@@ -24,6 +24,48 @@
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
 
+      var _gasSeq = 0;
+
+      function _jsonpCall(action, args, successFn, failureFn) {
+        var cbName = '_gasJsonp_' + (++_gasSeq);
+        var script = document.createElement('script');
+        var done   = false;
+
+        var timer = setTimeout(function () {
+          if (done) return;
+          done = true;
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+          console.error('[GAS Bridge] Timeout:', action);
+          if (failureFn) failureFn(new Error('Timeout: ' + action));
+        }, 30000);
+
+        window[cbName] = function (data) {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+          if (successFn) successFn(data);
+        };
+
+        script.onerror = function () {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          delete window[cbName];
+          console.error('[GAS Bridge] Script error:', action);
+          if (failureFn) failureFn(new Error('Script error: ' + action));
+        };
+
+        script.src = GAS_URL
+          + '?action='   + encodeURIComponent(action)
+          + '&args='     + encodeURIComponent(JSON.stringify(args))
+          + '&callback=' + encodeURIComponent(cbName);
+
+        document.body.appendChild(script);
+      }
+
       function _createRunner(successFn, failureFn) {
         return new Proxy({}, {
           get: function (target, prop) {
@@ -33,28 +75,9 @@
             if (prop === 'withFailureHandler') {
               return function (fn) { return _createRunner(successFn, fn); };
             }
-            // prop = ชื่อ function ที่จะเรียก GAS
             return function () {
               var args = Array.prototype.slice.call(arguments);
-              // ใช้ GET + URL params — รองรับ CORS จาก GAS โดยตรง
-              var url = GAS_URL
-                + '?action=' + encodeURIComponent(prop)
-                + '&args='   + encodeURIComponent(JSON.stringify(args));
-              fetch(url)
-              .then(function (r) { return r.text(); })
-              .then(function (text) {
-                try {
-                  var data = JSON.parse(text);
-                  if (successFn) successFn(data);
-                } catch(e) {
-                  console.error('[GAS Bridge] JSON parse error for ' + prop + ':', text);
-                  if (failureFn) failureFn(new Error('Invalid JSON response'));
-                }
-              })
-              .catch(function (err) {
-                console.error('[GAS Bridge] Error calling ' + prop + ':', err);
-                if (failureFn) failureFn(err);
-              });
+              _jsonpCall(prop, args, successFn, failureFn);
             };
           }
         });
