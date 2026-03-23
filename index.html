@@ -35,12 +35,23 @@
             // prop = ชื่อ function ที่จะเรียก GAS
             return function () {
               var args = Array.prototype.slice.call(arguments);
+              // ใช้ text/plain เพื่อหลีกเลี่ยง CORS Preflight (OPTIONS)
               fetch(GAS_URL, {
                 method: 'POST',
-                body: JSON.stringify({ action: prop, args: args })
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: prop, args: args }),
+                redirect: 'follow'
               })
-              .then(function (r) { return r.json(); })
-              .then(function (data) { if (successFn) successFn(data); })
+              .then(function (r) { return r.text(); })
+              .then(function (text) {
+                try {
+                  var data = JSON.parse(text);
+                  if (successFn) successFn(data);
+                } catch(e) {
+                  console.error('[GAS Bridge] JSON parse error for ' + prop + ':', text);
+                  if (failureFn) failureFn(new Error('Invalid JSON response'));
+                }
+              })
               .catch(function (err) {
                 console.error('[GAS Bridge] Error calling ' + prop + ':', err);
                 if (failureFn) failureFn(err);
