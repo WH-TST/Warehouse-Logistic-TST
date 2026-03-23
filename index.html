@@ -35,13 +35,11 @@
             // prop = ชื่อ function ที่จะเรียก GAS
             return function () {
               var args = Array.prototype.slice.call(arguments);
-              // ใช้ text/plain เพื่อหลีกเลี่ยง CORS Preflight (OPTIONS)
-              fetch(GAS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: prop, args: args }),
-                redirect: 'follow'
-              })
+              // ใช้ GET + URL params — รองรับ CORS จาก GAS โดยตรง
+              var url = GAS_URL
+                + '?action=' + encodeURIComponent(prop)
+                + '&args='   + encodeURIComponent(JSON.stringify(args));
+              fetch(url)
               .then(function (r) { return r.text(); })
               .then(function (text) {
                 try {
