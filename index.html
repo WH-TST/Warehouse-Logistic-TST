@@ -547,6 +547,10 @@ thead.sticky {
             <button onclick="switchView('kpi-wh')" id="nav-kpi-wh" class="nav-btn">
                 <span class="nav-icon"><i class="fas fa-chart-bar"></i></span> KPI WH &amp; LOGISTIC
             </button>
+            <div style="height:1px;background:#1a2740;margin:6px 0;"></div>
+            <button onclick="openAuditLogModal()" class="nav-btn" title="ประวัติการแก้ไขข้อมูล">
+                <span class="nav-icon"><i class="fas fa-history"></i></span> Audit Log
+            </button>
 
         </nav>
 
@@ -4613,6 +4617,102 @@ thead.sticky {
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: Confirmation Dialog (Global Reusable)                       -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="confirm-modal" class="fixed inset-0 bg-black/60 hidden z-[9999] flex items-center justify-center p-4">
+  <div class="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <div id="confirm-icon-wrap" class="w-10 h-10 rounded-full flex items-center justify-center bg-rose-500/20 flex-shrink-0">
+        <i id="confirm-icon-i" class="fas fa-exclamation-triangle text-rose-400 text-lg"></i>
+      </div>
+      <h3 id="confirm-title" class="text-white font-bold text-lg leading-snug">ยืนยันการดำเนินการ</h3>
+    </div>
+    <p id="confirm-message" class="text-slate-300 text-sm mb-6 leading-relaxed pl-1"></p>
+    <div class="flex gap-3 justify-end">
+      <button onclick="closeConfirmModal()"
+        class="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold transition-colors">
+        ยกเลิก
+      </button>
+      <button id="confirm-ok-btn"
+        class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold transition-colors">
+        ยืนยัน
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: Audit Log Viewer                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="audit-log-modal" class="fixed inset-0 bg-black/70 hidden z-[9998] flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col" style="max-height:85vh;">
+    <div class="flex items-center justify-between p-5 border-b border-slate-700 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+          <i class="fas fa-history text-indigo-400 text-lg"></i>
+        </div>
+        <div>
+          <h3 class="text-white font-bold text-lg">ประวัติการแก้ไข (Audit Log)</h3>
+          <p class="text-slate-400 text-xs mt-0.5">บันทึกทุก action สำคัญที่กระทบข้อมูล</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="loadAuditLog()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors">
+          <i class="fas fa-sync-alt mr-1"></i>โหลดใหม่
+        </button>
+        <button onclick="closeAuditLogModal()" class="w-9 h-9 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center justify-center transition-colors">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <!-- Filter -->
+    <div class="flex gap-2 p-4 border-b border-slate-700 flex-shrink-0 flex-wrap">
+      <select id="audit-filter-module" onchange="renderAuditTable()" class="bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded-lg px-3 py-1.5">
+        <option value="">ทุก Module</option>
+        <option value="FG Cycle Count">FG Cycle Count</option>
+        <option value="SEMI Cycle Count">SEMI Cycle Count</option>
+        <option value="Safety Stock">Safety Stock</option>
+        <option value="Logistic">Logistic</option>
+        <option value="Driver Activity">Driver Activity</option>
+        <option value="Incident">Incident</option>
+        <option value="Emergency">Emergency</option>
+        <option value="Billing">Billing</option>
+        <option value="Delivery">Delivery</option>
+        <option value="Import">Import</option>
+      </select>
+      <select id="audit-filter-action" onchange="renderAuditTable()" class="bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded-lg px-3 py-1.5">
+        <option value="">ทุก Action</option>
+        <option value="SAVE">SAVE</option>
+        <option value="DELETE">DELETE</option>
+        <option value="IMPORT">IMPORT</option>
+      </select>
+      <span id="audit-count-label" class="text-slate-400 text-xs self-center ml-auto"></span>
+    </div>
+    <!-- Table -->
+    <div class="overflow-y-auto flex-1 p-4">
+      <div id="audit-loading" class="hidden text-center py-10 text-slate-400 text-sm">
+        <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>กำลังโหลด...
+      </div>
+      <div id="audit-empty" class="hidden text-center py-10 text-slate-500 text-sm">
+        <i class="fas fa-inbox text-3xl mb-2 block opacity-30"></i>ยังไม่มีประวัติการแก้ไข
+      </div>
+      <table class="w-full text-xs" id="audit-table">
+        <thead>
+          <tr class="text-slate-400 border-b border-slate-700">
+            <th class="text-left pb-2 pr-3 font-semibold w-36">วันที่-เวลา</th>
+            <th class="text-left pb-2 pr-3 font-semibold w-24">Module</th>
+            <th class="text-left pb-2 pr-3 font-semibold w-20">Action</th>
+            <th class="text-left pb-2 pr-3 font-semibold">รายละเอียด</th>
+            <th class="text-left pb-2 font-semibold w-16">สถานะ</th>
+          </tr>
+        </thead>
+        <tbody id="audit-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
 <!-- MODAL: แก้ไข FG Cycle Count                                       -->
 <!-- ═══════════════════════════════════════════════════════════════════ -->
 <div id="edit-fg-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[500] flex items-center justify-center backdrop-blur-sm p-4">
@@ -4956,6 +5056,152 @@ window.refreshCurrentView = function refreshCurrentView() {
             setTimeout(() => toast.classList.add('translate-y-32'), 4000);
         }
         window.showToast = showToast; // expose globally for KPI WH & other window.* functions
+
+// ══════════════════════════════════════════════════════════════════════
+// CONFIRM MODAL UTILITY — ใช้แทน native confirm() ทั่วทั้งระบบ
+// ══════════════════════════════════════════════════════════════════════
+;(function() {
+    var _confirmCallback = null;
+
+    window.showConfirmModal = function(title, message, onConfirm, options) {
+        var opts    = options || {};
+        var modal   = safeGet('confirm-modal');
+        var okBtn   = safeGet('confirm-ok-btn');
+        var iconWrap= safeGet('confirm-icon-wrap');
+        var iconEl  = safeGet('confirm-icon-i');
+        if (!modal || !okBtn) { if (onConfirm) onConfirm(); return; }
+
+        safeSetText('confirm-title',   title);
+        safeSetHTML('confirm-message', message);
+
+        // ปรับสีตาม type: danger (แดง), warning (เหลือง), info (น้ำเงิน)
+        var type = opts.type || 'danger';
+        var colorMap = {
+            danger:  { btn: 'bg-rose-600 hover:bg-rose-500',   icon: 'bg-rose-500/20',   iconCls: 'fas fa-exclamation-triangle text-rose-400 text-lg' },
+            warning: { btn: 'bg-amber-600 hover:bg-amber-500', icon: 'bg-amber-500/20',  iconCls: 'fas fa-exclamation-circle text-amber-400 text-lg' },
+            info:    { btn: 'bg-blue-600 hover:bg-blue-500',   icon: 'bg-blue-500/20',   iconCls: 'fas fa-question-circle text-blue-400 text-lg' }
+        };
+        var c = colorMap[type] || colorMap.danger;
+        okBtn.className    = 'px-5 py-2 rounded-xl ' + c.btn + ' text-white text-sm font-bold transition-colors';
+        okBtn.textContent  = opts.okText || 'ยืนยัน';
+        iconWrap.className = 'w-10 h-10 rounded-full flex items-center justify-center ' + c.icon + ' flex-shrink-0';
+        if (iconEl) iconEl.className = c.iconCls;
+
+        _confirmCallback = onConfirm || null;
+        okBtn.onclick = function() { closeConfirmModal(); if (_confirmCallback) _confirmCallback(); };
+
+        modal.classList.remove('hidden');
+    };
+
+    window.closeConfirmModal = function() {
+        var modal = safeGet('confirm-modal');
+        if (modal) modal.classList.add('hidden');
+        _confirmCallback = null;
+    };
+})();
+
+// ══════════════════════════════════════════════════════════════════════
+// AUDIT LOG — บันทึก + แสดงประวัติการแก้ไข
+// ══════════════════════════════════════════════════════════════════════
+;(function() {
+    var _auditCache = [];
+
+    // บันทึก Audit Log ไปยัง GAS (fire-and-forget)
+    window.logAudit = function(module, action, detail) {
+        try {
+            google.script.run
+                .withSuccessHandler(function() {})
+                .withFailureHandler(function() {})
+                .saveAuditLog(module, action, String(detail || ''), 'success');
+        } catch(e) {}
+    };
+
+    // เปิด modal + โหลดข้อมูล
+    window.openAuditLogModal = function() {
+        var modal = safeGet('audit-log-modal');
+        if (modal) modal.classList.remove('hidden');
+        loadAuditLog();
+    };
+
+    window.closeAuditLogModal = function() {
+        var modal = safeGet('audit-log-modal');
+        if (modal) modal.classList.add('hidden');
+    };
+
+    window.loadAuditLog = function() {
+        var loading = safeGet('audit-loading');
+        var empty   = safeGet('audit-empty');
+        var table   = safeGet('audit-table');
+        var tbody   = safeGet('audit-tbody');
+        if (!tbody) return;
+        if (loading) loading.classList.remove('hidden');
+        if (empty)   empty.classList.add('hidden');
+        if (table)   table.style.display = 'none';
+
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (loading) loading.classList.add('hidden');
+                if (!res || !res.success || !res.data || res.data.length === 0) {
+                    if (empty) empty.classList.remove('hidden');
+                    _auditCache = [];
+                    return;
+                }
+                _auditCache = res.data;
+                if (table) table.style.display = '';
+                renderAuditTable();
+            })
+            .withFailureHandler(function() {
+                if (loading) loading.classList.add('hidden');
+                showToast('โหลด Audit Log ไม่สำเร็จ', true);
+            })
+            .getAuditLog(200);
+    };
+
+    window.renderAuditTable = function() {
+        var tbody       = safeGet('audit-tbody');
+        var empty       = safeGet('audit-empty');
+        var countLabel  = safeGet('audit-count-label');
+        var filterMod   = (safeGet('audit-filter-module')  || {}).value || '';
+        var filterAct   = (safeGet('audit-filter-action')  || {}).value || '';
+        if (!tbody) return;
+
+        var rows = _auditCache.filter(function(r) {
+            return (!filterMod || r.Module === filterMod) &&
+                   (!filterAct || r.Action === filterAct);
+        });
+
+        if (countLabel) countLabel.textContent = rows.length + ' รายการ';
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '';
+            if (empty) empty.classList.remove('hidden');
+            return;
+        }
+        if (empty) empty.classList.add('hidden');
+
+        var actionBadge = function(a) {
+            var map = {
+                'SAVE':   'background:#d1fae5;color:#065f46;',
+                'DELETE': 'background:#fee2e2;color:#991b1b;',
+                'IMPORT': 'background:#dbeafe;color:#1e40af;'
+            };
+            var s = map[a] || 'background:#f1f5f9;color:#475569;';
+            return '<span style="' + s + 'padding:2px 8px;border-radius:999px;font-weight:900;font-size:11px;">' + (a || '—') + '</span>';
+        };
+
+        tbody.innerHTML = rows.map(function(r, i) {
+            var bg = i % 2 === 0 ? '#1e293b' : '#0f172a';
+            return '<tr style="background:' + bg + ';border-bottom:1px solid #334155;">' +
+                '<td style="padding:8px 12px 8px 4px;color:#94a3b8;white-space:nowrap;">' + (r.Timestamp || '—') + '</td>' +
+                '<td style="padding:8px 12px 8px 4px;color:#e2e8f0;font-weight:700;">' + (r.Module || '—') + '</td>' +
+                '<td style="padding:8px 12px 8px 4px;">' + actionBadge(r.Action) + '</td>' +
+                '<td style="padding:8px 12px 8px 4px;color:#cbd5e1;">' + (r.Detail || '—') + '</td>' +
+                '<td style="padding:8px 4px 8px 4px;color:' + (r.Status === 'success' ? '#34d399' : '#f87171') + ';font-weight:700;">' + (r.Status || '—') + '</td>' +
+            '</tr>';
+        }).join('');
+    };
+})();
+
 function getNormalizedF(sumColF, hasM, hasN) {
     // 🚩 กรณีที่ 1: เครื่องมี 2 กะ (M และ N)
     if (hasM && hasN) {
@@ -7706,20 +7952,27 @@ function renderBlockingTrendChart(data) {
             }))
             : [];
 
-        showToast('กำลังบันทึกข้อมูล...');
-
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res.success) {
-                    showToast('✅ บันทึกสำเร็จ: ' + res.message);
-                } else {
-                    showToast('❌ ' + res.message, true);
-                }
-            })
-            .withFailureHandler(err => {
-                showToast('เกิดข้อผิดพลาดในการส่งข้อมูล: ' + err.message, true);
-            })
-            .saveFGCycleCount(cycleRows, cleanExcelRows, String(cycleDate)); 
+        showConfirmModal(
+            'ยืนยันบันทึก FG Cycle Count',
+            'บันทึกผล Cycle Count FG จำนวน <strong class="text-white">' + cycleRows.length + ' รายการ</strong> วันที่ <strong class="text-white">' + cycleDate + '</strong>?',
+            function() {
+                showToast('กำลังบันทึกข้อมูล...');
+                google.script.run
+                    .withSuccessHandler(res => {
+                        if (res.success) {
+                            showToast('✅ บันทึกสำเร็จ: ' + res.message);
+                            logAudit('FG Cycle Count', 'SAVE', cycleRows.length + ' รายการ วันที่ ' + cycleDate);
+                        } else {
+                            showToast('❌ ' + res.message, true);
+                        }
+                    })
+                    .withFailureHandler(err => {
+                        showToast('เกิดข้อผิดพลาดในการส่งข้อมูล: ' + err.message, true);
+                    })
+                    .saveFGCycleCount(cycleRows, cleanExcelRows, String(cycleDate));
+            },
+            { type: 'info', okText: 'บันทึก' }
+        );
     }
     /**
      * โครงสร้างไฟล์ Excel ที่รองรับ (0-based index):
@@ -9982,14 +10235,23 @@ function renderSemiCycleTable(rows) {
         const hasData = rows.some(r => r.total !== null);
         if (!hasData) return showToast('กรุณากรอกจำนวน QTY FG1 หรือ QTY FG2 ก่อนบันทึก', true);
 
-        showToast('กำลังบันทึก...');
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res && res.success) showToast('✅ บันทึกสำเร็จ: ' + res.message);
-                else showToast('❌ ' + (res && res.message || 'error'), true);
-            })
-            .withFailureHandler(err => showToast('เกิดข้อผิดพลาด: ' + (err && err.message || String(err)), true))
-            .saveSemiCycleCount(rows, String(cycleDate));
+        showConfirmModal(
+            'ยืนยันบันทึก SEMI Cycle Count',
+            'บันทึกผล Cycle Count SEMI จำนวน <strong class="text-white">' + rows.length + ' รายการ</strong> วันที่ <strong class="text-white">' + cycleDate + '</strong>?',
+            function() {
+                showToast('กำลังบันทึก...');
+                google.script.run
+                    .withSuccessHandler(res => {
+                        if (res && res.success) {
+                            showToast('✅ บันทึกสำเร็จ: ' + res.message);
+                            logAudit('SEMI Cycle Count', 'SAVE', rows.length + ' รายการ วันที่ ' + cycleDate);
+                        } else showToast('❌ ' + (res && res.message || 'error'), true);
+                    })
+                    .withFailureHandler(err => showToast('เกิดข้อผิดพลาด: ' + (err && err.message || String(err)), true))
+                    .saveSemiCycleCount(rows, String(cycleDate));
+            },
+            { type: 'info', okText: 'บันทึก' }
+        );
     }
 
     /** ดึงรายการ SEMI ที่ต้อง Re-Check */
@@ -11672,10 +11934,17 @@ window.addTransferItem = function addTransferItem(sku, qty) {
 };
 
 window.removeTransferItem = function removeTransferItem(idx) {
-    const row = document.getElementById(`ti-row-${idx}`);
-    if (row) row.remove();
-    _updateTransferItemsEmpty();
-    updateTransferWeightBadge();
+    showConfirmModal(
+        'ลบสินค้าออก?',
+        'ต้องการลบสินค้ารายการนี้ออกจากรายการย้ายหรือไม่?',
+        function() {
+            const row = document.getElementById('ti-row-' + idx);
+            if (row) row.remove();
+            _updateTransferItemsEmpty();
+            updateTransferWeightBadge();
+        },
+        { type: 'warning', okText: 'ลบออก' }
+    );
 };
 
 function _updateTransferItemsEmpty() {
@@ -12266,11 +12535,18 @@ window.closeLogiShopDropdown = function closeLogiShopDropdown(idx) {
 
 // ── ลบการ์ดร้านค้า ──
 window.removeLogiShop = function removeLogiShop(idx) {
-    const card = document.getElementById(`logi-shop-card-${idx}`);
-    if (card) card.remove();
-    logiShopList = logiShopList.filter(s => s.idx !== idx);
-    updateLogiShopNumbers();
-    updateLogiTotalWeight();
+    showConfirmModal(
+        'ลบจุดส่งออก?',
+        'ต้องการลบจุดส่งนี้และสินค้าทั้งหมดในจุดส่งนี้ออกหรือไม่?',
+        function() {
+            const card = document.getElementById('logi-shop-card-' + idx);
+            if (card) card.remove();
+            logiShopList = logiShopList.filter(s => s.idx !== idx);
+            updateLogiShopNumbers();
+            updateLogiTotalWeight();
+        },
+        { type: 'warning', okText: 'ลบออก' }
+    );
 }
 
 // ── อัปเดตลำดับตัวเลขร้าน ──
@@ -12412,15 +12688,22 @@ window.onLogiQtyChange = function onLogiQtyChange(shopIdx, itemIdx, input) {
 
 // ── ลบแถวสินค้า ──
 window.removeLogiItem = function removeLogiItem(shopIdx, itemIdx) {
-    const row = document.getElementById(`logi-item-${shopIdx}-${itemIdx}`);
-    if (row) row.remove();
-    const itemsContainer = document.getElementById(`logi-items-${shopIdx}`);
-    const emptyEl        = document.getElementById(`logi-items-empty-${shopIdx}`);
-    if (itemsContainer && itemsContainer.children.length === 0 && emptyEl) {
-        emptyEl.classList.remove('hidden');
-    }
-    updateLogiShopWeight(shopIdx);
-    updateLogiTotalWeight();
+    showConfirmModal(
+        'ลบสินค้าออก?',
+        'ต้องการลบสินค้ารายการนี้ออกจากจุดส่งหรือไม่?',
+        function() {
+            const row = document.getElementById('logi-item-' + shopIdx + '-' + itemIdx);
+            if (row) row.remove();
+            const itemsContainer = document.getElementById('logi-items-' + shopIdx);
+            const emptyEl        = document.getElementById('logi-items-empty-' + shopIdx);
+            if (itemsContainer && itemsContainer.children.length === 0 && emptyEl) {
+                emptyEl.classList.remove('hidden');
+            }
+            updateLogiShopWeight(shopIdx);
+            updateLogiTotalWeight();
+        },
+        { type: 'warning', okText: 'ลบออก' }
+    );
 }
 
 // ── คำนวณน้ำหนักรวมของร้าน ──
@@ -15832,45 +16115,59 @@ window.editLogiPlan = function editLogiPlan(planId) {
 }
 
 window.deleteLogiPlan = function deleteLogiPlan(planId) {
-    if (!confirm('ยืนยันการลบแผน ' + planId + '?\n\nการลบจะไม่สามารถกู้คืนได้')) return;
-    showToast('⏳ กำลังลบ ' + planId + '...');
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (!res || !res.success) {
-                showToast('ลบไม่สำเร็จ: ' + (res?.message || ''), true);
-                return;
-            }
-            logiPlanList = logiPlanList.filter(p => p.id !== planId);
-            renderLogisticList();
-            updateLogiKPI();
-            showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
-        })
-        .withFailureHandler(function(err) {
-            showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-        })
-        .deleteLogisticPlan(planId);
+    showConfirmModal(
+        'ยืนยันการลบแผน',
+        'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>',
+        function() {
+            showToast('⏳ กำลังลบ ' + planId + '...');
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    if (!res || !res.success) {
+                        showToast('ลบไม่สำเร็จ: ' + (res?.message || ''), true);
+                        return;
+                    }
+                    logiPlanList = logiPlanList.filter(p => p.id !== planId);
+                    renderLogisticList();
+                    updateLogiKPI();
+                    showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
+                    logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId);
+                })
+                .withFailureHandler(function(err) {
+                    showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
+                })
+                .deleteLogisticPlan(planId);
+        },
+        { type: 'danger', okText: 'ลบเลย' }
+    );
 }
 
 // ── ลบแผนจากหน้าปฏิทิน (อัปเดต logiCalPlanList + re-render) ──
 window.deleteLogiPlanFromCal = function deleteLogiPlanFromCal(planId) {
-    if (!confirm('ยืนยันการลบแผน ' + planId + '?\n\nการลบจะไม่สามารถกู้คืนได้')) return;
-    showToast('⏳ กำลังลบ ' + planId + '...');
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (!res || !res.success) {
-                showToast('ลบไม่สำเร็จ: ' + (res?.message || ''), true);
-                return;
-            }
-            logiPlanList    = logiPlanList.filter(p => p.id !== planId);
-            logiCalPlanList = logiCalPlanList.filter(p => p.id !== planId);
-            renderLogiCalendar();
-            updateLogiKPI();
-            showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
-        })
-        .withFailureHandler(function(err) {
-            showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-        })
-        .deleteLogisticPlan(planId);
+    showConfirmModal(
+        'ยืนยันการลบแผน',
+        'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>',
+        function() {
+            showToast('⏳ กำลังลบ ' + planId + '...');
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    if (!res || !res.success) {
+                        showToast('ลบไม่สำเร็จ: ' + (res?.message || ''), true);
+                        return;
+                    }
+                    logiPlanList    = logiPlanList.filter(p => p.id !== planId);
+                    logiCalPlanList = logiCalPlanList.filter(p => p.id !== planId);
+                    renderLogiCalendar();
+                    updateLogiKPI();
+                    showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
+                    logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + ' (from Calendar)');
+                })
+                .withFailureHandler(function(err) {
+                    showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
+                })
+                .deleteLogisticPlan(planId);
+        },
+        { type: 'danger', okText: 'ลบเลย' }
+    );
 }
 
 // ── ตั้งค่าวันที่ default สำหรับ filter ──
@@ -17629,8 +17926,15 @@ window.dlogHistTimeBlur = function dlogHistTimeBlur(el, rowNum, type, field) {
 };
 
 window.dlogHistDeleteRow = function dlogHistDeleteRow(rowNum, type) {
-    if (!confirm('ลบแถวนี้ออกจาก Google Sheet?\nการลบนี้ไม่สามารถกู้คืนได้')) return;
+    showConfirmModal(
+        'ยืนยันการลบแถว',
+        'ลบแถวนี้ออกจาก Google Sheet?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ไม่สามารถกู้คืนได้</span>',
+        function() { _dlogHistDeleteRowExec(rowNum, type); },
+        { type: 'danger', okText: 'ลบเลย' }
+    );
+};
 
+function _dlogHistDeleteRowExec(rowNum, type) {
     const gasFunc = type === 'actual' ? 'deleteDriverActivityRow' : 'deleteGpsActivityRow';
 
     google.script.run
@@ -17654,6 +17958,7 @@ window.dlogHistDeleteRow = function dlogHistDeleteRow(rowNum, type) {
                 const saveBtn = safeGet('dlog-hist-save-' + type);
                 if (saveBtn && dirtyLeft === 0) saveBtn.classList.add('hidden');
                 showToast('✅ ลบแถวออกจาก Sheet เรียบร้อยแล้ว');
+                logAudit('Driver Activity', 'DELETE', 'Row: ' + rowNum + ' Type: ' + type);
             } else {
                 showToast('❌ ลบไม่สำเร็จ: ' + ((res && res.message) || ''), true);
             }
@@ -17905,25 +18210,31 @@ window.incAddRecord = function incAddRecord() {
 }
 
 window.incDeleteRecord = function incDeleteRecord(id) {
-    if (!confirm('ลบรายการนี้?')) return;
-    const rec = incData.find(r => r.id === id);
-    incData = incData.filter(r => r.id !== id);
-    _safeStorage.setItem('logi_incidents', JSON.stringify(incData));
-    incRenderTable();
-    // ลบจาก GAS Sheet ด้วย (ถ้ามี rowNum)
-    if (rec && rec.rowNum) {
-        google.script.run
-            .withSuccessHandler(function(res) {
-                if (res && res.success) {
-                    // อัปเดต rowNum ของแถวที่อยู่ถัดลงไป (ทั้ง inc และ emer ในชีตเดียวกัน)
-                    [...incData, ...emerData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
-                    _safeStorage.setItem('logi_incidents', JSON.stringify(incData));
-                    _safeStorage.setItem('logi_emergency', JSON.stringify(emerData));
-                }
-            })
-            .withFailureHandler(function() {})
-            .deleteDriverEventRow(rec.rowNum);
-    }
+    showConfirmModal(
+        'ยืนยันการลบเหตุการณ์',
+        'ลบรายการเหตุการณ์นี้ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ไม่สามารถกู้คืนได้</span>',
+        function() {
+            const rec = incData.find(r => r.id === id);
+            incData = incData.filter(r => r.id !== id);
+            _safeStorage.setItem('logi_incidents', JSON.stringify(incData));
+            incRenderTable();
+            showToast('🗑️ ลบเรียบร้อยแล้ว');
+            logAudit('Incident', 'DELETE', 'ID: ' + id);
+            if (rec && rec.rowNum) {
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (res && res.success) {
+                            [...incData, ...emerData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
+                            _safeStorage.setItem('logi_incidents', JSON.stringify(incData));
+                            _safeStorage.setItem('logi_emergency', JSON.stringify(emerData));
+                        }
+                    })
+                    .withFailureHandler(function() {})
+                    .deleteDriverEventRow(rec.rowNum);
+            }
+        },
+        { type: 'danger', okText: 'ลบเลย' }
+    );
 }
 
 window.incRenderTable = function incRenderTable() {
@@ -18009,25 +18320,31 @@ window.emerAddRecord = function emerAddRecord() {
 }
 
 window.emerDeleteRecord = function emerDeleteRecord(id) {
-    if (!confirm('ลบรายการนี้?')) return;
-    const rec = emerData.find(r => r.id === id);
-    emerData = emerData.filter(r => r.id !== id);
-    _safeStorage.setItem('logi_emergency', JSON.stringify(emerData));
-    emerRenderTable();
-    // ลบจาก GAS Sheet ด้วย (ถ้ามี rowNum)
-    if (rec && rec.rowNum) {
-        google.script.run
-            .withSuccessHandler(function(res) {
-                if (res && res.success) {
-                    // อัปเดต rowNum ของแถวที่อยู่ถัดลงไปทั้งสองชุด
-                    [...incData, ...emerData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
-                    _safeStorage.setItem('logi_incidents', JSON.stringify(incData));
-                    _safeStorage.setItem('logi_emergency', JSON.stringify(emerData));
-                }
-            })
-            .withFailureHandler(function() {})
-            .deleteDriverEventRow(rec.rowNum);
-    }
+    showConfirmModal(
+        'ยืนยันการลบรายการซ่อม',
+        'ลบรายการซ่อมฉุกเฉินนี้ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ไม่สามารถกู้คืนได้</span>',
+        function() {
+            const rec = emerData.find(r => r.id === id);
+            emerData = emerData.filter(r => r.id !== id);
+            _safeStorage.setItem('logi_emergency', JSON.stringify(emerData));
+            emerRenderTable();
+            showToast('🗑️ ลบเรียบร้อยแล้ว');
+            logAudit('Emergency', 'DELETE', 'ID: ' + id);
+            if (rec && rec.rowNum) {
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (res && res.success) {
+                            [...incData, ...emerData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
+                            _safeStorage.setItem('logi_incidents', JSON.stringify(incData));
+                            _safeStorage.setItem('logi_emergency', JSON.stringify(emerData));
+                        }
+                    })
+                    .withFailureHandler(function() {})
+                    .deleteDriverEventRow(rec.rowNum);
+            }
+        },
+        { type: 'danger', okText: 'ลบเลย' }
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -18524,23 +18841,31 @@ window.billToggleFixed = function billToggleFixed(id) {
 };
 
 window.billDeleteRecord = function billDeleteRecord(id) {
-    if (!confirm('ลบรายการนี้?')) return;
-    const rec = billData.find(r => r.id === id);
-    billData = billData.filter(r => r.id !== id);
-    _safeStorage.setItem('logi_billing', JSON.stringify(billData));
-    billRenderTable();
-    if (rec && rec.rowNum) {
-        google.script.run
-            .withSuccessHandler(function(res) {
-                if (res && res.success) {
-                    [...billData, ...delData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
-                    _safeStorage.setItem('logi_billing', JSON.stringify(billData));
-                    _safeStorage.setItem('logi_delivery', JSON.stringify(delData));
-                }
-            })
-            .withFailureHandler(function() {})
-            .deleteStaffEventRow(rec.rowNum);
-    }
+    showConfirmModal(
+        'ยืนยันการลบรายการเงิน',
+        'ลบรายการ Billing นี้ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ไม่สามารถกู้คืนได้</span>',
+        function() {
+            const rec = billData.find(r => r.id === id);
+            billData = billData.filter(r => r.id !== id);
+            _safeStorage.setItem('logi_billing', JSON.stringify(billData));
+            billRenderTable();
+            showToast('🗑️ ลบเรียบร้อยแล้ว');
+            logAudit('Billing', 'DELETE', 'ID: ' + id);
+            if (rec && rec.rowNum) {
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (res && res.success) {
+                            [...billData, ...delData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
+                            _safeStorage.setItem('logi_billing', JSON.stringify(billData));
+                            _safeStorage.setItem('logi_delivery', JSON.stringify(delData));
+                        }
+                    })
+                    .withFailureHandler(function() {})
+                    .deleteStaffEventRow(rec.rowNum);
+            }
+        },
+        { type: 'danger', okText: 'ลบเลย' }
+    );
 };
 
 window.billRenderTable = function billRenderTable() {
@@ -18639,23 +18964,31 @@ window.delAddRecord = function delAddRecord() {
 };
 
 window.delDeleteRecord = function delDeleteRecord(id) {
-    if (!confirm('ลบรายการนี้?')) return;
-    const rec = delData.find(r => r.id === id);
-    delData = delData.filter(r => r.id !== id);
-    _safeStorage.setItem('logi_delivery', JSON.stringify(delData));
-    delRenderTable();
-    if (rec && rec.rowNum) {
-        google.script.run
-            .withSuccessHandler(function(res) {
-                if (res && res.success) {
-                    [...billData, ...delData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
-                    _safeStorage.setItem('logi_billing', JSON.stringify(billData));
-                    _safeStorage.setItem('logi_delivery', JSON.stringify(delData));
-                }
-            })
-            .withFailureHandler(function() {})
-            .deleteStaffEventRow(rec.rowNum);
-    }
+    showConfirmModal(
+        'ยืนยันการลบรายการส่ง',
+        'ลบรายการ Delivery นี้ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ไม่สามารถกู้คืนได้</span>',
+        function() {
+            const rec = delData.find(r => r.id === id);
+            delData = delData.filter(r => r.id !== id);
+            _safeStorage.setItem('logi_delivery', JSON.stringify(delData));
+            delRenderTable();
+            showToast('🗑️ ลบเรียบร้อยแล้ว');
+            logAudit('Delivery', 'DELETE', 'ID: ' + id);
+            if (rec && rec.rowNum) {
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (res && res.success) {
+                            [...billData, ...delData].forEach(r => { if (r.rowNum > rec.rowNum) r.rowNum--; });
+                            _safeStorage.setItem('logi_billing', JSON.stringify(billData));
+                            _safeStorage.setItem('logi_delivery', JSON.stringify(delData));
+                        }
+                    })
+                    .withFailureHandler(function() {})
+                    .deleteStaffEventRow(rec.rowNum);
+            }
+        },
+        { type: 'danger', okText: 'ลบเลย' }
+    );
 };
 
 window.delRenderTable = function delRenderTable() {
@@ -18909,6 +19242,16 @@ window.updateSSRemark = function updateSSRemark(inp, sku) {
 
 window.saveSafetyStock = function saveSafetyStock() {
     if (!_ssAllData.length) { showToast('ยังไม่มีข้อมูล กรุณาโหลดก่อน', true); return; }
+
+    showConfirmModal(
+        'ยืนยันบันทึก Safety Stock',
+        'บันทึกค่า Safety Stock จำนวน <strong class="text-white">' + _ssAllData.length + ' รายการ</strong>?<br><span class="text-amber-400 text-xs mt-1 block">⚠️ ข้อมูลเดิมใน Sheet จะถูกเขียนทับ</span>',
+        function() { _saveSafetyStockExec(); },
+        { type: 'warning', okText: 'บันทึก' }
+    );
+};
+
+function _saveSafetyStockExec() {
     const btn = document.getElementById('btn-ss-save');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...'; }
 
@@ -18938,13 +19281,14 @@ window.saveSafetyStock = function saveSafetyStock() {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> บันทึกทั้งหมด'; }
             if (!res || !res.success) { showToast('❌ ' + (res && res.message || 'บันทึกไม่สำเร็จ'), true); return; }
             showToast('✅ บันทึก Safety Stock สำเร็จ ' + payload.length + ' รายการ');
+            logAudit('Safety Stock', 'SAVE', payload.length + ' รายการ');
         })
         .withFailureHandler(function(err) {
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> บันทึกทั้งหมด'; }
             showToast('❌ เกิดข้อผิดพลาด: ' + err, true);
         })
         .saveSafetyStockData(payload);
-};
+}
 
 function _mgmtMedian(arr) {
     const s = arr.filter(v => v > 0 && isFinite(v)).sort((a,b) => a-b);
