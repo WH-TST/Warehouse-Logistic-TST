@@ -72,15 +72,20 @@
       function _postFetch(action, args, successFn, failureFn) {
         fetch(GAS_URL, {
           method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: action, args: args })
         })
-        .then(function(r) { return r.text(); })
+        .then(function(r) {
+          console.log('[GAS Bridge] POST status:', action, r.status, r.url);
+          return r.text();
+        })
         .then(function(text) {
+          console.log('[GAS Bridge] POST raw:', action, text.substring(0, 300));
           try {
             var data = JSON.parse(text);
             if (successFn) successFn(data);
           } catch (pe) {
-            console.error('[GAS Bridge] POST parse error:', action, text.substring(0, 200));
+            console.error('[GAS Bridge] POST parse error:', action, text.substring(0, 300));
             if (failureFn) failureFn(new Error('POST parse error: ' + action));
           }
         })
