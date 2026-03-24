@@ -25,6 +25,8 @@
       if (typeof google !== 'undefined' && google.script) return;
 
       var _gasSeq = 0;
+      // payload > 20KB → ใช้ POST fetch แทน JSONP เพื่อหลีกเลี่ยง URL length limit
+      var LARGE_PAYLOAD_THRESHOLD = 20000;
 
       function _jsonpCall(action, args, successFn, failureFn) {
         var cbName = '_gasJsonp_' + (++_gasSeq);
@@ -66,6 +68,28 @@
         document.body.appendChild(script);
       }
 
+      // POST fetch — ใช้กับ payload ขนาดใหญ่ที่ไม่พอใส่ใน URL
+      function _postFetch(action, args, successFn, failureFn) {
+        fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: action, args: args })
+        })
+        .then(function(r) { return r.text(); })
+        .then(function(text) {
+          try {
+            var data = JSON.parse(text);
+            if (successFn) successFn(data);
+          } catch (pe) {
+            console.error('[GAS Bridge] POST parse error:', action, text.substring(0, 200));
+            if (failureFn) failureFn(new Error('POST parse error: ' + action));
+          }
+        })
+        .catch(function(err) {
+          console.error('[GAS Bridge] POST fetch error:', action, err);
+          if (failureFn) failureFn(err);
+        });
+      }
+
       function _createRunner(successFn, failureFn) {
         return new Proxy({}, {
           get: function (target, prop) {
@@ -77,7 +101,13 @@
             }
             return function () {
               var args = Array.prototype.slice.call(arguments);
-              _jsonpCall(prop, args, successFn, failureFn);
+              var argsStr = JSON.stringify(args);
+              if (argsStr.length > LARGE_PAYLOAD_THRESHOLD) {
+                console.log('[GAS Bridge] Large payload (' + argsStr.length + ' bytes) → POST:', prop);
+                _postFetch(prop, args, successFn, failureFn);
+              } else {
+                _jsonpCall(prop, args, successFn, failureFn);
+              }
             };
           }
         });
