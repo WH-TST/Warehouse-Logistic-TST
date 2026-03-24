@@ -1633,6 +1633,32 @@ thead.sticky {
                     <p id="semi-file-label" class="text-sm font-bold text-slate-400">คลิกหรือลากไฟล์ SEMI มาวางที่นี่</p>
                     <p class="text-xs text-slate-300 mt-1">.xlsx, .xls</p>
                 </div>
+
+                <!-- ── Column Mapping Panel (แสดงหลังอ่านไฟล์) ──────── -->
+                <div id="semi-col-map-panel" class="hidden mt-3 p-4 bg-purple-50 border-2 border-purple-200 rounded-xl">
+                    <div class="flex items-center gap-2 mb-2 flex-wrap">
+                        <i class="fas fa-columns text-purple-500 text-sm"></i>
+                        <span class="text-sm font-bold text-purple-700">Column ที่เป็น "รหัส SEMI (Item number)"</span>
+                        <span id="semi-col-auto-badge"
+                              class="hidden text-xs bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                            <i class="fas fa-magic mr-1"></i>ตรวจจับอัตโนมัติ
+                        </span>
+                        <span id="semi-col-manual-badge"
+                              class="hidden text-xs bg-amber-100 text-amber-700 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
+                            <i class="fas fa-hand-pointer mr-1"></i>เลือกเอง
+                        </span>
+                    </div>
+                    <select id="semi-sku-col-select" onchange="setSemiSkuColumn(this.value)"
+                        class="w-full bg-white border-2 border-purple-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:border-purple-500 outline-none transition-colors">
+                    </select>
+                    <div class="flex items-start gap-2 mt-2">
+                        <i class="fas fa-eye text-purple-400 text-xs mt-0.5 flex-shrink-0"></i>
+                        <p class="text-xs text-slate-500">
+                            ตัวอย่างค่าใน Column นี้:
+                            <span id="semi-col-preview" class="font-mono text-purple-700 font-bold ml-1">—</span>
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <div>
@@ -10617,6 +10643,58 @@ window.printSemiStockForm = function printSemiStockForm() {
     }
 }
 let semiExcelRows = []; // เก็บข้อมูลดิบจากไฟล์ SEMI
+let semiSkuColIdx  = 6; // index ของ column ที่เป็น Item number (default = Col G)
+let semiColAutoDetected = false; // ตรวจจับอัตโนมัติหรือไม่
+
+// ── Keywords สำหรับ auto-detect column ที่เป็น SKU ──────────────────
+const SEMI_SKU_KEYWORDS = [
+    'item number', 'item no', 'item_number', 'itemnumber', 'itemno',
+    'sku', 'product number', 'product no', 'material number', 'material no',
+    'part number', 'part no', 'รหัสสินค้า', 'รหัส semi', 'รหัส', 'สินค้า'
+];
+
+/** ตรวจจับ column ที่น่าจะเป็น SKU จาก header row */
+function _detectSemiSkuColumn(headers) {
+    for (let i = 0; i < headers.length; i++) {
+        const h = String(headers[i] || '').toLowerCase().trim();
+        if (h && SEMI_SKU_KEYWORDS.some(k => h.includes(k))) return i;
+    }
+    return -1; // ไม่พบ
+}
+
+/** สร้าง options ใน dropdown จาก headers */
+function _populateSemiColSelect(headers) {
+    const sel = document.getElementById('semi-sku-col-select');
+    if (!sel) return;
+    sel.innerHTML = headers.map(function(h, i) {
+        const colLetter = i < 26 ? String.fromCharCode(65 + i) : 'Col' + (i + 1);
+        const label = h ? ('Col ' + colLetter + ' — ' + String(h).substring(0, 40))
+                        : ('Col ' + colLetter + ' (ไม่มี header)');
+        return '<option value="' + i + '">' + label + '</option>';
+    }).join('');
+    sel.value = String(semiSkuColIdx);
+}
+
+/** อัปเดต preview เมื่อ user เลือก column */
+window.setSemiSkuColumn = function setSemiSkuColumn(idx) {
+    semiSkuColIdx = parseInt(idx);
+    semiColAutoDetected = false;
+    // แสดง badge "เลือกเอง"
+    const autoBadge   = document.getElementById('semi-col-auto-badge');
+    const manualBadge = document.getElementById('semi-col-manual-badge');
+    if (autoBadge)   autoBadge.classList.add('hidden');
+    if (manualBadge) manualBadge.classList.remove('hidden');
+    // แสดงตัวอย่างค่า
+    _updateSemiColPreview();
+};
+
+function _updateSemiColPreview() {
+    const samples = semiExcelRows.slice(1, 5)
+        .map(function(r) { return String(r[semiSkuColIdx] || '').trim(); })
+        .filter(Boolean);
+    const prevEl = document.getElementById('semi-col-preview');
+    if (prevEl) prevEl.textContent = samples.length ? samples.join(', ') : '(ว่าง — ลองเลือก Column อื่น)';
+}
 
 /** จัดการการลากวางไฟล์ SEMI */
 function handleSemiFileDrop(e) {
@@ -10633,19 +10711,53 @@ window.handleSemiFileSelect = function handleSemiFileSelect(input) {
     if (file) processSemiExcelFile(file);
 }
 
-/** อ่านไฟล์ Excel ของ SEMI */
+/** อ่านไฟล์ Excel ของ SEMI + Auto-detect column */
 function processSemiExcelFile(file) {
     const label = document.getElementById('semi-file-label');
     label.textContent = '⏳ กำลังอ่านไฟล์ SEMI...';
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const data = new Uint8Array(e.target.result);
+            const data     = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            semiExcelRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '', raw: false });
-            label.textContent = `✅ ${file.name} (${semiExcelRows.length - 1} รายการ)`;
-            showToast(`โหลดไฟล์ SEMI สำเร็จ`);
+            semiExcelRows  = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '', raw: false });
+
+            if (semiExcelRows.length < 2) {
+                label.textContent = '⚠️ ไฟล์ว่าง หรือมีข้อมูลไม่พอ';
+                showToast('ไม่พบข้อมูลในไฟล์ Excel', true);
+                return;
+            }
+
+            const headers = semiExcelRows[0]; // row แรก = header
+
+            // ── Auto-detect column ที่เป็น Item number ──
+            const detectedIdx = _detectSemiSkuColumn(headers);
+            if (detectedIdx >= 0) {
+                semiSkuColIdx       = detectedIdx;
+                semiColAutoDetected = true;
+            } else {
+                semiSkuColIdx       = 6; // fallback default Col G
+                semiColAutoDetected = false;
+            }
+
+            // ── แสดง Column Mapping Panel ──
+            const panel      = document.getElementById('semi-col-map-panel');
+            const autoBadge  = document.getElementById('semi-col-auto-badge');
+            const manBadge   = document.getElementById('semi-col-manual-badge');
+            if (panel) panel.classList.remove('hidden');
+            _populateSemiColSelect(headers);
+            document.getElementById('semi-sku-col-select').value = String(semiSkuColIdx);
+            if (autoBadge)  autoBadge.classList.toggle('hidden',  !semiColAutoDetected);
+            if (manBadge)   manBadge.classList.toggle('hidden',    semiColAutoDetected);
+            _updateSemiColPreview();
+
+            const dataRows = semiExcelRows.length - 1;
+            label.textContent = '✅ ' + file.name + ' (' + dataRows + ' รายการ)';
+            const colInfo = semiColAutoDetected
+                ? '— ตรวจจับ Column อัตโนมัติ: "' + String(headers[semiSkuColIdx]).substring(0, 30) + '"'
+                : '— ไม่พบ header อัตโนมัติ กรุณาเลือก Column ด้านล่าง';
+            showToast('โหลดไฟล์ SEMI สำเร็จ ' + dataRows + ' แถว ' + colInfo);
         } catch (err) {
             label.textContent = '❌ อ่านไฟล์ไม่สำเร็จ';
             showToast('เกิดข้อผิดพลาด: ' + err.message, true);
@@ -10653,8 +10765,10 @@ function processSemiExcelFile(file) {
     };
     reader.readAsArrayBuffer(file);
 }
-/** * สร้างตารางเทียบ SEMI จากไฟล์ Excel 
- * อ้างอิงรหัส SEMI จาก Item number (คอลัมน์ G / Index 6)
+
+/**
+ * สร้างตารางเทียบ SEMI จากไฟล์ Excel
+ * ใช้ semiSkuColIdx (auto-detected หรือ user เลือก) แทน hardcoded index 6
  */
 window.buildSemiCycleTableFromExcel = function buildSemiCycleTableFromExcel() {
     if (!semiExcelRows || semiExcelRows.length < 2) {
@@ -10664,32 +10778,35 @@ window.buildSemiCycleTableFromExcel = function buildSemiCycleTableFromExcel() {
     const cycleDate = document.getElementById('semi-cycle-date').value;
     if (!cycleDate) return showToast('กรุณาระบุวันที่ Cycle Count', true);
 
-    // ดึงรหัส SEMI จากคอลัมน์ G (Index 6)
+    // ── ดึงรหัส SEMI จาก column ที่ผู้ใช้เลือก (หรือ auto-detect) ──
+    const colSel = document.getElementById('semi-sku-col-select');
+    if (colSel) semiSkuColIdx = parseInt(colSel.value) || semiSkuColIdx;
+
     const seenSkus = new Set();
     for (let i = 1; i < semiExcelRows.length; i++) {
-        const sku = String(semiExcelRows[i][6] || '').trim(); // Index 6 คือ Item number (Col G)
+        const sku = String(semiExcelRows[i][semiSkuColIdx] || '').trim();
         if (sku) seenSkus.add(sku);
     }
 
     if (seenSkus.size === 0) {
-        return showToast('ไม่พบรหัสสินค้าในคอลัมน์ G (Item number)', true);
+        const colLetter = semiSkuColIdx < 26 ? String.fromCharCode(65 + semiSkuColIdx) : String(semiSkuColIdx + 1);
+        return showToast('ไม่พบรหัสสินค้าใน Column ' + colLetter + ' — กรุณาเลือก Column ที่ถูกต้องด้านบน', true);
     }
 
     showToast('กำลังบันทึก Transaction และสร้างตารางเทียบ...');
-    
-    // ส่งข้อมูลไปบันทึกลงชีต Transection SEMI และดึงข้อมูล Master กลับมาเทียบ
+
+    // ส่ง semiExcelRows (ทั้งหมด) และ skuColIdx ไปให้ GAS backend ด้วย
+    // เพื่อให้ backend รู้ว่า column ไหนคือ Item number
     google.script.run
-        .withSuccessHandler(res => {
+        .withSuccessHandler(function(res) {
             if (!res.success) return showToast(res.message, true);
-            
-            // กรอง Master Data ให้เหลือเฉพาะรายการที่มีความเคลื่อนไหวในไฟล์
-            semiTableData = res.semiList.filter(item => seenSkus.has(item.semiSku));
-            
+            semiTableData = res.semiList.filter(function(item) { return seenSkus.has(item.semiSku); });
             renderSemiCycleTable(semiTableData);
-            showToast(`บันทึก Transaction และสร้างตารางสำเร็จ (${semiTableData.length} รายการ)`);
+            showToast('บันทึก Transaction และสร้างตารางสำเร็จ (' + semiTableData.length + ' รายการ)');
+            logAudit('SEMI Cycle Count', 'IMPORT', semiTableData.length + ' รายการ วันที่ ' + cycleDate);
         })
-        .withFailureHandler(err => showToast('เกิดข้อผิดพลาด: ' + err, true))
-        .saveSemiMovementAndGetMaster(semiExcelRows, cycleDate);
+        .withFailureHandler(function(err) { showToast('เกิดข้อผิดพลาด: ' + err, true); })
+        .saveSemiMovementAndGetMaster(semiExcelRows, cycleDate, semiSkuColIdx);
 }
 // ─────────────────────────────────────────────────────────────────
 // PRODUCTION VERIFY — ตรวจสอบยอดคีย์ระบบ vs ใบรายงานยอดผลิต
