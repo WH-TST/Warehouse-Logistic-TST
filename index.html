@@ -14013,6 +14013,15 @@ window.initAutoDeliveryPlanner = function() {
     });
 };
 
+// ── Toggle "ใช้เฉพาะรถแม่" สำหรับเที่ยวที่ ti ───────────────────────────────
+// เมื่อเปิด: capacity = capMother, weight bar + warning อัปเดตใหม่
+window.autoplanToggleMotherOnly = function(ti, val) {
+    if (_autoPlanTrips[ti]) {
+        _autoPlanTrips[ti].motherOnly = !!val;
+        renderAutoplanDraftTrips(); // re-render ทั้งตาราง
+    }
+};
+
 // ── Helper: อัปเดต trip เมื่อเปลี่ยนรถในการ์ด (รวม trailer flags) ────────────
 window.autoplanUpdateTripTruck = function(ti, val) {
     _autoPlanTrips[ti].truckPlate  = val;
@@ -14294,13 +14303,11 @@ window.runAutoGrouping = function() {
                 shopId:      sid,
                 shopName:    meta.name || item.shopRaw,
                 distance:    meta.distance || 0,
-                zone:        autoDetectZoneFromAddress(meta.address || '') || meta.zone || '', // auto-detect จากที่อยู่ → จับกลุ่มทิศเหมือนไลน์แมน
+                zone:        autoDetectZoneFromAddress(meta.address || '') || meta.zone || '',
                 sale:        meta.sale     || '',
+                noTrailer:   meta.noTrailer || false, // Col G Customers: รถพ่วงเข้าไม่ได้
                 totalWeight: 0,
                 items:       []
-                // หมายเหตุ: freeDistance ไม่ได้มาจาก master แต่คำนวณตาม rule:
-                //   1 ร้าน/เที่ยว: ≥30000กก.→30km | ≥15000กก.→15km | อื่น→10km
-                //   2+ ร้าน/เที่ยว: 10km × จำนวนร้าน
             };
         }
         shopGroups[sid].totalWeight += item.weightKg;
@@ -14458,8 +14465,10 @@ window.runAutoGrouping = function() {
             });
 
             // ── ขั้น 2: ถ้าไม่มี non-trailer พอดี → ใช้รถพ่วง ──────────────
-            // หลักการ: ใช้พ่วงเมื่อน้ำหนักเกิน 10 ล้อ หรือ 10 ล้อ assign เต็มแล้ว
-            if (!best) {
+            // ยกเว้น: trip มีร้านที่พ่วงเข้าไม่ได้ → ห้าม assign trailer
+            var hasNoTrailerShop = trip.shops.some(function(s) { return s.noTrailer; });
+            trip.noTrailerRestricted = hasNoTrailerShop; // เก็บไว้แสดง warning ใน UI
+            if (!best && !hasNoTrailerShop) {
                 var bestTrailerScore = Infinity;
                 trailerTrucks.forEach(function(t) {
                     var cap   = t.netWeight || 0;
@@ -14635,10 +14644,14 @@ function renderAutoplanDraftTrips() {
         var trip = item.trip;
         var ti   = item.ti;
         var kmTotal  = trip.estimatedKm || 0;
-        var wtPct    = CAPACITY > 0 ? Math.min(100, (trip.totalWeight / CAPACITY) * 100) : 0;
+        // capacity-aware: รถพ่วง + motherOnly → ใช้ capMother เท่านั้น
+        var effectiveCap = (trip.isTrailer && trip.motherOnly && trip.capMother > 0)
+            ? trip.capMother : CAPACITY;
+        var wtPct    = effectiveCap > 0 ? Math.min(100, (trip.totalWeight / effectiveCap) * 100) : 0;
         var wtBarCls = wtPct > 90 ? 'bg-rose-500' : wtPct > 70 ? 'bg-amber-400' : 'bg-emerald-500';
         var kmBadge  = kmTotal > 350 ? 'bg-rose-500 text-white' : kmTotal >= 250 ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-amber-900';
         var zone     = trip.zone || '';
+        var overMotherCap = trip.isTrailer && trip.motherOnly && trip.capMother > 0 && trip.totalWeight > trip.capMother;
 
         // truck opts
         var truckOpts = '<option value="">— รถ —</option>' +
@@ -14665,9 +14678,11 @@ function renderAutoplanDraftTrips() {
         // shop rows (compact)
         var shopRows = trip.shops.map(function(s, si) {
             return '<div class="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 gap-1">' +
-                '<div class="flex items-center gap-1 min-w-0">' +
+                '<div class="flex items-center gap-1 min-w-0 flex-1">' +
                     '<span class="w-4 h-4 bg-violet-100 text-violet-700 rounded-full text-[9px] font-black inline-flex items-center justify-center flex-shrink-0">' + (si+1) + '</span>' +
                     '<span class="text-[11px] font-bold text-slate-700 truncate">' + s.shopName + '</span>' +
+                    // badge พ่วงเข้าไม่ได้ — แสดงใต้ชื่อร้าน
+                    (s.noTrailer ? '<span class="flex-shrink-0 bg-amber-100 text-amber-700 text-[8px] font-black px-1 py-0.5 rounded ml-1 whitespace-nowrap">🚫พ่วง</span>' : '') +
                 '</div>' +
                 '<div class="flex-shrink-0 text-right ml-1">' +
                     '<div class="text-[10px] font-black text-emerald-700">' + (s.totalWeight/1000).toFixed(1) + 't</div>' +
@@ -14688,7 +14703,16 @@ function renderAutoplanDraftTrips() {
                         (zone
                             ? '<span class="' + zoneCls(zone) + ' text-[9px] font-black px-1.5 py-0.5 rounded-full"><i class="fas fa-compass mr-0.5"></i>' + zone + '</span>'
                             : '<span class="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">ไม่ระบุเส้นทาง</span>') +
-                        (trip.isTrailer  ? '<span class="bg-cyan-100 text-cyan-700 text-[9px] font-black px-1.5 py-0.5 rounded-full">🔗พ่วง</span>' : '') +
+                        // trailer badge (ถ้า motherOnly → แสดง mode)
+                        (trip.isTrailer && trip.motherOnly
+                            ? '<span class="bg-sky-100 text-sky-700 text-[9px] font-black px-1.5 py-0.5 rounded-full">🚛แม่เท่านั้น</span>'
+                            : trip.isTrailer
+                                ? '<span class="bg-cyan-100 text-cyan-700 text-[9px] font-black px-1.5 py-0.5 rounded-full">🔗พ่วง</span>'
+                                : '') +
+                        // noTrailer restriction warning
+                        (trip.noTrailerRestricted && trip.isTrailer
+                            ? '<span class="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">⚠️พ่วงเข้าไม่ได้!</span>'
+                            : '') +
                         (trip.overLimit  ? '<span class="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">⚠️เกิน</span>' : '') +
                     '</div>' +
                     '<div class="flex items-center gap-1.5">' +
@@ -14701,15 +14725,29 @@ function renderAutoplanDraftTrips() {
                 // ── weight bar ──
                 '<div class="px-3 pt-2 pb-1">' +
                     '<div class="flex justify-between text-[9px] text-slate-400 mb-0.5">' +
-                        '<span>Load (' + trip.shops.length + ' ร้าน)</span>' +
+                        '<span>Load' + (trip.isTrailer && trip.motherOnly ? ' (แม่' + (trip.capMother/1000).toFixed(1) + 't)' : ' ' + trip.shops.length + ' ร้าน') + '</span>' +
                         '<span class="font-black ' + (wtPct > 90 ? 'text-rose-500' : 'text-slate-500') + '">' + wtPct.toFixed(0) + '%</span>' +
                     '</div>' +
                     '<div class="h-2 bg-slate-100 rounded-full overflow-hidden">' +
                         '<div class="h-full ' + wtBarCls + ' rounded-full" style="width:' + wtPct + '%"></div>' +
                     '</div>' +
+                    // warning: น้ำหนักเกิน cap รถแม่
+                    (overMotherCap
+                        ? '<div class="text-[9px] text-rose-500 font-black mt-0.5">⚠️ เกิน cap แม่ (' + (trip.capMother/1000).toFixed(1) + 't) — เพิ่มพ่วง หรือลดสินค้า</div>'
+                        : '') +
                 '</div>' +
                 // ── fields: วันที่ + รถ + คนขับ ──
                 '<div class="px-2 pb-2 pt-1 space-y-1.5">' +
+                    // checkbox ใช้เฉพาะรถแม่ (เฉพาะ trailer trip)
+                    (trip.isTrailer
+                        ? '<label class="flex items-center gap-1.5 cursor-pointer bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5">' +
+                            '<input type="checkbox"' + (trip.motherOnly ? ' checked' : '') +
+                                ' onchange="autoplanToggleMotherOnly(' + ti + ',this.checked);"' +
+                                ' class="w-3.5 h-3.5 accent-sky-600 cursor-pointer">' +
+                            '<span class="text-[11px] font-black text-sky-700">ใช้เฉพาะรถแม่</span>' +
+                            '<span class="text-[10px] text-slate-400 ml-auto">' + (trip.capMother ? (trip.capMother/1000).toFixed(1) + 't' : '') + '</span>' +
+                          '</label>'
+                        : '') +
                     '<div class="flex items-center gap-1">' +
                         '<i class="fas fa-calendar-check text-violet-400 text-[10px] w-3"></i>' +
                         '<input type="date" value="' + (trip.date || '') + '" ' +

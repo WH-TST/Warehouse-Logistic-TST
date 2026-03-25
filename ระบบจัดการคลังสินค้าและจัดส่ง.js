@@ -4028,20 +4028,23 @@ function getLogisticMasterData() {
       }
     }
 
-    // ── 4. ร้านค้า (Customers): A=รหัส B=ชื่อ C=ที่อยู่ D=เบอร์ติดต่อ E=เซลล์ F=ระยะทางจากบริษัท ──
+    // ── 4. ร้านค้า (Customers): A=รหัส B=ชื่อ C=ที่อยู่ D=เบอร์ E=เซลล์ F=ระยะทาง G=noTrailer ──
+    // Col G = TRUE หมายถึง ร้านนี้รถพ่วงเข้าไม่ได้ (ถนนแคบ, ที่จอดไม่พอ ฯลฯ)
     var shops = [];
     var custSheet = ss.getSheetByName(LOGI_SH_CUSTOMER);
     if (custSheet && custSheet.getLastRow() >= 2) {
       var cd = custSheet.getDataRange().getValues();
       for (var i = 1; i < cd.length; i++) {
-        var cid      = String(cd[i][0] || '').trim();  // Col A: รหัสลูกค้า
-        var cname    = String(cd[i][1] || '').trim();  // Col B: ชื่อร้าน
-        var address  = String(cd[i][2] || '').trim();  // Col C: ที่อยู่ (ใช้ detect zone)
-        var phone    = String(cd[i][3] || '').trim();  // Col D: เบอร์ติดต่อ
-        var sale     = String(cd[i][4] || '').trim();  // Col E: เซลล์ที่รับผิดชอบ
-        var distance = parseFloat(cd[i][5]) || 0;      // Col F: ระยะทางจากบริษัท (กม.)
+        var cid        = String(cd[i][0] || '').trim();  // Col A: รหัสลูกค้า
+        var cname      = String(cd[i][1] || '').trim();  // Col B: ชื่อร้าน
+        var address    = String(cd[i][2] || '').trim();  // Col C: ที่อยู่
+        var phone      = String(cd[i][3] || '').trim();  // Col D: เบอร์ติดต่อ
+        var sale       = String(cd[i][4] || '').trim();  // Col E: เซลล์รับผิดชอบ
+        var distance   = parseFloat(cd[i][5]) || 0;      // Col F: ระยะทาง (กม.)
+        var noTrailer  = String(cd[i][6] || '').trim().toUpperCase() === 'TRUE'; // Col G: พ่วงเข้าไม่ได้
         if (cid && cname) {
-          shops.push({ id: cid, name: cname, address: address, phone: phone, sale: sale, distance: distance, freeDistance: 0, zone: '' });
+          shops.push({ id: cid, name: cname, address: address, phone: phone, sale: sale,
+                       distance: distance, freeDistance: 0, zone: '', noTrailer: noTrailer });
         }
       }
     }
