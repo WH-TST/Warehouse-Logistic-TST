@@ -4058,65 +4058,25 @@ thead.sticky {
       </div>
     </div>
 
-    <!-- STEP 1: นำเข้าข้อมูล SO -->
+    <!-- STEP 1: กำหนดเงื่อนไข + วันที่ส่ง -->
     <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
       <div class="flex items-center gap-2 mb-4">
         <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">1</span>
-        <h4 class="font-black text-slate-700">ดึงข้อมูลจาก Sheet "จองพร้อมส่ง"</h4>
-      </div>
-      <!-- ปุ่มดึงข้อมูลจาก Sheet -->
-      <div class="flex flex-wrap gap-3 items-end">
-        <div>
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">กรองตาม Ship Date (ไม่บังคับ)</label>
-          <input type="date" id="autoplan-ship-date"
-            class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 transition-all text-sm">
-          <div id="autoplan-date-chips" class="flex flex-wrap gap-1.5 mt-1.5"></div>
-        </div>
-        <button onclick="autoplanLoadFromSheet()" id="autoplan-load-btn"
-          class="bg-violet-600 hover:bg-violet-500 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow transition-all flex items-center gap-2">
-          <i class="fas fa-cloud-download-alt"></i>ดึงข้อมูลจาก Sheet
-        </button>
-        <span class="text-xs text-slate-400">หรือ</span>
-        <label class="cursor-pointer bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl px-4 py-2.5 text-slate-500 font-bold text-sm text-center hover:bg-slate-100 transition-all">
-          <i class="fas fa-file-excel text-emerald-500 mr-1"></i>Excel backup
-          <input type="file" id="autoplan-file-input" accept=".xlsx,.xls" class="hidden" onchange="autoplanReadExcel(this)">
-        </label>
-      </div>
-      <div class="mt-2 p-2 bg-violet-50 rounded-xl border border-violet-100 text-xs text-violet-600">
-        <i class="fas fa-info-circle mr-1"></i>อ่านจาก Sheet <strong>"จองพร้อมส่ง"</strong> — คอลัมน์ D=ชื่อร้าน, G=Ship date, H=รหัสสินค้า, I=ชื่อสินค้า, AB=จำนวน, AF=น้ำหนัก (กก.)
-      </div>
-
-      <!-- Preview table -->
-      <div id="autoplan-so-preview" class="hidden mt-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-black text-slate-500 uppercase">ข้อมูลที่โหลด: <span id="autoplan-so-count" class="text-violet-600">0</span> รายการ / <span id="autoplan-shop-count" class="text-emerald-600">0</span> ร้าน</span>
-          <button onclick="clearAutoplanData()" class="text-xs text-rose-500 hover:text-rose-700 font-bold">
-            <i class="fas fa-times mr-1"></i>ล้างข้อมูล
-          </button>
-        </div>
-        <div class="overflow-x-auto max-h-48 overflow-y-auto rounded-xl border border-slate-200">
-          <table class="w-full text-xs">
-            <thead class="bg-slate-700 text-white sticky top-0">
-              <tr>
-                <th class="px-3 py-2 text-left font-black">ร้านค้า</th>
-                <th class="px-3 py-2 text-left font-black">Ship Date</th>
-                <th class="px-3 py-2 text-left font-black">สินค้า</th>
-                <th class="px-3 py-2 text-right font-black">จำนวน</th>
-                <th class="px-3 py-2 text-right font-black">น้ำหนัก (กก.)</th>
-                <th class="px-3 py-2 text-center font-black">Match ร้าน</th>
-              </tr>
-            </thead>
-            <tbody id="autoplan-so-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- STEP 2: กำหนด Parameter -->
-    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">2</span>
         <h4 class="font-black text-slate-700">กำหนดเงื่อนไขการวางแผน</h4>
+      </div>
+      <!-- วันที่ส่ง (compact) -->
+      <div class="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b border-slate-100">
+        <span class="text-xs font-black text-slate-500 uppercase">📅 วันที่ส่ง</span>
+        <input type="date" id="autoplan-ship-date"
+          class="bg-violet-50 border-2 border-violet-200 rounded-xl px-3 py-2 font-bold text-violet-700 outline-none focus:border-violet-400 transition-all text-sm">
+        <div id="autoplan-date-chips" class="flex flex-wrap gap-1.5"></div>
+        <!-- hidden elements for backward compat -->
+        <input type="file" id="autoplan-file-input" accept=".xlsx,.xls" class="hidden" onchange="autoplanReadExcel(this)">
+        <div id="autoplan-so-preview" class="hidden"></div>
+        <span id="autoplan-so-count" class="hidden">0</span>
+        <span id="autoplan-shop-count" class="hidden">0</span>
+        <tbody id="autoplan-so-tbody" class="hidden"></tbody>
+        <button id="autoplan-load-btn" class="hidden"></button>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div>
@@ -4174,19 +4134,19 @@ thead.sticky {
       </div>
       <div class="mt-4 flex justify-end items-center gap-3">
         <div id="autoplan-excluded-badge" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-bold"></div>
-        <button onclick="runAutoGrouping()" id="autoplan-run-btn"
+        <button onclick="autoplanRunAll()" id="autoplan-run-btn"
           class="bg-violet-600 hover:bg-violet-500 text-white px-8 py-3 rounded-xl font-black text-sm shadow-lg transition-all flex items-center gap-2">
-          <i class="fas fa-magic"></i>สร้างแผนอัตโนมัติ
+          <i class="fas fa-magic"></i>จัดแผนอัตโนมัติ
         </button>
       </div>
     </div>
 
-    <!-- STEP 3: Draft Trips -->
+    <!-- STEP 2: Draft Trips -->
     <div id="autoplan-result-section" class="hidden">
       <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-2">
-            <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">3</span>
+            <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">2</span>
             <h4 class="font-black text-slate-700">ผลลัพธ์ Draft Trips</h4>
             <span id="autoplan-trip-count-badge" class="bg-violet-100 text-violet-700 text-xs font-black px-3 py-1 rounded-full"></span>
           </div>
@@ -14150,6 +14110,68 @@ window.autoplanLoadFromSheet = function() {
         })
         .withFailureHandler(function(err) {
             if (loadBtn) { loadBtn.innerHTML = '<i class="fas fa-cloud-download-alt mr-1"></i>ดึงข้อมูลจาก Sheet'; loadBtn.disabled = false; }
+            showToast('โหลดไม่สำเร็จ: ' + (err.message || String(err)), true);
+        })
+        .getReadyToShipOrders(shipDate);
+};
+
+// ── Combined: โหลด SO + จัดแผน ในคลิกเดียว ─────────────────────────────────
+window.autoplanRunAll = function() {
+    var runBtn = safeGet('autoplan-run-btn');
+    if (runBtn) { runBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดข้อมูล...'; runBtn.disabled = true; }
+
+    // วันที่ส่ง: ใช้จาก input หรือ default พรุ่งนี้
+    var sdEl  = safeGet('autoplan-ship-date');
+    var sdVal = sdEl ? sdEl.value : '';
+    if (!sdVal) {
+        var tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+        sdVal = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
+        if (sdEl) sdEl.value = sdVal;
+    }
+    var shipDate = sdVal;
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || !res.success) {
+                if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
+                showToast('โหลดข้อมูลไม่สำเร็จ: ' + (res ? res.message : ''), true);
+                return;
+            }
+            _autoPlanSoItems = res.items || [];
+            _autoplanMatchShops();
+
+            var unmatchedCount = _autoPlanSoItems.filter(function(i){ return !i.matched; }).length;
+            var msg = 'โหลด ' + _autoPlanSoItems.length + ' รายการ';
+            if (unmatchedCount > 0) msg += ' (ไม่พบร้าน ' + unmatchedCount + ' รายการ)';
+
+            // Cross-day: check planned shops
+            window._autoPlanExcludedShopIds = new Set();
+            function _doRun() {
+                if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
+                showToast(msg + ' — กำลังจัดแผน...');
+                runAutoGrouping();
+            }
+            if (shipDate) {
+                google.script.run
+                    .withSuccessHandler(function(r2) {
+                        if (r2 && r2.success && r2.plannedShopIds) {
+                            r2.plannedShopIds.forEach(function(id){ window._autoPlanExcludedShopIds.add(id); });
+                            var excl = window._autoPlanExcludedShopIds.size;
+                            if (excl > 0) {
+                                var badge = safeGet('autoplan-excluded-badge');
+                                if (badge) { badge.textContent = '⚠️ ' + excl + ' ร้านวางแผนไปแล้ว'; badge.classList.remove('hidden'); }
+                            }
+                        }
+                        _doRun();
+                    })
+                    .withFailureHandler(function(){ _doRun(); })
+                    .getPlannedShopIdsByDateRange(shipDate, shipDate);
+            } else {
+                _doRun();
+            }
+        })
+        .withFailureHandler(function(err) {
+            if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
             showToast('โหลดไม่สำเร็จ: ' + (err.message || String(err)), true);
         })
         .getReadyToShipOrders(shipDate);
