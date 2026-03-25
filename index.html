@@ -14163,7 +14163,7 @@ window.runAutoGrouping = function() {
     const CAPACITY  = parseFloat((safeGet('autoplan-capacity')  || {}).value) || 15000;
     const shops     = LOGI_MASTER_CACHE.shops || [];
 
-    // 1. จัดกลุ่มตาม shopId
+    // 1. จัดกลุ่มตาม shopId + ดึง zone จาก master
     const shopGroups = {};
     _autoPlanSoItems.forEach(function(item) {
         if (!item.matched) return;
@@ -14173,9 +14173,10 @@ window.runAutoGrouping = function() {
             shopGroups[sid] = {
                 shopId:       sid,
                 shopName:     meta.name || item.shopRaw,
-                distance:     meta.distance     || 0,
-                freeDistance: meta.freeDistance || 0,
-                sale:         meta.sale         || '',
+                distance:     meta.distance      || 0,
+                freeDistance: meta.freeDistance  || 0,
+                zone:         meta.zone          || '', // Col H ใน Customers sheet
+                sale:         meta.sale          || '',
                 totalWeight:  0,
                 items:        []
             };
@@ -14189,7 +14190,7 @@ window.runAutoGrouping = function() {
         });
     });
 
-    // ร้านที่ไม่พบใน master
+    // แจ้ง unmatched shops
     const unmatchedShops = _autoPlanSoItems.filter(function(i) { return !i.matched; });
     const unmatchedWarn = safeGet('autoplan-unmatched-warning');
     const unmatchedTxt  = safeGet('autoplan-unmatched-text');
@@ -14201,14 +14202,34 @@ window.runAutoGrouping = function() {
         if (unmatchedWarn) unmatchedWarn.classList.add('hidden');
     }
 
-    let remaining = Object.values(shopGroups).filter(function(g) { return g.distance > 0; });
+    let allShopList = Object.values(shopGroups).filter(function(g) { return g.distance > 0; });
 
-    // เรียงจากใกล้ → ไกล
-    remaining.sort(function(a, b) { return a.distance - b.distance; });
+    // ── Zone-based grouping (ถ้ามี zone ใน master) ───────────────────────────
+    // จัดกลุ่มตามเส้นทาง/ทิศทางก่อน → ป้องกัน ระยอง + นนทบุรี อยู่เที่ยวเดียวกัน
+    const hasZone = allShopList.some(function(g) { return g.zone; });
+    let zoneGroups = {}; // zone → [shops]
+    if (hasZone) {
+        allShopList.forEach(function(g) {
+            const z = g.zone || '(ไม่ระบุเส้นทาง)';
+            if (!zoneGroups[z]) zoneGroups[z] = [];
+            zoneGroups[z].push(g);
+        });
+    } else {
+        // ไม่มี zone → รวมเป็น group เดียว (ใช้ distance อย่างเดียว)
+        zoneGroups['all'] = allShopList;
+    }
 
-    // 2. Greedy Nearest-Neighbor Bin Packing
-    // สูตรระยะทาง = (ร้านไกลสุด × 2) + ฟรีรวมทุกร้าน  ← ตรงกับเป้าผู้บริหาร ≈ 300 กม./วัน
+    // 2. Greedy Nearest-Neighbor Bin Packing แยกตาม zone
+    // สำคัญ: ร้านในคนละ zone ห้ามอยู่เที่ยวเดียวกัน (ยกเว้นไม่มี zone)
     _autoPlanTrips = [];
+
+    Object.keys(zoneGroups).forEach(function(zoneName) {
+        // เรียงจากใกล้ → ไกลภายใน zone
+        let remaining = zoneGroups[zoneName].slice()
+            .sort(function(a, b) { return a.distance - b.distance; });
+
+    // ── Greedy Nearest-Neighbor ภายใน zone ──────────────────────────────────
+    // สูตรระยะทาง = (ร้านไกลสุด × 2) + ฟรีรวมทุกร้าน  ≈ 300 กม./วัน
     while (remaining.length > 0) {
         const trip = { shops: [], estimatedKm: 0, roundTrip: 0, totalFreeKm: 0, totalWeight: 0 };
 
@@ -14263,41 +14284,72 @@ window.runAutoGrouping = function() {
             trip.date = (safeGet('autoplan-ship-date') || {}).value || '';
         }
 
+        // เก็บ zone name ไว้แสดงใน card
+        trip.zone = hasZone ? zoneName : '';
         _autoPlanTrips.push(trip);
-    }
+    } // end while remaining
+    }); // end forEach zoneGroups
 
     // ── Auto-assign Truck ─────────────────────────────────────────────────────
-    const truckType    = (safeGet('autoplan-truck-type') || {}).value || 'company';
-    const isHiredMode  = truckType === 'hired';
-    const transports   = LOGI_MASTER_CACHE.transports || [];
-    const trucks       = (LOGI_MASTER_CACHE.trucks || []).slice(); // copy เพื่อ cycle
-    // เรียง trucks: ใหญ่สุดก่อน
-    trucks.sort(function(a, b) { return (b.netWeight || 0) - (a.netWeight || 0); });
+    const truckType   = (safeGet('autoplan-truck-type') || {}).value || 'company';
+    const isHiredMode = truckType === 'hired';
+    const transports  = LOGI_MASTER_CACHE.transports || [];
+    // เรียง trucks: netWeight ใหญ่สุดก่อน (ถ้าไม่มี netWeight ใช้ตามลำดับเดิม)
+    const trucks = (LOGI_MASTER_CACHE.trucks || []).slice()
+        .sort(function(a, b) { return (b.netWeight || 0) - (a.netWeight || 0); });
 
-    const usedTrucks = {}; // plate → trip index ที่ assign ไปแล้ว (สำหรับ cycle)
+    const MAX_TRIPS_PER_TRUCK = 3;  // ไม่เกิน 3 เที่ยว/คน/วัน (ความเหนื่อย+การจราจร)
+    const usedCount = {};           // plate → จำนวนเที่ยวที่ assign แล้ว
+    trucks.forEach(function(t) { usedCount[t.plate] = 0; });
+
     _autoPlanTrips.forEach(function(trip, ti) {
         if (isHiredMode) {
-            // รถจ้าง: cycle ผ่าน transports ตามลำดับ
+            // รถจ้าง: cycle ผ่าน transports (ไม่จำกัดเที่ยว เพราะบริษัทขนส่งส่งรถได้ไม่จำกัด)
             if (transports.length > 0) {
                 const t = transports[ti % transports.length];
                 trip.transportCo = t.id;
                 trip.truckPlate  = '';
             }
-        } else {
-            // รถบริษัท: หารถที่ capacity ≥ น้ำหนักเที่ยว โดย prefer ไม่ซ้ำกัน
-            var assigned = trucks.find(function(t) {
-                return (t.netWeight || 0) >= trip.totalWeight && !usedTrucks[t.plate];
+        } else if (trucks.length > 0) {
+            // รถบริษัท: เลือกรถที่:
+            //   1. capacity ≥ น้ำหนัก (ถ้ามี netWeight) หรือ capacity ไม่ได้กำหนด
+            //   2. ยังไม่เกิน MAX_TRIPS_PER_TRUCK เที่ยว
+            //   3. ใช้น้อยที่สุด (ช่วยกระจาย load)
+            var best = null;
+            var bestScore = Infinity;
+            trucks.forEach(function(t) {
+                var cap   = t.netWeight || 0;
+                var fits  = (cap === 0) || (cap >= trip.totalWeight);
+                var count = usedCount[t.plate] || 0;
+                var withinLimit = count < MAX_TRIPS_PER_TRUCK;
+                if (fits && withinLimit && count < bestScore) {
+                    bestScore = count;
+                    best = t;
+                }
             });
-            if (!assigned) {
-                // ถ้าหมดรถ: cycle โดยเลือก capacity ใหญ่สุดที่ใช้น้อยที่สุด
-                assigned = trucks[ti % trucks.length];
+            // fallback: ถ้าทุกรถเต็ม MAX_TRIPS → เลือกรถที่ใช้น้อยที่สุด (พร้อม warning)
+            if (!best) {
+                best = trucks.reduce(function(a, b) {
+                    return (usedCount[a.plate] || 0) <= (usedCount[b.plate] || 0) ? a : b;
+                });
+                trip.overLimit = true; // flag: เกินเที่ยวที่กำหนด
             }
-            if (assigned) {
-                trip.truckPlate = assigned.plate;
-                usedTrucks[assigned.plate] = ti;
+            if (best) {
+                trip.truckPlate = best.plate;
+                usedCount[best.plate] = (usedCount[best.plate] || 0) + 1;
             }
         }
     });
+
+    // แจ้ง warning ถ้ามีเที่ยวที่เกิน MAX_TRIPS
+    const overLimitTrips = _autoPlanTrips.filter(function(t) { return t.overLimit; });
+    if (overLimitTrips.length > 0) {
+        const warn = safeGet('autoplan-unmatched-warning');
+        const txt  = safeGet('autoplan-unmatched-text');
+        if (warn) warn.classList.remove('hidden');
+        if (txt)  txt.innerHTML = (txt.textContent ? txt.textContent + '<br>' : '') +
+            '⚠️ มี <strong>' + overLimitTrips.length + ' เที่ยว</strong> ที่รถถูก assign เกิน ' + MAX_TRIPS_PER_TRUCK + ' เที่ยว/วัน กรุณาตรวจสอบและแก้ไข';
+    }
 
     renderAutoplanDraftTrips();
 };
@@ -14378,9 +14430,16 @@ function renderAutoplanDraftTrips() {
                     '<div class="flex items-center gap-2">' +
                         '<span class="w-8 h-8 bg-white/25 rounded-xl flex items-center justify-center text-white font-black">' + (ti+1) + '</span>' +
                         '<div>' +
-                            '<div class="text-white font-black text-sm">เที่ยวที่ ' + (ti+1) + '</div>' +
-                            // Ship Date แสดงชัดเจน
-                            (fmtShipDate ? '<div class="text-violet-200 text-xs font-bold"><i class="fas fa-calendar-check mr-1"></i>ส่งวันที่ ' + fmtShipDate + '</div>' : '') +
+                            '<div class="flex items-center gap-2 flex-wrap">' +
+                            '<span class="text-white font-black text-sm">เที่ยวที่ ' + (ti+1) + '</span>' +
+                            // Zone badge
+                            (trip.zone ? '<span class="bg-white/25 text-white text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fas fa-route mr-0.5"></i>' + trip.zone + '</span>' :
+                                '<span class="bg-amber-400/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full" title="เพิ่มคอลัมน์ เส้นทาง (Col H) ใน Sheet Customers เพื่อจัดกลุ่มตามทิศทาง"><i class="fas fa-exclamation-triangle mr-0.5"></i>ยังไม่มีเส้นทาง</span>') +
+                            // Over-limit badge
+                            (trip.overLimit ? '<span class="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse"><i class="fas fa-exclamation-circle mr-0.5"></i>เกิน 3 เที่ยว/วัน!</span>' : '') +
+                        '</div>' +
+                        // Ship Date
+                        (fmtShipDate ? '<div class="text-violet-200 text-xs font-bold mt-0.5"><i class="fas fa-calendar-check mr-1"></i>ส่งวันที่ ' + fmtShipDate + '</div>' : '') +
                         '</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-3">' +
