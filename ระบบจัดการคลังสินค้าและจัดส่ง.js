@@ -3999,16 +3999,19 @@ function getLogisticMasterData() {
       }
     }
 
-    // ── 2. คนขับ (Driver Name): Col A=รหัส, B=ชื่อ, C=canTrailer (TRUE/FALSE) ──
+    // ── 2. คนขับ (Driver Name): Col A=รหัส, B=ชื่อ, C=canTrailer, D=trailerPriority ──
+    // trailerPriority: 1=ขับก่อน (คนขับหลัก), 2=สำรอง (เช่น หัวหน้างาน)
+    // ถ้าไม่ระบุ Col D → default = 1
     var drivers = [];
     var driverSheet = ss.getSheetByName(LOGI_SH_DRIVER);
     if (driverSheet && driverSheet.getLastRow() >= 2) {
       var dd = driverSheet.getDataRange().getValues();
       for (var i = 1; i < dd.length; i++) {
-        var empId      = String(dd[i][0] || '').trim();
-        var empName    = String(dd[i][1] || '').trim();
-        var canTrailer = String(dd[i][2] || '').trim().toUpperCase() === 'TRUE'; // Col C
-        if (empName) drivers.push({ id: empId, name: empName, canTrailer: canTrailer });
+        var empId           = String(dd[i][0] || '').trim();
+        var empName         = String(dd[i][1] || '').trim();
+        var canTrailer      = String(dd[i][2] || '').trim().toUpperCase() === 'TRUE'; // Col C
+        var trailerPriority = parseInt(dd[i][3]) || 1; // Col D: 1=หลัก, 2=สำรอง (default=1)
+        if (empName) drivers.push({ id: empId, name: empName, canTrailer: canTrailer, trailerPriority: trailerPriority });
       }
     }
 

@@ -14492,13 +14492,36 @@ window.runAutoGrouping = function() {
 
     // ── Auto-assign Driver สำหรับรถพ่วง ──────────────────────────────────────
     // เฉพาะคนขับที่ canTrailer=true เท่านั้นที่ขับรถพ่วงได้
-    const trailerDrivers = (LOGI_MASTER_CACHE.drivers || []).filter(function(d) { return d.canTrailer; });
-    const driverUsed     = {};
+    // trailerPriority: 1=คนขับหลัก (ใช้ก่อน), 2=สำรอง/หัวหน้า (ใช้เมื่อคนหลักเต็มแล้ว)
+    const trailerDrivers = (LOGI_MASTER_CACHE.drivers || [])
+        .filter(function(d) { return d.canTrailer; })
+        .slice()
+        .sort(function(a, b) {
+            // เรียงตาม priority ก่อน (1 ก่อน 2) → ใช้เสมอเป็นลำดับแรก
+            return (a.trailerPriority || 1) - (b.trailerPriority || 1);
+        });
+    const driverUsed = {};
     _autoPlanTrips.forEach(function(trip) {
         if (!trip.isTrailer || trailerDrivers.length === 0) return;
-        // เลือกคนขับพ่วงที่ว่างมากที่สุด (กระจาย load)
-        var pick = trailerDrivers.reduce(function(a, b) {
-            return (driverUsed[a.id] || 0) <= (driverUsed[b.id] || 0) ? a : b;
+        // คนขับหลัก (priority=1) ทุกคน → เลือกที่ใช้น้อยสุด
+        // ถ้าหลักทุกคนมีงานแล้ว → ค่อยใช้สำรอง (priority=2)
+        var mainDrivers    = trailerDrivers.filter(function(d) { return (d.trailerPriority || 1) === 1; });
+        var backupDrivers  = trailerDrivers.filter(function(d) { return (d.trailerPriority || 1) >  1; });
+        var pool = mainDrivers.length > 0 ? mainDrivers : backupDrivers;
+
+        // ถ้ายังมีคนขับหลักที่ยังไม่มีงานเลย → ใช้ pool หลัก
+        // ถ้าหลักทุกคนมีงานแล้ว → เพิ่มสำรองเข้า pool
+        var anyMainFree = mainDrivers.some(function(d) { return (driverUsed[d.id] || 0) === 0; });
+        if (!anyMainFree && backupDrivers.length > 0) {
+            pool = trailerDrivers; // เปิดให้สำรองรับงาน
+        }
+
+        var pick = pool.reduce(function(a, b) {
+            // เลือกที่ใช้น้อยสุด; ถ้าเท่ากัน → priority ต่ำกว่า (หลัก) ก่อน
+            var countA = driverUsed[a.id] || 0;
+            var countB = driverUsed[b.id] || 0;
+            if (countA !== countB) return countA < countB ? a : b;
+            return (a.trailerPriority || 1) <= (b.trailerPriority || 1) ? a : b;
         });
         trip.driver   = pick.name;
         trip.driverId = pick.id;
