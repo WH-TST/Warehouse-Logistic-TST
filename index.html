@@ -13991,6 +13991,16 @@ let _autoPlanTrips   = [];   // draft trips หลัง grouping
 
 // ── Init tab ──────────────────────────────────────────────────────────────────
 window.initAutoDeliveryPlanner = function() {
+    // ตั้ง default วันส่ง = วันพรุ่งนี้ (ถ้ายังไม่ได้กรอก)
+    const shipDateEl = safeGet('autoplan-ship-date');
+    if (shipDateEl && !shipDateEl.value) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const y = tomorrow.getFullYear();
+        const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+        const d = String(tomorrow.getDate()).padStart(2, '0');
+        shipDateEl.value = y + '-' + m + '-' + d;
+    }
     loadLogiMaster(function() {
         autoplanUpdateTruckOptions();
     });
@@ -14371,19 +14381,8 @@ window.runAutoGrouping = function() {
         trip.driver      = '';
         trip.transportCo = '';
 
-        // ── Auto-assign Ship Date จาก SO items ของ trip ──────────────────────
-        const tripShopIds = trip.shops.map(function(s) { return s.shopId; });
-        const tripDates   = _autoPlanSoItems
-            .filter(function(i) { return i.matched && tripShopIds.includes(i.shopId) && i.shipDate; })
-            .map(function(i) { return i.shipDate; });
-        // ใช้ ship date ที่พบมากที่สุด (mode) หรือวันแรก
-        if (tripDates.length > 0) {
-            const freq = {};
-            tripDates.forEach(function(d) { freq[d] = (freq[d] || 0) + 1; });
-            trip.date = Object.keys(freq).reduce(function(a, b) { return freq[a] >= freq[b] ? a : b; });
-        } else {
-            trip.date = (safeGet('autoplan-ship-date') || {}).value || '';
-        }
+        // ── วันที่ส่ง: ยึดจาก input ที่ผู้ใช้กำหนดเท่านั้น ห้ามใช้วันจากชีต ──
+        trip.date = (safeGet('autoplan-ship-date') || {}).value || '';
 
         // เก็บ zone name ไว้แสดงใน card
         trip.zone = hasZone ? zoneName : '';
