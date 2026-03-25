@@ -29,7 +29,7 @@ function _handleApiPost(e) {
       'getSafetyStockData','saveSafetyStockData',
       'saveFGCycleCount','saveSemiCycleCount',
       'importInventoryData','uploadOverdueData',
-      'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders',
+      'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders','getAutoplanBundle',
       'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan','getPlannedShopIdsByDateRange',
       'getLogisticPlanSummary','getPreShipmentData','getPreShipmentProductList',
       'saveDriverActivityRow','saveDriverActivityRows','getDriverActivityLog',
@@ -185,7 +185,7 @@ function doGet(e) {
           'getSafetyStockData','saveSafetyStockData',
           'saveFGCycleCount','saveSemiCycleCount',
           'importInventoryData','uploadOverdueData',
-          'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders',
+          'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders','getAutoplanBundle',
           'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan','getPlannedShopIdsByDateRange',
           'getLogisticPlanSummary','getPreShipmentData','getPreShipmentProductList',
           'saveDriverActivityRow','saveDriverActivityRows','getDriverActivityLog',
@@ -4470,6 +4470,126 @@ function getLogisticPlans(date) {
 
   } catch (e) {
     return { success: false, message: e.toString(), plans: [] };
+  }
+}
+
+// ── getAutoplanBundle(tomorrowStr) ────────────────────────────────────────────
+// รวม 3 การทำงานใน 1 call: โหลด SO + match ร้าน + ดึง plannedShopIds
+// แทนการเรียก getReadyToShipOrders + getPlannedShopIdsByDateRange แยกกัน
+function getAutoplanBundle(tomorrowStr) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // ── 1. สร้าง shopMap จาก Customers (สำหรับ match) ─────────────────────────
+    var shopMap = {}; // key = ชื่อร้าน lowercase → { id, name }
+    var custSheet = ss.getSheetByName(LOGI_SH_CUSTOMER);
+    if (custSheet && custSheet.getLastRow() >= 2) {
+      var cd = custSheet.getDataRange().getValues();
+      for (var i = 1; i < cd.length; i++) {
+        var cid   = String(cd[i][0] || '').trim();
+        var cname = String(cd[i][1] || '').trim();
+        if (cid && cname) shopMap[cname.toLowerCase()] = { id: cid, name: cname };
+      }
+    }
+    var shopKeys = Object.keys(shopMap);
+
+    // ── 2. โหลด SO จาก 'จองพร้อมส่ง' ─────────────────────────────────────────
+    var items = [];
+    var soSheet = ss.getSheetByName('จองพร้อมส่ง');
+    if (soSheet && soSheet.getLastRow() >= 2) {
+      var data    = soSheet.getDataRange().getValues();
+      var headers = data[0];
+      var colIdx  = {};
+      headers.forEach(function(h, i) { colIdx[String(h).trim().toLowerCase()] = i; });
+
+      var iShop    = colIdx['delivery name']  !== undefined ? colIdx['delivery name']  : 3;
+      var iDate    = colIdx['ship date']       !== undefined ? colIdx['ship date']       : 6;
+      var iItemNo  = colIdx['item number']     !== undefined ? colIdx['item number']     : 7;
+      var iProd    = colIdx['product name']    !== undefined ? colIdx['product name']    : 8;
+      var iQty     = colIdx['qty']             !== undefined ? colIdx['qty']             : 11;
+      var iWeight  = colIdx['kg/จอง']          !== undefined ? colIdx['kg/จอง']          : 31;
+
+      for (var r = 1; r < data.length; r++) {
+        var row      = data[r];
+        var shopRaw  = String(row[iShop]  || '').trim();
+        var productN = String(row[iProd]  || '').trim();
+        if (!shopRaw || !productN) continue;
+
+        // แปลงวันที่
+        var sd = '';
+        var rawD = row[iDate];
+        if (rawD) {
+          var dObj = rawD instanceof Date ? rawD : new Date(rawD);
+          if (!isNaN(dObj.getTime())) {
+            sd = dObj.getFullYear() + '-' +
+                 String(dObj.getMonth() + 1).padStart(2, '0') + '-' +
+                 String(dObj.getDate()).padStart(2, '0');
+          }
+        }
+
+        // match ร้านค้า (exact → substring → token)
+        var matched = false, shopId = null, shopName = '';
+        var rawLow = shopRaw.toLowerCase().trim();
+        if (shopMap[rawLow]) {
+          var m = shopMap[rawLow]; matched = true; shopId = m.id; shopName = m.name;
+        } else {
+          for (var k = 0; k < shopKeys.length && !matched; k++) {
+            var sn = shopKeys[k];
+            if (rawLow.indexOf(sn) >= 0 || sn.indexOf(rawLow) >= 0) {
+              matched = true; shopId = shopMap[sn].id; shopName = shopMap[sn].name;
+            }
+          }
+          if (!matched) {
+            var tokens = rawLow.split(/\s+/).filter(function(t) { return t.length > 3; });
+            for (var k = 0; k < shopKeys.length && !matched; k++) {
+              var sn = shopKeys[k];
+              for (var t = 0; t < tokens.length && !matched; t++) {
+                if (sn.indexOf(tokens[t]) >= 0) {
+                  matched = true; shopId = shopMap[sn].id; shopName = shopMap[sn].name;
+                }
+              }
+            }
+          }
+        }
+
+        items.push({
+          shopRaw: shopRaw, shipDate: sd,
+          itemNo: String(row[iItemNo] || '').trim(),
+          productName: productN,
+          qty: parseFloat(row[iQty]) || 0,
+          weightKg: parseFloat(row[iWeight]) || 0,
+          matched: matched, shopId: shopId, shopName: shopName
+        });
+      }
+    }
+
+    // ── 3. ดึง plannedShopIds สำหรับวันพรุ่งนี้ ────────────────────────────────
+    var plannedShopIds = [];
+    if (tomorrowStr) {
+      var planSheet = ss.getSheetByName(LOGI_PLAN_SHEET);
+      if (planSheet && planSheet.getLastRow() >= 2) {
+        var pd = planSheet.getDataRange().getValues();
+        var idMap = {};
+        for (var i = 1; i < pd.length; i++) {
+          var rowDate = '';
+          var rawDate2 = pd[i][1]; // Col B: วันที่
+          if (rawDate2 instanceof Date) {
+            rowDate = Utilities.formatDate(rawDate2, 'GMT+7', 'yyyy-MM-dd');
+          } else {
+            rowDate = String(rawDate2 || '').substring(0, 10);
+          }
+          if (rowDate === tomorrowStr) {
+            var sid = String(pd[i][17] || '').trim(); // Col R: รหัสร้านค้า
+            if (sid) idMap[sid] = true;
+          }
+        }
+        plannedShopIds = Object.keys(idMap);
+      }
+    }
+
+    return { success: true, items: items, plannedShopIds: plannedShopIds };
+  } catch(e) {
+    return { success: false, message: e.toString() };
   }
 }
 

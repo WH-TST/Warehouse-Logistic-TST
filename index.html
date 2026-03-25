@@ -5076,6 +5076,15 @@ const _safeStorage = {
     document.addEventListener("DOMContentLoaded", function() {
         console.log("✅ DOM Ready - Warehouse & Logistic Management System Initialized");
 
+        // ── Preload logistics master data in background (เร็วขึ้นตอนเปิด tab) ──────
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            setTimeout(function() {
+                loadLogiMaster(function() {
+                    console.log('✅ Logistics master preloaded — shops: ' + (LOGI_MASTER_CACHE.shops || []).length);
+                });
+            }, 800);
+        }
+
         // --- DATA STATE ---
         let rawData = [];
         let holidayList = [];
@@ -14117,7 +14126,7 @@ window.autoplanRunAll = function() {
     var tomorrowStr = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
     if (sdEl) sdEl.value = tomorrowStr;
 
-    // โหลด SO ทั้งหมด (ไม่กรองวัน) — ระบบกำหนดวันส่งในการ์ดเอง
+    // 1 GAS call แทน 2 — รวม SO + match ร้าน + planned IDs
     google.script.run
         .withSuccessHandler(function(res) {
             if (!res || !res.success) {
@@ -14131,39 +14140,31 @@ window.autoplanRunAll = function() {
                 showToast('ไม่พบข้อมูลใน Sheet "จองพร้อมส่ง"', true);
                 return;
             }
+
+            // fallback match ฝั่ง client สำหรับ item ที่ยังไม่ match
             _autoplanMatchShops();
+
+            // set excluded shop IDs จาก planned ล่วงหน้า
+            window._autoPlanExcludedShopIds = new Set(res.plannedShopIds || []);
+            var excl = window._autoPlanExcludedShopIds.size;
+            if (excl > 0) {
+                var badge = safeGet('autoplan-excluded-badge');
+                if (badge) { badge.textContent = '⚠️ ' + excl + ' ร้านวางแผนไปแล้ว'; badge.classList.remove('hidden'); }
+            }
 
             var unmatchedCount = _autoPlanSoItems.filter(function(i){ return !i.matched; }).length;
             var msg = 'โหลด ' + _autoPlanSoItems.length + ' รายการ';
-            if (unmatchedCount > 0) msg += ' (ไม่พบร้าน ' + unmatchedCount + ' รายการ)';
+            if (unmatchedCount > 0) msg += ' — ไม่พบร้าน ' + unmatchedCount + ' รายการ';
 
-            // Cross-day: check planned shops ในวันพรุ่งนี้
-            window._autoPlanExcludedShopIds = new Set();
-            function _doRun() {
-                if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
-                showToast(msg + ' — กำลังจัดแผน...');
-                runAutoGrouping();
-            }
-            google.script.run
-                .withSuccessHandler(function(r2) {
-                    if (r2 && r2.success && r2.plannedShopIds) {
-                        r2.plannedShopIds.forEach(function(id){ window._autoPlanExcludedShopIds.add(id); });
-                        var excl = window._autoPlanExcludedShopIds.size;
-                        if (excl > 0) {
-                            var badge = safeGet('autoplan-excluded-badge');
-                            if (badge) { badge.textContent = '⚠️ ' + excl + ' ร้านวางแผนไปแล้ว'; badge.classList.remove('hidden'); }
-                        }
-                    }
-                    _doRun();
-                })
-                .withFailureHandler(function(){ _doRun(); })
-                .getPlannedShopIdsByDateRange(tomorrowStr, tomorrowStr);
+            if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
+            showToast(msg);
+            runAutoGrouping();
         })
         .withFailureHandler(function(err) {
             if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
             showToast('โหลดไม่สำเร็จ: ' + (err.message || String(err)), true);
         })
-        .getReadyToShipOrders('');  // '' = โหลดทั้งหมด ไม่กรองวัน
+        .getAutoplanBundle(tomorrowStr);
 };
 
 // ── match shopRaw → shopId จาก LOGI_MASTER_CACHE.shops ─────────────────────
@@ -15159,7 +15160,12 @@ window.autoplanSaveSingleTrip = function(ti) {
     if (!trip) return;
 
     var btn = document.getElementById('autoplan-card-save-' + ti);
-    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังบันทึก...'; btn.disabled = true; }
+    // Optimistic UI: แสดงว่าบันทึกแล้วทันที
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-check mr-1"></i>บันทึกแล้ว ✓';
+        btn.disabled = true;
+        btn.className = btn.className.replace('bg-emerald-600 hover:bg-emerald-500', 'bg-slate-400');
+    }
 
     var isHired = trip.truckType === 'hired';
     var driverTransport = '';
@@ -15203,18 +15209,24 @@ window.autoplanSaveSingleTrip = function(ti) {
             if (res && res.success) {
                 showToast('✅ บันทึกแผนสำเร็จ');
                 _autoPlanTrips[ti].saved = true;
-                if (btn) {
-                    btn.innerHTML = '<i class="fas fa-check mr-1"></i>บันทึกแล้ว ✓';
-                    btn.disabled = true;
-                    btn.className = btn.className.replace('bg-emerald-600 hover:bg-emerald-500', 'bg-slate-400');
-                }
+                // button already shows "บันทึกแล้ว ✓" from optimistic UI
             } else {
-                if (btn) { btn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนนี้'; btn.disabled = false; }
+                // revert optimistic UI
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนนี้';
+                    btn.disabled = false;
+                    btn.className = btn.className.replace('bg-slate-400', 'bg-emerald-600 hover:bg-emerald-500');
+                }
                 showToast('เกิดข้อผิดพลาด: ' + (res ? res.message : ''), true);
             }
         })
         .withFailureHandler(function(err) {
-            if (btn) { btn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนนี้'; btn.disabled = false; }
+            // revert optimistic UI
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนนี้';
+                btn.disabled = false;
+                btn.className = btn.className.replace('bg-slate-400', 'bg-emerald-600 hover:bg-emerald-500');
+            }
             showToast('บันทึกไม่สำเร็จ: ' + (err.message || String(err)), true);
         })
         .saveBatchLogisticPlans(payload);
