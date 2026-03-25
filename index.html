@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbzuxpwrAaVFxlf-BE7bz6mjAZsvKet27d2A59iTnPBsjKjScjtENzDutk3eDWPaje2B/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbycHh4_AaUSlLmQ_2P0omYXYeBqSd_xQbzXlevk7rcQZX8CHB8wURi6Rv_U9uW_ibgc/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -12419,6 +12419,8 @@ function loadLogiMaster(callback) {
                 LOGI_PRODUCTS_MASTER         = LOGI_MASTER_CACHE.products;
                 // mark loaded เฉพาะตอนมีร้านค้า — ถ้าว่างจะ retry รอบถัดไป
                 LOGI_MASTER_CACHE.loaded     = LOGI_MASTER_CACHE.shops.length > 0;
+            } else {
+                showToast('โหลดข้อมูลร้านค้าไม่สำเร็จ: ' + (res && res.message || 'กรุณากด รีเฟรชข้อมูล อีกครั้ง'), true);
             }
             if (callback) callback();
         })
@@ -12434,11 +12436,18 @@ window.forceReloadLogiMaster = function(btn) {
     LOGI_MASTER_CACHE.loaded = false;
     LOGI_MASTER_CACHE.shops  = [];
     if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...'; btn.disabled = true; }
-    loadLogiMaster(function() {
-        if (btn) { btn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i>รีเฟรชข้อมูล'; btn.disabled = false; }
-        showToast('โหลดข้อมูลหลักสำเร็จ — ร้านค้า ' + LOGI_MASTER_CACHE.shops.length + ' ร้าน');
-        populateLogiDropdowns();
-    });
+    // ล้าง GAS-side cache ก่อน แล้วค่อย reload ข้อมูลใหม่
+    const _doReload = function() {
+        loadLogiMaster(function() {
+            if (btn) { btn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i>รีเฟรชข้อมูล'; btn.disabled = false; }
+            showToast('โหลดข้อมูลหลักสำเร็จ — ร้านค้า ' + LOGI_MASTER_CACHE.shops.length + ' ร้าน');
+            populateLogiDropdowns();
+        });
+    };
+    google.script.run
+        .withSuccessHandler(_doReload)
+        .withFailureHandler(_doReload)
+        .clearLogiMasterCache();
 };
 
 // ── populate dropdowns ใน Modal ──────────────────────────────────────────────
