@@ -14152,6 +14152,64 @@ window.clearAutoplanData = function() {
     if (fileInput) fileInput.value = '';
 };
 
+// ── Auto-detect Zone จากที่อยู่ลูกค้า (เหมือนไลน์แมน — แบ่งทิศตามจังหวัด) ───────
+// ไม่ต้องเพิ่ม column เพิ่มเติมใน Sheet — อ่านจากที่อยู่ Col C ของ Customers Adress
+function autoDetectZoneFromAddress(addr) {
+    if (!addr) return '';
+
+    // Province → Zone direction mapping
+    var ZONE_MAP = {
+        // 🔵 กรุงเทพฯ
+        'กรุงเทพมหานคร': 'กรุงเทพฯ', 'กรุงเทพ': 'กรุงเทพฯ',
+        // 🟡 ปริมณฑล (รอบกรุงเทพฯ)
+        'สมุทรปราการ': 'ปริมณฑลใต้', 'นนทบุรี': 'ปริมณฑลเหนือ',
+        'ปทุมธานี': 'ปริมณฑลเหนือ', 'สมุทรสาคร': 'ตะวันตก',
+        // 🟢 ตะวันตก
+        'สมุทรสงคราม': 'ตะวันตก', 'นครปฐม': 'ตะวันตก',
+        'ราชบุรี': 'ตะวันตก', 'กาญจนบุรี': 'ตะวันตก',
+        'เพชรบุรี': 'ตะวันตก', 'ประจวบคีรีขันธ์': 'ตะวันตก',
+        'สุพรรณบุรี': 'ตะวันตก',
+        // 🔴 ตะวันออก
+        'ชลบุรี': 'ตะวันออก', 'ระยอง': 'ตะวันออก',
+        'ฉะเชิงเทรา': 'ตะวันออก', 'จันทบุรี': 'ตะวันออก',
+        'ตราด': 'ตะวันออก', 'สระแก้ว': 'ตะวันออก',
+        'ปราจีนบุรี': 'ตะวันออก', 'นครนายก': 'ตะวันออก',
+        // 🟠 เหนือ/กลาง
+        'พระนครศรีอยุธยา': 'เหนือ', 'อยุธยา': 'เหนือ',
+        'สระบุรี': 'เหนือ', 'ลพบุรี': 'เหนือ',
+        'อ่างทอง': 'เหนือ', 'สิงห์บุรี': 'เหนือ', 'ชัยนาท': 'เหนือ',
+        'นครราชสีมา': 'อีสาน', 'บุรีรัมย์': 'อีสาน',
+        'ขอนแก่น': 'อีสาน', 'อุดรธานี': 'อีสาน',
+        // 🟣 ใต้
+        'เพชรบุรี': 'ใต้', 'ชุมพร': 'ใต้', 'สุราษฎร์ธานี': 'ใต้',
+        'นครศรีธรรมราช': 'ใต้', 'สงขลา': 'ใต้', 'ภูเก็ต': 'ใต้'
+    };
+
+    // 1. หา "จ.XXXXX" เช่น จ.นนทบุรี / จ.สมุทรปราการ
+    var m = addr.match(/จ\.([ก-๙]{2,15})/);
+    if (m) {
+        var p = m[1].trim();
+        if (ZONE_MAP[p]) return ZONE_MAP[p];
+    }
+
+    // 2. หา "จังหวัดXXXXX"
+    m = addr.match(/จังหวัด([ก-๙\s]{2,20}?)(?:\s|\d|$)/);
+    if (m) {
+        var p = m[1].trim();
+        if (ZONE_MAP[p]) return ZONE_MAP[p];
+    }
+
+    // 3. หาชื่อจังหวัดตรงๆ ในที่อยู่ (เช่น "กรุงเทพมหานคร" ท้ายที่อยู่)
+    var provinces = Object.keys(ZONE_MAP);
+    for (var i = 0; i < provinces.length; i++) {
+        if (addr.indexOf(provinces[i]) >= 0) {
+            return ZONE_MAP[provinces[i]];
+        }
+    }
+
+    return ''; // ไม่สามารถ detect ได้
+}
+
 // ── Run Greedy Nearest-Neighbor grouping ─────────────────────────────────────
 window.runAutoGrouping = function() {
     if (_autoPlanSoItems.length === 0) {
@@ -14174,7 +14232,7 @@ window.runAutoGrouping = function() {
                 shopId:      sid,
                 shopName:    meta.name || item.shopRaw,
                 distance:    meta.distance || 0,
-                zone:        meta.zone     || '', // Col D ใน Customers Adress sheet
+                zone:        autoDetectZoneFromAddress(meta.address || '') || meta.zone || '', // auto-detect จากที่อยู่ → จับกลุ่มทิศเหมือนไลน์แมน
                 sale:        meta.sale     || '',
                 totalWeight: 0,
                 items:       []
@@ -14450,9 +14508,19 @@ function renderAutoplanDraftTrips() {
                         '<div>' +
                             '<div class="flex items-center gap-2 flex-wrap">' +
                             '<span class="text-white font-black text-sm">เที่ยวที่ ' + (ti+1) + '</span>' +
-                            // Zone badge
-                            (trip.zone ? '<span class="bg-white/25 text-white text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fas fa-route mr-0.5"></i>' + trip.zone + '</span>' :
-                                '<span class="bg-amber-400/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full" title="เพิ่มคอลัมน์ เส้นทาง (Col H) ใน Sheet Customers เพื่อจัดกลุ่มตามทิศทาง"><i class="fas fa-exclamation-triangle mr-0.5"></i>ยังไม่มีเส้นทาง</span>') +
+                            // Zone badge — สีแยกตามทิศ เหมือนระบบ routing ไลน์แมน
+                            (function() {
+                                var z = trip.zone || '';
+                                if (!z) return '<span class="bg-amber-400/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full"><i class="fas fa-question-circle mr-0.5"></i>ยังไม่ระบุเส้นทาง</span>';
+                                var cls = 'bg-slate-500/70 text-white'; // default
+                                if (z.indexOf('ตะวันออก') >= 0) cls = 'bg-rose-500/90 text-white';
+                                else if (z.indexOf('ตะวันตก') >= 0) cls = 'bg-emerald-500/90 text-white';
+                                else if (z.indexOf('เหนือ') >= 0 || z.indexOf('ปริมณฑลเหนือ') >= 0) cls = 'bg-blue-500/90 text-white';
+                                else if (z.indexOf('ใต้') >= 0 || z.indexOf('ปริมณฑลใต้') >= 0) cls = 'bg-orange-500/90 text-white';
+                                else if (z.indexOf('กรุงเทพ') >= 0) cls = 'bg-purple-500/90 text-white';
+                                else if (z.indexOf('อีสาน') >= 0) cls = 'bg-yellow-500/90 text-gray-900';
+                                return '<span class="' + cls + ' text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fas fa-compass mr-0.5"></i>' + z + '</span>';
+                            })() +
                             // Over-limit badge
                             (trip.overLimit ? '<span class="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse"><i class="fas fa-exclamation-circle mr-0.5"></i>เกิน 3 เที่ยว/วัน!</span>' : '') +
                         '</div>' +
