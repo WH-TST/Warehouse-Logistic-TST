@@ -14541,187 +14541,265 @@ window.runAutoGrouping = function() {
     renderAutoplanDraftTrips();
 };
 
-// ── Render Draft Trips ────────────────────────────────────────────────────────
+// ── Render Draft Trips — Schedule Table View ─────────────────────────────────
+// Layout: แถว = รถแต่ละคัน | คอลัมน์ = ลำดับเที่ยว (เที่ยวที่ 1, 2, 3, ...)
 function renderAutoplanDraftTrips() {
-    const container = safeGet('autoplan-trips-container');
-    const badge     = safeGet('autoplan-trip-count-badge');
-    const section   = safeGet('autoplan-result-section');
+    const container  = safeGet('autoplan-trips-container');
+    const badge      = safeGet('autoplan-trip-count-badge');
+    const section    = safeGet('autoplan-result-section');
     if (!container) return;
 
     if (badge) badge.textContent = _autoPlanTrips.length + ' เที่ยว';
     if (section) section.classList.remove('hidden');
 
-    const trucks    = LOGI_MASTER_CACHE.trucks    || [];
-    const drivers   = LOGI_MASTER_CACHE.drivers   || [];
-    const transports= LOGI_MASTER_CACHE.transports|| [];
-    const defaultTruckType = (safeGet('autoplan-truck-type') || {}).value || 'company';
-
-    // ตั้ง ship date เริ่มต้น
+    const trucks      = LOGI_MASTER_CACHE.trucks    || [];
+    const drivers     = LOGI_MASTER_CACHE.drivers   || [];
+    const transports  = LOGI_MASTER_CACHE.transports|| [];
+    const isHiredMode = (safeGet('autoplan-truck-type') || {}).value === 'hired';
     const defaultDate = (safeGet('autoplan-ship-date') || {}).value || '';
+    const CAPACITY    = parseFloat((safeGet('autoplan-capacity') || {}).value || 15000);
+
     _autoPlanTrips.forEach(function(trip) { if (!trip.date) trip.date = defaultDate; });
 
-    const CAPACITY = parseFloat((safeGet('autoplan-capacity') || {}).value || 15000);
+    // ── จัดกลุ่ม trips ตาม truck plate/transport ──────────────────────────────
+    var truckGroups = {}; // key → [{ trip, ti }]
+    var truckOrder  = [];
+    _autoPlanTrips.forEach(function(trip, ti) {
+        var key = trip.truckPlate || trip.transportCo || '(ไม่ระบุ)';
+        if (!truckGroups[key]) { truckGroups[key] = []; truckOrder.push(key); }
+        truckGroups[key].push({ trip: trip, ti: ti });
+    });
+    var maxSeq = truckOrder.reduce(function(m, k) { return Math.max(m, truckGroups[k].length); }, 1);
 
-    container.innerHTML = _autoPlanTrips.map(function(trip, ti) {
-        const isHired   = trip.truckType === 'hired';
-        const kmTotal   = trip.estimatedKm || 0;
-        const kmRound   = trip.roundTrip   || 0;
-        const kmFree    = trip.totalFreeKm || 0;
-        // สีระยะทาง: ใกล้ 300 กม. = เขียว, ต่ำกว่า 200 = แดง, เกิน 350 = แดง
-        const kmBadgeCls = kmTotal > 350 ? 'bg-rose-500' : kmTotal >= 250 ? 'bg-emerald-500' : 'bg-amber-500';
-        const wtPct      = trip.totalWeight > 0 ? Math.min(100, (trip.totalWeight / CAPACITY) * 100) : 0;
-        const wtBarCls   = wtPct > 90 ? 'bg-rose-500' : wtPct > 70 ? 'bg-amber-500' : 'bg-emerald-500';
+    // ── Summary stats ─────────────────────────────────────────────────────────
+    var totalWt     = _autoPlanTrips.reduce(function(s, t) { return s + (t.totalWeight || 0); }, 0);
+    var totalShops  = _autoPlanTrips.reduce(function(s, t) { return s + t.shops.length; }, 0);
+    var trailerTrips= _autoPlanTrips.filter(function(t)  { return t.isTrailer; }).length;
 
-        // หา ship date จาก items ของ trip
-        const tripShipDate = trip.date || defaultDate;
-        var fmtShipDate = '';
-        if (tripShipDate) {
-            var dp = tripShipDate.split('-');
-            if (dp.length === 3) fmtShipDate = dp[2] + '/' + dp[1] + '/' + dp[0];
-        }
+    // ── Zone color helper ─────────────────────────────────────────────────────
+    function zoneCls(z) {
+        if (!z) return 'bg-amber-400 text-amber-900';
+        if (z.indexOf('ตะวันออก') >= 0)  return 'bg-rose-500 text-white';
+        if (z.indexOf('ตะวันตก') >= 0)   return 'bg-emerald-500 text-white';
+        if (z.indexOf('เหนือ')    >= 0 ||
+            z.indexOf('ปริมณฑลเหนือ') >= 0) return 'bg-blue-500 text-white';
+        if (z.indexOf('ใต้')      >= 0 ||
+            z.indexOf('ปริมณฑลใต้')  >= 0) return 'bg-orange-500 text-white';
+        if (z.indexOf('กรุงเทพ') >= 0)   return 'bg-purple-500 text-white';
+        if (z.indexOf('อีสาน')   >= 0)   return 'bg-yellow-400 text-gray-900';
+        return 'bg-slate-500 text-white';
+    }
 
-        // Dropdown รถ (รถบริษัทเท่านั้น — รถจ้างเลือกที่นี่ด้วยเพราะต่างเที่ยวต่างบริษัทได้)
-        var truckOpts = '<option value="">— เลือก' + (isHired ? 'บริษัทขนส่ง' : 'ทะเบียนรถ') + ' —</option>' +
-            (isHired ? transports : trucks).map(function(t) {
-                var val = isHired ? t.id   : t.plate;
-                var lbl = isHired ? t.name
+    // ── Build: ซ้าย-คอลัมน์ ข้อมูลรถ ─────────────────────────────────────────
+    function buildTruckCol(key, items) {
+        var t0       = items[0].trip;
+        var meta     = trucks.find(function(t) { return t.plate === key; }) || {};
+        var truckCap = meta.netWeight || CAPACITY;
+        var usedWt   = items.reduce(function(s, x) { return s + (x.trip.totalWeight || 0); }, 0);
+        var maxWt    = truckCap * items.length; // ถ้า 2 เที่ยว = 2× capacity
+        var pct      = maxWt > 0 ? Math.min(100, (usedWt / maxWt) * 100) : 0;
+        var barCls   = pct > 90 ? 'bg-rose-400' : pct > 65 ? 'bg-amber-400' : 'bg-emerald-400';
+
+        var capInfo = t0.isTrailer
+            ? 'แม่ ' + ((meta.capMother || t0.capMother || 0)/1000).toFixed(1) + 't<br>ลูก ' + ((meta.capChild  || t0.capChild  || 0)/1000).toFixed(1) + 't'
+            : (truckCap ? (truckCap/1000).toFixed(1) + 't' : '—');
+
+        return '<td class="align-middle p-0" style="min-width:155px;max-width:170px;">' +
+            '<div class="m-1 h-full bg-gradient-to-b from-slate-800 to-slate-700 rounded-2xl p-3 flex flex-col justify-between" style="min-height:200px;">' +
+                // type badge
+                '<div>' +
+                    (t0.isTrailer
+                        ? '<div class="inline-flex items-center gap-1 bg-cyan-500/25 text-cyan-300 text-[10px] font-black px-2 py-0.5 rounded-full mb-2"><i class="fas fa-link"></i> รถพ่วง</div>'
+                        : '<div class="inline-flex items-center gap-1 bg-white/10 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded-full mb-2"><i class="fas fa-truck"></i> ' + (meta.type || 'รถบริษัท') + '</div>') +
+                // plate
+                '<div class="text-white font-black text-base leading-tight">' + key + '</div>' +
+                // cap
+                '<div class="text-slate-400 text-[11px] mt-0.5 leading-snug">' + capInfo + '</div>' +
+                '</div>' +
+                // utilization
+                '<div class="mt-3">' +
+                    '<div class="flex justify-between text-[9px] text-slate-400 mb-1">' +
+                        '<span>' + items.length + ' เที่ยว</span>' +
+                        '<span class="font-black text-slate-300">' + (usedWt/1000).toFixed(1) + 't รวม</span>' +
+                    '</div>' +
+                    '<div class="h-1.5 bg-slate-600 rounded-full overflow-hidden">' +
+                        '<div class="h-full ' + barCls + ' rounded-full" style="width:' + pct + '%"></div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+        '</td>';
+    }
+
+    // ── Build: เซลล์เที่ยว ────────────────────────────────────────────────────
+    function buildTripCell(item) {
+        var trip = item.trip;
+        var ti   = item.ti;
+        var kmTotal  = trip.estimatedKm || 0;
+        var wtPct    = CAPACITY > 0 ? Math.min(100, (trip.totalWeight / CAPACITY) * 100) : 0;
+        var wtBarCls = wtPct > 90 ? 'bg-rose-500' : wtPct > 70 ? 'bg-amber-400' : 'bg-emerald-500';
+        var kmBadge  = kmTotal > 350 ? 'bg-rose-500 text-white' : kmTotal >= 250 ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-amber-900';
+        var zone     = trip.zone || '';
+
+        // truck opts
+        var truckOpts = '<option value="">— รถ —</option>' +
+            (isHiredMode ? transports : trucks).map(function(t) {
+                var val = isHiredMode ? t.id : t.plate;
+                var lbl = isHiredMode ? t.name
                     : (t.isTrailer
-                        ? t.plate + ' 🔗[พ่วง] — แม่ ' + (t.capMother/1000).toFixed(1) + 't + ลูก ' + (t.capChild/1000).toFixed(1) + 't'
-                        : t.plate + ' (' + t.type + ')' + (t.netWeight ? ' ' + (t.netWeight/1000).toFixed(1) + 't' : ''));
+                        ? t.plate + ' 🔗 ' + (t.capMother/1000).toFixed(0) + '+' + (t.capChild/1000).toFixed(0) + 't'
+                        : t.plate + ' (' + (t.netWeight ? (t.netWeight/1000).toFixed(0) + 't' : t.type) + ')');
                 var sel = (trip.truckPlate === val || trip.transportCo === val) ? ' selected' : '';
                 return '<option value="' + val + '"' + sel + '>' + lbl + '</option>';
             }).join('');
 
-        // Driver dropdown: รถพ่วง → เฉพาะคนขับที่ canTrailer เท่านั้น
+        // driver opts
         var driverPool = trip.isTrailer
             ? drivers.filter(function(d) { return d.canTrailer; })
             : drivers;
-        var driverOpts = '<option value="">— เลือกคนขับ —</option>' +
+        var driverOpts = '<option value="">— คนขับ —</option>' +
             driverPool.map(function(d) {
-                var label = d.name + (d.canTrailer ? ' 🔗' : '');
-                return '<option value="' + d.name + '"' + (trip.driver === d.name ? ' selected' : '') + '>' + label + '</option>';
+                return '<option value="' + d.name + '"' + (trip.driver === d.name ? ' selected' : '') + '>'
+                    + d.name + (d.canTrailer ? ' 🔗' : '') + '</option>';
             }).join('');
 
-        // Shop list
-        var shopList = trip.shops.map(function(s, si) {
-            return '<div class="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">' +
-                '<div class="flex-1 min-w-0">' +
-                    '<span class="w-5 h-5 bg-violet-100 text-violet-700 rounded-full text-[10px] font-black inline-flex items-center justify-center mr-1.5 flex-shrink-0">' + (si+1) + '</span>' +
-                    '<span class="text-sm font-bold text-slate-700">' + s.shopName + '</span>' +
-                    '<span class="ml-2 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono">' + s.distance + ' กม.</span>' +
-                    (trip.shops.length > 1 ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +10 กม.</span>' :
-                        s.totalWeight >= 30000 ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +30 กม.</span>' :
-                        s.totalWeight >= 15000 ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +15 กม.</span>' :
-                        '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +10 กม.</span>') +
+        // shop rows (compact)
+        var shopRows = trip.shops.map(function(s, si) {
+            return '<div class="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 gap-1">' +
+                '<div class="flex items-center gap-1 min-w-0">' +
+                    '<span class="w-4 h-4 bg-violet-100 text-violet-700 rounded-full text-[9px] font-black inline-flex items-center justify-center flex-shrink-0">' + (si+1) + '</span>' +
+                    '<span class="text-[11px] font-bold text-slate-700 truncate">' + s.shopName + '</span>' +
                 '</div>' +
-                '<div class="text-right ml-2 flex-shrink-0">' +
-                    '<div class="text-xs font-black text-emerald-700">' + s.totalWeight.toFixed(1) + ' กก.</div>' +
-                    '<div class="text-[10px] text-slate-400">' + s.items.length + ' รายการ</div>' +
+                '<div class="flex-shrink-0 text-right ml-1">' +
+                    '<div class="text-[10px] font-black text-emerald-700">' + (s.totalWeight/1000).toFixed(1) + 't</div>' +
+                    '<div class="text-[9px] text-slate-400 font-mono">' + s.distance + 'km</div>' +
                 '</div>' +
             '</div>';
         }).join('');
 
-        return '<div class="bg-white rounded-2xl border-2 border-violet-100 shadow-sm overflow-hidden" id="autoplan-trip-card-' + ti + '">' +
-            // ── Header ──
-            '<div class="bg-gradient-to-r from-violet-700 to-purple-600 px-5 py-3">' +
-                '<div class="flex items-center justify-between">' +
-                    '<div class="flex items-center gap-2">' +
-                        '<span class="w-8 h-8 bg-white/25 rounded-xl flex items-center justify-center text-white font-black">' + (ti+1) + '</span>' +
-                        '<div>' +
-                            '<div class="flex items-center gap-2 flex-wrap">' +
-                            '<span class="text-white font-black text-sm">เที่ยวที่ ' + (ti+1) + '</span>' +
-                            // Zone badge — สีแยกตามทิศ เหมือนระบบ routing ไลน์แมน
-                            (function() {
-                                var z = trip.zone || '';
-                                if (!z) return '<span class="bg-amber-400/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full"><i class="fas fa-question-circle mr-0.5"></i>ยังไม่ระบุเส้นทาง</span>';
-                                var cls = 'bg-slate-500/70 text-white'; // default
-                                if (z.indexOf('ตะวันออก') >= 0) cls = 'bg-rose-500/90 text-white';
-                                else if (z.indexOf('ตะวันตก') >= 0) cls = 'bg-emerald-500/90 text-white';
-                                else if (z.indexOf('เหนือ') >= 0 || z.indexOf('ปริมณฑลเหนือ') >= 0) cls = 'bg-blue-500/90 text-white';
-                                else if (z.indexOf('ใต้') >= 0 || z.indexOf('ปริมณฑลใต้') >= 0) cls = 'bg-orange-500/90 text-white';
-                                else if (z.indexOf('กรุงเทพ') >= 0) cls = 'bg-purple-500/90 text-white';
-                                else if (z.indexOf('อีสาน') >= 0) cls = 'bg-yellow-500/90 text-gray-900';
-                                return '<span class="' + cls + ' text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fas fa-compass mr-0.5"></i>' + z + '</span>';
-                            })() +
-                            // Trailer badge
-                            (trip.isTrailer ? '<span class="bg-cyan-400/90 text-cyan-900 text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fas fa-link mr-0.5"></i>รถพ่วง</span>' : '') +
-                            // Over-limit badge
-                            (trip.overLimit ? '<span class="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse"><i class="fas fa-exclamation-circle mr-0.5"></i>เกิน 3 เที่ยว/วัน!</span>' : '') +
-                        '</div>' +
-                        // Ship Date + trailer cap breakdown
-                        (fmtShipDate ? '<div class="text-violet-200 text-xs font-bold mt-0.5"><i class="fas fa-calendar-check mr-1"></i>ส่งวันที่ ' + fmtShipDate + '</div>' : '') +
-                        (trip.isTrailer ? '<div class="text-cyan-200 text-[10px] font-bold mt-0.5"><i class="fas fa-truck mr-1"></i>แม่ ' + (trip.capMother/1000).toFixed(1) + 't &nbsp;+&nbsp; <i class="fas fa-trailer mr-1"></i>ลูก ' + (trip.capChild/1000).toFixed(1) + 't &nbsp;→ แบ่งสินค้าอัตโนมัติใน PSD</div>' : '') +
-                        '</div>' +
+        // format date dd/MM/yyyy for display header
+        var dp = (trip.date || '').split('-');
+        var fmtDate = dp.length === 3 ? dp[2] + '/' + dp[1] + '/' + dp[0] : '';
+
+        return '<td class="align-top p-0" style="min-width:210px;max-width:240px;">' +
+            '<div class="m-1 bg-white rounded-2xl border-2 ' + (trip.overLimit ? 'border-rose-300 shadow-rose-100' : 'border-slate-200') + ' overflow-hidden shadow-sm" id="autoplan-trip-card-' + ti + '">' +
+                // ── mini header ──
+                '<div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between">' +
+                    '<div class="flex items-center gap-1.5 flex-wrap">' +
+                        (zone
+                            ? '<span class="' + zoneCls(zone) + ' text-[9px] font-black px-1.5 py-0.5 rounded-full"><i class="fas fa-compass mr-0.5"></i>' + zone + '</span>'
+                            : '<span class="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">ไม่ระบุเส้นทาง</span>') +
+                        (trip.isTrailer  ? '<span class="bg-cyan-100 text-cyan-700 text-[9px] font-black px-1.5 py-0.5 rounded-full">🔗พ่วง</span>' : '') +
+                        (trip.overLimit  ? '<span class="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">⚠️เกิน</span>' : '') +
                     '</div>' +
-                    '<div class="flex items-center gap-3">' +
-                        // ระยะทาง badge สี
-                        '<div class="text-right">' +
-                            '<div class="' + kmBadgeCls + ' text-white text-lg font-black px-3 py-1 rounded-xl inline-block">' + kmTotal.toFixed(1) + ' กม.</div>' +
-                            '<div class="text-violet-200 text-[10px] mt-0.5 text-right">' +
-                                'ไปกลับ ' + kmRound.toFixed(1) + ' + ฟรี ' + kmFree.toFixed(1) + ' กม.' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="text-right">' +
-                            '<div class="text-white font-black text-lg">' + (trip.totalWeight/1000).toFixed(2) + ' <span class="text-xs font-normal text-violet-200">ตัน</span></div>' +
-                            '<div class="text-violet-200 text-[10px]">(' + trip.totalWeight.toFixed(0) + ' กก.)</div>' +
-                        '</div>' +
+                    '<div class="flex items-center gap-1.5">' +
+                        '<span class="' + kmBadge + ' text-[10px] font-black px-2 py-0.5 rounded-full">' + kmTotal.toFixed(0) + 'km</span>' +
+                        '<span class="text-slate-700 font-black text-[11px]">' + (trip.totalWeight/1000).toFixed(2) + 't</span>' +
                     '</div>' +
                 '</div>' +
-            '</div>' +
-            // ── Body ──
-            '<div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">' +
-                '<div>' +
-                    '<div class="text-xs font-black text-slate-400 uppercase mb-2">' +
-                        '<i class="fas fa-store mr-1 text-violet-400"></i>ร้านค้า ' + trip.shops.length + ' ร้าน</div>' +
-                    shopList +
-                    '<div class="mt-3">' +
-                        '<div class="flex justify-between text-[10px] text-slate-400 mb-1">' +
-                            '<span>น้ำหนัก / capacity</span>' +
-                            '<span class="font-bold ' + (wtPct > 90 ? 'text-rose-600' : 'text-slate-500') + '">' + wtPct.toFixed(0) + '%</span>' +
-                        '</div>' +
-                        '<div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">' +
-                            '<div class="h-full ' + wtBarCls + ' rounded-full transition-all" style="width:' + wtPct + '%"></div>' +
-                        '</div>' +
+                // ── ร้านค้า ──
+                '<div class="px-3 py-2 border-b border-slate-100">' + shopRows + '</div>' +
+                // ── weight bar ──
+                '<div class="px-3 pt-2 pb-1">' +
+                    '<div class="flex justify-between text-[9px] text-slate-400 mb-0.5">' +
+                        '<span>Load (' + trip.shops.length + ' ร้าน)</span>' +
+                        '<span class="font-black ' + (wtPct > 90 ? 'text-rose-500' : 'text-slate-500') + '">' + wtPct.toFixed(0) + '%</span>' +
+                    '</div>' +
+                    '<div class="h-2 bg-slate-100 rounded-full overflow-hidden">' +
+                        '<div class="h-full ' + wtBarCls + ' rounded-full" style="width:' + wtPct + '%"></div>' +
                     '</div>' +
                 '</div>' +
-                '<div class="space-y-3">' +
-                    // ── วันที่ส่ง (auto-filled, แก้ได้) ──────────────────────
-                    '<div>' +
-                        '<div class="flex items-center justify-between mb-1">' +
-                            '<label class="text-xs font-black text-slate-500 uppercase"><i class="fas fa-calendar-check mr-1 text-violet-500"></i>วันที่ส่ง</label>' +
-                            '<span class="text-[10px] text-violet-400 font-bold"><i class="fas fa-magic mr-0.5"></i>Auto</span>' +
-                        '</div>' +
-                        '<input type="date" value="' + tripShipDate + '" ' +
-                            'class="w-full bg-violet-50 border-2 border-violet-300 rounded-xl px-3 py-2.5 font-black text-violet-800 outline-none focus:border-violet-500 text-sm" ' +
+                // ── fields: วันที่ + รถ + คนขับ ──
+                '<div class="px-2 pb-2 pt-1 space-y-1.5">' +
+                    '<div class="flex items-center gap-1">' +
+                        '<i class="fas fa-calendar-check text-violet-400 text-[10px] w-3"></i>' +
+                        '<input type="date" value="' + (trip.date || '') + '" ' +
+                            'class="flex-1 bg-violet-50 border border-violet-200 rounded-lg px-2 py-1.5 text-xs font-black text-violet-700 outline-none focus:border-violet-400" ' +
                             'onchange="_autoPlanTrips[' + ti + '].date=this.value;">' +
                     '</div>' +
-                    // ── รถ (auto-assigned, แก้ได้) ────────────────────────────
-                    '<div>' +
-                        '<div class="flex items-center justify-between mb-1">' +
-                            '<label class="text-xs font-black text-slate-500 uppercase">' + (isHired ? '<i class="fas fa-truck mr-1 text-orange-400"></i>บริษัทขนส่ง' : '<i class="fas fa-truck mr-1 text-emerald-500"></i>ทะเบียนรถ') + '</label>' +
-                            '<span class="text-[10px] text-emerald-500 font-bold"><i class="fas fa-magic mr-0.5"></i>Auto</span>' +
-                        '</div>' +
-                        '<select class="w-full bg-emerald-50 border-2 border-emerald-300 rounded-xl px-3 py-2.5 font-black text-emerald-800 outline-none focus:border-emerald-500 text-sm cursor-pointer" ' +
+                    '<div class="flex items-center gap-1">' +
+                        '<i class="fas fa-truck text-emerald-500 text-[10px] w-3"></i>' +
+                        '<select class="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-800 outline-none cursor-pointer" ' +
                             'onchange="autoplanUpdateTripTruck(' + ti + ',this.value);">' +
                             truckOpts +
                         '</select>' +
                     '</div>' +
-                    // ── คนขับ (เลือกเอง) ──────────────────────────────────────
-                    (!isHired ?
-                    '<div>' +
-                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block">' +
-                            '<i class="fas fa-user mr-1 text-slate-400"></i>คนขับ ' +
-                            '<span class="text-rose-400">*</span>' +
-                        '</label>' +
-                        '<select class="w-full bg-white border-2 border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" ' +
-                            'onchange="_autoPlanTrips[' + ti + '].driver=this.value;">' +
-                            driverOpts +
-                        '</select>' +
-                    '</div>' : '') +
+                    (!isHiredMode
+                        ? '<div class="flex items-center gap-1">' +
+                            '<i class="fas fa-user text-slate-400 text-[10px] w-3"></i>' +
+                            '<select class="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer" ' +
+                                'onchange="_autoPlanTrips[' + ti + '].driver=this.value;">' +
+                                driverOpts +
+                            '</select>' +
+                        '</div>'
+                        : '') +
                 '</div>' +
             '</div>' +
+        '</td>';
+    }
+
+    // ── Empty cell ────────────────────────────────────────────────────────────
+    function buildEmptyCell() {
+        return '<td class="align-top p-0" style="min-width:210px;">' +
+            '<div class="m-1 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center" style="min-height:200px;">' +
+                '<span class="text-slate-300 text-xs">— ว่าง —</span>' +
+            '</div>' +
+        '</td>';
+    }
+
+    // ── Assemble HTML ─────────────────────────────────────────────────────────
+    // Summary bar
+    var summaryHtml =
+        '<div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">' +
+            '<div class="flex items-center gap-1.5"><i class="fas fa-truck text-violet-500"></i><span class="font-black text-slate-700">' + truckOrder.length + ' คัน</span></div>' +
+            '<span class="text-slate-300 hidden sm:inline">|</span>' +
+            '<div class="flex items-center gap-1.5"><i class="fas fa-route text-violet-500"></i><span class="font-black text-slate-700">' + _autoPlanTrips.length + ' เที่ยว</span></div>' +
+            '<span class="text-slate-300 hidden sm:inline">|</span>' +
+            '<div class="flex items-center gap-1.5"><i class="fas fa-store text-violet-500"></i><span class="font-black text-slate-700">' + totalShops + ' ร้าน</span></div>' +
+            '<span class="text-slate-300 hidden sm:inline">|</span>' +
+            '<div class="flex items-center gap-1.5"><i class="fas fa-weight-hanging text-violet-500"></i><span class="font-black text-slate-700">' + (totalWt/1000).toFixed(2) + ' ตัน</span></div>' +
+            (trailerTrips > 0
+                ? '<span class="text-slate-300 hidden sm:inline">|</span><div class="flex items-center gap-1.5"><i class="fas fa-link text-cyan-500"></i><span class="font-black text-cyan-700">' + trailerTrips + ' เที่ยวพ่วง</span></div>'
+                : '') +
         '</div>';
-    }).join('');
+
+    // Table header (seq columns)
+    var seqHeaders = '';
+    for (var s = 1; s <= maxSeq; s++) {
+        var seqColors = ['bg-violet-600','bg-indigo-600','bg-blue-600','bg-sky-600'];
+        var hCls = seqColors[(s-1) % seqColors.length] || 'bg-violet-600';
+        seqHeaders += '<th class="p-0" style="min-width:210px;">' +
+            '<div class="m-1 ' + hCls + ' text-white text-sm font-black rounded-xl px-3 py-2 text-center">' +
+                '<i class="fas fa-route mr-1 opacity-70"></i>เที่ยวที่ ' + s +
+            '</div>' +
+        '</th>';
+    }
+
+    var tableHtml =
+        '<div class="overflow-x-auto">' +
+        '<table class="w-full border-collapse" style="table-layout:auto;">' +
+        '<thead><tr>' +
+            '<th class="p-0" style="min-width:155px;">' +
+                '<div class="m-1 bg-slate-700 text-slate-200 text-sm font-black rounded-xl px-3 py-2 text-center">' +
+                    '<i class="fas fa-truck mr-1"></i>รถ / คนขับ' +
+                '</div>' +
+            '</th>' +
+            seqHeaders +
+        '</tr></thead>' +
+        '<tbody>';
+
+    truckOrder.forEach(function(key) {
+        var items = truckGroups[key];
+        tableHtml += '<tr>';
+        tableHtml += buildTruckCol(key, items);
+        for (var seq = 0; seq < maxSeq; seq++) {
+            tableHtml += seq < items.length ? buildTripCell(items[seq]) : buildEmptyCell();
+        }
+        tableHtml += '</tr>';
+    });
+
+    tableHtml += '</tbody></table></div>';
+
+    container.innerHTML = summaryHtml + tableHtml;
 }
 
 window.autoplanResetResult = function() {
