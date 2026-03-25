@@ -14353,10 +14353,14 @@ window.runAutoGrouping = function() {
         return;
     }
 
-    const TARGET_KM      = parseFloat((safeGet('autoplan-target-km')  || {}).value) || 300;
-    const MAX_KM         = parseFloat((safeGet('autoplan-max-km')     || {}).value) || 500;  // hard limit
-    const CAPACITY       = parseFloat((safeGet('autoplan-capacity')   || {}).value) || 15000;
-    const MIN_SEND_WEIGHT = parseFloat((safeGet('autoplan-min-weight') || {}).value) || 14000;
+    window._AUTOPLAN_TARGET_KM   = parseFloat((safeGet('autoplan-target-km')  || {}).value) || 300;
+    window._AUTOPLAN_MAX_KM      = parseFloat((safeGet('autoplan-max-km')     || {}).value) || 500;
+    window._AUTOPLAN_CAPACITY    = parseFloat((safeGet('autoplan-capacity')   || {}).value) || 15000;
+    window._AUTOPLAN_MIN_WEIGHT  = parseFloat((safeGet('autoplan-min-weight') || {}).value) || 14000;
+    const TARGET_KM       = window._AUTOPLAN_TARGET_KM;
+    const MAX_KM          = window._AUTOPLAN_MAX_KM;
+    const CAPACITY        = window._AUTOPLAN_CAPACITY;
+    const MIN_SEND_WEIGHT = window._AUTOPLAN_MIN_WEIGHT;
     const shops     = LOGI_MASTER_CACHE.shops || [];
 
     // 1. จัดกลุ่มตาม shopId + ดึง zone จาก master
@@ -14699,7 +14703,9 @@ function renderAutoplanDraftTrips() {
     const transports  = LOGI_MASTER_CACHE.transports|| [];
     const isHiredMode = (safeGet('autoplan-truck-type') || {}).value === 'hired';
     const defaultDate = (safeGet('autoplan-ship-date') || {}).value || '';
-    const CAPACITY    = parseFloat((safeGet('autoplan-capacity') || {}).value || 15000);
+    const CAPACITY    = window._AUTOPLAN_CAPACITY    || parseFloat((safeGet('autoplan-capacity')  || {}).value) || 15000;
+    const TARGET_KM   = window._AUTOPLAN_TARGET_KM   || parseFloat((safeGet('autoplan-target-km') || {}).value) || 300;
+    const MAX_KM      = window._AUTOPLAN_MAX_KM      || parseFloat((safeGet('autoplan-max-km')    || {}).value) || 500;
 
     _autoPlanTrips.forEach(function(trip) { if (!trip.date) trip.date = defaultDate; });
 
