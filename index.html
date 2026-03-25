@@ -2416,6 +2416,10 @@ thead.sticky {
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-emerald-300 hover:bg-rose-900 hover:text-rose-300">
       <i class="fas fa-user-shield mr-2"></i>พฤติกรรม & KPI
     </button>
+    <button id="logi-tab-autoplan" onclick="switchLogiTab('autoplan')"
+      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-emerald-300 hover:bg-violet-900 hover:text-violet-300">
+      <i class="fas fa-magic mr-2"></i>วางแผนอัตโนมัติ
+    </button>
   </div>
 
   <!-- ── TAB: รายการแผน ── -->
@@ -4037,6 +4041,156 @@ thead.sticky {
     </div><!-- end perf-panel-summary -->
 
   </div><!-- end logi-panel-driverperf -->
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- TAB: วางแผนการส่งมอบอัตโนมัติ (Auto Delivery Planner)   -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div id="logi-panel-autoplan" class="hidden space-y-5">
+
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-violet-700 to-purple-600 rounded-2xl p-6 text-white flex items-center gap-4">
+      <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">
+        <i class="fas fa-magic"></i>
+      </div>
+      <div>
+        <h3 class="text-xl font-black tracking-tight">วางแผนการส่งมอบอัตโนมัติ</h3>
+        <p class="text-violet-200 text-xs font-bold mt-0.5 uppercase tracking-widest">Auto Delivery Planning — Greedy Nearest-Neighbor</p>
+      </div>
+    </div>
+
+    <!-- STEP 1: นำเข้าข้อมูล SO -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">1</span>
+        <h4 class="font-black text-slate-700">ดึงข้อมูลจาก Sheet "จองพร้อมส่ง"</h4>
+      </div>
+      <!-- ปุ่มดึงข้อมูลจาก Sheet -->
+      <div class="flex flex-wrap gap-3 items-end">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">กรองตาม Ship Date (ไม่บังคับ)</label>
+          <input type="date" id="autoplan-ship-date"
+            class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 transition-all text-sm">
+        </div>
+        <button onclick="autoplanLoadFromSheet()" id="autoplan-load-btn"
+          class="bg-violet-600 hover:bg-violet-500 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow transition-all flex items-center gap-2">
+          <i class="fas fa-cloud-download-alt"></i>ดึงข้อมูลจาก Sheet
+        </button>
+        <span class="text-xs text-slate-400">หรือ</span>
+        <label class="cursor-pointer bg-slate-50 border-2 border-slate-200 border-dashed rounded-xl px-4 py-2.5 text-slate-500 font-bold text-sm text-center hover:bg-slate-100 transition-all">
+          <i class="fas fa-file-excel text-emerald-500 mr-1"></i>Excel backup
+          <input type="file" id="autoplan-file-input" accept=".xlsx,.xls" class="hidden" onchange="autoplanReadExcel(this)">
+        </label>
+      </div>
+      <div class="mt-2 p-2 bg-violet-50 rounded-xl border border-violet-100 text-xs text-violet-600">
+        <i class="fas fa-info-circle mr-1"></i>อ่านจาก Sheet <strong>"จองพร้อมส่ง"</strong> — คอลัมน์ D=ชื่อร้าน, G=Ship date, H=รหัสสินค้า, I=ชื่อสินค้า, AB=จำนวน, AF=น้ำหนัก (กก.)
+      </div>
+
+      <!-- Preview table -->
+      <div id="autoplan-so-preview" class="hidden mt-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-black text-slate-500 uppercase">ข้อมูลที่โหลด: <span id="autoplan-so-count" class="text-violet-600">0</span> รายการ / <span id="autoplan-shop-count" class="text-emerald-600">0</span> ร้าน</span>
+          <button onclick="clearAutoplanData()" class="text-xs text-rose-500 hover:text-rose-700 font-bold">
+            <i class="fas fa-times mr-1"></i>ล้างข้อมูล
+          </button>
+        </div>
+        <div class="overflow-x-auto max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+          <table class="w-full text-xs">
+            <thead class="bg-slate-700 text-white sticky top-0">
+              <tr>
+                <th class="px-3 py-2 text-left font-black">ร้านค้า</th>
+                <th class="px-3 py-2 text-left font-black">Ship Date</th>
+                <th class="px-3 py-2 text-left font-black">สินค้า</th>
+                <th class="px-3 py-2 text-right font-black">จำนวน</th>
+                <th class="px-3 py-2 text-right font-black">น้ำหนัก (กก.)</th>
+                <th class="px-3 py-2 text-center font-black">Match ร้าน</th>
+              </tr>
+            </thead>
+            <tbody id="autoplan-so-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: กำหนด Parameter -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">2</span>
+        <h4 class="font-black text-slate-700">กำหนดเงื่อนไขการวางแผน</h4>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ระยะทาง Target (กม./วัน)</label>
+          <input type="number" id="autoplan-target-km" value="300" min="50" max="1000"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm text-center">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ประเภทรถ</label>
+          <select id="autoplan-truck-type" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" onchange="autoplanUpdateTruckOptions()">
+            <option value="company">รถบริษัท</option>
+            <option value="hired">รถจ้าง</option>
+          </select>
+        </div>
+        <!-- รถบริษัท: dropdown ทะเบียน + auto-fill capacity -->
+        <div id="autoplan-company-truck-col">
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">เลือกทะเบียนรถ</label>
+          <select id="autoplan-truck-sel" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" onchange="autoplanUpdateCapacity()">
+            <option value="">— เลือกรถ —</option>
+          </select>
+        </div>
+        <!-- รถจ้าง: ไม่มี dropdown (บริษัทขนส่งมีหลายคัน) — กรอก capacity เองได้ -->
+        <div id="autoplan-hired-truck-col" class="hidden">
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">บริษัทขนส่ง (ระบุต่อเที่ยว)</label>
+          <div class="bg-violet-50 border-2 border-violet-200 rounded-xl px-4 py-2.5 text-xs text-violet-600 font-bold">
+            <i class="fas fa-info-circle mr-1"></i>เลือกบริษัทขนส่งต่อเที่ยวในขั้นตอน 3
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">Capacity ต่อเที่ยว (กก.)</label>
+          <input type="number" id="autoplan-capacity" value="15000" min="1000"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm text-center"
+            placeholder="กรอก capacity กก.">
+          <div class="text-[10px] text-slate-400 mt-0.5 text-center">รถจ้าง: กรอกตามขนาดที่จ้างมา</div>
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button onclick="runAutoGrouping()" id="autoplan-run-btn"
+          class="bg-violet-600 hover:bg-violet-500 text-white px-8 py-3 rounded-xl font-black text-sm shadow-lg transition-all flex items-center gap-2">
+          <i class="fas fa-magic"></i>สร้างแผนอัตโนมัติ
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Draft Trips -->
+    <div id="autoplan-result-section" class="hidden">
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">3</span>
+            <h4 class="font-black text-slate-700">ผลลัพธ์ Draft Trips</h4>
+            <span id="autoplan-trip-count-badge" class="bg-violet-100 text-violet-700 text-xs font-black px-3 py-1 rounded-full"></span>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="autoplanResetResult()" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition-all">
+              <i class="fas fa-redo mr-1"></i>เริ่มใหม่
+            </button>
+            <button onclick="confirmAndSaveAutoPlans()" id="autoplan-save-btn"
+              class="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow transition-all flex items-center gap-2">
+              <i class="fas fa-save"></i>บันทึกแผนทั้งหมด
+            </button>
+          </div>
+        </div>
+
+        <!-- ไม่มี match warning -->
+        <div id="autoplan-unmatched-warning" class="hidden mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+          <i class="fas fa-exclamation-triangle mr-1 text-amber-500"></i>
+          <span id="autoplan-unmatched-text"></span>
+        </div>
+
+        <div id="autoplan-trips-container" class="space-y-4"></div>
+      </div>
+    </div>
+
+  </div><!-- end logi-panel-autoplan -->
 
 
 </div>
@@ -13762,20 +13916,23 @@ window.switchLogiTab = function switchLogiTab(tab) {
         preshipment:  'logi-panel-preshipment',
         driverlog:    'logi-panel-driverlog',
         driverperf:   'logi-panel-driverperf',
+        autoplan:     'logi-panel-autoplan',
     };
     const tabColors = {
         list:        ' bg-emerald-600 text-white shadow',
         cal:         ' bg-emerald-600 text-white shadow',
         preshipment: ' bg-orange-500 text-white shadow',
         driverlog:   ' bg-teal-600 text-white shadow',
-        driverperf:  ' bg-rose-600 text-white shadow'
+        driverperf:  ' bg-rose-600 text-white shadow',
+        autoplan:    ' bg-violet-600 text-white shadow',
     };
     const tabHover = {
         list:        ' text-emerald-300 hover:bg-emerald-800 hover:text-white',
         cal:         ' text-emerald-300 hover:bg-emerald-800 hover:text-white',
         preshipment: ' text-emerald-300 hover:bg-orange-900 hover:text-orange-300',
         driverlog:   ' text-emerald-300 hover:bg-teal-900 hover:text-teal-300',
-        driverperf:  ' text-emerald-300 hover:bg-rose-900 hover:text-rose-300'
+        driverperf:  ' text-emerald-300 hover:bg-rose-900 hover:text-rose-300',
+        autoplan:    ' text-emerald-300 hover:bg-violet-900 hover:text-violet-300',
     };
     const btnBase = 'flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all';
     Object.keys(panels).forEach(function(t) {
@@ -13794,7 +13951,535 @@ window.switchLogiTab = function switchLogiTab(tab) {
     if (tab === 'preshipment') initPreShipmentTab();
     if (tab === 'driverlog')   dlogInit();
     if (tab === 'driverperf')  perfInit();
+    if (tab === 'autoplan')    initAutoDeliveryPlanner();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AUTO DELIVERY PLANNER — วางแผนส่งมอบอัตโนมัติ
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _autoPlanSoItems = [];   // raw SO items จาก Excel
+let _autoPlanTrips   = [];   // draft trips หลัง grouping
+
+// ── Init tab ──────────────────────────────────────────────────────────────────
+window.initAutoDeliveryPlanner = function() {
+    loadLogiMaster(function() {
+        autoplanUpdateTruckOptions();
+    });
+};
+
+// ── อัปเดต dropdown รถตาม truck type ─────────────────────────────────────────
+window.autoplanUpdateTruckOptions = function() {
+    const type        = (safeGet('autoplan-truck-type') || {}).value || 'company';
+    const sel         = safeGet('autoplan-truck-sel');
+    const companyCol  = safeGet('autoplan-company-truck-col');
+    const hiredCol    = safeGet('autoplan-hired-truck-col');
+    const capEl       = safeGet('autoplan-capacity');
+
+    // show/hide คอลัมน์ตามประเภทรถ
+    if (companyCol) companyCol.classList.toggle('hidden', type !== 'company');
+    if (hiredCol)   hiredCol.classList.toggle('hidden',   type !== 'hired');
+
+    if (type === 'company' && sel) {
+        // รถบริษัท: dropdown ทะเบียน + auto-fill capacity จาก netWeight
+        sel.innerHTML = '<option value="">— เลือกรถ —</option>';
+        (LOGI_MASTER_CACHE.trucks || []).forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.plate;
+            opt.dataset.cap = t.netWeight || 15000;
+            opt.textContent = t.plate + ' (' + t.type + ')' +
+                (t.netWeight ? ' — ' + t.netWeight.toLocaleString() + ' กก.' : '');
+            sel.appendChild(opt);
+        });
+        autoplanUpdateCapacity();
+    } else {
+        // รถจ้าง: ไม่ auto-fill capacity — ผู้ใช้กรอกเองตามขนาดรถที่จ้าง
+        if (capEl) capEl.value = '';
+    }
+};
+
+window.autoplanUpdateCapacity = function() {
+    // ใช้เฉพาะรถบริษัทเท่านั้น (auto-fill netWeight)
+    const type  = (safeGet('autoplan-truck-type') || {}).value || 'company';
+    if (type !== 'company') return;
+    const sel   = safeGet('autoplan-truck-sel');
+    const capEl = safeGet('autoplan-capacity');
+    if (!sel || !capEl) return;
+    const opt = sel.options[sel.selectedIndex];
+    const cap = opt ? parseFloat(opt.dataset.cap || 0) : 0;
+    if (cap > 0) capEl.value = cap;
+};
+
+// ── ดึงข้อมูลจาก Sheet "จองพร้อมส่ง" ──────────────────────────────────────
+window.autoplanLoadFromSheet = function() {
+    const shipDate  = (safeGet('autoplan-ship-date') || {}).value || '';
+    const loadBtn   = safeGet('autoplan-load-btn');
+    if (loadBtn) { loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...'; loadBtn.disabled = true; }
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (loadBtn) { loadBtn.innerHTML = '<i class="fas fa-cloud-download-alt mr-1"></i>ดึงข้อมูลจาก Sheet'; loadBtn.disabled = false; }
+            if (!res || !res.success) {
+                showToast('โหลดข้อมูลไม่สำเร็จ: ' + (res ? res.message : ''), true);
+                return;
+            }
+            _autoPlanSoItems = res.items || [];
+            // match shopRaw → shopId
+            _autoplanMatchShops();
+            autoplanRenderSoPreview();
+            showToast('โหลดสำเร็จ ' + _autoPlanSoItems.length + ' รายการ จาก Sheet จองพร้อมส่ง');
+        })
+        .withFailureHandler(function(err) {
+            if (loadBtn) { loadBtn.innerHTML = '<i class="fas fa-cloud-download-alt mr-1"></i>ดึงข้อมูลจาก Sheet'; loadBtn.disabled = false; }
+            showToast('โหลดไม่สำเร็จ: ' + (err.message || String(err)), true);
+        })
+        .getReadyToShipOrders(shipDate);
+};
+
+// ── match shopRaw → shopId จาก LOGI_MASTER_CACHE.shops ─────────────────────
+function _autoplanMatchShops() {
+    const shops = LOGI_MASTER_CACHE.shops || [];
+    _autoPlanSoItems.forEach(function(item) {
+        if (item.matched) return; // ถ้า GAS match ให้แล้ว ข้ามได้
+        const raw = (item.shopRaw || '').toLowerCase().trim();
+        var found = shops.find(function(s) { return s.name.toLowerCase().trim() === raw; });
+        if (!found) found = shops.find(function(s) {
+            var sn = s.name.toLowerCase().trim();
+            return raw.includes(sn) || sn.includes(raw);
+        });
+        if (!found) {
+            var tokens = raw.split(/\s+/);
+            found = shops.find(function(s) {
+                var sn = s.name.toLowerCase().trim();
+                return tokens.some(function(tk) { return tk.length > 3 && sn.includes(tk); });
+            });
+        }
+        if (found) { item.shopId = found.id; item.shopName = found.name; item.matched = true; }
+    });
+}
+
+// ── อ่าน Excel ──────────────────────────────────────────────────────────────
+window.autoplanReadExcel = function(input) {
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data  = new Uint8Array(e.target.result);
+            const wb    = XLSX.read(data, { type: 'array', cellDates: true });
+            const ws    = wb.Sheets[wb.SheetNames[0]];
+            const rows  = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+            _autoPlanSoItems = [];
+
+            // อ่านตั้งแต่แถว 2 (index 1) — แถว 1 คือ header
+            for (var i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                // Col D(3)=DeliveryName, G(6)=ShipDate, H(7)=ItemNo, I(8)=ProductName,
+                // AB(27)=W/Order, AF(31)=KG/จอง
+                const delivName  = String(r[3] || '').trim();
+                const shipDate   = r[6] ? (r[6] instanceof Date ? r[6].toISOString().slice(0,10) : String(r[6])) : '';
+                const itemNo     = String(r[7] || '').trim();
+                const productName= String(r[8] || '').trim();
+                const qty        = parseFloat(r[27]) || 0;
+                const weightKg   = parseFloat(r[31]) || 0;
+
+                if (!delivName || !productName) continue;
+
+                _autoPlanSoItems.push({
+                    shopRaw:     delivName,
+                    shipDate:    shipDate,
+                    itemNo:      itemNo,
+                    productName: productName,
+                    qty:         qty,
+                    weightKg:    weightKg,
+                    shopId:      null,  // จะ match ทีหลัง
+                    matched:     false
+                });
+            }
+
+            _autoplanMatchShops();
+            autoplanRenderSoPreview();
+        } catch(e) {
+            showToast('อ่าน Excel ไม่สำเร็จ: ' + e.message, true);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+};
+
+// ── Render preview table ───────────────────────────────────────────────────
+function autoplanRenderSoPreview() {
+    const preview   = safeGet('autoplan-so-preview');
+    const tbody     = safeGet('autoplan-so-tbody');
+    const cntSo     = safeGet('autoplan-so-count');
+    const cntShop   = safeGet('autoplan-shop-count');
+    if (!tbody) return;
+
+    const uniqueShops = new Set(_autoPlanSoItems.filter(function(i) { return i.matched; }).map(function(i) { return i.shopId; }));
+    if (cntSo)   cntSo.textContent   = _autoPlanSoItems.length;
+    if (cntShop) cntShop.textContent = uniqueShops.size;
+
+    tbody.innerHTML = _autoPlanSoItems.slice(0, 100).map(function(item, idx) {
+        var bg = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
+        var matchBadge = item.matched
+            ? '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-black">' + (item.shopName || item.shopId) + '</span>'
+            : '<span class="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full text-[10px] font-bold">ไม่พบ</span>';
+        return '<tr style="background:' + bg + ';">' +
+            '<td class="px-3 py-1.5 text-xs font-bold text-slate-700">' + item.shopRaw + '</td>' +
+            '<td class="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">' + (item.shipDate || '—') + '</td>' +
+            '<td class="px-3 py-1.5 text-xs text-slate-600">' + item.productName + '</td>' +
+            '<td class="px-3 py-1.5 text-xs text-right font-mono">' + (item.qty || '—') + '</td>' +
+            '<td class="px-3 py-1.5 text-xs text-right font-mono text-emerald-700 font-bold">' + item.weightKg.toFixed(2) + '</td>' +
+            '<td class="px-3 py-1.5 text-center">' + matchBadge + '</td>' +
+        '</tr>';
+    }).join('');
+
+    if (_autoPlanSoItems.length > 100) {
+        tbody.innerHTML += '<tr><td colspan="6" class="text-center text-xs text-slate-400 py-2">... แสดงแค่ 100 แถวแรก ทั้งหมด ' + _autoPlanSoItems.length + ' รายการ</td></tr>';
+    }
+
+    if (preview) preview.classList.remove('hidden');
+}
+
+window.clearAutoplanData = function() {
+    _autoPlanSoItems = [];
+    _autoPlanTrips   = [];
+    const preview = safeGet('autoplan-so-preview');
+    const result  = safeGet('autoplan-result-section');
+    if (preview) preview.classList.add('hidden');
+    if (result)  result.classList.add('hidden');
+    const fileInput = safeGet('autoplan-file-input');
+    if (fileInput) fileInput.value = '';
+};
+
+// ── Run Greedy Nearest-Neighbor grouping ─────────────────────────────────────
+window.runAutoGrouping = function() {
+    if (_autoPlanSoItems.length === 0) {
+        showToast('กรุณาโหลดข้อมูล SO ก่อน', true);
+        return;
+    }
+
+    const TARGET_KM = parseFloat((safeGet('autoplan-target-km') || {}).value) || 300;
+    const CAPACITY  = parseFloat((safeGet('autoplan-capacity')  || {}).value) || 15000;
+    const shops     = LOGI_MASTER_CACHE.shops || [];
+
+    // 1. จัดกลุ่มตาม shopId
+    const shopGroups = {};
+    _autoPlanSoItems.forEach(function(item) {
+        if (!item.matched) return;
+        const sid = item.shopId;
+        if (!shopGroups[sid]) {
+            const meta = shops.find(function(s) { return s.id === sid; }) || {};
+            shopGroups[sid] = {
+                shopId:       sid,
+                shopName:     meta.name || item.shopRaw,
+                distance:     meta.distance     || 0,
+                freeDistance: meta.freeDistance || 0,
+                sale:         meta.sale         || '',
+                totalWeight:  0,
+                items:        []
+            };
+        }
+        shopGroups[sid].totalWeight += item.weightKg;
+        shopGroups[sid].items.push({
+            sku:  item.itemNo,
+            name: item.productName,
+            qty:  item.qty,
+            wt:   item.weightKg
+        });
+    });
+
+    // ร้านที่ไม่พบใน master
+    const unmatchedShops = _autoPlanSoItems.filter(function(i) { return !i.matched; });
+    const unmatchedWarn = safeGet('autoplan-unmatched-warning');
+    const unmatchedTxt  = safeGet('autoplan-unmatched-text');
+    if (unmatchedShops.length > 0) {
+        const names = [...new Set(unmatchedShops.map(function(i) { return i.shopRaw; }))];
+        if (unmatchedWarn) unmatchedWarn.classList.remove('hidden');
+        if (unmatchedTxt)  unmatchedTxt.textContent = 'ร้านต่อไปนี้ไม่พบใน Master จะถูกข้าม: ' + names.join(', ');
+    } else {
+        if (unmatchedWarn) unmatchedWarn.classList.add('hidden');
+    }
+
+    let remaining = Object.values(shopGroups).filter(function(g) { return g.distance > 0; });
+
+    // เรียงจากใกล้ → ไกล
+    remaining.sort(function(a, b) { return a.distance - b.distance; });
+
+    // 2. Greedy Nearest-Neighbor Bin Packing
+    // สูตรระยะทาง = (ร้านไกลสุด × 2) + ฟรีรวมทุกร้าน  ← ตรงกับเป้าผู้บริหาร ≈ 300 กม./วัน
+    _autoPlanTrips = [];
+    while (remaining.length > 0) {
+        const trip = { shops: [], estimatedKm: 0, roundTrip: 0, totalFreeKm: 0, totalWeight: 0 };
+
+        // เริ่มด้วยร้านแรก (ใกล้สุดที่เหลือ — เรียงจากน้อยไปมากแล้ว)
+        const first = remaining.shift();
+        trip.shops.push(first);
+        let currentMaxDist  = first.distance;
+        let currentFree     = first.freeDistance;
+        trip.totalWeight   += first.totalWeight;
+
+        // เติมร้านถัดไป: ตรวจว่า (maxDist*2 + totalFree) ≤ TARGET_KM และ weight ≤ CAPACITY
+        let changed = true;
+        while (changed && remaining.length > 0) {
+            changed = false;
+            for (let i = 0; i < remaining.length; i++) {
+                const c        = remaining[i];
+                const newMax   = Math.max(currentMaxDist, c.distance);
+                const newFree  = currentFree + c.freeDistance;
+                const newKm    = (newMax * 2) + newFree;   // ← สูตรเดียวกันกับ final estimate
+                const newWt    = trip.totalWeight + c.totalWeight;
+                if (newKm <= TARGET_KM && newWt <= CAPACITY) {
+                    trip.shops.push(c);
+                    currentMaxDist  = newMax;
+                    currentFree     = newFree;
+                    trip.totalWeight = newWt;
+                    remaining.splice(i, 1);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        // สรุประยะทาง: ไปกลับ + ฟรีทุกร้าน
+        trip.roundTrip   = currentMaxDist * 2;
+        trip.totalFreeKm = currentFree;
+        trip.estimatedKm = trip.roundTrip + trip.totalFreeKm;
+        trip.truckType   = (safeGet('autoplan-truck-type') || {}).value || 'company';
+        trip.truckPlate  = (safeGet('autoplan-truck-sel') || {}).value || '';
+        trip.driver      = '';
+        trip.transportCo = '';
+
+        _autoPlanTrips.push(trip);
+    }
+
+    renderAutoplanDraftTrips();
+};
+
+// ── Render Draft Trips ────────────────────────────────────────────────────────
+function renderAutoplanDraftTrips() {
+    const container = safeGet('autoplan-trips-container');
+    const badge     = safeGet('autoplan-trip-count-badge');
+    const section   = safeGet('autoplan-result-section');
+    if (!container) return;
+
+    if (badge) badge.textContent = _autoPlanTrips.length + ' เที่ยว';
+    if (section) section.classList.remove('hidden');
+
+    const trucks    = LOGI_MASTER_CACHE.trucks    || [];
+    const drivers   = LOGI_MASTER_CACHE.drivers   || [];
+    const transports= LOGI_MASTER_CACHE.transports|| [];
+    const defaultTruckType = (safeGet('autoplan-truck-type') || {}).value || 'company';
+
+    // ตั้ง ship date เริ่มต้น
+    const defaultDate = (safeGet('autoplan-ship-date') || {}).value || '';
+    _autoPlanTrips.forEach(function(trip) { if (!trip.date) trip.date = defaultDate; });
+
+    const CAPACITY = parseFloat((safeGet('autoplan-capacity') || {}).value || 15000);
+
+    container.innerHTML = _autoPlanTrips.map(function(trip, ti) {
+        const isHired   = trip.truckType === 'hired';
+        const kmTotal   = trip.estimatedKm || 0;
+        const kmRound   = trip.roundTrip   || 0;
+        const kmFree    = trip.totalFreeKm || 0;
+        // สีระยะทาง: ใกล้ 300 กม. = เขียว, ต่ำกว่า 200 = แดง, เกิน 350 = แดง
+        const kmBadgeCls = kmTotal > 350 ? 'bg-rose-500' : kmTotal >= 250 ? 'bg-emerald-500' : 'bg-amber-500';
+        const wtPct      = trip.totalWeight > 0 ? Math.min(100, (trip.totalWeight / CAPACITY) * 100) : 0;
+        const wtBarCls   = wtPct > 90 ? 'bg-rose-500' : wtPct > 70 ? 'bg-amber-500' : 'bg-emerald-500';
+
+        // หา ship date จาก items ของ trip
+        const tripShipDate = trip.date || defaultDate;
+        var fmtShipDate = '';
+        if (tripShipDate) {
+            var dp = tripShipDate.split('-');
+            if (dp.length === 3) fmtShipDate = dp[2] + '/' + dp[1] + '/' + dp[0];
+        }
+
+        // Dropdown รถ (รถบริษัทเท่านั้น — รถจ้างเลือกที่นี่ด้วยเพราะต่างเที่ยวต่างบริษัทได้)
+        var truckOpts = '<option value="">— เลือก' + (isHired ? 'บริษัทขนส่ง' : 'ทะเบียนรถ') + ' —</option>' +
+            (isHired ? transports : trucks).map(function(t) {
+                var val = isHired ? t.id   : t.plate;
+                var lbl = isHired ? t.name : (t.plate + ' (' + t.type + ')' + (t.netWeight ? ' ' + (t.netWeight/1000).toFixed(1) + 't' : ''));
+                var sel = (trip.truckPlate === val || trip.transportCo === val) ? ' selected' : '';
+                return '<option value="' + val + '"' + sel + '>' + lbl + '</option>';
+            }).join('');
+
+        var driverOpts = '<option value="">— เลือกคนขับ —</option>' +
+            drivers.map(function(d) {
+                return '<option value="' + d.name + '"' + (trip.driver === d.name ? ' selected' : '') + '>' + d.name + '</option>';
+            }).join('');
+
+        // Shop list
+        var shopList = trip.shops.map(function(s, si) {
+            return '<div class="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">' +
+                '<div class="flex-1 min-w-0">' +
+                    '<span class="w-5 h-5 bg-violet-100 text-violet-700 rounded-full text-[10px] font-black inline-flex items-center justify-center mr-1.5 flex-shrink-0">' + (si+1) + '</span>' +
+                    '<span class="text-sm font-bold text-slate-700">' + s.shopName + '</span>' +
+                    '<span class="ml-2 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono">' + s.distance + ' กม.</span>' +
+                    (s.freeDistance ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +' + s.freeDistance + '</span>' : '') +
+                '</div>' +
+                '<div class="text-right ml-2 flex-shrink-0">' +
+                    '<div class="text-xs font-black text-emerald-700">' + s.totalWeight.toFixed(1) + ' กก.</div>' +
+                    '<div class="text-[10px] text-slate-400">' + s.items.length + ' รายการ</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        return '<div class="bg-white rounded-2xl border-2 border-violet-100 shadow-sm overflow-hidden" id="autoplan-trip-card-' + ti + '">' +
+            // ── Header ──
+            '<div class="bg-gradient-to-r from-violet-700 to-purple-600 px-5 py-3">' +
+                '<div class="flex items-center justify-between">' +
+                    '<div class="flex items-center gap-2">' +
+                        '<span class="w-8 h-8 bg-white/25 rounded-xl flex items-center justify-center text-white font-black">' + (ti+1) + '</span>' +
+                        '<div>' +
+                            '<div class="text-white font-black text-sm">เที่ยวที่ ' + (ti+1) + '</div>' +
+                            // Ship Date แสดงชัดเจน
+                            (fmtShipDate ? '<div class="text-violet-200 text-xs font-bold"><i class="fas fa-calendar-check mr-1"></i>ส่งวันที่ ' + fmtShipDate + '</div>' : '') +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-3">' +
+                        // ระยะทาง badge สี
+                        '<div class="text-right">' +
+                            '<div class="' + kmBadgeCls + ' text-white text-lg font-black px-3 py-1 rounded-xl inline-block">' + kmTotal.toFixed(1) + ' กม.</div>' +
+                            '<div class="text-violet-200 text-[10px] mt-0.5 text-right">' +
+                                'ไปกลับ ' + kmRound.toFixed(1) + ' + ฟรี ' + kmFree.toFixed(1) + ' กม.' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="text-right">' +
+                            '<div class="text-white font-black text-lg">' + (trip.totalWeight/1000).toFixed(2) + ' <span class="text-xs font-normal text-violet-200">ตัน</span></div>' +
+                            '<div class="text-violet-200 text-[10px]">(' + trip.totalWeight.toFixed(0) + ' กก.)</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            // ── Body ──
+            '<div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">' +
+                '<div>' +
+                    '<div class="text-xs font-black text-slate-400 uppercase mb-2">' +
+                        '<i class="fas fa-store mr-1 text-violet-400"></i>ร้านค้า ' + trip.shops.length + ' ร้าน</div>' +
+                    shopList +
+                    '<div class="mt-3">' +
+                        '<div class="flex justify-between text-[10px] text-slate-400 mb-1">' +
+                            '<span>น้ำหนัก / capacity</span>' +
+                            '<span class="font-bold ' + (wtPct > 90 ? 'text-rose-600' : 'text-slate-500') + '">' + wtPct.toFixed(0) + '%</span>' +
+                        '</div>' +
+                        '<div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">' +
+                            '<div class="h-full ' + wtBarCls + ' rounded-full transition-all" style="width:' + wtPct + '%"></div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="space-y-3">' +
+                    // วันที่ส่ง
+                    '<div>' +
+                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block"><i class="fas fa-calendar-check mr-1 text-violet-500"></i>วันที่ส่ง</label>' +
+                        '<input type="date" value="' + tripShipDate + '" ' +
+                            'class="w-full bg-violet-50 border-2 border-violet-200 rounded-xl px-3 py-2 font-bold text-violet-800 outline-none focus:border-violet-400 text-sm" ' +
+                            'onchange="_autoPlanTrips[' + ti + '].date=this.value;">' +
+                    '</div>' +
+                    // รถ/บริษัทขนส่ง
+                    '<div>' +
+                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block">' + (isHired ? 'บริษัทขนส่ง' : 'ทะเบียนรถ') + '</label>' +
+                        '<select class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" ' +
+                            'onchange="_autoPlanTrips[' + ti + '].truckPlate=this.value;_autoPlanTrips[' + ti + '].transportCo=this.value;">' +
+                            truckOpts +
+                        '</select>' +
+                    '</div>' +
+                    // คนขับ (รถบริษัท)
+                    (!isHired ? '<div>' +
+                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block">คนขับ</label>' +
+                        '<select class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" ' +
+                            'onchange="_autoPlanTrips[' + ti + '].driver=this.value;">' +
+                            driverOpts +
+                        '</select>' +
+                    '</div>' : '') +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }).join('');
+}
+
+window.autoplanResetResult = function() {
+    _autoPlanTrips = [];
+    const result = safeGet('autoplan-result-section');
+    if (result) result.classList.add('hidden');
+};
+
+// ── Confirm & Batch Save ──────────────────────────────────────────────────────
+window.confirmAndSaveAutoPlans = function() {
+    if (_autoPlanTrips.length === 0) { showToast('ไม่มีแผนที่ต้องบันทึก', true); return; }
+
+    showConfirmModal(
+        'บันทึกแผนทั้งหมด?',
+        'จะสร้างแผนการส่งมอบ <strong>' + _autoPlanTrips.length + ' เที่ยว</strong> เข้าระบบ',
+        function() {
+            const saveBtn = safeGet('autoplan-save-btn');
+            if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังบันทึก...'; saveBtn.disabled = true; }
+
+            // สร้าง payload
+            const plansArray = _autoPlanTrips.map(function(trip, ti) {
+                const isHired = trip.truckType === 'hired';
+                // หา driver transport string
+                let driverTransport = '';
+                if (isHired) {
+                    const trans = (LOGI_MASTER_CACHE.transports || []).find(function(t) { return t.id === (trip.transportCo || trip.truckPlate); });
+                    driverTransport = trans ? trans.name : (trip.transportCo || trip.truckPlate || '');
+                } else {
+                    driverTransport = trip.driver || '';
+                }
+
+                return {
+                    date:            trip.date || '',
+                    truckType:       isHired ? 'hired' : 'company',
+                    truckPlate:      isHired ? '' : (trip.truckPlate || ''),
+                    driverTransport: driverTransport,
+                    tripNo:          String(ti + 1),
+                    jobType:         'sale_order',
+                    status:          'planned',
+                    distance:        trip.estimatedKm,
+                    returnDistance:  0,
+                    shopNames:       trip.shops.map(function(s) { return s.shopName; }).join(', '),
+                    shops: trip.shops.map(function(s) {
+                        return {
+                            shopId:       s.shopId,
+                            shopName:     s.shopName,
+                            sale:         s.sale || '',
+                            distance:     s.distance,
+                            freeDistance: s.freeDistance,
+                            remark:       '',
+                            loadWarehouse:'',
+                            items: s.items.map(function(it) {
+                                return { sku: it.sku || '', qty: it.qty || 0, weight: it.wt || 0 };
+                            })
+                        };
+                    })
+                };
+            });
+
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนทั้งหมด'; saveBtn.disabled = false; }
+                    if (res && res.success) {
+                        showToast('✅ ' + res.message + ' — Plan IDs: ' + (res.savedIds || []).join(', '));
+                        _autoPlanTrips = [];
+                        const result = safeGet('autoplan-result-section');
+                        if (result) result.classList.add('hidden');
+                        // ไป tab รายการแผน
+                        switchLogiTab('list');
+                        loadLogisticList();
+                    } else {
+                        showToast('เกิดข้อผิดพลาด: ' + (res ? res.message : 'ไม่ทราบสาเหตุ'), true);
+                    }
+                })
+                .withFailureHandler(function(err) {
+                    if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนทั้งหมด'; saveBtn.disabled = false; }
+                    showToast('บันทึกไม่สำเร็จ: ' + (err.message || String(err)), true);
+                })
+                .saveBatchLogisticPlans(plansArray);
+        },
+        { type: 'confirm', okText: 'บันทึกเลย' }
+    );
+};
+// ── end AUTO DELIVERY PLANNER ────────────────────────────────────────────────
 
 // ─── TRUCK LOAD PLANNER (จัดรถพ่วง) ──────────────────────────────────────────
 let tlRowCount = 0;
