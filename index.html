@@ -14115,16 +14115,13 @@ window.autoplanRunAll = function() {
     var runBtn = safeGet('autoplan-run-btn');
     if (runBtn) { runBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดข้อมูล...'; runBtn.disabled = true; }
 
-    // วันที่ส่ง: ใช้จาก input หรือ default พรุ่งนี้
-    var sdEl  = safeGet('autoplan-ship-date');
-    var sdVal = sdEl ? sdEl.value : '';
-    if (!sdVal) {
-        var tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
-        sdVal = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
-        if (sdEl) sdEl.value = sdVal;
-    }
-    var shipDate = sdVal;
+    // กำหนดวันพรุ่งนี้ใน hidden input (ใช้ใน trip cards)
+    var sdEl = safeGet('autoplan-ship-date');
+    var tmr  = new Date(); tmr.setDate(tmr.getDate() + 1);
+    var tomorrowStr = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
+    if (sdEl) sdEl.value = tomorrowStr;
 
+    // โหลด SO ทั้งหมด (ไม่กรองวัน) — ระบบกำหนดวันส่งในการ์ดเอง
     google.script.run
         .withSuccessHandler(function(res) {
             if (!res || !res.success) {
@@ -14133,43 +14130,44 @@ window.autoplanRunAll = function() {
                 return;
             }
             _autoPlanSoItems = res.items || [];
+            if (_autoPlanSoItems.length === 0) {
+                if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
+                showToast('ไม่พบข้อมูลใน Sheet "จองพร้อมส่ง"', true);
+                return;
+            }
             _autoplanMatchShops();
 
             var unmatchedCount = _autoPlanSoItems.filter(function(i){ return !i.matched; }).length;
             var msg = 'โหลด ' + _autoPlanSoItems.length + ' รายการ';
             if (unmatchedCount > 0) msg += ' (ไม่พบร้าน ' + unmatchedCount + ' รายการ)';
 
-            // Cross-day: check planned shops
+            // Cross-day: check planned shops ในวันพรุ่งนี้
             window._autoPlanExcludedShopIds = new Set();
             function _doRun() {
                 if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
                 showToast(msg + ' — กำลังจัดแผน...');
                 runAutoGrouping();
             }
-            if (shipDate) {
-                google.script.run
-                    .withSuccessHandler(function(r2) {
-                        if (r2 && r2.success && r2.plannedShopIds) {
-                            r2.plannedShopIds.forEach(function(id){ window._autoPlanExcludedShopIds.add(id); });
-                            var excl = window._autoPlanExcludedShopIds.size;
-                            if (excl > 0) {
-                                var badge = safeGet('autoplan-excluded-badge');
-                                if (badge) { badge.textContent = '⚠️ ' + excl + ' ร้านวางแผนไปแล้ว'; badge.classList.remove('hidden'); }
-                            }
+            google.script.run
+                .withSuccessHandler(function(r2) {
+                    if (r2 && r2.success && r2.plannedShopIds) {
+                        r2.plannedShopIds.forEach(function(id){ window._autoPlanExcludedShopIds.add(id); });
+                        var excl = window._autoPlanExcludedShopIds.size;
+                        if (excl > 0) {
+                            var badge = safeGet('autoplan-excluded-badge');
+                            if (badge) { badge.textContent = '⚠️ ' + excl + ' ร้านวางแผนไปแล้ว'; badge.classList.remove('hidden'); }
                         }
-                        _doRun();
-                    })
-                    .withFailureHandler(function(){ _doRun(); })
-                    .getPlannedShopIdsByDateRange(shipDate, shipDate);
-            } else {
-                _doRun();
-            }
+                    }
+                    _doRun();
+                })
+                .withFailureHandler(function(){ _doRun(); })
+                .getPlannedShopIdsByDateRange(tomorrowStr, tomorrowStr);
         })
         .withFailureHandler(function(err) {
             if (runBtn) { runBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>จัดแผนอัตโนมัติ'; runBtn.disabled = false; }
             showToast('โหลดไม่สำเร็จ: ' + (err.message || String(err)), true);
         })
-        .getReadyToShipOrders(shipDate);
+        .getReadyToShipOrders('');  // '' = โหลดทั้งหมด ไม่กรองวัน
 };
 
 // ── match shopRaw → shopId จาก LOGI_MASTER_CACHE.shops ─────────────────────
