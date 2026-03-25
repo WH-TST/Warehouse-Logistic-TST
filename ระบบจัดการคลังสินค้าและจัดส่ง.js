@@ -4477,25 +4477,13 @@ function getLogisticPlans(date) {
 function getPlannedShopIdsByDateRange(startDate, endDate) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var planSheet = ss.getSheetByName(LOGI_PLAN_ITEM_SHEET || 'Logistic_Plan_Item');
-    if (!planSheet || planSheet.getLastRow() < 2) {
-      // fallback: try main plan sheet
-      planSheet = ss.getSheetByName(LOGI_PLAN_SHEET || 'Logistic_Plan');
-      if (!planSheet || planSheet.getLastRow() < 2) return { success: true, plannedShopIds: [] };
-    }
+    // ศูนย์รวมแผนอยู่ที่ Logistic_Plan เสมอ: Col B=วันที่, Col R(17)=รหัสร้านค้า
+    var planSheet = ss.getSheetByName(LOGI_PLAN_SHEET);
+    if (!planSheet || planSheet.getLastRow() < 2) return { success: true, plannedShopIds: [] };
     var data = planSheet.getDataRange().getValues();
     var ids = {};
-    var headers = data[0];
-    // Find column indices dynamically
-    var dateCol = -1, shopIdCol = -1;
-    for (var h = 0; h < headers.length; h++) {
-      var hdr = String(headers[h]).toLowerCase();
-      if (hdr.indexOf('วันที่') !== -1 || hdr === 'date' || hdr === 'shipdate') dateCol = h;
-      if (hdr.indexOf('รหัสลูกค้า') !== -1 || hdr === 'shopid' || hdr === 'customerid') shopIdCol = h;
-    }
-    // Fallback column positions if headers not found
-    if (dateCol < 0) dateCol = 1;   // Col B typically
-    if (shopIdCol < 0) shopIdCol = 5; // Col F typically
+    var dateCol   = 1;   // Col B: วันที่
+    var shopIdCol = 17;  // Col R: รหัสร้านค้า
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
       var rowDateRaw = row[dateCol];

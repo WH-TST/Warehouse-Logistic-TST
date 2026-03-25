@@ -14507,8 +14507,17 @@ window.runAutoGrouping = function() {
         trip.driver      = '';
         trip.transportCo = '';
 
-        // ── วันที่ส่ง: ยึดจาก input ที่ผู้ใช้กำหนดเท่านั้น ห้ามใช้วันจากชีต ──
-        trip.date = (safeGet('autoplan-ship-date') || {}).value || '';
+        // ── วันที่ส่ง: ยึดจาก input ถ้าว่าง → default พรุ่งนี้ ──
+        var _sdEl  = safeGet('autoplan-ship-date');
+        var _sdVal = _sdEl ? _sdEl.value : '';
+        if (!_sdVal) {
+            var _tmr = new Date(); _tmr.setDate(_tmr.getDate() + 1);
+            _sdVal = _tmr.getFullYear() + '-' +
+                     String(_tmr.getMonth() + 1).padStart(2, '0') + '-' +
+                     String(_tmr.getDate()).padStart(2, '0');
+            if (_sdEl) _sdEl.value = _sdVal;
+        }
+        trip.date = _sdVal;
 
         // เก็บ zone name ไว้แสดงใน card
         trip.zone = hasZone ? zoneName : '';
