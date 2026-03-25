@@ -2623,7 +2623,7 @@ thead.sticky {
         <div class="flex flex-wrap gap-4 items-end">
           <div class="flex-1 min-w-[220px]">
             <label class="text-xs font-black text-slate-400 uppercase mb-1 block">Plan ID / วันที่</label>
-            <select id="psd-plan-select"
+            <select id="psd-plan-select" onchange="psdPlanCheckTrailer()"
               class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-orange-400 transition-all cursor-pointer">
               <option value="">— กรุณาเลือกแผน —</option>
             </select>
@@ -12452,12 +12452,19 @@ window.forceReloadLogiMaster = function(btn) {
 
 // ── populate dropdowns ใน Modal ──────────────────────────────────────────────
 function populateLogiDropdowns() {
-    // ทะเบียนรถบริษัท — value = plate text
+    // ทะเบียนรถบริษัท — value = plate text (รถพ่วง: แสดง 🔗 + cap แม่/ลูก)
     const truckSel = document.getElementById('logi-truck-plate');
     if (truckSel) {
         truckSel.innerHTML = '<option value="">-- เลือกทะเบียนรถ --</option>' +
             LOGI_MASTER_CACHE.trucks.map(t =>
-                `<option value="${t.plate}">${t.plate}${t.type ? ' (' + t.type + ')' : ''}</option>`
+                `<option value="${t.plate}"
+                    data-is-trailer="${t.isTrailer ? '1' : '0'}"
+                    data-cap-mother="${t.capMother || 0}"
+                    data-cap-child="${t.capChild || 0}">
+                    ${t.isTrailer
+                        ? t.plate + ' 🔗[พ่วง] — แม่ ' + (t.capMother/1000).toFixed(1) + 't + ลูก ' + (t.capChild/1000).toFixed(1) + 't'
+                        : t.plate + (t.type ? ' (' + t.type + ')' : '')}
+                </option>`
             ).join('');
     }
 
@@ -14006,6 +14013,18 @@ window.initAutoDeliveryPlanner = function() {
     });
 };
 
+// ── Helper: อัปเดต trip เมื่อเปลี่ยนรถในการ์ด (รวม trailer flags) ────────────
+window.autoplanUpdateTripTruck = function(ti, val) {
+    _autoPlanTrips[ti].truckPlate  = val;
+    _autoPlanTrips[ti].transportCo = val;
+    var t = (LOGI_MASTER_CACHE.trucks || []).find(function(x) { return x.plate === val; });
+    if (t) {
+        _autoPlanTrips[ti].isTrailer = t.isTrailer  || false;
+        _autoPlanTrips[ti].capMother = t.capMother  || 0;
+        _autoPlanTrips[ti].capChild  = t.capChild   || 0;
+    }
+};
+
 // ── อัปเดต dropdown รถตาม truck type ─────────────────────────────────────────
 window.autoplanUpdateTruckOptions = function() {
     const type        = (safeGet('autoplan-truck-type') || {}).value || 'company';
@@ -14024,9 +14043,14 @@ window.autoplanUpdateTruckOptions = function() {
         (LOGI_MASTER_CACHE.trucks || []).forEach(function(t) {
             var opt = document.createElement('option');
             opt.value = t.plate;
-            opt.dataset.cap = t.netWeight || 15000;
-            opt.textContent = t.plate + ' (' + t.type + ')' +
-                (t.netWeight ? ' — ' + t.netWeight.toLocaleString() + ' กก.' : '');
+            opt.dataset.cap       = t.netWeight  || 15000;
+            opt.dataset.isTrailer = t.isTrailer  ? '1' : '0';
+            opt.dataset.capMother = t.capMother  || 0;
+            opt.dataset.capChild  = t.capChild   || 0;
+            // รถพ่วง: แสดง cap แม่+ลูก | รถธรรมดา: แสดง netWeight
+            opt.textContent = t.isTrailer
+                ? t.plate + ' 🔗[พ่วง] — แม่ ' + (t.capMother/1000).toFixed(1) + 't + ลูก ' + (t.capChild/1000).toFixed(1) + 't'
+                : t.plate + ' (' + t.type + ')' + (t.netWeight ? ' — ' + t.netWeight.toLocaleString() + ' กก.' : '');
             sel.appendChild(opt);
         });
         autoplanUpdateCapacity();
@@ -14394,51 +14418,91 @@ window.runAutoGrouping = function() {
     const truckType   = (safeGet('autoplan-truck-type') || {}).value || 'company';
     const isHiredMode = truckType === 'hired';
     const transports  = LOGI_MASTER_CACHE.transports || [];
-    // เรียง trucks: netWeight ใหญ่สุดก่อน (ถ้าไม่มี netWeight ใช้ตามลำดับเดิม)
-    const trucks = (LOGI_MASTER_CACHE.trucks || []).slice()
-        .sort(function(a, b) { return (b.netWeight || 0) - (a.netWeight || 0); });
+    const allTrucks   = LOGI_MASTER_CACHE.trucks || [];
 
-    const MAX_TRIPS_PER_TRUCK = 3;  // ไม่เกิน 3 เที่ยว/คน/วัน (ความเหนื่อย+การจราจร)
+    // แยก non-trailer / trailer สำหรับ logic assign
+    const nonTrailerTrucks = allTrucks.filter(function(t) { return !t.isTrailer; });
+    const trailerTrucks    = allTrucks.filter(function(t) { return  t.isTrailer; });
+    // หา capacity สูงสุดของ non-trailer (ใช้ตัดสินว่าต้องใช้พ่วงหรือเปล่า)
+    const maxNonTrailerCap = nonTrailerTrucks.reduce(function(m, t) {
+        return Math.max(m, t.netWeight || 0);
+    }, 0);
+
+    const MAX_TRIPS_PER_TRUCK = 3;  // ไม่เกิน 3 เที่ยว/คน/วัน
     const usedCount = {};           // plate → จำนวนเที่ยวที่ assign แล้ว
-    trucks.forEach(function(t) { usedCount[t.plate] = 0; });
+    allTrucks.forEach(function(t) { usedCount[t.plate] = 0; });
 
     _autoPlanTrips.forEach(function(trip, ti) {
         if (isHiredMode) {
-            // รถจ้าง: cycle ผ่าน transports (ไม่จำกัดเที่ยว เพราะบริษัทขนส่งส่งรถได้ไม่จำกัด)
+            // รถจ้าง: cycle ผ่าน transports
             if (transports.length > 0) {
                 const t = transports[ti % transports.length];
                 trip.transportCo = t.id;
                 trip.truckPlate  = '';
             }
-        } else if (trucks.length > 0) {
-            // รถบริษัท: เลือกรถที่:
-            //   1. capacity ≥ น้ำหนัก (ถ้ามี netWeight) หรือ capacity ไม่ได้กำหนด
-            //   2. ยังไม่เกิน MAX_TRIPS_PER_TRUCK เที่ยว
-            //   3. ใช้น้อยที่สุด (ช่วยกระจาย load)
+        } else if (allTrucks.length > 0) {
             var best = null;
             var bestScore = Infinity;
-            trucks.forEach(function(t) {
+
+            // ── ขั้น 1: ลอง non-trailer ก่อน (ถ้าน้ำหนักใส่ได้) ─────────────
+            // หลักการ: ไม่ยัดงานหนักเกิน capacity ให้รถ 10 ล้อ
+            //          เลือกรถที่ใช้น้อยที่สุด (กระจาย load)
+            nonTrailerTrucks.forEach(function(t) {
                 var cap   = t.netWeight || 0;
                 var fits  = (cap === 0) || (cap >= trip.totalWeight);
                 var count = usedCount[t.plate] || 0;
-                var withinLimit = count < MAX_TRIPS_PER_TRUCK;
-                if (fits && withinLimit && count < bestScore) {
+                if (fits && count < MAX_TRIPS_PER_TRUCK && count < bestScore) {
                     bestScore = count;
                     best = t;
                 }
             });
-            // fallback: ถ้าทุกรถเต็ม MAX_TRIPS → เลือกรถที่ใช้น้อยที่สุด (พร้อม warning)
+
+            // ── ขั้น 2: ถ้าไม่มี non-trailer พอดี → ใช้รถพ่วง ──────────────
+            // หลักการ: ใช้พ่วงเมื่อน้ำหนักเกิน 10 ล้อ หรือ 10 ล้อ assign เต็มแล้ว
             if (!best) {
-                best = trucks.reduce(function(a, b) {
+                var bestTrailerScore = Infinity;
+                trailerTrucks.forEach(function(t) {
+                    var cap   = t.netWeight || 0;
+                    var fits  = (cap === 0) || (cap >= trip.totalWeight);
+                    var count = usedCount[t.plate] || 0;
+                    if (fits && count < MAX_TRIPS_PER_TRUCK && count < bestTrailerScore) {
+                        bestTrailerScore = count;
+                        best = t;
+                    }
+                });
+            }
+
+            // ── fallback: ทุกคันเต็ม MAX_TRIPS → เลือกที่ใช้น้อยสุด + warning ──
+            if (!best) {
+                best = allTrucks.reduce(function(a, b) {
                     return (usedCount[a.plate] || 0) <= (usedCount[b.plate] || 0) ? a : b;
                 });
-                trip.overLimit = true; // flag: เกินเที่ยวที่กำหนด
+                trip.overLimit = true;
             }
+
             if (best) {
                 trip.truckPlate = best.plate;
+                trip.isTrailer  = best.isTrailer  || false;
+                trip.capMother  = best.capMother  || 0;
+                trip.capChild   = best.capChild   || 0;
                 usedCount[best.plate] = (usedCount[best.plate] || 0) + 1;
             }
         }
+    });
+
+    // ── Auto-assign Driver สำหรับรถพ่วง ──────────────────────────────────────
+    // เฉพาะคนขับที่ canTrailer=true เท่านั้นที่ขับรถพ่วงได้
+    const trailerDrivers = (LOGI_MASTER_CACHE.drivers || []).filter(function(d) { return d.canTrailer; });
+    const driverUsed     = {};
+    _autoPlanTrips.forEach(function(trip) {
+        if (!trip.isTrailer || trailerDrivers.length === 0) return;
+        // เลือกคนขับพ่วงที่ว่างมากที่สุด (กระจาย load)
+        var pick = trailerDrivers.reduce(function(a, b) {
+            return (driverUsed[a.id] || 0) <= (driverUsed[b.id] || 0) ? a : b;
+        });
+        trip.driver   = pick.name;
+        trip.driverId = pick.id;
+        driverUsed[pick.id] = (driverUsed[pick.id] || 0) + 1;
     });
 
     // แจ้ง warning ถ้ามีเที่ยวที่เกิน MAX_TRIPS
@@ -14497,14 +14561,22 @@ function renderAutoplanDraftTrips() {
         var truckOpts = '<option value="">— เลือก' + (isHired ? 'บริษัทขนส่ง' : 'ทะเบียนรถ') + ' —</option>' +
             (isHired ? transports : trucks).map(function(t) {
                 var val = isHired ? t.id   : t.plate;
-                var lbl = isHired ? t.name : (t.plate + ' (' + t.type + ')' + (t.netWeight ? ' ' + (t.netWeight/1000).toFixed(1) + 't' : ''));
+                var lbl = isHired ? t.name
+                    : (t.isTrailer
+                        ? t.plate + ' 🔗[พ่วง] — แม่ ' + (t.capMother/1000).toFixed(1) + 't + ลูก ' + (t.capChild/1000).toFixed(1) + 't'
+                        : t.plate + ' (' + t.type + ')' + (t.netWeight ? ' ' + (t.netWeight/1000).toFixed(1) + 't' : ''));
                 var sel = (trip.truckPlate === val || trip.transportCo === val) ? ' selected' : '';
                 return '<option value="' + val + '"' + sel + '>' + lbl + '</option>';
             }).join('');
 
+        // Driver dropdown: รถพ่วง → เฉพาะคนขับที่ canTrailer เท่านั้น
+        var driverPool = trip.isTrailer
+            ? drivers.filter(function(d) { return d.canTrailer; })
+            : drivers;
         var driverOpts = '<option value="">— เลือกคนขับ —</option>' +
-            drivers.map(function(d) {
-                return '<option value="' + d.name + '"' + (trip.driver === d.name ? ' selected' : '') + '>' + d.name + '</option>';
+            driverPool.map(function(d) {
+                var label = d.name + (d.canTrailer ? ' 🔗' : '');
+                return '<option value="' + d.name + '"' + (trip.driver === d.name ? ' selected' : '') + '>' + label + '</option>';
             }).join('');
 
         // Shop list
@@ -14548,11 +14620,14 @@ function renderAutoplanDraftTrips() {
                                 else if (z.indexOf('อีสาน') >= 0) cls = 'bg-yellow-500/90 text-gray-900';
                                 return '<span class="' + cls + ' text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fas fa-compass mr-0.5"></i>' + z + '</span>';
                             })() +
+                            // Trailer badge
+                            (trip.isTrailer ? '<span class="bg-cyan-400/90 text-cyan-900 text-[10px] font-black px-2 py-0.5 rounded-full"><i class="fas fa-link mr-0.5"></i>รถพ่วง</span>' : '') +
                             // Over-limit badge
                             (trip.overLimit ? '<span class="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse"><i class="fas fa-exclamation-circle mr-0.5"></i>เกิน 3 เที่ยว/วัน!</span>' : '') +
                         '</div>' +
-                        // Ship Date
+                        // Ship Date + trailer cap breakdown
                         (fmtShipDate ? '<div class="text-violet-200 text-xs font-bold mt-0.5"><i class="fas fa-calendar-check mr-1"></i>ส่งวันที่ ' + fmtShipDate + '</div>' : '') +
+                        (trip.isTrailer ? '<div class="text-cyan-200 text-[10px] font-bold mt-0.5"><i class="fas fa-truck mr-1"></i>แม่ ' + (trip.capMother/1000).toFixed(1) + 't &nbsp;+&nbsp; <i class="fas fa-trailer mr-1"></i>ลูก ' + (trip.capChild/1000).toFixed(1) + 't &nbsp;→ แบ่งสินค้าอัตโนมัติใน PSD</div>' : '') +
                         '</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-3">' +
@@ -14604,7 +14679,7 @@ function renderAutoplanDraftTrips() {
                             '<span class="text-[10px] text-emerald-500 font-bold"><i class="fas fa-magic mr-0.5"></i>Auto</span>' +
                         '</div>' +
                         '<select class="w-full bg-emerald-50 border-2 border-emerald-300 rounded-xl px-3 py-2.5 font-black text-emerald-800 outline-none focus:border-emerald-500 text-sm cursor-pointer" ' +
-                            'onchange="_autoPlanTrips[' + ti + '].truckPlate=this.value;_autoPlanTrips[' + ti + '].transportCo=this.value;">' +
+                            'onchange="autoplanUpdateTripTruck(' + ti + ',this.value);">' +
                             truckOpts +
                         '</select>' +
                     '</div>' +
@@ -15736,7 +15811,7 @@ function initPreShipmentTab() {
                     + (p.driverTransport && p.driverTransport !== truckStr ? ' | ' + p.driverTransport : '')
                     + ' | ' + (p.totalWeight ? parseFloat(p.totalWeight).toLocaleString() + ' กก.' : '—')
                     + shopStr;
-                opts += '<option value="' + p.id + '">' + label + '</option>';
+                opts += '<option value="' + p.id + '" data-truck="' + (p.truckPlate || '') + '">' + label + '</option>';
             });
             sel.innerHTML = opts;
         })
@@ -15745,6 +15820,35 @@ function initPreShipmentTab() {
         })
         .getLogisticPlans(null);
 }
+
+// ── Plan Mode: Auto-detect รถพ่วงจาก plan ที่เลือก ──────────────────────────
+// เรียกจาก onchange ของ psd-plan-select → ถ้าแผนใช้รถพ่วง auto-check toggle + fill cap
+window.psdPlanCheckTrailer = function psdPlanCheckTrailer() {
+    var sel = document.getElementById('psd-plan-select');
+    if (!sel) return;
+    var opt        = sel.options[sel.selectedIndex];
+    var truckPlate = opt ? (opt.dataset.truck || '') : '';
+    var truck      = (LOGI_MASTER_CACHE.trucks || []).find(function(t) { return t.plate === truckPlate; });
+    var toggle     = document.getElementById('psd-plan-trailer-toggle');
+    var inputs     = document.getElementById('psd-plan-trailer-inputs');
+    var capMEl     = document.getElementById('psd-plan-trailer-cap-mother');
+    var capCEl     = document.getElementById('psd-plan-trailer-cap-child');
+    if (truck && truck.isTrailer) {
+        // รถพ่วง: auto-check + fill cap + show inputs
+        if (toggle) toggle.checked = true;
+        if (inputs) inputs.classList.remove('hidden');
+        if (capMEl) capMEl.value = truck.capMother || '';
+        if (capCEl) capCEl.value = truck.capChild  || '';
+        var assignBtn = document.getElementById('psd-plan-assign-btn');
+        if (assignBtn) assignBtn.classList.remove('hidden');
+    } else {
+        // รถธรรมดา: reset trailer section
+        if (toggle) toggle.checked = false;
+        if (inputs) inputs.classList.add('hidden');
+        if (capMEl) capMEl.value = '';
+        if (capCEl) capCEl.value = '';
+    }
+};
 
 // ── Plan Mode: Toggle Trailer Inputs ────────────────────────────────────
 window.psdPlanToggleTrailer = function psdPlanToggleTrailer() {
