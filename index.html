@@ -14246,12 +14246,58 @@ window.runAutoGrouping = function() {
         trip.totalFreeKm = currentFree;
         trip.estimatedKm = trip.roundTrip + trip.totalFreeKm;
         trip.truckType   = (safeGet('autoplan-truck-type') || {}).value || 'company';
-        trip.truckPlate  = (safeGet('autoplan-truck-sel') || {}).value || '';
         trip.driver      = '';
         trip.transportCo = '';
 
+        // ── Auto-assign Ship Date จาก SO items ของ trip ──────────────────────
+        const tripShopIds = trip.shops.map(function(s) { return s.shopId; });
+        const tripDates   = _autoPlanSoItems
+            .filter(function(i) { return i.matched && tripShopIds.includes(i.shopId) && i.shipDate; })
+            .map(function(i) { return i.shipDate; });
+        // ใช้ ship date ที่พบมากที่สุด (mode) หรือวันแรก
+        if (tripDates.length > 0) {
+            const freq = {};
+            tripDates.forEach(function(d) { freq[d] = (freq[d] || 0) + 1; });
+            trip.date = Object.keys(freq).reduce(function(a, b) { return freq[a] >= freq[b] ? a : b; });
+        } else {
+            trip.date = (safeGet('autoplan-ship-date') || {}).value || '';
+        }
+
         _autoPlanTrips.push(trip);
     }
+
+    // ── Auto-assign Truck ─────────────────────────────────────────────────────
+    const truckType    = (safeGet('autoplan-truck-type') || {}).value || 'company';
+    const isHiredMode  = truckType === 'hired';
+    const transports   = LOGI_MASTER_CACHE.transports || [];
+    const trucks       = (LOGI_MASTER_CACHE.trucks || []).slice(); // copy เพื่อ cycle
+    // เรียง trucks: ใหญ่สุดก่อน
+    trucks.sort(function(a, b) { return (b.netWeight || 0) - (a.netWeight || 0); });
+
+    const usedTrucks = {}; // plate → trip index ที่ assign ไปแล้ว (สำหรับ cycle)
+    _autoPlanTrips.forEach(function(trip, ti) {
+        if (isHiredMode) {
+            // รถจ้าง: cycle ผ่าน transports ตามลำดับ
+            if (transports.length > 0) {
+                const t = transports[ti % transports.length];
+                trip.transportCo = t.id;
+                trip.truckPlate  = '';
+            }
+        } else {
+            // รถบริษัท: หารถที่ capacity ≥ น้ำหนักเที่ยว โดย prefer ไม่ซ้ำกัน
+            var assigned = trucks.find(function(t) {
+                return (t.netWeight || 0) >= trip.totalWeight && !usedTrucks[t.plate];
+            });
+            if (!assigned) {
+                // ถ้าหมดรถ: cycle โดยเลือก capacity ใหญ่สุดที่ใช้น้อยที่สุด
+                assigned = trucks[ti % trucks.length];
+            }
+            if (assigned) {
+                trip.truckPlate = assigned.plate;
+                usedTrucks[assigned.plate] = ti;
+            }
+        }
+    });
 
     renderAutoplanDraftTrips();
 };
@@ -14369,25 +14415,35 @@ function renderAutoplanDraftTrips() {
                     '</div>' +
                 '</div>' +
                 '<div class="space-y-3">' +
-                    // วันที่ส่ง
+                    // ── วันที่ส่ง (auto-filled, แก้ได้) ──────────────────────
                     '<div>' +
-                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block"><i class="fas fa-calendar-check mr-1 text-violet-500"></i>วันที่ส่ง</label>' +
+                        '<div class="flex items-center justify-between mb-1">' +
+                            '<label class="text-xs font-black text-slate-500 uppercase"><i class="fas fa-calendar-check mr-1 text-violet-500"></i>วันที่ส่ง</label>' +
+                            '<span class="text-[10px] text-violet-400 font-bold"><i class="fas fa-magic mr-0.5"></i>Auto</span>' +
+                        '</div>' +
                         '<input type="date" value="' + tripShipDate + '" ' +
-                            'class="w-full bg-violet-50 border-2 border-violet-200 rounded-xl px-3 py-2 font-bold text-violet-800 outline-none focus:border-violet-400 text-sm" ' +
+                            'class="w-full bg-violet-50 border-2 border-violet-300 rounded-xl px-3 py-2.5 font-black text-violet-800 outline-none focus:border-violet-500 text-sm" ' +
                             'onchange="_autoPlanTrips[' + ti + '].date=this.value;">' +
                     '</div>' +
-                    // รถ/บริษัทขนส่ง
+                    // ── รถ (auto-assigned, แก้ได้) ────────────────────────────
                     '<div>' +
-                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block">' + (isHired ? 'บริษัทขนส่ง' : 'ทะเบียนรถ') + '</label>' +
-                        '<select class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" ' +
+                        '<div class="flex items-center justify-between mb-1">' +
+                            '<label class="text-xs font-black text-slate-500 uppercase">' + (isHired ? '<i class="fas fa-truck mr-1 text-orange-400"></i>บริษัทขนส่ง' : '<i class="fas fa-truck mr-1 text-emerald-500"></i>ทะเบียนรถ') + '</label>' +
+                            '<span class="text-[10px] text-emerald-500 font-bold"><i class="fas fa-magic mr-0.5"></i>Auto</span>' +
+                        '</div>' +
+                        '<select class="w-full bg-emerald-50 border-2 border-emerald-300 rounded-xl px-3 py-2.5 font-black text-emerald-800 outline-none focus:border-emerald-500 text-sm cursor-pointer" ' +
                             'onchange="_autoPlanTrips[' + ti + '].truckPlate=this.value;_autoPlanTrips[' + ti + '].transportCo=this.value;">' +
                             truckOpts +
                         '</select>' +
                     '</div>' +
-                    // คนขับ (รถบริษัท)
-                    (!isHired ? '<div>' +
-                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block">คนขับ</label>' +
-                        '<select class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" ' +
+                    // ── คนขับ (เลือกเอง) ──────────────────────────────────────
+                    (!isHired ?
+                    '<div>' +
+                        '<label class="text-xs font-black text-slate-500 uppercase mb-1 block">' +
+                            '<i class="fas fa-user mr-1 text-slate-400"></i>คนขับ ' +
+                            '<span class="text-rose-400">*</span>' +
+                        '</label>' +
+                        '<select class="w-full bg-white border-2 border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" ' +
                             'onchange="_autoPlanTrips[' + ti + '].driver=this.value;">' +
                             driverOpts +
                         '</select>' +
