@@ -14171,14 +14171,16 @@ window.runAutoGrouping = function() {
         if (!shopGroups[sid]) {
             const meta = shops.find(function(s) { return s.id === sid; }) || {};
             shopGroups[sid] = {
-                shopId:       sid,
-                shopName:     meta.name || item.shopRaw,
-                distance:     meta.distance      || 0,
-                freeDistance: meta.freeDistance  || 0,
-                zone:         meta.zone          || '', // Col H ใน Customers sheet
-                sale:         meta.sale          || '',
-                totalWeight:  0,
-                items:        []
+                shopId:      sid,
+                shopName:    meta.name || item.shopRaw,
+                distance:    meta.distance || 0,
+                zone:        meta.zone     || '', // Col D ใน Customers Adress sheet
+                sale:        meta.sale     || '',
+                totalWeight: 0,
+                items:       []
+                // หมายเหตุ: freeDistance ไม่ได้มาจาก master แต่คำนวณตาม rule:
+                //   1 ร้าน/เที่ยว: ≥30000กก.→30km | ≥15000กก.→15km | อื่น→10km
+                //   2+ ร้าน/เที่ยว: 10km × จำนวนร้าน
             };
         }
         shopGroups[sid].totalWeight += item.weightKg;
@@ -14223,37 +14225,50 @@ window.runAutoGrouping = function() {
     // สำคัญ: ร้านในคนละ zone ห้ามอยู่เที่ยวเดียวกัน (ยกเว้นไม่มี zone)
     _autoPlanTrips = [];
 
+    // ── helper: คำนวณ freeKm ตามกฎธุรกิจ ──────────────────────────────────────
+    // 1 ร้าน/เที่ยว: ≥30000กก.→30km | ≥15000กก.→15km | อื่น→10km
+    // 2+ ร้าน/เที่ยว: 10km × จำนวนร้าน
+    function calcFreeKm(tripShops) {
+        if (!tripShops || tripShops.length === 0) return 0;
+        if (tripShops.length === 1) {
+            var w = tripShops[0].totalWeight || 0;
+            if (w >= 30000) return 30;
+            if (w >= 15000) return 15;
+            return 10;
+        }
+        return tripShops.length * 10; // 2+ ร้าน → 10 km ต่อร้าน
+    }
+
     Object.keys(zoneGroups).forEach(function(zoneName) {
         // เรียงจากใกล้ → ไกลภายใน zone
         let remaining = zoneGroups[zoneName].slice()
             .sort(function(a, b) { return a.distance - b.distance; });
 
     // ── Greedy Nearest-Neighbor ภายใน zone ──────────────────────────────────
-    // สูตรระยะทาง = (ร้านไกลสุด × 2) + ฟรีรวมทุกร้าน  ≈ 300 กม./วัน
+    // สูตรระยะทาง = (ร้านไกลสุด × 2) + ฟรีรวม  ≈ 300 กม./วัน
     while (remaining.length > 0) {
         const trip = { shops: [], estimatedKm: 0, roundTrip: 0, totalFreeKm: 0, totalWeight: 0 };
 
-        // เริ่มด้วยร้านแรก (ใกล้สุดที่เหลือ — เรียงจากน้อยไปมากแล้ว)
+        // เริ่มด้วยร้านแรก (ใกล้สุดที่เหลือ)
         const first = remaining.shift();
         trip.shops.push(first);
-        let currentMaxDist  = first.distance;
-        let currentFree     = first.freeDistance;
-        trip.totalWeight   += first.totalWeight;
+        let currentMaxDist = first.distance;
+        trip.totalWeight  += first.totalWeight;
 
-        // เติมร้านถัดไป: ตรวจว่า (maxDist*2 + totalFree) ≤ TARGET_KM และ weight ≤ CAPACITY
+        // เติมร้านถัดไป: ตรวจว่า (maxDist*2 + freeKm) ≤ TARGET_KM และ weight ≤ CAPACITY
         let changed = true;
         while (changed && remaining.length > 0) {
             changed = false;
             for (let i = 0; i < remaining.length; i++) {
-                const c        = remaining[i];
-                const newMax   = Math.max(currentMaxDist, c.distance);
-                const newFree  = currentFree + c.freeDistance;
-                const newKm    = (newMax * 2) + newFree;   // ← สูตรเดียวกันกับ final estimate
-                const newWt    = trip.totalWeight + c.totalWeight;
+                const c      = remaining[i];
+                const newMax = Math.max(currentMaxDist, c.distance);
+                const newWt  = trip.totalWeight + c.totalWeight;
+                // คำนวณ freeKm สมมุติว่าเพิ่มร้าน c เข้าไป
+                const newFree = calcFreeKm(trip.shops.concat([c]));
+                const newKm   = (newMax * 2) + newFree;
                 if (newKm <= TARGET_KM && newWt <= CAPACITY) {
                     trip.shops.push(c);
-                    currentMaxDist  = newMax;
-                    currentFree     = newFree;
+                    currentMaxDist   = newMax;
                     trip.totalWeight = newWt;
                     remaining.splice(i, 1);
                     changed = true;
@@ -14262,9 +14277,9 @@ window.runAutoGrouping = function() {
             }
         }
 
-        // สรุประยะทาง: ไปกลับ + ฟรีทุกร้าน
+        // สรุประยะทาง: ไปกลับ + ฟรีตาม rule
         trip.roundTrip   = currentMaxDist * 2;
-        trip.totalFreeKm = currentFree;
+        trip.totalFreeKm = calcFreeKm(trip.shops);
         trip.estimatedKm = trip.roundTrip + trip.totalFreeKm;
         trip.truckType   = (safeGet('autoplan-truck-type') || {}).value || 'company';
         trip.driver      = '';
@@ -14414,7 +14429,10 @@ function renderAutoplanDraftTrips() {
                     '<span class="w-5 h-5 bg-violet-100 text-violet-700 rounded-full text-[10px] font-black inline-flex items-center justify-center mr-1.5 flex-shrink-0">' + (si+1) + '</span>' +
                     '<span class="text-sm font-bold text-slate-700">' + s.shopName + '</span>' +
                     '<span class="ml-2 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono">' + s.distance + ' กม.</span>' +
-                    (s.freeDistance ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +' + s.freeDistance + '</span>' : '') +
+                    (trip.shops.length > 1 ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +10 กม.</span>' :
+                        s.totalWeight >= 30000 ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +30 กม.</span>' :
+                        s.totalWeight >= 15000 ? '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +15 กม.</span>' :
+                        '<span class="ml-1 text-[10px] bg-violet-50 text-violet-500 px-1.5 py-0.5 rounded font-mono">ฟรี +10 กม.</span>') +
                 '</div>' +
                 '<div class="text-right ml-2 flex-shrink-0">' +
                     '<div class="text-xs font-black text-emerald-700">' + s.totalWeight.toFixed(1) + ' กก.</div>' +
