@@ -4362,9 +4362,14 @@ thead.sticky {
           <p class="text-sky-200 text-sm font-bold">กรอกข้อมูลเที่ยวรถและรายการร้านค้า</p>
         </div>
       </div>
-      <button onclick="closeLogisticForm()" class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-all">
-        <i class="fas fa-times"></i>
-      </button>
+      <div class="flex items-center gap-2">
+        <button onclick="forceReloadLogiMaster(this)" class="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all" title="รีโหลดรายชื่อร้านค้า/รถ/คนขับ">
+          <i class="fas fa-sync-alt"></i> รีเฟรชข้อมูล
+        </button>
+        <button onclick="closeLogisticForm()" class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-all">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
     </div>
 
     <div class="p-8 space-y-8">
@@ -12397,7 +12402,8 @@ window.onLogiStatusChange = function onLogiStatusChange() {
 
 // ── โหลด Master Data จาก GAS ──────────────────────────────────────────────
 function loadLogiMaster(callback) {
-    if (LOGI_MASTER_CACHE.loaded) {
+    // โหลดซ้ำถ้า shops ว่าง (ป้องกัน cache เก่าที่โหลดตอนชีตผิดชื่อ)
+    if (LOGI_MASTER_CACHE.loaded && LOGI_MASTER_CACHE.shops.length > 0) {
         if (callback) callback();
         return;
     }
@@ -12405,13 +12411,14 @@ function loadLogiMaster(callback) {
         .withSuccessHandler(function(res) {
             if (res && res.success) {
                 LOGI_MASTER_CACHE.trucks     = res.trucks     || [];
-                LOGI_MASTER_CACHE.drivers    = res.drivers    || [];  // [{ id, name }]
-                LOGI_MASTER_CACHE.transports = res.transports || [];  // [{ id, name }]
-                LOGI_MASTER_CACHE.shops      = res.shops      || [];  // [{ id, name, address, phone, sale, distance }]
-                LOGI_MASTER_CACHE.products   = res.products   || [];  // [{ sku, name, weightPerUnit }]
-                LOGI_MASTER_CACHE.whStaff    = res.whStaff    || [];  // [{ id, name, team }]
-                LOGI_PRODUCTS_MASTER         = LOGI_MASTER_CACHE.products; // sync alias
-                LOGI_MASTER_CACHE.loaded     = true;
+                LOGI_MASTER_CACHE.drivers    = res.drivers    || [];
+                LOGI_MASTER_CACHE.transports = res.transports || [];
+                LOGI_MASTER_CACHE.shops      = res.shops      || [];
+                LOGI_MASTER_CACHE.products   = res.products   || [];
+                LOGI_MASTER_CACHE.whStaff    = res.whStaff    || [];
+                LOGI_PRODUCTS_MASTER         = LOGI_MASTER_CACHE.products;
+                // mark loaded เฉพาะตอนมีร้านค้า — ถ้าว่างจะ retry รอบถัดไป
+                LOGI_MASTER_CACHE.loaded     = LOGI_MASTER_CACHE.shops.length > 0;
             }
             if (callback) callback();
         })
@@ -12421,6 +12428,18 @@ function loadLogiMaster(callback) {
         })
         .getLogisticMasterData();
 }
+
+// ── Force reload master (ปุ่ม รีเฟรช) ──────────────────────────────────────
+window.forceReloadLogiMaster = function(btn) {
+    LOGI_MASTER_CACHE.loaded = false;
+    LOGI_MASTER_CACHE.shops  = [];
+    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...'; btn.disabled = true; }
+    loadLogiMaster(function() {
+        if (btn) { btn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i>รีเฟรชข้อมูล'; btn.disabled = false; }
+        showToast('โหลดข้อมูลหลักสำเร็จ — ร้านค้า ' + LOGI_MASTER_CACHE.shops.length + ' ร้าน');
+        populateLogiDropdowns();
+    });
+};
 
 // ── populate dropdowns ใน Modal ──────────────────────────────────────────────
 function populateLogiDropdowns() {
