@@ -2491,7 +2491,7 @@ thead.sticky {
               </th>
               <th class="px-3 py-3 text-right leading-snug">
                 <i class="fas fa-road text-emerald-300 mr-1"></i>ระยะทางรวม<br>
-                <span class="text-emerald-300 text-[10px] font-semibold normal-case">(ไปกลับ) กม.</span>
+                <span class="text-emerald-300 text-[10px] font-semibold normal-case">(ไป+กลับ+Stop) กม.</span>
               </th>
               <th class="px-3 py-3 text-right leading-snug">
                 <i class="fas fa-weight-hanging text-emerald-300 mr-1"></i>น้ำหนักรวม<br>
@@ -13639,10 +13639,11 @@ function updateLogiKPI() {
         if (p.jobType !== 'maintenance_pm') {
             d.trips  += 1;
             d.shops  += (p.shops || []).length;
-            const dist    = parseFloat(p.distance)       || 0;
-            const retDist = parseFloat(p.returnDistance) || 0;
-            // ระยะทางรวม = ขาไป + ขากลับ (ค่า returnDistance คือระยะจริงจาก Maps ไม่ต้องคูณ 2)
-            d.dist += retDist > 0 ? (dist + retDist) : dist * 2;
+            const dist     = parseFloat(p.distance)       || 0;
+            const retDist  = parseFloat(p.returnDistance) || 0;
+            const stopDist = parseFloat(p.stopFee)        || 0;
+            // ระยะทางรวม = ขาไป + ขากลับ + Stop (freeDistance รวมทุกร้าน)
+            d.dist += (retDist > 0 ? (dist + retDist) : dist * 2) + stopDist;
         }
         d.weight  += parseFloat(p.totalWeight) || 0;
         if (p.status === 'success') d.success += 1;
