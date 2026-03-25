@@ -4149,10 +4149,6 @@ thead.sticky {
             <button onclick="autoplanResetResult()" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition-all">
               <i class="fas fa-redo mr-1"></i>เริ่มใหม่
             </button>
-            <button onclick="confirmAndSaveAutoPlans()" id="autoplan-save-btn"
-              class="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow transition-all flex items-center gap-2">
-              <i class="fas fa-save"></i>บันทึกแผนทั้งหมด
-            </button>
           </div>
         </div>
 
@@ -14963,6 +14959,12 @@ function renderAutoplanDraftTrips() {
                             '</select>' +
                         '</div>'
                         : '') +
+                    // ── ปุ่มบันทึกแผนระดับการ์ด ──
+                    '<button id="autoplan-card-save-' + ti + '" ' +
+                        'onclick="autoplanSaveSingleTrip(' + ti + ')" ' +
+                        'class="w-full mt-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl py-2 text-xs font-black shadow transition-all flex items-center justify-center gap-1.5">' +
+                        '<i class="fas fa-save"></i>บันทึกแผนนี้' +
+                    '</button>' +
                 '</div>' +
             '</div>' +
         '</td>';
@@ -15151,6 +15153,73 @@ window.confirmAndSaveAutoPlans = function() {
         { type: 'confirm', okText: 'บันทึกเลย' }
     );
 };
+// ── บันทึกแผนรายการ์ด ────────────────────────────────────────────────────────
+window.autoplanSaveSingleTrip = function(ti) {
+    var trip = _autoPlanTrips[ti];
+    if (!trip) return;
+
+    var btn = document.getElementById('autoplan-card-save-' + ti);
+    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังบันทึก...'; btn.disabled = true; }
+
+    var isHired = trip.truckType === 'hired';
+    var driverTransport = '';
+    if (isHired) {
+        var trans = (LOGI_MASTER_CACHE.transports || []).find(function(t) { return t.id === (trip.transportCo || trip.truckPlate); });
+        driverTransport = trans ? trans.name : (trip.transportCo || trip.truckPlate || '');
+    } else {
+        driverTransport = trip.driver || '';
+    }
+
+    var payload = [{
+        date:            trip.date || '',
+        truckType:       isHired ? 'hired' : 'company',
+        truckPlate:      isHired ? '' : (trip.truckPlate || ''),
+        driverTransport: driverTransport,
+        tripNo:          String(ti + 1),
+        jobType:         'sale_order',
+        status:          'planned',
+        distance:        trip.estimatedKm,
+        returnDistance:  0,
+        shopNames:       trip.shops.map(function(s){ return s.shopName; }).join(', '),
+        waitForMerge:    trip.waitForMerge || false,
+        shops: trip.shops.map(function(s) {
+            return {
+                shopId:       s.shopId,
+                shopName:     s.shopName,
+                sale:         s.sale || '',
+                distance:     s.distance,
+                freeDistance: s.freeDistance,
+                remark:       '',
+                loadWarehouse:'',
+                items: s.items.map(function(it){
+                    return { sku: it.sku||'', qty: it.qty||0, weight: it.wt||0 };
+                })
+            };
+        })
+    }];
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (res && res.success) {
+                showToast('✅ บันทึกแผนสำเร็จ');
+                _autoPlanTrips[ti].saved = true;
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-check mr-1"></i>บันทึกแล้ว ✓';
+                    btn.disabled = true;
+                    btn.className = btn.className.replace('bg-emerald-600 hover:bg-emerald-500', 'bg-slate-400');
+                }
+            } else {
+                if (btn) { btn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนนี้'; btn.disabled = false; }
+                showToast('เกิดข้อผิดพลาด: ' + (res ? res.message : ''), true);
+            }
+        })
+        .withFailureHandler(function(err) {
+            if (btn) { btn.innerHTML = '<i class="fas fa-save mr-1"></i>บันทึกแผนนี้'; btn.disabled = false; }
+            showToast('บันทึกไม่สำเร็จ: ' + (err.message || String(err)), true);
+        })
+        .saveBatchLogisticPlans(payload);
+};
+
 // ── end AUTO DELIVERY PLANNER ────────────────────────────────────────────────
 
 // ─── TRUCK LOAD PLANNER (จัดรถพ่วง) ──────────────────────────────────────────
