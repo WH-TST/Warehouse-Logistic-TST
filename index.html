@@ -4119,8 +4119,19 @@ thead.sticky {
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div>
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ระยะทาง Target (กม./วัน)</label>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">
+            🎯 เป้าหมาย กม./เที่ยว
+            <span class="text-violet-500 normal-case font-normal ml-1">(soft target)</span>
+          </label>
           <input type="number" id="autoplan-target-km" value="300" min="50" max="1000"
+            class="w-full bg-violet-50 border-2 border-violet-300 rounded-xl px-4 py-2.5 font-black text-violet-700 outline-none focus:border-violet-500 text-sm text-center">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">
+            🚧 กม.สูงสุด/เที่ยว
+            <span class="text-slate-400 normal-case font-normal ml-1">(hard limit)</span>
+          </label>
+          <input type="number" id="autoplan-max-km" value="500" min="100" max="2000"
             class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm text-center">
         </div>
         <div>
@@ -14289,6 +14300,7 @@ window.runAutoGrouping = function() {
     }
 
     const TARGET_KM = parseFloat((safeGet('autoplan-target-km') || {}).value) || 300;
+    const MAX_KM    = parseFloat((safeGet('autoplan-max-km')    || {}).value) || 500;  // hard limit
     const CAPACITY  = parseFloat((safeGet('autoplan-capacity')  || {}).value) || 15000;
     const shops     = LOGI_MASTER_CACHE.shops || [];
 
@@ -14382,25 +14394,37 @@ window.runAutoGrouping = function() {
         let currentMaxDist = first.distance;
         trip.totalWeight  += first.totalWeight;
 
-        // เติมร้านถัดไป: ตรวจว่า (maxDist*2 + freeKm) ≤ TARGET_KM และ weight ≤ CAPACITY
+        // ── เติมร้านถัดไป: best-fit toward TARGET_KM (เกินได้ยิ่งดี, hard cap = MAX_KM) ──
+        // Strategy: เลือกร้านที่ทำให้ km ใกล้ TARGET_KM มากสุด (ไม่ใช่แค่ first-fit)
+        //   score = newKm          ถ้า newKm ≤ TARGET  → maximize toward target
+        //   score = TARGET - Δ×0.3 ถ้า newKm > TARGET  → ยังได้ แต่ penalty เล็กน้อย
         let changed = true;
         while (changed && remaining.length > 0) {
             changed = false;
-            for (let i = 0; i < remaining.length; i++) {
-                const c      = remaining[i];
-                const newMax = Math.max(currentMaxDist, c.distance);
-                const newWt  = trip.totalWeight + c.totalWeight;
-                // คำนวณ freeKm สมมุติว่าเพิ่มร้าน c เข้าไป
+            var bestIdx   = -1;
+            var bestScore = -Infinity;
+            for (var i = 0; i < remaining.length; i++) {
+                const c       = remaining[i];
+                const newMax  = Math.max(currentMaxDist, c.distance);
+                const newWt   = trip.totalWeight + c.totalWeight;
                 const newFree = calcFreeKm(trip.shops.concat([c]));
                 const newKm   = (newMax * 2) + newFree;
-                if (newKm <= TARGET_KM && newWt <= CAPACITY) {
-                    trip.shops.push(c);
-                    currentMaxDist   = newMax;
-                    trip.totalWeight = newWt;
-                    remaining.splice(i, 1);
-                    changed = true;
-                    break;
-                }
+                // hard constraints
+                if (newWt > CAPACITY || newKm > MAX_KM) continue;
+                // score: ยิ่งใกล้ TARGET ยิ่งดี; เกิน TARGET ก็ดี (penalty นิดหน่อย)
+                var score = newKm <= TARGET_KM
+                    ? newKm
+                    : TARGET_KM - (newKm - TARGET_KM) * 0.3;
+                if (score > bestScore) { bestScore = score; bestIdx = i; }
+            }
+            if (bestIdx >= 0) {
+                const chosen  = remaining[bestIdx];
+                const newMax  = Math.max(currentMaxDist, chosen.distance);
+                currentMaxDist    = newMax;
+                trip.totalWeight += chosen.totalWeight;
+                trip.shops.push(chosen);
+                remaining.splice(bestIdx, 1);
+                changed = true;
             }
         }
 
@@ -14608,6 +14632,8 @@ function renderAutoplanDraftTrips() {
         var maxWt    = truckCap * items.length; // ถ้า 2 เที่ยว = 2× capacity
         var pct      = maxWt > 0 ? Math.min(100, (usedWt / maxWt) * 100) : 0;
         var barCls   = pct > 90 ? 'bg-rose-400' : pct > 65 ? 'bg-amber-400' : 'bg-emerald-400';
+        var avgKm    = items.length > 0 ? items.reduce(function(s, x) { return s + (x.trip.estimatedKm || 0); }, 0) / items.length : 0;
+        var avgKmCls = avgKm >= TARGET_KM * 0.9 ? 'text-emerald-400' : avgKm >= TARGET_KM * 0.65 ? 'text-amber-400' : 'text-rose-400';
 
         var capInfo = t0.isTrailer
             ? 'แม่ ' + ((meta.capMother || t0.capMother || 0)/1000).toFixed(1) + 't<br>ลูก ' + ((meta.capChild  || t0.capChild  || 0)/1000).toFixed(1) + 't'
@@ -14634,6 +14660,10 @@ function renderAutoplanDraftTrips() {
                     '<div class="h-1.5 bg-slate-600 rounded-full overflow-hidden">' +
                         '<div class="h-full ' + barCls + ' rounded-full" style="width:' + pct + '%"></div>' +
                     '</div>' +
+                    '<div class="flex items-center justify-between mt-1.5">' +
+                        '<span class="text-slate-500 text-[9px]">avg กม./เที่ยว</span>' +
+                        '<span class="' + avgKmCls + ' text-[10px] font-black">' + avgKm.toFixed(0) + ' km' + (avgKm >= TARGET_KM * 0.9 ? ' ✅' : '') + '</span>' +
+                    '</div>' +
                 '</div>' +
             '</div>' +
         '</td>';
@@ -14649,7 +14679,17 @@ function renderAutoplanDraftTrips() {
             ? trip.capMother : CAPACITY;
         var wtPct    = effectiveCap > 0 ? Math.min(100, (trip.totalWeight / effectiveCap) * 100) : 0;
         var wtBarCls = wtPct > 90 ? 'bg-rose-500' : wtPct > 70 ? 'bg-amber-400' : 'bg-emerald-500';
-        var kmBadge  = kmTotal > 350 ? 'bg-rose-500 text-white' : kmTotal >= 250 ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-amber-900';
+        // km badge: เปรียบกับ TARGET_KM (soft goal) ไม่ใช่ค่าคงที่
+        var kmBadge = kmTotal >= TARGET_KM * 0.9
+            ? 'bg-emerald-500 text-white'          // ✅ ≥90% target = ใกล้หรือเกิน 300
+            : kmTotal >= TARGET_KM * 0.65
+                ? 'bg-amber-400 text-amber-900'    // ⚠️ 65-90% = ต่ำกว่าเป้า
+                : 'bg-rose-500 text-white';        // ❌ <65% = ต่ำมาก
+        if (kmTotal > MAX_KM) kmBadge = 'bg-purple-600 text-white'; // เกิน max (แสดงพิเศษ)
+        // km gauge: fill pct ต่อ TARGET (เกิน 100% = ดี แต่แสดง overflow)
+        var kmGaugePct = TARGET_KM > 0 ? Math.min(100, (kmTotal / TARGET_KM) * 100) : 0;
+        var kmOverTarget = kmTotal > TARGET_KM;
+        var kmGaugeCls = kmOverTarget ? 'bg-emerald-500' : kmGaugePct >= 65 ? 'bg-amber-400' : 'bg-rose-400';
         var zone     = trip.zone || '';
         var overMotherCap = trip.isTrailer && trip.motherOnly && trip.capMother > 0 && trip.totalWeight > trip.capMother;
 
@@ -14735,6 +14775,19 @@ function renderAutoplanDraftTrips() {
                     (overMotherCap
                         ? '<div class="text-[9px] text-rose-500 font-black mt-0.5">⚠️ เกิน cap แม่ (' + (trip.capMother/1000).toFixed(1) + 't) — เพิ่มพ่วง หรือลดสินค้า</div>'
                         : '') +
+                '</div>' +
+                // ── km gauge bar ──
+                '<div class="px-3 pt-0 pb-2">' +
+                    '<div class="flex justify-between text-[9px] mb-0.5">' +
+                        '<span class="text-slate-400">กม. vs เป้า ' + TARGET_KM + 'km</span>' +
+                        '<span class="font-black ' + (kmOverTarget ? 'text-emerald-600' : kmGaugePct >= 65 ? 'text-amber-600' : 'text-rose-500') + '">' +
+                            kmTotal.toFixed(0) + 'km' + (kmOverTarget ? ' ✅' : '') +
+                        '</span>' +
+                    '</div>' +
+                    '<div class="h-1.5 bg-slate-100 rounded-full overflow-hidden relative">' +
+                        '<div class="h-full ' + kmGaugeCls + ' rounded-full transition-all" style="width:' + kmGaugePct + '%"></div>' +
+                        '<div class="absolute top-0 bottom-0 w-px bg-violet-400 opacity-70" style="left:99%;"></div>' +
+                    '</div>' +
                 '</div>' +
                 // ── fields: วันที่ + รถ + คนขับ ──
                 '<div class="px-2 pb-2 pt-1 space-y-1.5">' +
