@@ -30,7 +30,7 @@ function _handleApiPost(e) {
       'saveFGCycleCount','saveSemiCycleCount',
       'importInventoryData','uploadOverdueData',
       'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders',
-      'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan',
+      'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan','getPlannedShopIdsByDateRange',
       'getLogisticPlanSummary','getPreShipmentData','getPreShipmentProductList',
       'saveDriverActivityRow','saveDriverActivityRows','getDriverActivityLog',
       'deleteDriverActivityRow','updateDriverActivityRows','saveGpsActivityRow',
@@ -186,7 +186,7 @@ function doGet(e) {
           'saveFGCycleCount','saveSemiCycleCount',
           'importInventoryData','uploadOverdueData',
           'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders',
-          'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan',
+          'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan','getPlannedShopIdsByDateRange',
           'getLogisticPlanSummary','getPreShipmentData','getPreShipmentProductList',
           'saveDriverActivityRow','saveDriverActivityRows','getDriverActivityLog',
           'deleteDriverActivityRow','updateDriverActivityRows','saveGpsActivityRow',
@@ -4470,6 +4470,48 @@ function getLogisticPlans(date) {
 
   } catch (e) {
     return { success: false, message: e.toString(), plans: [] };
+  }
+}
+
+// ── ดึง shopId ที่ถูกวางแผนไปแล้วในช่วงวันที่ ─────────────────────────────────
+function getPlannedShopIdsByDateRange(startDate, endDate) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var planSheet = ss.getSheetByName(LOGI_PLAN_ITEM_SHEET || 'Logistic_Plan_Item');
+    if (!planSheet || planSheet.getLastRow() < 2) {
+      // fallback: try main plan sheet
+      planSheet = ss.getSheetByName(LOGI_PLAN_SHEET || 'Logistic_Plan');
+      if (!planSheet || planSheet.getLastRow() < 2) return { success: true, plannedShopIds: [] };
+    }
+    var data = planSheet.getDataRange().getValues();
+    var ids = {};
+    var headers = data[0];
+    // Find column indices dynamically
+    var dateCol = -1, shopIdCol = -1;
+    for (var h = 0; h < headers.length; h++) {
+      var hdr = String(headers[h]).toLowerCase();
+      if (hdr.indexOf('วันที่') !== -1 || hdr === 'date' || hdr === 'shipdate') dateCol = h;
+      if (hdr.indexOf('รหัสลูกค้า') !== -1 || hdr === 'shopid' || hdr === 'customerid') shopIdCol = h;
+    }
+    // Fallback column positions if headers not found
+    if (dateCol < 0) dateCol = 1;   // Col B typically
+    if (shopIdCol < 0) shopIdCol = 5; // Col F typically
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var rowDateRaw = row[dateCol];
+      var rowDate = '';
+      if (rowDateRaw instanceof Date) {
+        rowDate = Utilities.formatDate(rowDateRaw, 'GMT+7', 'yyyy-MM-dd');
+      } else {
+        rowDate = String(rowDateRaw || '').substring(0, 10);
+      }
+      if (rowDate < startDate || rowDate > endDate) continue;
+      var shopId = String(row[shopIdCol] || '').trim();
+      if (shopId) ids[shopId] = true;
+    }
+    return { success: true, plannedShopIds: Object.keys(ids) };
+  } catch(e) {
+    return { success: false, plannedShopIds: [], message: e.toString() };
   }
 }
 

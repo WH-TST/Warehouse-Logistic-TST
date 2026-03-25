@@ -4070,6 +4070,7 @@ thead.sticky {
           <label class="text-xs font-black text-slate-500 uppercase mb-1 block">กรองตาม Ship Date (ไม่บังคับ)</label>
           <input type="date" id="autoplan-ship-date"
             class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 transition-all text-sm">
+          <div id="autoplan-date-chips" class="flex flex-wrap gap-1.5 mt-1.5"></div>
         </div>
         <button onclick="autoplanLoadFromSheet()" id="autoplan-load-btn"
           class="bg-violet-600 hover:bg-violet-500 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow transition-all flex items-center gap-2">
@@ -4162,8 +4163,17 @@ thead.sticky {
             placeholder="กรอก capacity กก.">
           <div class="text-[10px] text-slate-400 mt-0.5 text-center">รถจ้าง: กรอกตามขนาดที่จ้างมา</div>
         </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wide mb-1 block">
+            ⚖️ น้ำหนักขั้นต่ำ/เที่ยว
+            <span class="text-slate-400 normal-case font-normal ml-1">(ต่ำกว่านี้ = รอรวม)</span>
+          </label>
+          <input type="number" id="autoplan-min-weight" value="14000" min="0" max="33000" step="500"
+            class="w-full bg-amber-50 border-2 border-amber-300 rounded-xl px-4 py-2.5 font-black text-amber-700 text-center text-sm outline-none focus:border-amber-500 transition">
+        </div>
       </div>
-      <div class="mt-4 flex justify-end">
+      <div class="mt-4 flex justify-end items-center gap-3">
+        <div id="autoplan-excluded-badge" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-bold"></div>
         <button onclick="runAutoGrouping()" id="autoplan-run-btn"
           class="bg-violet-600 hover:bg-violet-500 text-white px-8 py-3 rounded-xl font-black text-sm shadow-lg transition-all flex items-center gap-2">
           <i class="fas fa-magic"></i>สร้างแผนอัตโนมัติ
@@ -13997,7 +14007,10 @@ window.switchLogiTab = function switchLogiTab(tab) {
     if (tab === 'preshipment') initPreShipmentTab();
     if (tab === 'driverlog')   dlogInit();
     if (tab === 'driverperf')  perfInit();
-    if (tab === 'autoplan')    initAutoDeliveryPlanner();
+    if (tab === 'autoplan') {
+        initAutoDeliveryPlanner();
+        if (typeof window.autoplanRenderDateChips === 'function') window.autoplanRenderDateChips();
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -14006,6 +14019,7 @@ window.switchLogiTab = function switchLogiTab(tab) {
 
 window._autoPlanSoItems = [];   // raw SO items จาก Excel
 window._autoPlanTrips   = [];   // draft trips หลัง grouping
+window._autoPlanExcludedShopIds = new Set(); // ร้านที่ถูกวางแผนไปแล้วในช่วงวันที่เลือก
 
 // ── Init tab ──────────────────────────────────────────────────────────────────
 window.initAutoDeliveryPlanner = function() {
@@ -14110,6 +14124,29 @@ window.autoplanLoadFromSheet = function() {
             _autoplanMatchShops();
             autoplanRenderSoPreview();
             showToast('โหลดสำเร็จ ' + _autoPlanSoItems.length + ' รายการ จาก Sheet จองพร้อมส่ง');
+            // ── Cross-day check: โหลด shopId ที่ถูกวางแผนไปแล้วในวันที่เลือก ────────
+            window._autoPlanExcludedShopIds = new Set();
+            var sdEl = safeGet('autoplan-ship-date');
+            var shipDate = sdEl ? sdEl.value : '';
+            if (shipDate) {
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (res && res.success && res.plannedShopIds) {
+                            res.plannedShopIds.forEach(function(id) {
+                                window._autoPlanExcludedShopIds.add(id);
+                            });
+                            if (window._autoPlanExcludedShopIds.size > 0) {
+                                var badge = safeGet('autoplan-excluded-badge');
+                                if (badge) {
+                                    badge.textContent = '⚠️ ' + window._autoPlanExcludedShopIds.size + ' ร้านถูกวางแผนไปแล้วในวันนี้';
+                                    badge.classList.remove('hidden');
+                                }
+                            }
+                        }
+                    })
+                    .withFailureHandler(function() {})
+                    .getPlannedShopIdsByDateRange(shipDate, shipDate);
+            }
         })
         .withFailureHandler(function(err) {
             if (loadBtn) { loadBtn.innerHTML = '<i class="fas fa-cloud-download-alt mr-1"></i>ดึงข้อมูลจาก Sheet'; loadBtn.disabled = false; }
@@ -14234,63 +14271,80 @@ window.clearAutoplanData = function() {
     if (fileInput) fileInput.value = '';
 };
 
-// ── Auto-detect Zone จากที่อยู่ลูกค้า (เหมือนไลน์แมน — แบ่งทิศตามจังหวัด) ───────
-// ไม่ต้องเพิ่ม column เพิ่มเติมใน Sheet — อ่านจากที่อยู่ Col C ของ Customers
+// ── Detect delivery corridor from address text ────────────────────────────
+// Origin: บางพลี สมุทรปราการ → 6 corridors based on direction from warehouse
 function autoDetectZoneFromAddress(addr) {
     if (!addr) return '';
-
-    // Province → Zone direction mapping
-    var ZONE_MAP = {
-        // 🔵 กรุงเทพฯ
-        'กรุงเทพมหานคร': 'กรุงเทพฯ', 'กรุงเทพ': 'กรุงเทพฯ',
-        // 🟡 ปริมณฑล (รอบกรุงเทพฯ)
-        'สมุทรปราการ': 'ปริมณฑลใต้', 'นนทบุรี': 'ปริมณฑลเหนือ',
-        'ปทุมธานี': 'ปริมณฑลเหนือ', 'สมุทรสาคร': 'ตะวันตก',
-        // 🟢 ตะวันตก
-        'สมุทรสงคราม': 'ตะวันตก', 'นครปฐม': 'ตะวันตก',
-        'ราชบุรี': 'ตะวันตก', 'กาญจนบุรี': 'ตะวันตก',
-        'เพชรบุรี': 'ตะวันตก', 'ประจวบคีรีขันธ์': 'ตะวันตก',
-        'สุพรรณบุรี': 'ตะวันตก',
-        // 🔴 ตะวันออก
-        'ชลบุรี': 'ตะวันออก', 'ระยอง': 'ตะวันออก',
-        'ฉะเชิงเทรา': 'ตะวันออก', 'จันทบุรี': 'ตะวันออก',
-        'ตราด': 'ตะวันออก', 'สระแก้ว': 'ตะวันออก',
-        'ปราจีนบุรี': 'ตะวันออก', 'นครนายก': 'ตะวันออก',
-        // 🟠 เหนือ/กลาง
-        'พระนครศรีอยุธยา': 'เหนือ', 'อยุธยา': 'เหนือ',
-        'สระบุรี': 'เหนือ', 'ลพบุรี': 'เหนือ',
-        'อ่างทอง': 'เหนือ', 'สิงห์บุรี': 'เหนือ', 'ชัยนาท': 'เหนือ',
-        'นครราชสีมา': 'อีสาน', 'บุรีรัมย์': 'อีสาน',
-        'ขอนแก่น': 'อีสาน', 'อุดรธานี': 'อีสาน',
-        // 🟣 ใต้
-        'เพชรบุรี': 'ใต้', 'ชุมพร': 'ใต้', 'สุราษฎร์ธานี': 'ใต้',
-        'นครศรีธรรมราช': 'ใต้', 'สงขลา': 'ใต้', 'ภูเก็ต': 'ใต้'
+    var CORRIDOR_MAP = {
+        // ── ตะวันออก (East) — ทางด่วน 7 / มอเตอร์เวย์ ──
+        'ชลบุรี':  'ตะวันออก', 'ระยอง': 'ตะวันออก',
+        'จันทบุรี': 'ตะวันออก', 'ตราด': 'ตะวันออก',
+        // ── ตะวันออกเฉียงเหนือ — ทล.304 ──
+        'ฉะเชิงเทรา': 'ตะวันออกเฉียงเหนือ',
+        'ปราจีนบุรี': 'ตะวันออกเฉียงเหนือ',
+        'สระแก้ว':    'ตะวันออกเฉียงเหนือ',
+        'นครนายก':   'ตะวันออกเฉียงเหนือ',
+        // ── เหนือ/กลาง — ทล.1, 32, 304 (ผ่านกรุงเทพฯ) ──
+        'กรุงเทพ':              'เหนือ/กลาง',
+        'กรุงเทพมหานคร':        'เหนือ/กลาง',
+        'นนทบุรี':              'เหนือ/กลาง',
+        'ปทุมธานี':             'เหนือ/กลาง',
+        'พระนครศรีอยุธยา':      'เหนือ/กลาง',
+        'อยุธยา':               'เหนือ/กลาง',
+        'สระบุรี':              'เหนือ/กลาง',
+        'ลพบุรี':               'เหนือ/กลาง',
+        'อ่างทอง':              'เหนือ/กลาง',
+        'สิงห์บุรี':            'เหนือ/กลาง',
+        'ชัยนาท':               'เหนือ/กลาง',
+        'นครสวรรค์':            'เหนือ/กลาง',
+        'อุทัยธานี':            'เหนือ/กลาง',
+        'พิจิตร':               'เหนือ/กลาง',
+        'พิษณุโลก':             'เหนือ/กลาง',
+        'เพชรบูรณ์':            'เหนือ/กลาง',
+        'นครราชสีมา':           'เหนือ/กลาง',
+        'บุรีรัมย์':            'เหนือ/กลาง',
+        'สุรินทร์':             'เหนือ/กลาง',
+        'ขอนแก่น':              'เหนือ/กลาง',
+        'อุดรธานี':             'เหนือ/กลาง',
+        'หนองคาย':              'เหนือ/กลาง',
+        'เชียงใหม่':            'เหนือ/กลาง',
+        'เชียงราย':             'เหนือ/กลาง',
+        'ลำปาง':                'เหนือ/กลาง',
+        // ── ตะวันตก — ทล.35, 338 ──
+        'สมุทรสาคร':   'ตะวันตก',
+        'สมุทรสงคราม': 'ตะวันตก',
+        'นครปฐม':      'ตะวันตก',
+        'ราชบุรี':     'ตะวันตก',
+        'กาญจนบุรี':   'ตะวันตก',
+        'สุพรรณบุรี':  'ตะวันตก',
+        // ── ใต้ — ทล.35 ต่อลงใต้ ──
+        'เพชรบุรี':              'ใต้',
+        'ประจวบคีรีขันธ์':       'ใต้',
+        'ชุมพร':                 'ใต้',
+        'สุราษฎร์ธานี':          'ใต้',
+        'นครศรีธรรมราช':         'ใต้',
+        'สงขลา':                 'ใต้',
+        'ภูเก็ต':                'ใต้',
+        'กระบี่':                'ใต้',
+        'ตรัง':                  'ใต้',
+        'พัทลุง':                'ใต้',
+        // ── ใกล้/ปริมณฑล — ในจังหวัดเดียวกับคลัง ──
+        'สมุทรปราการ': 'ใกล้'
     };
-
-    // 1. หา "จ.XXXXX" เช่น จ.นนทบุรี / จ.สมุทรปราการ
-    var m = addr.match(/จ\.([ก-๙]{2,15})/);
+    // parse "จ.ชลบุรี" or "จังหวัดชลบุรี" or plain province at end of address
+    var m = addr.match(/จ\.([^\s\d,\/]+)/);
+    if (!m) m = addr.match(/จังหวัด([^\s\d,\/]+)/);
     if (m) {
-        var p = m[1].trim();
-        if (ZONE_MAP[p]) return ZONE_MAP[p];
+        var prov = m[1].trim();
+        if (CORRIDOR_MAP[prov]) return CORRIDOR_MAP[prov];
     }
-
-    // 2. หา "จังหวัดXXXXX"
-    m = addr.match(/จังหวัด([ก-๙\s]{2,20}?)(?:\s|\d|$)/);
-    if (m) {
-        var p = m[1].trim();
-        if (ZONE_MAP[p]) return ZONE_MAP[p];
+    // fallback: scan full address for any province key
+    for (var k in CORRIDOR_MAP) {
+        if (addr.indexOf(k) !== -1) return CORRIDOR_MAP[k];
     }
-
-    // 3. หาชื่อจังหวัดตรงๆ ในที่อยู่ (เช่น "กรุงเทพมหานคร" ท้ายที่อยู่)
-    var provinces = Object.keys(ZONE_MAP);
-    for (var i = 0; i < provinces.length; i++) {
-        if (addr.indexOf(provinces[i]) >= 0) {
-            return ZONE_MAP[provinces[i]];
-        }
-    }
-
-    return ''; // ไม่สามารถ detect ได้
+    return '';
 }
+
 
 // ── Run Greedy Nearest-Neighbor grouping ─────────────────────────────────────
 window.runAutoGrouping = function() {
@@ -14299,9 +14353,10 @@ window.runAutoGrouping = function() {
         return;
     }
 
-    const TARGET_KM = parseFloat((safeGet('autoplan-target-km') || {}).value) || 300;
-    const MAX_KM    = parseFloat((safeGet('autoplan-max-km')    || {}).value) || 500;  // hard limit
-    const CAPACITY  = parseFloat((safeGet('autoplan-capacity')  || {}).value) || 15000;
+    const TARGET_KM      = parseFloat((safeGet('autoplan-target-km')  || {}).value) || 300;
+    const MAX_KM         = parseFloat((safeGet('autoplan-max-km')     || {}).value) || 500;  // hard limit
+    const CAPACITY       = parseFloat((safeGet('autoplan-capacity')   || {}).value) || 15000;
+    const MIN_SEND_WEIGHT = parseFloat((safeGet('autoplan-min-weight') || {}).value) || 14000;
     const shops     = LOGI_MASTER_CACHE.shops || [];
 
     // 1. จัดกลุ่มตาม shopId + ดึง zone จาก master
@@ -14341,6 +14396,18 @@ window.runAutoGrouping = function() {
         if (unmatchedTxt)  unmatchedTxt.textContent = 'ร้านต่อไปนี้ไม่พบใน Master จะถูกข้าม: ' + names.join(', ');
     } else {
         if (unmatchedWarn) unmatchedWarn.classList.add('hidden');
+    }
+
+    // ── กรองร้านที่ถูกวางแผนไปแล้ว (cross-day) ───────────────────────────────
+    var crossDayExcluded = [];
+    Object.keys(shopGroups).forEach(function(sid) {
+        if (window._autoPlanExcludedShopIds && window._autoPlanExcludedShopIds.has(sid)) {
+            crossDayExcluded.push(shopGroups[sid].shopName);
+            delete shopGroups[sid];
+        }
+    });
+    if (crossDayExcluded.length > 0) {
+        showToast('⚠️ ข้าม ' + crossDayExcluded.length + ' ร้านที่วางแผนแล้ว: ' + crossDayExcluded.slice(0,3).join(', ') + (crossDayExcluded.length > 3 ? '...' : ''), false);
     }
 
     let allShopList = Object.values(shopGroups).filter(function(g) { return g.distance > 0; });
@@ -14571,6 +14638,48 @@ window.runAutoGrouping = function() {
             '⚠️ มี <strong>' + overLimitTrips.length + ' เที่ยว</strong> ที่รถถูก assign เกิน ' + MAX_TRIPS_PER_TRUCK + ' เที่ยว/วัน กรุณาตรวจสอบและแก้ไข';
     }
 
+    // ── Post-process: ตรวจน้ำหนักขั้นต่ำ + พยายาม merge trips น้อย ────────────
+    _autoPlanTrips.forEach(function(trip) {
+        if (trip.totalWeight < MIN_SEND_WEIGHT) {
+            trip.waitForMerge = true;
+            trip.waitReason = 'น้ำหนักรวม ' + (trip.totalWeight/1000).toFixed(2) + 't < ' + (MIN_SEND_WEIGHT/1000).toFixed(0) + 't';
+        }
+    });
+
+    // พยายาม merge trips ที่ waitForMerge และ zone เดียวกัน
+    var mergedTrips = [];
+    var skipMergeIdx = new Set();
+    _autoPlanTrips.forEach(function(trip, i) {
+        if (skipMergeIdx.has(i)) return;
+        if (!trip.waitForMerge) { mergedTrips.push(trip); return; }
+        var merged = false;
+        for (var j = i + 1; j < _autoPlanTrips.length; j++) {
+            if (skipMergeIdx.has(j)) continue;
+            var other = _autoPlanTrips[j];
+            if (!other.waitForMerge) continue;
+            if (other.zone !== trip.zone) continue;
+            var combinedWt = trip.totalWeight + other.totalWeight;
+            var allShops   = trip.shops.concat(other.shops);
+            var maxDist    = allShops.reduce(function(m,s){ return Math.max(m, s.distance||0); }, 0);
+            var freeKm     = allShops.reduce(function(s,sh){ return s + (sh.distance||0) * 0.1; }, 0);
+            var combinedKm = maxDist * 2 + freeKm;
+            if (combinedKm <= MAX_KM) {
+                trip.shops       = allShops;
+                trip.totalWeight = combinedWt;
+                trip.roundTrip   = maxDist * 2;
+                trip.totalFreeKm = freeKm;
+                trip.estimatedKm = combinedKm;
+                trip.waitForMerge = (combinedWt < MIN_SEND_WEIGHT);
+                if (!trip.waitForMerge) delete trip.waitReason;
+                skipMergeIdx.add(j);
+                merged = true;
+                break;
+            }
+        }
+        mergedTrips.push(trip);
+    });
+    _autoPlanTrips = mergedTrips;
+
     renderAutoplanDraftTrips();
 };
 
@@ -14736,7 +14845,7 @@ function renderAutoplanDraftTrips() {
         var fmtDate = dp.length === 3 ? dp[2] + '/' + dp[1] + '/' + dp[0] : '';
 
         return '<td class="align-top p-0" style="min-width:210px;max-width:240px;">' +
-            '<div class="m-1 bg-white rounded-2xl border-2 ' + (trip.overLimit ? 'border-rose-300 shadow-rose-100' : 'border-slate-200') + ' overflow-hidden shadow-sm" id="autoplan-trip-card-' + ti + '">' +
+            '<div class="m-1 bg-white rounded-2xl border-2 ' + (trip.overLimit ? 'border-rose-300 shadow-rose-100' : trip.waitForMerge ? 'border-amber-300 shadow-amber-50' : 'border-slate-200') + ' overflow-hidden shadow-sm" id="autoplan-trip-card-' + ti + '">' +
                 // ── mini header ──
                 '<div class="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between">' +
                     '<div class="flex items-center gap-1.5 flex-wrap">' +
@@ -14754,6 +14863,7 @@ function renderAutoplanDraftTrips() {
                             ? '<span class="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">⚠️พ่วงเข้าไม่ได้!</span>'
                             : '') +
                         (trip.overLimit  ? '<span class="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">⚠️เกิน</span>' : '') +
+                        (trip.waitForMerge ? '<span class="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded-full">⏳รอรวม</span>' : '') +
                     '</div>' +
                     '<div class="flex items-center gap-1.5">' +
                         '<span class="' + kmBadge + ' text-[10px] font-black px-2 py-0.5 rounded-full">' + kmTotal.toFixed(0) + 'km</span>' +
@@ -14893,6 +15003,36 @@ function renderAutoplanDraftTrips() {
     container.innerHTML = summaryHtml + tableHtml;
 }
 
+// ── Date chips: แสดงปุ่มวันที่ถัดไป 5 วัน ────────────────────────────────
+window.autoplanRenderDateChips = function() {
+    var container = safeGet('autoplan-date-chips');
+    if (!container) return;
+    var dayNames = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+    var today = new Date();
+    var html = '';
+    for (var i = 1; i <= 5; i++) {
+        var d = new Date(today);
+        d.setDate(today.getDate() + i);
+        var iso = d.toISOString().slice(0, 10);
+        var dayLabel = dayNames[d.getDay()];
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        html += '<button type="button" ' +
+            'onclick="var el=safeGet(\'autoplan-ship-date\');if(el){el.value=\'' + iso + '\';}" ' +
+            'class="px-2.5 py-1 bg-violet-100 hover:bg-violet-200 text-violet-700 text-[11px] font-black rounded-lg border border-violet-200 transition whitespace-nowrap">' +
+            dayLabel + ' ' + dd + '/' + mm +
+        '</button>';
+    }
+    container.innerHTML = html;
+    // Set default to tomorrow if empty
+    var sdEl = safeGet('autoplan-ship-date');
+    if (sdEl && !sdEl.value) {
+        var tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        sdEl.value = tomorrow.toISOString().slice(0, 10);
+    }
+};
+
 window.autoplanResetResult = function() {
     _autoPlanTrips = [];
     const result = safeGet('autoplan-result-section');
@@ -14905,7 +15045,13 @@ window.confirmAndSaveAutoPlans = function() {
 
     showConfirmModal(
         'บันทึกแผนทั้งหมด?',
-        'จะสร้างแผนการส่งมอบ <strong>' + _autoPlanTrips.length + ' เที่ยว</strong> เข้าระบบ',
+        (function() {
+            var waitCount  = _autoPlanTrips.filter(function(t){ return t.waitForMerge; }).length;
+            var readyCount = _autoPlanTrips.length - waitCount;
+            return 'จะบันทึก <strong>' + readyCount + ' เที่ยว</strong>' +
+                   (waitCount > 0 ? ' + <span class="text-amber-600 font-black">' + waitCount + ' เที่ยวรอรวม</span>' : '') +
+                   ' เข้าระบบ';
+        })(),
         function() {
             const saveBtn = safeGet('autoplan-save-btn');
             if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังบันทึก...'; saveBtn.disabled = true; }
@@ -14933,6 +15079,7 @@ window.confirmAndSaveAutoPlans = function() {
                     distance:        trip.estimatedKm,
                     returnDistance:  0,
                     shopNames:       trip.shops.map(function(s) { return s.shopName; }).join(', '),
+                    waitForMerge: trip.waitForMerge || false,
                     shops: trip.shops.map(function(s) {
                         return {
                             shopId:       s.shopId,
