@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbwRUr-kmQ1FDZ_niGUxR_Yto_BtAS1d7OJoyKYRN6lVws3ajh8R9fAdDe6jUdBLu9BZ/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbwI1v6hPz5pKFHSyGjN8TGCdXeYDsf_khN8l2aFFLScMkT-GL5Yyd_sdNXgKErTKSCe/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -4224,29 +4224,34 @@ thead.sticky {
           <th class="px-4 py-3 text-left font-black text-xs uppercase tracking-widest whitespace-nowrap">วันที่</th>
           <!-- AUTO -->
           <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
-            <i class="fas fa-robot text-slate-400 mr-1"></i>ประสิทธิภาพ<br>โหลดสินค้า
-          </th>
-          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest bg-slate-700/50">
-            <i class="fas fa-robot text-slate-400 mr-1"></i>น้ำหนัก/หน่วย (kg)<br>นาที/รายการ<br><span class="text-slate-400 font-normal normal-case">vs Median</span>
-          </th>
-          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-gradient-to-b from-slate-700/50 to-amber-900/20">
-            <i class="fas fa-robot text-slate-400 mr-1"></i>ไม่มีพื้นที่<br>(%)<br><span class="text-amber-400 text-[10px] font-normal"><i class="fas fa-pencil-alt"></i> BD นาที</span>
+            <i class="fas fa-robot text-slate-400 mr-1"></i>FG Checker<br>(%)
           </th>
           <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
-            <i class="fas fa-robot text-slate-400 mr-1"></i>Inv Control<br>(%)
+            <i class="fas fa-robot text-slate-400 mr-1"></i>SEMI Checker<br>(%)
           </th>
-          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
-            <i class="fas fa-robot text-slate-400 mr-1"></i>Checker FG<br>(%)
-          </th>
-          <!-- AUTO (Damage) -->
-          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
-            <i class="fas fa-robot text-slate-400 mr-1"></i>Damage<br>(%)
-          </th>
-          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
-            <i class="fas fa-robot text-slate-400 mr-1"></i>Checker SEMI<br>(%)
+          <!-- MANUAL -->
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-amber-900/30">
+            <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Final Adj FG<br>(%)
           </th>
           <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-amber-900/30">
-            <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Safety<br>(อุบัติเหตุ ครั้ง)
+            <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Final Adj SEMI<br>(%)
+          </th>
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-amber-900/30">
+            <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Space<br>Breakdown (%)
+          </th>
+          <!-- AUTO -->
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
+            <i class="fas fa-robot text-slate-400 mr-1"></i>Load Score<br>(%)
+          </th>
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
+            <i class="fas fa-robot text-slate-400 mr-1"></i>Damage Score<br>(%)
+          </th>
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
+            <i class="fas fa-robot text-slate-400 mr-1"></i>Data Err FG<br>(%)
+          </th>
+          <!-- MANUAL -->
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-amber-900/30">
+            <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Data Err SEMI<br>(%)
           </th>
           <th class="px-4 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap">จัดการ</th>
         </tr>
@@ -4255,14 +4260,15 @@ thead.sticky {
       <tfoot id="kpi-wh-tfoot" class="hidden">
         <tr class="bg-slate-800 border-t-2 border-amber-500 text-white font-black">
           <td class="px-4 py-3 text-xs uppercase tracking-widest text-amber-400">เฉลี่ย</td>
-          <td id="kpi-wh-avg-efficiency" class="px-3 py-3 text-center font-mono text-amber-400"></td>
-          <td id="kpi-wh-avg-trips" class="px-3 py-3 text-center font-mono text-slate-400"></td>
-          <td id="kpi-wh-avg-blocking" class="px-3 py-3 text-center font-mono text-amber-400"></td>
-          <td id="kpi-wh-avg-invctrl" class="px-3 py-3 text-center font-mono text-amber-400"></td>
-          <td id="kpi-wh-avg-checkerfg" class="px-3 py-3 text-center font-mono text-amber-400"></td>
-          <td id="kpi-wh-avg-damage" class="px-3 py-3 text-center font-mono text-amber-400"></td>
-          <td id="kpi-wh-avg-checkersemi" class="px-3 py-3 text-center font-mono text-amber-400"></td>
-          <td id="kpi-wh-avg-safety" class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-checkerfg"    class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-checkersemi"  class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-adjfg"        class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-adjsemi"      class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-space"        class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-loadscore"    class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-damage"       class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-dataerr-fg"   class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-dataerr-semi" class="px-3 py-3 text-center font-mono text-amber-400"></td>
           <td></td>
         </tr>
       </tfoot>
@@ -4288,23 +4294,41 @@ thead.sticky {
         <i class="fas fa-times"></i>
       </button>
     </div>
-    <div class="p-6 space-y-5">
+    <div class="p-6 space-y-4">
       <input type="hidden" id="kpi-edit-modal-date">
-      <!-- BD นาที -->
-      <div>
-        <label class="block text-slate-300 text-sm font-bold mb-2">
-          <i class="fas fa-clock mr-1 text-amber-400"></i>BD นาที (ไม่มีพื้นที่วางสินค้า)
-        </label>
-        <input type="number" id="kpi-edit-bdMin" min="0" step="1"
-          class="w-full bg-slate-700 border border-amber-600/50 text-white rounded-xl px-4 py-2.5 text-sm font-bold focus:outline-none focus:border-amber-400">
-      </div>
-      <!-- Safety -->
-      <div>
-        <label class="block text-slate-300 text-sm font-bold mb-2">
-          <i class="fas fa-hard-hat mr-1 text-rose-400"></i>Safety — อุบัติเหตุ (ครั้ง)
-        </label>
-        <input type="number" id="kpi-edit-safety" min="0" step="1"
-          class="w-full bg-slate-700 border border-rose-600/50 text-white rounded-xl px-4 py-2.5 text-sm font-bold focus:outline-none focus:border-rose-400">
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Final Adj FG -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-pencil-alt mr-1 text-amber-400"></i>Final Adj FG (%)
+          </label>
+          <input type="number" id="kpi-edit-finalAdjFG" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-amber-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-amber-400">
+        </div>
+        <!-- Final Adj SEMI -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-pencil-alt mr-1 text-amber-400"></i>Final Adj SEMI (%)
+          </label>
+          <input type="number" id="kpi-edit-finalAdjSEMI" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-amber-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-amber-400">
+        </div>
+        <!-- Space Breakdown -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-warehouse mr-1 text-sky-400"></i>Space Breakdown (%)
+          </label>
+          <input type="number" id="kpi-edit-spaceBreakdown" min="0" max="100" step="0.1" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+        </div>
+        <!-- Data Err SEMI -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-database mr-1 text-violet-400"></i>Data Err SEMI (%)
+          </label>
+          <input type="number" id="kpi-edit-dataErrSEMI" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-violet-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-violet-400">
+        </div>
       </div>
     </div>
     <div class="px-6 pb-6 flex gap-3 justify-end">
@@ -22184,7 +22208,7 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
         const [y, m, d] = isoDate.split('-');
         const ddmmyyyy = `${d}/${m}/${y}`;
 
-        // ── วันอาทิตย์: แสดง row สีแดง ไม่มีข้อมูล ──────────────────
+        // ── วันอาทิตย์: แสดง row สีแดง ──────────────────────────────────
         const dateObj  = new Date(isoDate + 'T00:00:00');
         const isSunday = dateObj.getDay() === 0;
         if (isSunday) {
@@ -22192,7 +22216,7 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
                 <td class="px-4 py-3 font-bold text-sm whitespace-nowrap text-red-400">
                     <i class="fas fa-ban text-red-600 mr-1.5"></i>${ddmmyyyy}
                 </td>
-                <td colspan="9" class="px-3 py-3 text-center text-red-700/80 text-sm font-bold italic">
+                <td colspan="10" class="px-3 py-3 text-center text-red-700/80 text-sm font-bold italic">
                     วันอาทิตย์ — ไม่มีการทำงาน
                 </td>
             </tr>`;
@@ -22203,109 +22227,45 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
         const isSaved = !!saved.date;
         const rowCls = isSaved ? 'bg-emerald-900/40 border-b-2 border-emerald-700/60' : 'bg-slate-900 border-b border-slate-700/60 hover:bg-slate-800';
 
-        const autoCell = (val, unit = '') => {
-            const display = (val !== undefined && val !== null && val !== '') ? `<span class="text-white font-bold">${val}${unit}</span>` : '<span class="text-slate-500">—</span>';
-            return `<td class="px-3 py-3 text-center font-mono text-sm">${display}</td>`;
+        // Helper: auto cell (read-only, colored by score)
+        const pctColor = v => v >= 90 ? 'text-emerald-400' : v >= 70 ? 'text-amber-400' : 'text-rose-400';
+        const autoCell = (val) => {
+            if (val === undefined || val === null) {
+                return `<td class="px-3 py-3 text-center font-mono text-sm bg-slate-800/20"><span class="text-slate-500">—</span></td>`;
+            }
+            const f = parseFloat(val);
+            return `<td class="px-3 py-3 text-center font-mono text-sm bg-slate-800/20"><span class="${pctColor(f)} font-bold">${f.toFixed(1)}%</span></td>`;
         };
-        const manualCell = (field, savedVal, step = '1', min = '0') => {
-            const val = isSaved ? (savedVal ?? '') : '';
+
+        // Helper: manual input cell
+        const manualCell = (field, savedVal) => {
+            const val = isSaved ? (savedVal !== null && savedVal !== undefined ? savedVal : '') : '';
             const roAttr   = isSaved ? 'readonly' : '';
             const inputCls = isSaved
                 ? 'w-20 bg-slate-800 border border-slate-600 text-slate-400 rounded-lg px-2 py-1.5 text-center text-sm font-bold cursor-not-allowed'
                 : 'w-20 bg-slate-700 border border-amber-700/50 text-white rounded-lg px-2 py-1.5 text-center text-sm font-bold focus:outline-none focus:border-amber-400';
-            const evts = isSaved ? '' : `onchange="checkKpiRowComplete('${isoDate}')" oninput="checkKpiRowComplete('${isoDate}')"`;
             return `<td class="px-3 py-2 text-center bg-amber-900/20">
-                <input type="number" min="${min}" step="${step}"
+                <input type="number" min="0" max="100" step="0.01"
                     id="kpi-manual-${field}-${isoDate}"
-                    ${evts} value="${val}" ${roAttr}
+                    value="${val}" ${roAttr} placeholder="—"
                     class="${inputCls}">
             </td>`;
         };
-
-        const effVal = (auto.efficiency !== undefined && auto.efficiency !== null) ? parseFloat(auto.efficiency).toFixed(1) + '%' : '';
-        const wpuMpiVal = (() => {
-            const hasWpu = auto.wpuActual !== undefined && auto.wpuActual !== null;
-            const hasMpi = auto.mpiActual !== undefined && auto.mpiActual !== null;
-            if (!hasWpu && !hasMpi) return '';
-            const wpuLine = hasWpu
-                ? `<div class="flex justify-between gap-2"><span class="text-slate-400 text-[10px]">wpu</span><span class="text-white font-bold text-xs">${parseFloat(auto.wpuActual).toFixed(2)}</span><span class="text-slate-500 text-[10px]">/ ${auto.wpuMedian !== null && auto.wpuMedian !== undefined ? parseFloat(auto.wpuMedian).toFixed(2) : '—'}</span></div>`
-                : '';
-            const mpiLine = hasMpi
-                ? `<div class="flex justify-between gap-2"><span class="text-slate-400 text-[10px]">mpi</span><span class="text-amber-300 font-bold text-xs">${parseFloat(auto.mpiActual).toFixed(2)}</span><span class="text-slate-500 text-[10px]">/ ${auto.mpiMedian !== null && auto.mpiMedian !== undefined ? parseFloat(auto.mpiMedian).toFixed(2) : '—'}</span></div>`
-                : '';
-            return `<div class="text-left min-w-[110px]">${wpuLine}${mpiLine}</div>`;
-        })();
-        const icColor = (auto.invControlPct !== undefined && auto.invControlPct !== null)
-            ? (auto.invControlPct >= 99 ? 'text-emerald-400' : auto.invControlPct >= 95 ? 'text-amber-400' : 'text-rose-400')
-            : 'text-slate-500';
-        const invCtrlVal = (auto.invControlPct !== undefined && auto.invControlPct !== null)
-            ? `<span class="${icColor} font-bold">${parseFloat(auto.invControlPct).toFixed(1)}%</span>`
-            : '';
-        // Checker FG: สีตามคะแนน
-        const cfgColor = (auto.checkerFGPct !== undefined && auto.checkerFGPct !== null)
-            ? (auto.checkerFGPct >= 90 ? 'text-emerald-400' : auto.checkerFGPct >= 70 ? 'text-amber-400' : 'text-rose-400')
-            : 'text-slate-500';
-        const checkerFGVal = (auto.checkerFGPct !== undefined && auto.checkerFGPct !== null)
-            ? `<span class="${cfgColor} font-bold">${parseFloat(auto.checkerFGPct).toFixed(1)}%</span>`
-            : '<span class="text-slate-500">—</span>';
-
-        const effColor = auto.efficiency >= 90 ? 'text-emerald-400' : auto.efficiency >= 70 ? 'text-amber-400' : (auto.efficiency > 0) ? 'text-rose-400' : 'text-slate-400';
-
-        // ไม่มีพื้นที่: planMinutes (AUTO) + bdMinutes (MANUAL input) + noSpacePct (calculated)
-        const planMin   = auto.planMinutes !== undefined && auto.planMinutes !== null ? auto.planMinutes : null;
-        const savedBd   = isSaved ? (saved.bdMinutes ?? '') : '';
-        const calcNoSpacePct = (id) => {
-            const bdEl = safeGet(id);
-            const bd   = bdEl ? (parseFloat(bdEl.value) || 0) : 0;
-            if (planMin === null || planMin <= 0) return null;
-            return Math.max(0, Math.round(((planMin - bd) / planMin) * 1000) / 10);
-        };
-        const bdInputCls = isSaved
-            ? 'w-20 bg-slate-800 border border-slate-600 text-slate-400 rounded-lg px-2 py-1 text-center text-xs font-bold cursor-not-allowed'
-            : 'w-20 bg-slate-700 border border-amber-700/50 text-white rounded-lg px-2 py-1 text-center text-xs font-bold focus:outline-none focus:border-amber-400';
-        const bdEvts = isSaved ? '' : `oninput="updateNoSpacePct('${isoDate}');checkKpiRowComplete('${isoDate}')"`;
-        const bdReadonly = isSaved ? 'readonly' : '';
-        const noSpaceCell = `<td class="px-2 py-2 text-center">
-            <div class="text-[10px] text-slate-300 mb-1">${planMin !== null ? 'แผน: <span class="text-white font-bold">' + planMin + '</span> นาที' : '<span class="text-slate-500">ไม่มีแผน</span>'}</div>
-            <input type="number" min="0" step="1"
-                id="kpi-manual-bdMin-${isoDate}"
-                ${bdEvts} value="${savedBd}" ${bdReadonly} placeholder="BD นาที"
-                class="${bdInputCls}">
-            <div id="kpi-auto-nospace-${isoDate}" class="text-xs font-black mt-1 text-slate-400">—</div>
-        </td>`;
-
-        // Damage AUTO: คำนวณจาก WH_Activity_Log
-        const dmgColor = (auto.damagePct !== undefined && auto.damagePct !== null)
-            ? (auto.damagePct >= 90 ? 'text-emerald-400' : auto.damagePct >= 70 ? 'text-amber-400' : 'text-rose-400')
-            : 'text-slate-600';
-        const dmgTitle = (auto.dmgLoadCount !== undefined)
-            ? `title="โหลด: ${auto.dmgLoadCount} ครั้ง (−${auto.dmgLoadCount*20}pt) | เก็บ: ${auto.dmgStoreCount} ครั้ง (−${auto.dmgStoreCount*10}pt)"`
-            : '';
-        const dmgVal = (auto.damagePct !== undefined && auto.damagePct !== null)
-            ? `<span class="${dmgColor} font-bold" ${dmgTitle}>${parseFloat(auto.damagePct).toFixed(1)}%</span>`
-            : '<span class="text-slate-500">—</span>';
-
-        // Checker SEMI AUTO จาก KPI Log
-        const csColor = (auto.checkerSEMIPct !== undefined && auto.checkerSEMIPct !== null)
-            ? (auto.checkerSEMIPct >= 90 ? 'text-emerald-400' : auto.checkerSEMIPct >= 70 ? 'text-amber-400' : 'text-rose-400')
-            : 'text-slate-600';
-        const csVal = (auto.checkerSEMIPct !== undefined && auto.checkerSEMIPct !== null)
-            ? `<span class="${csColor} font-bold">${parseFloat(auto.checkerSEMIPct).toFixed(1)}%</span>`
-            : '<span class="text-slate-500">—</span>';
 
         return `<tr class="${rowCls}" id="kpi-row-${isoDate}">
             <td class="px-4 py-3 font-bold text-sm whitespace-nowrap text-white">
                 ${isSaved ? '<i class="fas fa-check-circle text-emerald-400 mr-1"></i>' : ''}
                 ${ddmmyyyy}
             </td>
-            <td class="px-3 py-3 text-center font-mono text-sm font-black ${effColor}">${effVal || '<span class="text-slate-500">—</span>'}</td>
-            <td class="px-3 py-3 text-center font-mono text-sm">${wpuMpiVal || '<span class="text-slate-500">—</span>'}</td>
-            ${noSpaceCell}
-            ${autoCell(invCtrlVal)}
-            <td class="px-3 py-3 text-center font-mono text-sm">${checkerFGVal}</td>
-            <td class="px-3 py-3 text-center font-mono text-sm">${dmgVal}</td>
-            <td class="px-3 py-3 text-center font-mono text-sm">${csVal}</td>
-            ${manualCell('safety',       saved.safety)}
+            ${autoCell(auto.checkerFGPct)}
+            ${autoCell(auto.checkerSEMIPct)}
+            ${manualCell('finalAdjFG',    saved.finalAdjFG)}
+            ${manualCell('finalAdjSEMI',  saved.finalAdjSEMI)}
+            ${manualCell('spaceBreakdown',saved.spaceBreakdown)}
+            ${autoCell(auto.efficiency)}
+            ${autoCell(auto.damagePct)}
+            ${autoCell(auto.invControlPct)}
+            ${manualCell('dataErrSEMI',   saved.dataErrSEMI)}
             <td class="px-4 py-2 text-center">
                 ${isSaved
                     ? `<button id="btn-kpi-save-${isoDate}"
@@ -22315,8 +22275,7 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
                         </button>`
                     : `<button id="btn-kpi-save-${isoDate}"
                             onclick="saveKpiWHRow('${isoDate}')"
-                            disabled
-                            class="bg-amber-500 disabled:bg-slate-600 disabled:text-slate-400 text-slate-900 px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
+                            class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
                             <i class="fas fa-save"></i> บันทึก
                         </button>`
                 }
@@ -22324,47 +22283,12 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
         </tr>`;
     }).join('');
 
-    // ตรวจสอบ enable/disable ปุ่มบันทึกทุกแถว + แสดง % ไม่มีพื้นที่ (ข้ามวันอาทิตย์)
-    dates.forEach(d => {
-        if (new Date(d + 'T00:00:00').getDay() === 0) return; // ข้ามวันอาทิตย์
-        updateNoSpacePct(d);
-        checkKpiRowComplete(d);
-    });
+    // (ไม่ต้องทำอะไรเพิ่ม — ปุ่มบันทึกเปิดเสมอสำหรับแถวที่ยังไม่บันทึก)
 
     // คำนวณ summary
     renderKpiWHSummary(dates);
 };
 
-// ── คำนวณ % ไม่มีพื้นที่ แบบ real-time ─────────────────────────────────
-window.updateNoSpacePct = function updateNoSpacePct(isoDate) {
-    const auto = kpiWHAutoData[isoDate] || (() => { const [y,m,d]=isoDate.split('-'); return kpiWHAutoData[`${d}/${m}/${y}`] || {}; })();
-    const planMin = auto.planMinutes !== undefined && auto.planMinutes !== null ? parseFloat(auto.planMinutes) : null;
-    const bdEl    = safeGet(`kpi-manual-bdMin-${isoDate}`);
-    const dispEl  = safeGet(`kpi-auto-nospace-${isoDate}`);
-    if (!dispEl) return;
-    if (planMin === null || planMin <= 0) { dispEl.textContent = '—'; return; }
-    const bd  = bdEl ? (parseFloat(bdEl.value) || 0) : 0;
-    const pct = Math.max(0, Math.round(((planMin - bd) / planMin) * 1000) / 10);
-    const color = pct >= 90 ? '#34d399' : pct >= 70 ? '#fbbf24' : '#f87171';
-    dispEl.innerHTML = `<span style="color:${color}">${pct.toFixed(1)}%</span>`;
-};
-
-// ── ตรวจสอบว่าแถวนั้นกรอกครบไหม ──────────────────────────────────────
-window.checkKpiRowComplete = function checkKpiRowComplete(isoDate) {
-    const auto = kpiWHAutoData[isoDate] || (() => { const [y,m,d]=isoDate.split('-'); return kpiWHAutoData[`${d}/${m}/${y}`] || {}; })();
-    const autoReady = (auto.efficiency !== undefined && auto.efficiency !== null) || (auto.planMinutes !== undefined) || (auto.invControlPct !== undefined);
-
-    const bdEl     = safeGet(`kpi-manual-bdMin-${isoDate}`);
-    const safetyEl = safeGet(`kpi-manual-safety-${isoDate}`);
-    const saveBtn  = safeGet(`btn-kpi-save-${isoDate}`);
-    if (!saveBtn) return;
-
-    // BD นาทีต้องกรอก (ถ้ามีแผน) หรือกรอก 0 ก็ได้ — ต้องไม่ว่าง
-    const bdOk     = bdEl && bdEl.value !== '';
-    const manualOk = bdOk && safetyEl && safetyEl.value !== '';
-
-    saveBtn.disabled = !(autoReady && manualOk);
-};
 
 // ── บันทึกแถว ──────────────────────────────────────────────────────────
 window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
@@ -22372,30 +22296,18 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
     const ddmmyyyy = `${d}/${m}/${y}`;
     const auto = kpiWHAutoData[isoDate] || kpiWHAutoData[ddmmyyyy] || {};
 
-    const getVal = id => { const el = safeGet(id); return el ? parseFloat(el.value) || 0 : 0; };
+    const getFloatVal = id => { const el = safeGet(id); return (el && el.value !== '') ? parseFloat(el.value) : null; };
     const row = {
-        date:          ddmmyyyy,
-        efficiency:    auto.efficiency     ?? null,
-        wpuActual:     auto.wpuActual      ?? null,
-        mpiActual:     auto.mpiActual      ?? null,
-        wpuMedian:     auto.wpuMedian      ?? null,
-        mpiMedian:     auto.mpiMedian      ?? null,
-        loadCount:     auto.loadCount      ?? null,
-        planMinutes:   auto.planMinutes    ?? null,
-        bdMinutes:     getVal(`kpi-manual-bdMin-${isoDate}`),
-        noSpacePct:    (() => {
-            const pm = auto.planMinutes;
-            const bd = getVal(`kpi-manual-bdMin-${isoDate}`);
-            if (!pm || pm <= 0) return null;
-            return Math.max(0, Math.round(((pm - bd) / pm) * 1000) / 10);
-        })(),
-        invControlPct:   auto.invControlPct ?? null,
+        date:           ddmmyyyy,
         checkerFGPct:   auto.checkerFGPct    ?? null,
         checkerSEMIPct: auto.checkerSEMIPct  ?? null,
-        damagePct:      auto.damagePct       ?? null,
-        dmgLoadCount:   auto.dmgLoadCount    ?? 0,
-        dmgStoreCount:  auto.dmgStoreCount   ?? 0,
-        safety:         getVal(`kpi-manual-safety-${isoDate}`),
+        finalAdjFG:     getFloatVal(`kpi-manual-finalAdjFG-${isoDate}`),
+        finalAdjSEMI:   getFloatVal(`kpi-manual-finalAdjSEMI-${isoDate}`),
+        spaceBreakdown: getFloatVal(`kpi-manual-spaceBreakdown-${isoDate}`),
+        loadScore:      auto.efficiency      ?? null,
+        damageScore:    auto.damagePct       ?? null,
+        dataErrFG:      auto.invControlPct   ?? null,
+        dataErrSEMI:    getFloatVal(`kpi-manual-dataErrSEMI-${isoDate}`),
     };
 
     const saveBtn = safeGet(`btn-kpi-save-${isoDate}`);
@@ -22444,44 +22356,39 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
 
 // ── คำนวณ Summary Row ──────────────────────────────────────────────────
 window.renderKpiWHSummary = function renderKpiWHSummary(dates) {
-    const avg = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+    const avg    = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
     const fmtPct = v => v !== null ? v.toFixed(1) + '%' : '—';
-    const fmtNum = v => v !== null ? v.toFixed(1) : '—';
 
-    const autos = dates.map(iso => {
+    const workDays = dates.filter(iso => new Date(iso + 'T00:00:00').getDay() !== 0);
+
+    const autos = workDays.map(iso => {
         const [y,m,d] = iso.split('-');
         return kpiWHAutoData[iso] || kpiWHAutoData[`${d}/${m}/${y}`] || {};
     });
 
-    const effArr   = autos.map(a => a.efficiency).filter(v => v !== undefined && v !== null);
-    const invArr   = autos.map(a => a.invControlPct).filter(v => v !== undefined && v !== null);
-    const cfgArr   = autos.map(a => a.checkerFGPct).filter(v => v !== undefined && v !== null);
-    const csArr    = autos.map(a => a.checkerSEMIPct).filter(v => v !== undefined && v !== null);
-    const dmgArr   = autos.map(a => a.damagePct).filter(v => v !== undefined && v !== null);
+    const cfgArr  = autos.map(a => a.checkerFGPct).filter(v => v !== undefined && v !== null);
+    const csArr   = autos.map(a => a.checkerSEMIPct).filter(v => v !== undefined && v !== null);
+    const lsArr   = autos.map(a => a.efficiency).filter(v => v !== undefined && v !== null);
+    const dmgArr  = autos.map(a => a.damagePct).filter(v => v !== undefined && v !== null);
+    const defgArr = autos.map(a => a.invControlPct).filter(v => v !== undefined && v !== null);
 
-    const manualVals = (field) => dates.map(iso => {
-        const el = safeGet(`kpi-manual-${field}-${iso}`);
-        return el && el.value !== '' ? parseFloat(el.value) : null;
-    }).filter(v => v !== null);
+    const manualAvg = (field) => {
+        const vals = workDays.map(iso => {
+            const el = safeGet(`kpi-manual-${field}-${iso}`);
+            return (el && el.value !== '') ? parseFloat(el.value) : null;
+        }).filter(v => v !== null);
+        return avg(vals);
+    };
 
-    // คำนวณ noSpacePct เฉลี่ยจาก planMinutes + BD input ของแต่ละวัน
-    const nsArr = dates.map(iso => {
-        const a  = kpiWHAutoData[iso] || (() => { const [y,m,d]=iso.split('-'); return kpiWHAutoData[`${d}/${m}/${y}`] || {}; })();
-        const pm = a.planMinutes;
-        if (!pm || pm <= 0) return null;
-        const bdEl = safeGet(`kpi-manual-bdMin-${iso}`);
-        const bd   = bdEl && bdEl.value !== '' ? (parseFloat(bdEl.value) || 0) : 0;
-        return Math.max(0, Math.round(((pm - bd) / pm) * 1000) / 10);
-    }).filter(v => v !== null);
-
-    safeSetText('kpi-wh-avg-efficiency',  fmtPct(avg(effArr)));
-    safeSetHTML('kpi-wh-avg-trips',       '');
-    safeSetText('kpi-wh-avg-blocking',    fmtPct(avg(nsArr)));
-    safeSetText('kpi-wh-avg-invctrl',     fmtNum(avg(invArr)));
-    safeSetText('kpi-wh-avg-checkerfg',   fmtPct(avg(cfgArr)));
-    safeSetText('kpi-wh-avg-damage',      fmtPct(avg(dmgArr)));
-    safeSetText('kpi-wh-avg-checkersemi', fmtPct(avg(csArr)));
-    safeSetText('kpi-wh-avg-safety',      fmtNum(avg(manualVals('safety'))));
+    safeSetText('kpi-wh-avg-checkerfg',    fmtPct(avg(cfgArr)));
+    safeSetText('kpi-wh-avg-checkersemi',  fmtPct(avg(csArr)));
+    safeSetText('kpi-wh-avg-adjfg',        fmtPct(manualAvg('finalAdjFG')));
+    safeSetText('kpi-wh-avg-adjsemi',      fmtPct(manualAvg('finalAdjSEMI')));
+    safeSetText('kpi-wh-avg-space',        fmtPct(manualAvg('spaceBreakdown')));
+    safeSetText('kpi-wh-avg-loadscore',    fmtPct(avg(lsArr)));
+    safeSetText('kpi-wh-avg-damage',       fmtPct(avg(dmgArr)));
+    safeSetText('kpi-wh-avg-dataerr-fg',   fmtPct(avg(defgArr)));
+    safeSetText('kpi-wh-avg-dataerr-semi', fmtPct(manualAvg('dataErrSEMI')));
 };
 
 // ── เปิด/ปิด Modal แก้ไข KPI ──────────────────────────────────────────
@@ -22494,10 +22401,11 @@ window.openKpiWHEditModal = function openKpiWHEditModal(isoDate) {
     if (dateInput) dateInput.value = isoDate;
     safeSetText('kpi-edit-modal-subtitle', `วันที่ ${ddmmyyyy}`);
 
-    const bdEl = safeGet('kpi-edit-bdMin');
-    if (bdEl) bdEl.value = (saved.bdMinutes !== undefined && saved.bdMinutes !== null) ? saved.bdMinutes : '';
-    const safetyEl = safeGet('kpi-edit-safety');
-    if (safetyEl) safetyEl.value = (saved.safety !== undefined && saved.safety !== null) ? saved.safety : '';
+    const setField = (id, val) => { const el = safeGet(id); if (el) el.value = (val !== null && val !== undefined) ? val : ''; };
+    setField('kpi-edit-finalAdjFG',    saved.finalAdjFG);
+    setField('kpi-edit-finalAdjSEMI',  saved.finalAdjSEMI);
+    setField('kpi-edit-spaceBreakdown',saved.spaceBreakdown);
+    setField('kpi-edit-dataErrSEMI',   saved.dataErrSEMI);
 
     const modal = safeGet('kpi-wh-edit-modal');
     if (modal) modal.classList.remove('hidden');
@@ -22517,31 +22425,18 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
     const ddmmyyyy  = `${d}/${m}/${y}`;
     const auto = kpiWHAutoData[isoDate] || kpiWHAutoData[ddmmyyyy] || {};
 
-    const bdVal     = parseFloat(safeGet('kpi-edit-bdMin')?.value)  || 0;
-    const safetyVal = parseFloat(safeGet('kpi-edit-safety')?.value) || 0;
-
+    const getF = id => { const el = safeGet(id); return (el && el.value !== '') ? parseFloat(el.value) : null; };
     const row = {
-        date:          ddmmyyyy,
-        efficiency:    auto.efficiency     ?? null,
-        wpuActual:     auto.wpuActual      ?? null,
-        mpiActual:     auto.mpiActual      ?? null,
-        wpuMedian:     auto.wpuMedian      ?? null,
-        mpiMedian:     auto.mpiMedian      ?? null,
-        loadCount:     auto.loadCount      ?? null,
-        planMinutes:   auto.planMinutes    ?? null,
-        bdMinutes:     bdVal,
-        noSpacePct:    (() => {
-            const pm = auto.planMinutes;
-            if (!pm || pm <= 0) return null;
-            return Math.max(0, Math.round(((pm - bdVal) / pm) * 1000) / 10);
-        })(),
-        invControlPct:   auto.invControlPct  ?? null,
-        checkerFGPct:    auto.checkerFGPct   ?? null,
-        checkerSEMIPct:  auto.checkerSEMIPct ?? null,
-        damagePct:       auto.damagePct      ?? null,
-        dmgLoadCount:    auto.dmgLoadCount   ?? 0,
-        dmgStoreCount:   auto.dmgStoreCount  ?? 0,
-        safety:          safetyVal,
+        date:           ddmmyyyy,
+        checkerFGPct:   auto.checkerFGPct    ?? null,
+        checkerSEMIPct: auto.checkerSEMIPct  ?? null,
+        finalAdjFG:     getF('kpi-edit-finalAdjFG'),
+        finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),
+        spaceBreakdown: getF('kpi-edit-spaceBreakdown'),
+        loadScore:      auto.efficiency      ?? null,
+        damageScore:    auto.damagePct       ?? null,
+        dataErrFG:      auto.invControlPct   ?? null,
+        dataErrSEMI:    getF('kpi-edit-dataErrSEMI'),
     };
 
     const submitBtn = safeGet('btn-kpi-edit-submit');
@@ -22554,12 +22449,11 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
                 closeKpiWHEditModal();
                 showToast(`✅ แก้ไข KPI วันที่ ${ddmmyyyy} สำเร็จ`);
                 kpiWHSavedData[isoDate] = row;
-                // อัปเดต input ที่ locked ในตาราง
-                const bdTableEl = safeGet(`kpi-manual-bdMin-${isoDate}`);
-                if (bdTableEl) bdTableEl.value = bdVal;
-                const safetyTableEl = safeGet(`kpi-manual-safety-${isoDate}`);
-                if (safetyTableEl) safetyTableEl.value = safetyVal;
-                updateNoSpacePct(isoDate);
+                // อัปเดต inputs ที่ locked ในตาราง
+                ['finalAdjFG','finalAdjSEMI','spaceBreakdown','dataErrSEMI'].forEach(f => {
+                    const el = safeGet(`kpi-manual-${f}-${isoDate}`);
+                    if (el) el.value = (row[f] !== null && row[f] !== undefined) ? row[f] : '';
+                });
             } else {
                 showToast(`❌ แก้ไขไม่สำเร็จ: ${res ? res.message : 'unknown error'}`, true);
             }
