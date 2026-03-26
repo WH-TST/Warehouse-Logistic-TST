@@ -4229,10 +4229,11 @@ thead.sticky {
           <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
             <i class="fas fa-robot text-slate-400 mr-1"></i>SEMI Checker<br>(%)
           </th>
-          <!-- MANUAL -->
-          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-amber-900/30">
-            <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Final Adj FG<br>(%)
+          <!-- AUTO -->
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
+            <i class="fas fa-robot text-slate-400 mr-1"></i>Final Adj FG<br>(%)
           </th>
+          <!-- MANUAL -->
           <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-amber-900/30">
             <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Final Adj SEMI<br>(%)
           </th>
@@ -4249,9 +4250,8 @@ thead.sticky {
           <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
             <i class="fas fa-robot text-slate-400 mr-1"></i>Data Err FG<br>(%)
           </th>
-          <!-- MANUAL -->
-          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-amber-900/30">
-            <i class="fas fa-pencil-alt text-amber-400 mr-1"></i>Data Err SEMI<br>(%)
+          <th class="px-3 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap bg-slate-700/50">
+            <i class="fas fa-robot text-slate-400 mr-1"></i>Data Err SEMI<br>(%)
           </th>
           <th class="px-4 py-3 text-center font-black text-xs uppercase tracking-widest whitespace-nowrap">จัดการ</th>
         </tr>
@@ -4262,7 +4262,7 @@ thead.sticky {
           <td class="px-4 py-3 text-xs uppercase tracking-widest text-amber-400">เฉลี่ย</td>
           <td id="kpi-wh-avg-checkerfg"    class="px-3 py-3 text-center font-mono text-amber-400"></td>
           <td id="kpi-wh-avg-checkersemi"  class="px-3 py-3 text-center font-mono text-amber-400"></td>
-          <td id="kpi-wh-avg-adjfg"        class="px-3 py-3 text-center font-mono text-amber-400"></td>
+          <td id="kpi-wh-avg-adjfg"         class="px-3 py-3 text-center font-mono text-amber-400"></td>
           <td id="kpi-wh-avg-adjsemi"      class="px-3 py-3 text-center font-mono text-amber-400"></td>
           <td id="kpi-wh-avg-space"        class="px-3 py-3 text-center font-mono text-amber-400"></td>
           <td id="kpi-wh-avg-loadscore"    class="px-3 py-3 text-center font-mono text-amber-400"></td>
@@ -4297,15 +4297,7 @@ thead.sticky {
     <div class="p-6 space-y-4">
       <input type="hidden" id="kpi-edit-modal-date">
       <div class="grid grid-cols-2 gap-4">
-        <!-- Final Adj FG -->
-        <div>
-          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
-            <i class="fas fa-pencil-alt mr-1 text-amber-400"></i>Final Adj FG (%)
-          </label>
-          <input type="number" id="kpi-edit-finalAdjFG" min="0" max="100" step="0.01" placeholder="—"
-            class="w-full bg-slate-700 border border-amber-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-amber-400">
-        </div>
-        <!-- Final Adj SEMI -->
+        <!-- Final Adj SEMI (MANUAL) -->
         <div>
           <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
             <i class="fas fa-pencil-alt mr-1 text-amber-400"></i>Final Adj SEMI (%)
@@ -4313,21 +4305,13 @@ thead.sticky {
           <input type="number" id="kpi-edit-finalAdjSEMI" min="0" max="100" step="0.01" placeholder="—"
             class="w-full bg-slate-700 border border-amber-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-amber-400">
         </div>
-        <!-- Space Breakdown -->
+        <!-- Space Breakdown (MANUAL) -->
         <div>
           <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
             <i class="fas fa-warehouse mr-1 text-sky-400"></i>Space Breakdown (%)
           </label>
           <input type="number" id="kpi-edit-spaceBreakdown" min="0" max="100" step="0.1" placeholder="—"
             class="w-full bg-slate-700 border border-sky-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
-        </div>
-        <!-- Data Err SEMI -->
-        <div>
-          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
-            <i class="fas fa-database mr-1 text-violet-400"></i>Data Err SEMI (%)
-          </label>
-          <input type="number" id="kpi-edit-dataErrSEMI" min="0" max="100" step="0.01" placeholder="—"
-            class="w-full bg-slate-700 border border-violet-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-violet-400">
         </div>
       </div>
     </div>
@@ -22259,13 +22243,13 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             </td>
             ${autoCell(auto.checkerFGPct)}
             ${autoCell(auto.checkerSEMIPct)}
-            ${manualCell('finalAdjFG',    saved.finalAdjFG)}
+            ${autoCell(auto.invControlPct)}
             ${manualCell('finalAdjSEMI',  saved.finalAdjSEMI)}
             ${manualCell('spaceBreakdown',saved.spaceBreakdown)}
             ${autoCell(auto.efficiency)}
             ${autoCell(auto.damagePct)}
-            ${autoCell(auto.invControlPct)}
-            ${manualCell('dataErrSEMI',   saved.dataErrSEMI)}
+            ${autoCell(auto.prdKPIFG)}
+            ${autoCell(auto.prdKPISEMI)}
             <td class="px-4 py-2 text-center">
                 ${isSaved
                     ? `<button id="btn-kpi-save-${isoDate}"
@@ -22301,13 +22285,13 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
         date:           ddmmyyyy,
         checkerFGPct:   auto.checkerFGPct    ?? null,
         checkerSEMIPct: auto.checkerSEMIPct  ?? null,
-        finalAdjFG:     getFloatVal(`kpi-manual-finalAdjFG-${isoDate}`),
-        finalAdjSEMI:   getFloatVal(`kpi-manual-finalAdjSEMI-${isoDate}`),
-        spaceBreakdown: getFloatVal(`kpi-manual-spaceBreakdown-${isoDate}`),
+        finalAdjFG:     auto.invControlPct   ?? null,   // AUTO: Inv Control
+        finalAdjSEMI:   getFloatVal(`kpi-manual-finalAdjSEMI-${isoDate}`),  // MANUAL
+        spaceBreakdown: getFloatVal(`kpi-manual-spaceBreakdown-${isoDate}`), // MANUAL
         loadScore:      auto.efficiency      ?? null,
         damageScore:    auto.damagePct       ?? null,
-        dataErrFG:      auto.invControlPct   ?? null,
-        dataErrSEMI:    getFloatVal(`kpi-manual-dataErrSEMI-${isoDate}`),
+        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG
+        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI
     };
 
     const saveBtn = safeGet(`btn-kpi-save-${isoDate}`);
@@ -22366,11 +22350,13 @@ window.renderKpiWHSummary = function renderKpiWHSummary(dates) {
         return kpiWHAutoData[iso] || kpiWHAutoData[`${d}/${m}/${y}`] || {};
     });
 
-    const cfgArr  = autos.map(a => a.checkerFGPct).filter(v => v !== undefined && v !== null);
-    const csArr   = autos.map(a => a.checkerSEMIPct).filter(v => v !== undefined && v !== null);
-    const lsArr   = autos.map(a => a.efficiency).filter(v => v !== undefined && v !== null);
-    const dmgArr  = autos.map(a => a.damagePct).filter(v => v !== undefined && v !== null);
-    const defgArr = autos.map(a => a.invControlPct).filter(v => v !== undefined && v !== null);
+    const cfgArr     = autos.map(a => a.checkerFGPct).filter(v => v !== undefined && v !== null);
+    const csArr      = autos.map(a => a.checkerSEMIPct).filter(v => v !== undefined && v !== null);
+    const adjFGArr   = autos.map(a => a.invControlPct).filter(v => v !== undefined && v !== null); // Final Adj FG = invControlPct
+    const lsArr      = autos.map(a => a.efficiency).filter(v => v !== undefined && v !== null);
+    const dmgArr     = autos.map(a => a.damagePct).filter(v => v !== undefined && v !== null);
+    const defgArr    = autos.map(a => a.prdKPIFG).filter(v => v !== undefined && v !== null);
+    const desemiArr  = autos.map(a => a.prdKPISEMI).filter(v => v !== undefined && v !== null);
 
     const manualAvg = (field) => {
         const vals = workDays.map(iso => {
@@ -22382,13 +22368,13 @@ window.renderKpiWHSummary = function renderKpiWHSummary(dates) {
 
     safeSetText('kpi-wh-avg-checkerfg',    fmtPct(avg(cfgArr)));
     safeSetText('kpi-wh-avg-checkersemi',  fmtPct(avg(csArr)));
-    safeSetText('kpi-wh-avg-adjfg',        fmtPct(manualAvg('finalAdjFG')));
+    safeSetText('kpi-wh-avg-adjfg',        fmtPct(avg(adjFGArr)));
     safeSetText('kpi-wh-avg-adjsemi',      fmtPct(manualAvg('finalAdjSEMI')));
     safeSetText('kpi-wh-avg-space',        fmtPct(manualAvg('spaceBreakdown')));
     safeSetText('kpi-wh-avg-loadscore',    fmtPct(avg(lsArr)));
     safeSetText('kpi-wh-avg-damage',       fmtPct(avg(dmgArr)));
     safeSetText('kpi-wh-avg-dataerr-fg',   fmtPct(avg(defgArr)));
-    safeSetText('kpi-wh-avg-dataerr-semi', fmtPct(manualAvg('dataErrSEMI')));
+    safeSetText('kpi-wh-avg-dataerr-semi', fmtPct(avg(desemiArr)));
 };
 
 // ── เปิด/ปิด Modal แก้ไข KPI ──────────────────────────────────────────
@@ -22402,10 +22388,8 @@ window.openKpiWHEditModal = function openKpiWHEditModal(isoDate) {
     safeSetText('kpi-edit-modal-subtitle', `วันที่ ${ddmmyyyy}`);
 
     const setField = (id, val) => { const el = safeGet(id); if (el) el.value = (val !== null && val !== undefined) ? val : ''; };
-    setField('kpi-edit-finalAdjFG',    saved.finalAdjFG);
     setField('kpi-edit-finalAdjSEMI',  saved.finalAdjSEMI);
     setField('kpi-edit-spaceBreakdown',saved.spaceBreakdown);
-    setField('kpi-edit-dataErrSEMI',   saved.dataErrSEMI);
 
     const modal = safeGet('kpi-wh-edit-modal');
     if (modal) modal.classList.remove('hidden');
@@ -22430,13 +22414,13 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
         date:           ddmmyyyy,
         checkerFGPct:   auto.checkerFGPct    ?? null,
         checkerSEMIPct: auto.checkerSEMIPct  ?? null,
-        finalAdjFG:     getF('kpi-edit-finalAdjFG'),
-        finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),
-        spaceBreakdown: getF('kpi-edit-spaceBreakdown'),
+        finalAdjFG:     auto.invControlPct   ?? null,   // AUTO: Inv Control
+        finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),  // MANUAL
+        spaceBreakdown: getF('kpi-edit-spaceBreakdown'), // MANUAL
         loadScore:      auto.efficiency      ?? null,
         damageScore:    auto.damagePct       ?? null,
-        dataErrFG:      auto.invControlPct   ?? null,
-        dataErrSEMI:    getF('kpi-edit-dataErrSEMI'),
+        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG
+        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI
     };
 
     const submitBtn = safeGet('btn-kpi-edit-submit');
@@ -22449,8 +22433,8 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
                 closeKpiWHEditModal();
                 showToast(`✅ แก้ไข KPI วันที่ ${ddmmyyyy} สำเร็จ`);
                 kpiWHSavedData[isoDate] = row;
-                // อัปเดต inputs ที่ locked ในตาราง
-                ['finalAdjFG','finalAdjSEMI','spaceBreakdown','dataErrSEMI'].forEach(f => {
+                // อัปเดต inputs ที่ locked ในตาราง (เฉพาะ manual fields)
+                ['finalAdjSEMI','spaceBreakdown'].forEach(f => {
                     const el = safeGet(`kpi-manual-${f}-${isoDate}`);
                     if (el) el.value = (row[f] !== null && row[f] !== undefined) ? row[f] : '';
                 });
