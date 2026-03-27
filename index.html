@@ -16941,9 +16941,10 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         var likelyW = useQty > 0 ? useWt / useQty : 0;
 
         if (mode === 'child') {
-            // ผู้ใช้ mark Up → ลูกเต็มจำนวน
+            // ลูก: auto-assign หรือ user กด Up — แสดง // Up เฉพาะ user กดเอง
             var ci = _psdPlanBuildItem(it, useQty, likelyW, 'รถลูก');
-            ci.cutMode = 'Up';
+            var isUserUp = (ov.autoMode || 'mother') === 'mother'; // user กด Up (override auto)
+            if (isUserUp) ci.cutMode = 'Up';
             childItems.push(ci); childWt += ci.totalWeight || 0;
         } else if (mode === 'cut') {
             cutEntries.push({ it: it, likelyW: likelyW, useQty: useQty });
