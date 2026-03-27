@@ -3975,9 +3975,11 @@ function getLogisticMasterData() {
         var netWeight = parseFloat(td[i][2]) || 0;
         var capMother = parseFloat(td[i][3]) || 0;   // Col D: ความจุรถแม่ (kg)
         var capChild  = parseFloat(td[i][4]) || 0;   // Col E: ความจุรถลูก/หางพ่วง (kg)
+        var childPlate = String(td[i][5] || '').trim();  // Col F: ทะเบียนรถลูก (เพิ่มใน Sheet)
         var isTrailer = capMother > 0 && capChild > 0; // มี capแม่+ลูก = รถพ่วง
         if (plate) trucks.push({ plate: plate, type: type, netWeight: netWeight,
-                                 isTrailer: isTrailer, capMother: capMother, capChild: capChild });
+                                 isTrailer: isTrailer, capMother: capMother, capChild: capChild,
+                                 childPlate: childPlate });
       }
     }
 
@@ -4129,19 +4131,33 @@ function saveLogisticPlan(payload) {
     var isUpdate = !!(payload.planId);
     var planId   = isUpdate ? String(payload.planId) : generateLogisticPlanId();
 
+    // ── Trailer split: childPlate มีค่า → แยก 2 PlanID (-M แม่, -C ลูก) ──
+    var childPlate     = payload.truckType === 'hire' ? '' : (payload.childPlate || '');
+    var isTrailerSplit  = !!(childPlate);
+    var basePlanId     = planId.replace(/-[MC]$/, '');  // strip suffix กรณี update
+    var planIdM = isTrailerSplit ? basePlanId + '-M' : basePlanId;
+    var planIdC = isTrailerSplit ? basePlanId + '-C' : null;
+    planId = basePlanId; // normalize
+
     if (isUpdate) {
-      // ลบแถวเดิมออกจาก planSheet (ย้อนจากล่างขึ้นบนเพื่อ index ไม่เลื่อน)
+      // ลบแถวเดิมออกจาก planSheet — รวม -M และ -C variants
       if (planSheet.getLastRow() >= 2) {
         var pr = planSheet.getRange(2, 1, planSheet.getLastRow() - 1, 1).getValues();
         for (var pi = pr.length - 1; pi >= 0; pi--) {
-          if (String(pr[pi][0]) === planId) planSheet.deleteRow(pi + 2);
+          var rid = String(pr[pi][0]);
+          if (rid === basePlanId || rid === basePlanId + '-M' || rid === basePlanId + '-C') {
+            planSheet.deleteRow(pi + 2);
+          }
         }
       }
-      // ลบแถวเดิมออกจาก itemSheet
+      // ลบแถวเดิมออกจาก itemSheet — รวม -M และ -C variants
       if (itemSheet.getLastRow() >= 2) {
         var ir = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 1).getValues();
         for (var ii2 = ir.length - 1; ii2 >= 0; ii2--) {
-          if (String(ir[ii2][0]) === planId) itemSheet.deleteRow(ii2 + 2);
+          var rid2 = String(ir[ii2][0]);
+          if (rid2 === basePlanId || rid2 === basePlanId + '-M' || rid2 === basePlanId + '-C') {
+            itemSheet.deleteRow(ii2 + 2);
+          }
         }
       }
     }
@@ -4172,7 +4188,7 @@ function saveLogisticPlan(payload) {
     // G, H, I, K, M      = ข้อมูลต่อร้าน (ใช้คอลัมน์เดิม)
     // Q, R, S            = ข้อมูลต่อร้านเพิ่มเติม (คอลัมน์ใหม่)
     var planTrip = [
-      planId,                               // A: PlanID
+      planIdM,                              // A: PlanID (จะถูก override ต่อร้านสำหรับ trailer)
       payload.date             || '',       // B: วันที่
       payload.truckType        || 'company',// C: ประเภทรถ
       driverOrTransport,                    // D: Driver/Transport
@@ -4205,7 +4221,15 @@ function saveLogisticPlan(payload) {
       ]));
     } else {
       shops.forEach(function(shop, si) {
-        planSheet.appendRow(planTrip.concat([
+        // Trailer split: แต่ละร้านใช้ planId และทะเบียนรถตาม truckLabel
+        var rowPlanId = isTrailerSplit
+          ? (shop.truckLabel === 'child' ? planIdC : planIdM)
+          : planIdM;
+        var rowPlate = isTrailerSplit
+          ? (shop.truckLabel === 'child' ? childPlate : truckPlate)
+          : truckPlate;
+        var rowTrip = planTrip.slice(); rowTrip[0] = rowPlanId;
+        planSheet.appendRow(rowTrip.concat([
           shop.shopName        || '',            // G: ชื่อร้านค้า (1 ร้านต่อแถว)
           parseFloat(shop.distance)     || 0,   // H: ระยะทางต่อร้าน
           parseFloat(shop.freeDistance) || 0,   // I: ระยะทางฟรีต่อร้าน (ค่าStop)
@@ -4214,7 +4238,7 @@ function saveLogisticPlan(payload) {
           planTail[1],                           // L: สถานะ
           shop.loadWarehouse   || '',            // M: คลังโหลด
           planTail[3],                           // N: สาเหตุ
-          planTail[4],                           // O: ทะเบียนรถ
+          rowPlate,                              // O: ทะเบียนรถ (แม่หรือลูก)
           planTail[5],                           // P: ระยะทางขากลับ
           si,                                    // Q: ลำดับร้าน (0-based)
           shop.shopId          || '',            // R: รหัสร้านค้า
@@ -4260,8 +4284,15 @@ function saveLogisticPlan(payload) {
     }
 
     if (!isTransferJob) shops.forEach(function(shop, si) {
+      // Trailer split: ใช้ planId และทะเบียนรถตาม truckLabel ของร้านนั้น
+      var shopPlanId = isTrailerSplit
+        ? (shop.truckLabel === 'child' ? planIdC : planIdM)
+        : planIdM;
+      var shopPlate = isTrailerSplit
+        ? (shop.truckLabel === 'child' ? childPlate : truckPlate)
+        : truckPlate;
       var baseRow = [
-        planId,                               // A: PlanID
+        shopPlanId,                           // A: PlanID (แม่หรือลูก)
         '',                                   // B: รหัสสินค้า (placeholder)
         '',                                   // C: ชื่อสินค้า
         0,                                    // D: จำนวน
@@ -4272,7 +4303,7 @@ function saveLogisticPlan(payload) {
         payload.warehouse     || '',          // I: คลังสินค้า
         payload.date          || '',          // J: วันที่
         payload.status        || 'planned',   // K: สถานะ
-        truckPlate,                           // L: ทะเบียนรถ
+        shopPlate,                            // L: ทะเบียนรถ (แม่หรือลูก)
         shop.loadWarehouse    || '',          // M: คลังโหลด
         parseFloat(shop.distance)     || 0,   // N: ระยะทาง (กม.) — per-shop
         shop.remark                || '',     // O: หมายเหตุ/ความด่วน — per-shop
@@ -4305,7 +4336,11 @@ function saveLogisticPlan(payload) {
         .setValues(itemRows);
     }
 
-    return { success: true, planId: planId, message: 'บันทึกสำเร็จ: ' + planId };
+    var savedMsg = isTrailerSplit
+      ? 'บันทึกสำเร็จ: ' + planIdM + ' (แม่) + ' + planIdC + ' (ลูก)'
+      : 'บันทึกสำเร็จ: ' + planIdM;
+    return { success: true, planId: basePlanId, planIdM: planIdM, planIdC: planIdC,
+             isTrailerSplit: isTrailerSplit, message: savedMsg };
 
   } catch (e) {
     return { success: false, message: e.toString() };
@@ -4343,8 +4378,15 @@ function getLogisticPlans(date) {
       if (!planMap[pid]) {
         planOrder.push(pid);
         var isNewFmt = (row[16] !== '' && row[16] !== null && row[16] !== undefined);
+        // Trailer pair metadata
+        var _pairId   = pid.replace(/-[MC]$/, '');
+        var _isMother = pid.endsWith('-M');
+        var _isChild  = pid.endsWith('-C');
         planMap[pid] = {
           id:              pid,
+          pairId:          _pairId,
+          isMother:        _isMother,
+          isChild:         _isChild,
           date:            rowDate,
           truckType:       String(row[2]  || 'company'),
           driverTransport: String(row[3]  || ''),
@@ -5714,7 +5756,8 @@ function saveWHActivityRows(rows) {
                      'เวลาเริ่ม','เวลาเสร็จ','เวลาที่ใช้(นาที)','จำนวนรวม(I)','น้ำหนัก(กก.)',
                      'นาที/รายการ','น้ำหนักต่อหน่วย(A)','รหัสสินค้า(A)','ชื่อสินค้า(A)',
                      'จำนวนเสียหาย/ผิด(O)','สาเหตุ/ประเภท(P)','หมายเหตุ(Q)','วันที่บันทึก(R)',
-                     'รหัสสินค้าที่ถูก(B)','ชื่อสินค้าที่ถูก(B)'];
+                     'รหัสสินค้าที่ถูก(B)','ชื่อสินค้าที่ถูก(B)',
+                     'ทะเบียนรถ(U)'];
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     }
     var data = rows.map(function(r) {
@@ -5738,7 +5781,8 @@ function saveWHActivityRows(rows) {
         r.remarkQ      || '',
         r.savedAt      || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm:ss'),
         r.skuB         || '',
-        r.nameB        || ''
+        r.nameB        || '',
+        r.truckPlate   || ''   // Col U: ทะเบียนรถ (optional)
       ];
     });
     var lastRow = sheet.getLastRow();
@@ -6392,6 +6436,7 @@ function getKpiWHLGData(startDateStr, endDateStr) {
     // Col A(0)=ประเภท, Col B(1)=วันที่, Col K(10)=นาที/รายการ, Col L(11)=น้ำหนักต่อหน่วย(A)
     var whaSheet = ss.getSheetByName(WH_ACTIVITY_SHEET);
     var whaMap      = {}; // key yyyy-MM-dd → { wpuList, mpiList, wrongCount, claimCount }
+    var truckMap    = {}; // key 'yyyy-MM-dd|plate' → { plate, date, mpiPerKgList }
     var allMpiPerKg = []; // นาที/KG ทุก row สำหรับคำนวณ median baseline
 
     if (whaSheet && whaSheet.getLastRow() >= 2) {
@@ -6429,6 +6474,14 @@ function getKpiWHLGData(startDateStr, endDateStr) {
         whaMap[wKey].wpuList.push(wpu);
         whaMap[wKey].mpiList.push(mpi);
         allMpiPerKg.push(mpi / wpu); // นาที/KG per trip
+
+        // Per-truck map (Col U index 20 = ทะเบียนรถ, optional)
+        var rowTruck = String(whaData[i][20] || '').trim();
+        if (rowTruck) {
+          var tKey = wKey + '|' + rowTruck;
+          if (!truckMap[tKey]) truckMap[tKey] = { plate: rowTruck, date: wKey, mpiPerKgList: [] };
+          truckMap[tKey].mpiPerKgList.push(mpi / wpu);
+        }
       }
     }
 
@@ -6588,6 +6641,23 @@ function getKpiWHLGData(startDateStr, endDateStr) {
 
       var planHours = (planMinutes !== null) ? Math.round((planMinutes / 60) * 10) / 10 : null;
 
+      // Per-truck efficiency สำหรับวันนี้
+      var truckScores = [];
+      Object.keys(truckMap).forEach(function(tKey) {
+        var tm = truckMap[tKey];
+        if (tm.date !== key) return;
+        if (!mpiPerKgMedian || !tm.mpiPerKgList.length) return;
+        var effList_t = tm.mpiPerKgList.map(function(v) {
+          return Math.min(100, (mpiPerKgMedian / v) * 100);
+        });
+        var avgEff_t = effList_t.reduce(function(a, b) { return a + b; }, 0) / effList_t.length;
+        truckScores.push({
+          plate:      tm.plate,
+          efficiency: Math.round(avgEff_t * 10) / 10,
+          tripCount:  tm.mpiPerKgList.length
+        });
+      });
+
       result.push({
         date:             key,
         efficiency:       efficiency,       // → Load Score (%)
@@ -6599,6 +6669,7 @@ function getKpiWHLGData(startDateStr, endDateStr) {
         prdKPISEMI:       prdKPISEMI,       // → Data Err SEMI (%)
         planHours:        planHours,        // → แผนชั่วโมง (แสดงใน Space Breakdown)
         planMinutes:      planMinutes,      // → แผนนาที (ใช้คำนวณ Space Breakdown KPI)
+        truckScores:      truckScores,      // → per-truck efficiency [{ plate, efficiency, tripCount }]
       });
       cur.setDate(cur.getDate() + 1);
     }

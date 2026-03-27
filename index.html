@@ -1008,6 +1008,12 @@ thead.sticky {
           <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-sticky-note text-slate-400"></i> หมายเหตุ</label>
           <input type="text" id="wha-f-load-remarkQ" placeholder="หมายเหตุเพิ่มเติม..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-full text-sm">
         </div>
+        <div class="border-l-4 border-sky-400 pl-4 md:col-span-2">
+          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-truck text-sky-500"></i> ทะเบียนรถที่โหลด <span class="text-slate-400 font-normal normal-case text-[10px]">(ไม่บังคับ)</span></label>
+          <select id="wha-f-load-truck" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-sky-400 cursor-pointer transition-all w-full text-sm">
+            <option value="">— ไม่ระบุ —</option>
+          </select>
+        </div>
       </div>
       <button onclick="whaSubmitTeam('บันทึกการโหลด')" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-lg flex items-center justify-center gap-2">
         <i class="fas fa-truck-loading"></i> บันทึกข้อมูลการโหลด
@@ -2649,10 +2655,11 @@ thead.sticky {
               oninput="_psdPlanUpdateWeightBar()"
               class="w-full bg-orange-50 border-2 border-orange-300 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-orange-500 transition-all">
           </div>
+          <!-- ── แสดงทะเบียนแม่/ลูก (auto-fill จาก TRUCK ID sheet Col F) ── -->
+          <div id="psd-plan-trailer-plate-info" class="hidden text-xs bg-white border border-emerald-300 rounded-lg px-3 py-2 text-slate-700 font-semibold"></div>
           <div id="psd-plan-trailer-inputs" class="hidden space-y-3 pt-1">
-            <!-- ── Capacity เท่านั้น — ทะเบียนใช้จากช่องหลัก (ทั้งแม่และลูก) ── -->
             <p class="text-xs text-emerald-600 font-semibold">
-              <i class="fas fa-info-circle mr-1"></i> ทะเบียนรถ: ใช้จากช่อง "ทะเบียนรก / ชื่อผู้รับ" ด้านบนทั้งแม่และลูก
+              <i class="fas fa-info-circle mr-1"></i> ทะเบียนรถแม่/ลูก ดูได้จากแถบด้านบน
             </p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -4504,7 +4511,7 @@ thead.sticky {
         <div id="logi-company-truck-section" class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ทะเบียนรถ <span class="text-rose-500">*</span></label>
-            <select id="logi-truck-plate" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-400 cursor-pointer">
+            <select id="logi-truck-plate" onchange="onLogiTruckPlateChange()" class="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-400 cursor-pointer">
               <option value="">-- เลือกทะเบียนรถ --</option>
               <option value="กข-1234">กข-1234 (รถ 10 ล้อ)</option>
               <option value="กข-5678">กข-5678 (รถ 6 ล้อ)</option>
@@ -7486,7 +7493,18 @@ window.switchView = function switchView(view) {
     // WH Activity Log — init เมื่อเปิดครั้งแรก
     if (view === 'whactivity') {
         whaInit();
-        loadLogiMaster(function() { whaPrepareStaffList(); });
+        loadLogiMaster(function() {
+            whaPrepareStaffList();
+            // populate truck dropdown ในฟอร์มโหลด (optional)
+            var whaLoadTruck = safeGet('wha-f-load-truck');
+            if (whaLoadTruck && LOGI_MASTER_CACHE.trucks.length > 0) {
+                whaLoadTruck.innerHTML = '<option value="">— ไม่ระบุ —</option>' +
+                    LOGI_MASTER_CACHE.trucks.map(function(t) {
+                        return '<option value="' + t.plate + '">' + t.plate
+                            + (t.isTrailer ? ' [พ่วง]' : '') + '</option>';
+                    }).join('');
+            }
+        });
     }
 }
 
@@ -12533,9 +12551,10 @@ function populateLogiDropdowns() {
                 `<option value="${t.plate}"
                     data-is-trailer="${t.isTrailer ? '1' : '0'}"
                     data-cap-mother="${t.capMother || 0}"
-                    data-cap-child="${t.capChild || 0}">
+                    data-cap-child="${t.capChild || 0}"
+                    data-child-plate="${t.childPlate || ''}">
                     ${t.isTrailer
-                        ? t.plate + ' 🔗[พ่วง] — แม่ ' + (t.capMother/1000).toFixed(1) + 't + ลูก ' + (t.capChild/1000).toFixed(1) + 't'
+                        ? t.plate + ' + ' + (t.childPlate || '?') + ' 🔗[พ่วง] — แม่ ' + (t.capMother/1000).toFixed(1) + 't + ลูก ' + (t.capChild/1000).toFixed(1) + 't'
                         : t.plate + (t.type ? ' (' + t.type + ')' : '')}
                 </option>`
             ).join('');
@@ -12621,6 +12640,37 @@ window.closeLogisticForm = function closeLogisticForm() {
     if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i> บันทึกแผนการส่งมอบ';
 }
 
+// ── กำหนดรถ (แม่/ลูก) ต่อร้าน — แสดงเฉพาะเมื่อเลือกรถพ่วง ──
+window.setLogiShopTruck = function setLogiShopTruck(idx, label) {
+    var labelInput = document.getElementById('logi-shop-truck-label-' + idx);
+    var btnM = document.getElementById('logi-shop-truck-m-' + idx);
+    var btnC = document.getElementById('logi-shop-truck-c-' + idx);
+    if (labelInput) labelInput.value = label;
+    if (btnM) {
+        btnM.style.background = label === 'mother' ? '#bae6fd' : '';
+        btnM.style.borderColor = label === 'mother' ? '#0ea5e9' : '';
+    }
+    if (btnC) {
+        btnC.style.background = label === 'child' ? '#ede9fe' : '';
+        btnC.style.borderColor = label === 'child' ? '#7c3aed' : '';
+    }
+};
+
+// ── แสดง/ซ่อน truck assignment เมื่อเปลี่ยนทะเบียนรถ ──
+window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
+    var truckSel = document.getElementById('logi-truck-plate');
+    var opt = truckSel?.options[truckSel.selectedIndex];
+    var hasChild = !!(opt?.dataset?.childPlate);
+    document.querySelectorAll('[id^="logi-shop-truck-wrap-"]').forEach(function(el) {
+        el.classList.toggle('hidden', !hasChild);
+    });
+    // reset labels to 'mother' when truck changes
+    document.querySelectorAll('[id^="logi-shop-truck-label-"]').forEach(function(el) {
+        var idx = el.id.replace('logi-shop-truck-label-', '');
+        setLogiShopTruck(parseInt(idx), 'mother');
+    });
+};
+
 // ── เพิ่มการ์ดร้านค้าใหม่ ──
 window.addLogiShop = function addLogiShop() {
     const idx = logiShopCounter++;
@@ -12634,6 +12684,14 @@ window.addLogiShop = function addLogiShop() {
     div.innerHTML  = buildLogiShopCardHTML(idx);
     container.appendChild(div);
     updateLogiShopNumbers();
+    // ถ้าเลือกรถพ่วงอยู่แล้ว → แสดง truck assignment ทันที
+    const truckSel = document.getElementById('logi-truck-plate');
+    const opt = truckSel?.options[truckSel.selectedIndex];
+    if (opt?.dataset?.childPlate) {
+        const wrap = document.getElementById('logi-shop-truck-wrap-' + idx);
+        if (wrap) wrap.classList.remove('hidden');
+        setLogiShopTruck(idx, 'mother');
+    }
 }
 
 // ── สร้าง HTML สำหรับการ์ดร้านค้า ──
@@ -12697,6 +12755,24 @@ function buildLogiShopCardHTML(idx) {
             <input type="number" id="logi-shop-free-dist-${idx}" step="0.1" placeholder="0.0"
                    class="w-full bg-white border-2 border-rose-200 rounded-xl px-4 py-3 font-bold text-slate-800 outline-none focus:border-rose-400 transition-all">
         </div>
+    </div>
+
+    <!-- Trailer truck assignment (แสดงเฉพาะเมื่อเลือกรถพ่วง) -->
+    <div id="logi-shop-truck-wrap-${idx}" class="hidden">
+        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">โหลดขึ้นรถ</label>
+        <div class="flex gap-2">
+            <button type="button" id="logi-shop-truck-m-${idx}"
+                onclick="setLogiShopTruck(${idx},'mother')"
+                class="flex-1 py-2 rounded-xl font-black text-sm border-2 border-sky-400 bg-sky-50 text-sky-700 hover:bg-sky-200 transition-all">
+                🚛 รถแม่
+            </button>
+            <button type="button" id="logi-shop-truck-c-${idx}"
+                onclick="setLogiShopTruck(${idx},'child')"
+                class="flex-1 py-2 rounded-xl font-black text-sm border-2 border-purple-300 bg-white text-purple-600 hover:bg-purple-100 transition-all">
+                ⬆ รถลูก
+            </button>
+        </div>
+        <input type="hidden" id="logi-shop-truck-label-${idx}" value="mother">
     </div>
 
     <!-- หมายเหตุ/ความด่วน + คลังโหลด -->
@@ -13314,7 +13390,10 @@ window.saveLogisticPlan = function saveLogisticPlan() {
     }
 
     if (truckType === 'company') {
-        payload.truckPlate = document.getElementById('logi-truck-plate')?.value;
+        const truckSel2 = document.getElementById('logi-truck-plate');
+        const truckOpt2 = truckSel2?.options[truckSel2.selectedIndex];
+        payload.truckPlate  = truckOpt2?.value || '';
+        payload.childPlate  = truckOpt2?.dataset?.childPlate || ''; // Col F จาก TRUCK ID
         // ดึง driverId + driverName จาก option ที่เลือก
         const driverSel = document.getElementById('logi-driver');
         const driverOpt = driverSel?.options[driverSel.selectedIndex];
@@ -13381,6 +13460,7 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 }
             });
 
+            const truckLabelEl = document.getElementById(`logi-shop-truck-label-${shopIdxAttr}`);
             shops.push({
                 shopId,
                 shopName:     shopMeta?.name    || shopOpt?.dataset?.name    || shopId,
@@ -13391,6 +13471,7 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 freeDistance: parseFloat(freeDistEl?.value) || 0,
                 remark:       remarkEl?.value || '',
                 loadWarehouse: document.getElementById(`logi-shop-load-wh-${shopIdxAttr}`)?.value || '',
+                truckLabel:   truckLabelEl?.value || 'mother', // 'mother' | 'child'
                 items,
             });
         });
@@ -16470,6 +16551,7 @@ window.psdPlanCheckTrailer = function psdPlanCheckTrailer() {
     var inputs     = document.getElementById('psd-plan-trailer-inputs');
     var capMEl     = document.getElementById('psd-plan-trailer-cap-mother');
     var capCEl     = document.getElementById('psd-plan-trailer-cap-child');
+    var plateDisplay = document.getElementById('psd-plan-trailer-plate-info');
     if (truck && truck.isTrailer) {
         // รถพ่วง: auto-check + fill cap + show inputs
         if (toggle) toggle.checked = true;
@@ -16478,12 +16560,27 @@ window.psdPlanCheckTrailer = function psdPlanCheckTrailer() {
         if (capCEl) capCEl.value = truck.capChild  || '';
         var assignBtn = document.getElementById('psd-plan-assign-btn');
         if (assignBtn) assignBtn.classList.remove('hidden');
+        // เก็บ plates บน _psdPlanData เพื่อใช้ใน document generation
+        if (_psdPlanData) {
+            _psdPlanData.motherPlate = truck.plate;
+            _psdPlanData.childPlate  = truck.childPlate || '';
+        }
+        // แสดงทะเบียนแม่/ลูก
+        if (plateDisplay) {
+            plateDisplay.innerHTML = '<i class="fas fa-truck mr-1 text-emerald-500"></i>'
+                + ' รถแม่: <span class="font-mono font-black text-slate-800">' + truck.plate + '</span>'
+                + '&nbsp;|&nbsp;<i class="fas fa-truck-moving mr-1 text-purple-500"></i>'
+                + ' รถลูก: <span class="font-mono font-black text-slate-800">' + (truck.childPlate || '—') + '</span>';
+            plateDisplay.classList.remove('hidden');
+        }
     } else {
         // รถธรรมดา: reset trailer section
         if (toggle) toggle.checked = false;
         if (inputs) inputs.classList.add('hidden');
         if (capMEl) capMEl.value = '';
         if (capCEl) capCEl.value = '';
+        if (plateDisplay) plateDisplay.classList.add('hidden');
+        if (_psdPlanData) { _psdPlanData.motherPlate = ''; _psdPlanData.childPlate = ''; }
     }
 };
 
@@ -17008,12 +17105,14 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
     var childShops  = childItems.length  > 0 ? _groupByShop(childItems)  : [];
     var totalSheets = motherShops.length + childShops.length;
 
-    // truck plate header: เพิ่ม [รถแม่]/[รถลูก] เมื่อมีทั้งสองรถ
-    var basePlate = res.truckPlate || '—';
-    var plateM = motherShops.length > 0 && childShops.length > 0
-        ? basePlate + ' [รถแม่]' : basePlate;
-    var plateC = motherShops.length > 0 && childShops.length > 0
-        ? basePlate + ' [รถลูก]' : basePlate;
+    // truck plate header: ใช้ทะเบียนจริงแยกแม่/ลูก จาก _psdPlanData (Phase 6)
+    var _hasChild = motherShops.length > 0 && childShops.length > 0;
+    var plateM = (_psdPlanData && _psdPlanData.motherPlate)
+        ? _psdPlanData.motherPlate
+        : ((res.truckPlate || '—') + (_hasChild ? ' [รถแม่]' : ''));
+    var plateC = (_psdPlanData && _psdPlanData.childPlate)
+        ? _psdPlanData.childPlate
+        : ((res.truckPlate || '—') + ' [รถลูก]');
 
     var docM = Object.assign({}, res, { truckPlate: plateM });
     var docC = Object.assign({}, res, { truckPlate: plateC });
@@ -22005,7 +22104,8 @@ window.whaSaveAll = function whaSaveAll() {
             remarkQ:       r.remarkQ,
             savedAt:       savedAt,
             skuB:          r.skuB,
-            nameB:         r.nameB
+            nameB:         r.nameB,
+            truckPlate:    r.truckPlate || ''  // Col U: ทะเบียนรถ (optional)
         };
     });
 
@@ -22243,7 +22343,8 @@ window.whaSubmitTeam = function whaSubmitTeam(type) {
     let formData = {};
     if (type === 'บันทึกการโหลด') {
         formData = { timeStart: g('wha-f-load-timeStart'), timeEnd: g('wha-f-load-timeEnd'),
-                     qty: g('wha-f-load-qty'), weight: g('wha-f-load-weight'), remarkQ: g('wha-f-load-remarkQ') };
+                     qty: g('wha-f-load-qty'), weight: g('wha-f-load-weight'), remarkQ: g('wha-f-load-remarkQ'),
+                     truckPlate: g('wha-f-load-truck') };
     } else if (type === 'เคลมสินค้า') {
         formData = { skuA: g('wha-f-claim-skuA').toUpperCase(), nameA: g('wha-f-claim-nameA'),
                      damageQty: g('wha-f-claim-damageQty'), causeP: g('wha-f-claim-causeP'), remarkQ: g('wha-f-claim-remarkQ') };
@@ -22318,7 +22419,7 @@ window.whaSubmitIndiv = function whaSubmitIndiv(type) {
 function _whaFormClear(type) {
     const clr = id => { const el = safeGet(id); if (el) el.value = ''; };
     if (type === 'บันทึกการโหลด') {
-        ['wha-f-load-timeStart','wha-f-load-timeEnd','wha-f-load-qty','wha-f-load-weight','wha-f-load-remarkQ'].forEach(clr);
+        ['wha-f-load-timeStart','wha-f-load-timeEnd','wha-f-load-qty','wha-f-load-weight','wha-f-load-remarkQ','wha-f-load-truck'].forEach(clr);
     } else if (type === 'เคลมสินค้า') {
         ['wha-f-claim-skuA','wha-f-claim-nameA','wha-f-claim-damageQty','wha-f-claim-remarkQ'].forEach(clr);
         clr('wha-f-claim-causeP');
