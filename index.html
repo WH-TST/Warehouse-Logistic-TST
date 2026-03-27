@@ -15650,13 +15650,10 @@ function _psdManualUpdateWeightBar() {
     _psdManualItems.forEach(function(r) {
         var wt = r.estWeight || 0;
         totWt += wt;
-        if (_psdMode === 'manual') {
-            motherWt += wt; // manual mode = รถเดียว
-        } else {
-            if (r.cutMode === 'Up')       childWt  += wt;
-            else if (r.cutMode === 'Cut') { motherWt += wt * 0.5; childWt += wt * 0.5; }
-            else                          motherWt += wt;
-        }
+        // Up → ลูก, Cut → แบ่งครึ่งประมาณ, ปกติ → แม่ (ใช้กับทุก mode รวม manual)
+        if (r.cutMode === 'Up')       childWt  += wt;
+        else if (r.cutMode === 'Cut') { motherWt += wt * 0.5; childWt += wt * 0.5; }
+        else                          motherWt += wt;
     });
     if (isTrailer) {
         var capM = parseFloat(document.getElementById('psd-trailer-mother')?.value) || 0;
@@ -16241,7 +16238,7 @@ function psdManualRenderRows() {
             + '<td style="padding:8px 10px;">'
               + '<div style="font-weight:800;font-size:13px;color:#0f172a;">'+escHtml(r.name)
               + (r.cutMode==='Cut' ? ' <span style="display:inline-block;font-size:10px;font-weight:900;color:#f97316;background:#fff7ed;border:1px solid #f97316;border-radius:4px;padding:0 4px;vertical-align:middle;">// Cut</span>' : '')
-              + (r.cutMode==='Up' && _psdMode !== 'manual' ? ' <span style="display:inline-block;font-size:10px;font-weight:900;color:#0284c7;background:#f0f9ff;border:1px solid #0284c7;border-radius:4px;padding:0 4px;vertical-align:middle;">// Up</span>' : '')
+              + (r.cutMode==='Up' ? ' <span style="display:inline-block;font-size:10px;font-weight:900;color:#0284c7;background:#f0f9ff;border:1px solid #0284c7;border-radius:4px;padding:0 4px;vertical-align:middle;">// Up</span>' : '')
               + '</div>'
               + (r.weightRange ? '<div style="font-size:11px;color:#64748b;">Range: '+escHtml(r.weightRange)+'</div>' : '')
             + '</td>'
@@ -16264,42 +16261,20 @@ function psdManualRenderRows() {
             + '<td style="text-align:center;padding:5px 6px;">'
               + '<div style="display:flex;gap:0;">'
               + '<button onclick="psdManualSetCutMode('+r.id+',\'Cut\')" '
-              + 'style="padding:4px 8px;font-size:10px;font-weight:900;'
-              + (_psdMode === 'manual' ? 'border-radius:6px;' : 'border-radius:6px 0 0 6px;border-right:none;')
+              + 'style="padding:4px 8px;font-size:10px;font-weight:900;border-radius:6px 0 0 6px;border-right:none;'
               + 'border:1.5px solid #f97316;cursor:pointer;'
               + (r.cutMode==='Cut' ? 'background:#f97316;color:#fff;' : 'background:#fff;color:#f97316;')
               + '">Cut</button>'
-              + (_psdMode !== 'manual'
-                  ? '<button onclick="psdManualSetCutMode('+r.id+',\'Up\')" '
-                    + 'style="padding:4px 8px;font-size:10px;font-weight:900;border-radius:0 6px 6px 0;border:1.5px solid #0284c7;cursor:pointer;'
-                    + (r.cutMode==='Up' ? 'background:#0284c7;color:#fff;' : 'background:#fff;color:#0284c7;')
-                    + '">Up</button>'
-                  : '')
+              + '<button onclick="psdManualSetCutMode('+r.id+',\'Up\')" '
+              + 'style="padding:4px 8px;font-size:10px;font-weight:900;border-radius:0 6px 6px 0;border:1.5px solid #0284c7;cursor:pointer;'
+              + (r.cutMode==='Up' ? 'background:#0284c7;color:#fff;' : 'background:#fff;color:#0284c7;')
+              + '">Up</button>'
               + '</div>'
             + '</td>'
             + '<td style="text-align:center;padding:8px 6px;">'
               + '<button onclick="psdManualRemoveRow('+r.id+')" style="width:28px;height:28px;border-radius:8px;background:#fff0f0;border:1px solid #fca5a5;color:#ef4444;cursor:pointer;font-size:11px;" title="ลบ"><i class="fas fa-trash"></i></button>'
             + '</td>'
-            + '</tr>'
-            // expand row "แบ่งรถแม่" ใช้เฉพาะ mode plan (มีรถแม่/รถลูก) เท่านั้น
-            + (r.cutMode === 'Cut' && _psdMode !== 'manual' ? (function(){
-                var lpb   = r.linesPerBundle || 1;
-                var split = r.cutSplitQty || 0;
-                var rem   = r.qty - split;
-                return '<tr style="background:#fff3e0;">'
-                    + '<td colspan="10" style="padding:4px 12px 8px 52px;border-top:none;">'
-                    + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
-                    + '<span style="font-size:11px;font-weight:900;color:#b45309;">✂ แบ่งรถแม่:</span>'
-                    + '<input type="number" min="0" step="'+lpb+'" max="'+r.qty+'" value="'+split+'" '
-                    + 'onchange="psdManualUpdateCutSplit('+r.id+',this.value)" '
-                    + 'style="width:82px;text-align:center;font-weight:900;font-size:13px;border:1.5px solid #f97316;border-radius:7px;padding:3px 5px;outline:none;background:#fff;" '
-                    + 'onfocus="this.style.borderColor=\'#b45309\'" onblur="this.style.borderColor=\'#f97316\'">'
-                    + '<span style="font-size:11px;font-weight:700;color:#b45309;">เส้น</span>'
-                    + '<span style="font-size:10px;color:#92400e;">(ทวีคูณ '+lpb+' เส้น/มัด)</span>'
-                    + '<span style="font-size:11px;font-weight:900;color:#0369a1;margin-left:6px;">| รถลูก: '+rem.toLocaleString()+' เส้น</span>'
-                    + '</div>'
-                    + '</td></tr>';
-              })() : '');
+            + '</tr>';
     }).join('');
 }
 
@@ -16834,17 +16809,18 @@ window.psdPlanAssignTrailer = function psdPlanAssignTrailer() {
 
     var items = _psdPlanData.items || [];
 
-    // ── Step 1: แยก cut items ออก (user mark "✂ ตัดได้" ไว้แล้ว)
+    // ── Step 1: แยก cut items ออก (user mark "✂ Cut" ไว้แล้ว)
     //    non-cut items จะถูก auto-assign; cut items คงไว้ไม่แตะ
     var nonCutIdxs = [];
     var cutWt = 0;
     items.forEach(function(it, i) {
-        var sel = document.getElementById('psd-plan-row-' + i);
-        var cur = sel ? sel.value : 'mother';
+        var cur = (_psdPlanOverrides[i] && _psdPlanOverrides[i].mode) ? _psdPlanOverrides[i].mode : 'mother';
         if (cur === 'cut') {
-            cutWt += it.totalWeight || 0;
+            cutWt += (_psdPlanOverrides[i] && _psdPlanOverrides[i].weight !== undefined)
+                ? _psdPlanOverrides[i].weight : (it.totalWeight || 0);
         } else {
-            nonCutIdxs.push({ idx: i, wt: it.totalWeight || 0 });
+            nonCutIdxs.push({ idx: i, wt: (_psdPlanOverrides[i] && _psdPlanOverrides[i].weight !== undefined)
+                ? _psdPlanOverrides[i].weight : (it.totalWeight || 0) });
         }
     });
 
@@ -16871,12 +16847,11 @@ window.psdPlanAssignTrailer = function psdPlanAssignTrailer() {
         }
     });
 
-    // ── Step 3: ใส่ค่าลง dropdown (skip cut items)
+    // ── Step 3: อัปเดต _psdPlanOverrides + ปุ่มแสดงผล (skip cut items)
     items.forEach(function(it, i) {
-        var sel = document.getElementById('psd-plan-row-' + i);
-        if (!sel) return;
-        if (sel.value === 'cut') return; // ไม่แตะ cut items
-        sel.value = assignment[i] || 'mother';
+        var cur = (_psdPlanOverrides[i] && _psdPlanOverrides[i].mode) ? _psdPlanOverrides[i].mode : 'mother';
+        if (cur === 'cut') return; // ไม่แตะ cut items
+        _psdPlanSetMode(i, assignment[i] || 'mother');
     });
 
     // ── Step 4: คำนวณ remChild หลังจัด non-cut แล้ว → บอก user
@@ -17014,11 +16989,8 @@ function buildSheetHtml(data, shopGroup, shopIdx, totalShops) {
                     }
                 }
                 if (ri === 0) {
-                    html += '<td rowspan="'+rowCount+'" style="'+TD+'padding:0;vertical-align:top;">'
-                        + '<div style="height:50%;min-height:6mm;border-bottom:1px dashed #aaa;display:flex;align-items:center;justify-content:center;">'
-                        + '<input type="text" style="width:100%;border:none;outline:none;font-family:inherit;font-size:7pt;font-weight:700;text-align:center;background:transparent;padding:0.5mm 0.5mm;"/>'
-                        + '</div>'
-                        + '<div style="height:50%;min-height:6mm;display:flex;align-items:center;justify-content:center;">'
+                    html += '<td rowspan="'+rowCount+'" style="'+TD+'padding:0;vertical-align:middle;">'
+                        + '<div style="min-height:12mm;display:flex;align-items:center;justify-content:center;padding:1mm;">'
                         + '<input type="text" style="width:100%;border:none;outline:none;font-family:inherit;font-size:7pt;font-weight:700;text-align:center;background:transparent;padding:0.5mm 0.5mm;"/>'
                         + '</div>'
                         + '</td>';
