@@ -16081,7 +16081,10 @@ function psdManualRenderRows() {
         return '<tr style="background:'+rowBg+';">'
             + '<td style="text-align:center;font-weight:900;color:#64748b;padding:8px 10px;">'+(idx+1)+'</td>'
             + '<td style="padding:8px 10px;">'
-              + '<div style="font-weight:800;font-size:13px;color:#0f172a;">'+escHtml(r.name)+(r.cutMode==='Cut'?' <span style="display:inline-block;font-size:10px;font-weight:900;color:#f97316;background:#fff7ed;border:1px solid #f97316;border-radius:4px;padding:0 4px;vertical-align:middle;">// Cut</span>':r.cutMode==='Up'?' <span style="display:inline-block;font-size:10px;font-weight:900;color:#0284c7;background:#f0f9ff;border:1px solid #0284c7;border-radius:4px;padding:0 4px;vertical-align:middle;">// Up</span>':'')+'</div>'
+              + '<div style="font-weight:800;font-size:13px;color:#0f172a;">'+escHtml(r.name)
+              + (r.cutMode==='Cut' ? ' <span style="display:inline-block;font-size:10px;font-weight:900;color:#f97316;background:#fff7ed;border:1px solid #f97316;border-radius:4px;padding:0 4px;vertical-align:middle;">// Cut</span>' : '')
+              + (r.cutMode==='Up' && _psdMode !== 'manual' ? ' <span style="display:inline-block;font-size:10px;font-weight:900;color:#0284c7;background:#f0f9ff;border:1px solid #0284c7;border-radius:4px;padding:0 4px;vertical-align:middle;">// Up</span>' : '')
+              + '</div>'
               + (r.weightRange ? '<div style="font-size:11px;color:#64748b;">Range: '+escHtml(r.weightRange)+'</div>' : '')
             + '</td>'
             + '<td style="text-align:center;font-size:11px;font-weight:700;color:#0369a1;padding:8px 10px;">'+escHtml(r.sku)+'</td>'
@@ -16103,20 +16106,25 @@ function psdManualRenderRows() {
             + '<td style="text-align:center;padding:5px 6px;">'
               + '<div style="display:flex;gap:0;">'
               + '<button onclick="psdManualSetCutMode('+r.id+',\'Cut\')" '
-              + 'style="padding:4px 8px;font-size:10px;font-weight:900;border-radius:6px 0 0 6px;border:1.5px solid #f97316;border-right:none;cursor:pointer;'
+              + 'style="padding:4px 8px;font-size:10px;font-weight:900;'
+              + (_psdMode === 'manual' ? 'border-radius:6px;' : 'border-radius:6px 0 0 6px;border-right:none;')
+              + 'border:1.5px solid #f97316;cursor:pointer;'
               + (r.cutMode==='Cut' ? 'background:#f97316;color:#fff;' : 'background:#fff;color:#f97316;')
               + '">Cut</button>'
-              + '<button onclick="psdManualSetCutMode('+r.id+',\'Up\')" '
-              + 'style="padding:4px 8px;font-size:10px;font-weight:900;border-radius:0 6px 6px 0;border:1.5px solid #0284c7;cursor:pointer;'
-              + (r.cutMode==='Up' ? 'background:#0284c7;color:#fff;' : 'background:#fff;color:#0284c7;')
-              + '">Up</button>'
+              + (_psdMode !== 'manual'
+                  ? '<button onclick="psdManualSetCutMode('+r.id+',\'Up\')" '
+                    + 'style="padding:4px 8px;font-size:10px;font-weight:900;border-radius:0 6px 6px 0;border:1.5px solid #0284c7;cursor:pointer;'
+                    + (r.cutMode==='Up' ? 'background:#0284c7;color:#fff;' : 'background:#fff;color:#0284c7;')
+                    + '">Up</button>'
+                  : '')
               + '</div>'
             + '</td>'
             + '<td style="text-align:center;padding:8px 6px;">'
               + '<button onclick="psdManualRemoveRow('+r.id+')" style="width:28px;height:28px;border-radius:8px;background:#fff0f0;border:1px solid #fca5a5;color:#ef4444;cursor:pointer;font-size:11px;" title="ลบ"><i class="fas fa-trash"></i></button>'
             + '</td>'
             + '</tr>'
-            + (r.cutMode === 'Cut' ? (function(){
+            // expand row "แบ่งรถแม่" ใช้เฉพาะ mode plan (มีรถแม่/รถลูก) เท่านั้น
+            + (r.cutMode === 'Cut' && _psdMode !== 'manual' ? (function(){
                 var lpb   = r.linesPerBundle || 1;
                 var split = r.cutSplitQty || 0;
                 var rem   = r.qty - split;
