@@ -16457,7 +16457,9 @@ window.psdPlanToggleTrailer = function psdPlanToggleTrailer() {
 };
 
 // ── Plan Mode: แบ่งสินค้าระหว่างรถแม่/รถลูก ─────────────────────────────
-function _psdPlanBuildItem(orig, newQty, likelyW, shopName) {
+// truckLabel = 'รถแม่' | 'รถลูก' — ใช้แสดงใน header ทะเบียนรถ
+// shopName ดั้งเดิม (จาก orig) ถูกรักษาไว้สำหรับจัดกลุ่มเอกสารหลายร้าน
+function _psdPlanBuildItem(orig, newQty, likelyW, truckLabel) {
     var lpb          = orig.linesPerBundle || 1;
     var bpl          = orig.bundlesPerLift || 1;
     var totalBundles = Math.ceil(newQty / lpb);
@@ -16477,7 +16479,8 @@ function _psdPlanBuildItem(orig, newQty, likelyW, shopName) {
         totalBundles: totalBundles,
         totalWeight:  totalWeight,
         liftRows:     liftRows.length ? liftRows : [[]],
-        shopName:     shopName
+        shopName:     orig.shopName || truckLabel,  // รักษา shopName ต้นฉบับ (multi-shop)
+        _truck:       truckLabel                    // 'รถแม่' | 'รถลูก'
     });
 }
 
@@ -16775,13 +16778,47 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         }
     });
 
-    // ── Render Document ────────────────────────────────────────────────────
+    // ── Render Document (Multi-shop × Truck aware) ─────────────────────────
+    // แยกใบตาม ร้าน × รถ: แม่-Shop1, แม่-Shop2, ลูก-Shop1, ...
     var area = document.getElementById('psd-document-area');
-    var grpM = { shopName: 'รถแม่', items: motherItems };
-    var grpC = { shopName: 'รถลูก', items: childItems  };
-    var html = '<div class="psd-sheet">' + buildSheetHtml(res, grpM, 0, 2) + '</div>';
-    html    += '<div style="page-break-before:always;"></div>';
-    html    += '<div class="psd-sheet">' + buildSheetHtml(res, grpC, 1, 2) + '</div>';
+
+    // helper: จัดกลุ่มตาม shopName คง order เดิม
+    function _groupByShop(items) {
+        var groups = [], shopMap = {};
+        items.forEach(function(item) {
+            var sn = item.shopName || '—';
+            if (!shopMap[sn]) { shopMap[sn] = []; groups.push({ shopName: sn, items: shopMap[sn] }); }
+            shopMap[sn].push(item);
+        });
+        return groups;
+    }
+
+    var motherShops = motherItems.length > 0 ? _groupByShop(motherItems) : [];
+    var childShops  = childItems.length  > 0 ? _groupByShop(childItems)  : [];
+    var totalSheets = motherShops.length + childShops.length;
+
+    // truck plate header: เพิ่ม [รถแม่]/[รถลูก] เมื่อมีทั้งสองรถ
+    var basePlate = res.truckPlate || '—';
+    var plateM = motherShops.length > 0 && childShops.length > 0
+        ? basePlate + ' [รถแม่]' : basePlate;
+    var plateC = motherShops.length > 0 && childShops.length > 0
+        ? basePlate + ' [รถลูก]' : basePlate;
+
+    var docM = Object.assign({}, res, { truckPlate: plateM });
+    var docC = Object.assign({}, res, { truckPlate: plateC });
+
+    var html = ''; var si = 0;
+    motherShops.forEach(function(grp) {
+        if (si > 0) html += '<div style="page-break-before:always;"></div>';
+        html += '<div class="psd-sheet">' + buildSheetHtml(docM, grp, si, totalSheets) + '</div>';
+        si++;
+    });
+    childShops.forEach(function(grp) {
+        if (si > 0) html += '<div style="page-break-before:always;"></div>';
+        html += '<div class="psd-sheet">' + buildSheetHtml(docC, grp, si, totalSheets) + '</div>';
+        si++;
+    });
+
     area.innerHTML = html;
     _psdCurrentDoc = res;
 
@@ -16790,8 +16827,8 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         showToast('⚠️ รถแม่รวม ' + motherWt.toFixed(0) + ' KG เกิน Cap ' + capMother.toLocaleString()
             + ' KG (เกิน ' + (motherWt-capMother).toFixed(0) + ' KG) — ปรับรายการ Cut หน้างาน', true);
     }
-    showToast('✅ สร้างเอกสารเสร็จ | 🚛 แม่: ' + motherItems.length + ' รายการ (' + motherWt.toFixed(0)
-        + ' KG) | 🚚 ลูก: ' + childItems.length + ' รายการ (' + childWt.toFixed(0) + ' KG)');
+    showToast('✅ สร้างเอกสารเสร็จ | 🚛 แม่: ' + motherItems.length + ' รายการ ' + motherShops.length + ' ร้าน (' + motherWt.toFixed(0)
+        + ' KG) | 🚚 ลูก: ' + childItems.length + ' รายการ ' + childShops.length + ' ร้าน (' + childWt.toFixed(0) + ' KG)');
 
     document.getElementById('psd-preview-wrap').classList.remove('hidden');
     if (printBtn) { printBtn.disabled = false; printBtn.className = 'bg-orange-600 hover:bg-orange-500 text-white px-8 py-2.5 rounded-xl font-black flex items-center gap-2 transition-all cursor-pointer'; }
