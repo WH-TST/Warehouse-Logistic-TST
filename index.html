@@ -15676,25 +15676,14 @@ function _psdPlanUpdateWeightBar() {
     var trailerDiv = document.getElementById('psd-plan-wt-trailer');
     var totWt = 0, motherWt = 0, childWt = 0;
     var items = (_psdPlanData && _psdPlanData.items) ? _psdPlanData.items : [];
-    var capMBar = parseFloat(document.getElementById('psd-plan-trailer-cap-mother')?.value) || 0;
-    var capCBar = parseFloat(document.getElementById('psd-plan-trailer-cap-child')?.value)  || 0;
-    // สะท้อน auto-assign logic จริง (heaviest → ลูก)
-    var autoBarList = [];
     items.forEach(function(it, i) {
         var ov   = _psdPlanOverrides[i] || {};
         var wt   = (ov.weight !== undefined) ? ov.weight : (parseFloat(it.totalWeight) || 0);
         var mode = ov.mode || 'mother';
         totWt += wt;
-        if (mode === 'child') { childWt += wt; }
-        else if (mode === 'cut') { motherWt += wt * 0.5; childWt += wt * 0.5; }
-        else { autoBarList.push(wt); }
-    });
-    // auto-fill child with heaviest
-    var remCBar = capCBar - childWt;
-    autoBarList.sort(function(a,b){ return b - a; });
-    autoBarList.forEach(function(wt) {
-        if (remCBar >= wt && wt > 0) { childWt += wt; remCBar -= wt; }
-        else { motherWt += wt; }
+        if (mode === 'child')      childWt  += wt;
+        else if (mode === 'cut') { motherWt += wt * 0.5; childWt += wt * 0.5; } // ประมาณ
+        else                       motherWt += wt;
     });
     if (isTrailer) {
         var capM = parseFloat(document.getElementById('psd-plan-trailer-cap-mother')?.value) || 0;
@@ -16721,15 +16710,15 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // Trailer mode — Auto-split อัตโนมัติ (ไม่ต้องกด "จัดรถพ่วง" ก่อน)
+    // Trailer mode — execute ตาม mark ที่ user เลือกเอง
     //
-    //  Pass 1a: 'child' (Up)  → รถลูกแน่นอน (full qty)
-    //  Pass 1b: 'mother'/auto → sort หนักสุดก่อน → fill ลูก → ที่เหลือแม่
-    //  Pass 2:  'cut'         → แบ่งตาม remChild จริง (floor ลงมัดเต็ม)
+    //  ⬆ Up   (mode='child') → รถลูก เต็มจำนวน
+    //  ✂ Cut  (mode='cut')   → แบ่งตาม remChild จริง (floor ลงมัดเต็ม)
+    //  ไม่ mark              → รถแม่ เต็มจำนวน (default)
     // ══════════════════════════════════════════════════════════════════════
     var motherItems = [], childItems = [];
     var motherWt = 0, childWt = 0;
-    var cutEntries = [], autoEntries = [];
+    var cutEntries = [];
 
     items.forEach(function(it, i) {
         var ov      = _psdPlanOverrides[i] || {};
@@ -16739,37 +16728,23 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         var likelyW = useQty > 0 ? useWt / useQty : 0;
 
         if (mode === 'child') {
-            // ผู้ใช้ mark Up → ลูกแน่นอน
+            // ผู้ใช้ mark Up → ลูกเต็มจำนวน
             var ci = _psdPlanBuildItem(it, useQty, likelyW, 'รถลูก');
             ci.cutMode = 'Up';
             childItems.push(ci); childWt += ci.totalWeight || 0;
         } else if (mode === 'cut') {
             cutEntries.push({ it: it, likelyW: likelyW, useQty: useQty });
         } else {
-            // 'mother' default → เก็บไว้ auto-assign (Pass 1b)
-            autoEntries.push({ it: it, likelyW: likelyW, useQty: useQty, useWt: useWt });
+            // ไม่ mark → แม่เต็มจำนวน
+            var mi = _psdPlanBuildItem(it, useQty, likelyW, 'รถแม่');
+            motherItems.push(mi); motherWt += mi.totalWeight || 0;
         }
     });
 
-    // ── Pass 1b: Auto-fill ลูกด้วยรายการหนักสุดก่อน (น้อยไซส์) ──────────
+    // ── Cut items — แบ่งตาม remChild จริง (floor ลงมัดเต็ม) ───────────────
+    // ลูก: floor(floor(remChild / likelyW) / lpb) * lpb
+    // แม่: ที่เหลือ (อาจเกิน Cap แม่ได้ — ปรับหน้างานได้)
     var remChild = capChild - childWt;
-    // sort สำหรับตัดสิน dest (ลูก = heaviest first) แต่ render ตามลำดับเดิม
-    var sortedAuto = autoEntries.slice().sort(function(a, b) { return b.useWt - a.useWt; });
-    sortedAuto.forEach(function(e) {
-        if (remChild >= e.useWt && e.useWt > 0) {
-            e._dest = 'child'; remChild -= e.useWt;
-        } else {
-            e._dest = 'mother';
-        }
-    });
-    autoEntries.forEach(function(e) {
-        var item = _psdPlanBuildItem(e.it, e.useQty, e.likelyW, e._dest === 'child' ? 'รถลูก' : 'รถแม่');
-        if (e._dest === 'child') { childItems.push(item); childWt += item.totalWeight || 0; }
-        else                     { motherItems.push(item); motherWt += item.totalWeight || 0; }
-    });
-
-    // ── Pass 2: Cut items — แบ่งตาม remChild จริงหลัง Pass 1 ─────────────
-    var remChildForCut = capChild - childWt;
 
     cutEntries.forEach(function(entry) {
         var it       = entry.it;
@@ -16777,14 +16752,13 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         var lpb      = it.linesPerBundle || 1;
         var totalPcs = entry.useQty !== undefined ? entry.useQty : (it.totalQtyPcs || 0);
 
-        if (likelyW <= 0 || remChildForCut <= 0) {
+        if (likelyW <= 0 || remChild <= 0) {
             var mi = _psdPlanBuildItem(it, totalPcs, likelyW, 'รถแม่');
             mi.cutMode = 'Cut';
             motherItems.push(mi); motherWt += mi.totalWeight || 0;
             return;
         }
-        // floor ลงมัดเต็มเสมอ
-        var fitPcs = Math.floor(Math.floor(remChildForCut / likelyW) / lpb) * lpb;
+        var fitPcs = Math.floor(Math.floor(remChild / likelyW) / lpb) * lpb;
         fitPcs = Math.max(0, Math.min(fitPcs, totalPcs));
         var motherPcs = totalPcs - fitPcs;
 
@@ -16792,7 +16766,7 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
             var ci = _psdPlanBuildItem(it, fitPcs, likelyW, 'รถลูก');
             ci.cutMode = 'Cut';
             childItems.push(ci); childWt += ci.totalWeight || 0;
-            remChildForCut -= ci.totalWeight || 0;
+            remChild -= ci.totalWeight || 0;
         }
         if (motherPcs > 0) {
             var mi = _psdPlanBuildItem(it, motherPcs, likelyW, 'รถแม่');
