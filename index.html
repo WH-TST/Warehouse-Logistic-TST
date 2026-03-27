@@ -16204,10 +16204,18 @@ window.psdManualUpdateCutSplit = function psdManualUpdateCutSplit(id, val) {
 }
 
 // ── Set Cut/Up Mode ('' | 'Cut' | 'Up') ────────────────────────────────────
+// กฎ: Cut เลือกได้แค่ 1 item, Up เลือกได้แค่ 1 item — กดซ้ำ = ยกเลิก
 window.psdManualSetCutMode = function psdManualSetCutMode(id, mode) {
     var r = _psdManualItems.find(function(x){ return x.id === id; });
     if (!r) return;
-    r.cutMode = (r.cutMode === mode) ? '' : mode;   // กดซ้ำ = ยกเลิก
+    var newMode = (r.cutMode === mode) ? '' : mode; // toggle
+    // clear mode เดียวกันจาก item อื่น (ห้ามมีหลายรายการที่ Cut พร้อมกัน / Up พร้อมกัน)
+    if (newMode !== '') {
+        _psdManualItems.forEach(function(x) {
+            if (x.id !== id && x.cutMode === newMode) x.cutMode = '';
+        });
+    }
+    r.cutMode = newMode;
     psdManualRenderRows();
 }
 
@@ -16639,19 +16647,71 @@ function _psdModeBtn(i, mode, label, color, active) {
         + label + '</button>';
 }
 
-// ── เปลี่ยน mode รถ ──────────────────────────────────────────────────────
-window._psdPlanSetMode = function _psdPlanSetMode(i, mode) {
-    if (!_psdPlanOverrides[i]) return;
-    _psdPlanOverrides[i].mode = mode;
+// ── Helper: อัปเดตปุ่มรถทุกแถว ────────────────────────────────────────────
+function _psdRefreshAllModeBtns() {
+    var items  = (_psdPlanData && _psdPlanData.items) || [];
     var colors = { mother:'#0369a1', cut:'#d97706', child:'#7c3aed' };
     var labels = { mother:'🚛 รถแม่', cut:'✂ Cut', child:'⬆ Up' };
-    var wrap   = document.getElementById('psd-mode-' + i);
-    if (!wrap) return;
-    wrap.innerHTML = '';
-    ['mother','cut','child'].forEach(function(m) {
-        wrap.insertAdjacentHTML('beforeend', _psdModeBtn(i, m, labels[m], colors[m], m === mode));
+    items.forEach(function(it, ki) {
+        var wrap = document.getElementById('psd-mode-' + ki);
+        if (!wrap) return;
+        var m = (_psdPlanOverrides[ki] && _psdPlanOverrides[ki].mode) || 'mother';
+        wrap.innerHTML = '';
+        ['mother','cut','child'].forEach(function(btn) {
+            wrap.insertAdjacentHTML('beforeend', _psdModeBtn(ki, btn, labels[btn], colors[btn], btn === m));
+        });
     });
-    _psdPlanUpdateWeightBar(); // อัปเดต bar เมื่อเปลี่ยน assignment
+}
+
+// ── เปลี่ยน mode รถ ──────────────────────────────────────────────────────
+// กฎ:
+//  ✂ Cut  → เลือกได้แค่ 1 item เท่านั้น (clear Cut ที่อื่น) เฉพาะ item นั้น
+//  ⬆ Up   → ทุก item ของ shop เดียวกัน → ลูก, clear Up shop อื่น
+//  🚛 แม่ → ทุก item ของ shop เดียวกัน → แม่
+//  กดซ้ำ mode เดิม = ยกเลิก (กลับ mother)
+window._psdPlanSetMode = function _psdPlanSetMode(i, mode) {
+    if (!_psdPlanOverrides[i]) return;
+    var items  = (_psdPlanData && _psdPlanData.items) || [];
+    var myShop = (items[i] && items[i].shopName) || '';
+
+    // toggle: กดซ้ำ = ยกเลิก
+    if (_psdPlanOverrides[i].mode === mode) mode = 'mother';
+
+    if (mode === 'cut') {
+        // ✂ Cut: เฉพาะ item นี้ item เดียว — clear Cut ที่อื่น
+        items.forEach(function(it, ki) {
+            if (ki !== i && _psdPlanOverrides[ki] && _psdPlanOverrides[ki].mode === 'cut') {
+                _psdPlanOverrides[ki].mode = 'mother';
+            }
+        });
+        _psdPlanOverrides[i].mode = 'cut';
+
+    } else if (mode === 'child') {
+        // ⬆ Up: ทุก item ใน shop นี้ → ลูก; clear shop อื่นที่เคย child
+        items.forEach(function(it, ki) {
+            if (!_psdPlanOverrides[ki]) return;
+            var kShop = it.shopName || '';
+            if (kShop === myShop) {
+                // shop เดียวกัน → ลูก (ยกเว้น Cut item ที่ user mark ไว้)
+                if (_psdPlanOverrides[ki].mode !== 'cut') _psdPlanOverrides[ki].mode = 'child';
+            } else if (_psdPlanOverrides[ki].mode === 'child') {
+                // shop อื่นที่เคย child → กลับ mother (ห้ามมีหลาย shop ใน child พร้อมกัน)
+                _psdPlanOverrides[ki].mode = 'mother';
+            }
+        });
+
+    } else { // mother
+        // 🚛 แม่: ทุก item ใน shop นี้ → แม่ (ยกเว้น Cut item)
+        items.forEach(function(it, ki) {
+            if (!_psdPlanOverrides[ki]) return;
+            if ((it.shopName || '') === myShop && _psdPlanOverrides[ki].mode !== 'cut') {
+                _psdPlanOverrides[ki].mode = 'mother';
+            }
+        });
+    }
+
+    _psdRefreshAllModeBtns();
+    _psdPlanUpdateWeightBar();
 }
 
 // ── อัปเดตจำนวน (เส้น) → คำนวณมัด + อัปเดต footer ──────────────────────
