@@ -2612,10 +2612,6 @@ thead.sticky {
           class="flex-1 py-3 px-5 rounded-xl font-black text-sm border-2 border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-all flex items-center justify-center gap-2">
           <i class="fas fa-map-marked-alt"></i> กรอกเอง (รถต่างจังหวัด)
         </button>
-        <button id="psd-mode-truckload" onclick="psdSwitchMode('truckload')"
-          class="flex-1 py-3 px-5 rounded-xl font-black text-sm border-2 border-slate-200 text-slate-500 hover:border-purple-400 hover:text-purple-600 transition-all flex items-center justify-center gap-2">
-          <i class="fas fa-truck-loading"></i> จัดรถพ่วง
-        </button>
       </div>
 
       <!-- ── MODE: จากแผน ── -->
@@ -2896,7 +2892,7 @@ thead.sticky {
     </div>
 
     <!-- ── MODE: จัดรถพ่วง ── -->
-    <div id="psd-panel-truckload" class="hidden space-y-5">
+    <div id="psd-panel-truckload" class="hidden space-y-5" style="display:none!important">
 
       <!-- Vehicle Capacity -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -15777,24 +15773,18 @@ window.psdSwitchMode = function psdSwitchMode(mode) {
     _psdMode = mode;
     var btnPlan      = document.getElementById('psd-mode-plan');
     var btnManual    = document.getElementById('psd-mode-manual');
-    var btnTruck     = document.getElementById('psd-mode-truckload');
     var panelPlan    = document.getElementById('psd-panel-plan');
     var panelMan     = document.getElementById('psd-panel-manual');
-    var panelTruck   = document.getElementById('psd-panel-truckload');
     var previewW     = document.getElementById('psd-preview-wrap');
 
     var activeOrange = 'flex-1 py-3 px-5 rounded-xl font-black text-sm border-2 border-orange-500 bg-orange-500 text-white transition-all flex items-center justify-center gap-2';
-    var activePurple = 'flex-1 py-3 px-5 rounded-xl font-black text-sm border-2 border-purple-500 bg-purple-600 text-white transition-all flex items-center justify-center gap-2';
     var inactiveClass= 'flex-1 py-3 px-5 rounded-xl font-black text-sm border-2 border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-all flex items-center justify-center gap-2';
-    var inactivePurp = 'flex-1 py-3 px-5 rounded-xl font-black text-sm border-2 border-slate-200 text-slate-500 hover:border-purple-400 hover:text-purple-600 transition-all flex items-center justify-center gap-2';
 
     // Reset all
     if (btnPlan)   btnPlan.className   = inactiveClass;
     if (btnManual) btnManual.className = inactiveClass;
-    if (btnTruck)  btnTruck.className  = inactivePurp;
     if (panelPlan)  panelPlan.classList.add('hidden');
     if (panelMan)   panelMan.classList.add('hidden');
-    if (panelTruck) panelTruck.classList.add('hidden');
 
     if (mode === 'plan') {
         if (btnPlan) btnPlan.className = activeOrange;
@@ -15805,9 +15795,6 @@ window.psdSwitchMode = function psdSwitchMode(mode) {
         if (!document.getElementById('psd-m-date').value)
             document.getElementById('psd-m-date').value = new Date().toISOString().slice(0,10);
         psdLoadProducts();
-    } else if (mode === 'truckload') {
-        if (btnTruck) btnTruck.className = activePurple;
-        if (panelTruck) panelTruck.classList.remove('hidden');
     }
     if (previewW) previewW.classList.add('hidden');
     _psdCurrentDoc = null;
