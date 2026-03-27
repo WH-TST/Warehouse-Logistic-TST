@@ -22243,7 +22243,7 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             </td>
             ${autoCell(auto.checkerFGPct)}
             ${autoCell(auto.checkerSEMIPct)}
-            ${autoCell(auto.invControlPct)}
+            ${autoCell(auto.finalAdjFGPct)}
             ${manualCell('finalAdjSEMI',  saved.finalAdjSEMI)}
             ${manualCell('spaceBreakdown',saved.spaceBreakdown)}
             ${autoCell(auto.efficiency)}
@@ -22285,7 +22285,7 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
         date:           ddmmyyyy,
         checkerFGPct:   auto.checkerFGPct    ?? null,
         checkerSEMIPct: auto.checkerSEMIPct  ?? null,
-        finalAdjFG:     auto.invControlPct   ?? null,   // AUTO: Inv Control
+        finalAdjFG:     auto.finalAdjFGPct   ?? null,   // AUTO: (tL-|dL|)/tL×100 จาก KPI Log
         finalAdjSEMI:   getFloatVal(`kpi-manual-finalAdjSEMI-${isoDate}`),  // MANUAL
         spaceBreakdown: getFloatVal(`kpi-manual-spaceBreakdown-${isoDate}`), // MANUAL
         loadScore:      auto.efficiency      ?? null,
@@ -22352,7 +22352,7 @@ window.renderKpiWHSummary = function renderKpiWHSummary(dates) {
 
     const cfgArr     = autos.map(a => a.checkerFGPct).filter(v => v !== undefined && v !== null);
     const csArr      = autos.map(a => a.checkerSEMIPct).filter(v => v !== undefined && v !== null);
-    const adjFGArr   = autos.map(a => a.invControlPct).filter(v => v !== undefined && v !== null); // Final Adj FG = invControlPct
+    const adjFGArr   = autos.map(a => a.finalAdjFGPct).filter(v => v !== undefined && v !== null);
     const lsArr      = autos.map(a => a.efficiency).filter(v => v !== undefined && v !== null);
     const dmgArr     = autos.map(a => a.damagePct).filter(v => v !== undefined && v !== null);
     const defgArr    = autos.map(a => a.prdKPIFG).filter(v => v !== undefined && v !== null);
@@ -22414,7 +22414,7 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
         date:           ddmmyyyy,
         checkerFGPct:   auto.checkerFGPct    ?? null,
         checkerSEMIPct: auto.checkerSEMIPct  ?? null,
-        finalAdjFG:     auto.invControlPct   ?? null,   // AUTO: Inv Control
+        finalAdjFG:     auto.finalAdjFGPct   ?? null,   // AUTO: (tL-|dL|)/tL×100 จาก KPI Log
         finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),  // MANUAL
         spaceBreakdown: getF('kpi-edit-spaceBreakdown'), // MANUAL
         loadScore:      auto.efficiency      ?? null,
