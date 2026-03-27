@@ -6387,13 +6387,12 @@ function getKpiWHLGData(startDateStr, endDateStr) {
     }
 
     // ── 1. WH_Activity_Log → ประสิทธิภาพการโหลด ────────────────────────
-    // Step 1: [(wpu_actual / wpu_median) × 0.7 + (mpi_median / mpi_actual) × 0.3] × 100
-    // Penalty: โหลดสินค้าผิด -25/ครั้ง, เคลมสินค้า -10/ครั้ง
+    // สูตรใหม่: MPI÷WPU = นาที/KG (normalize ด้วยน้ำหนักต่อรายการ → ยุติธรรมกว่า)
+    // Penalty: โหลดสินค้าผิด -15/ครั้ง, เคลมสินค้า -10/ครั้ง
     // Col A(0)=ประเภท, Col B(1)=วันที่, Col K(10)=นาที/รายการ, Col L(11)=น้ำหนักต่อหน่วย(A)
     var whaSheet = ss.getSheetByName(WH_ACTIVITY_SHEET);
-    var whaMap   = {}; // key yyyy-MM-dd → { wpuList, mpiList, wrongCount, claimCount }
-    var allWpu   = [];
-    var allMpi   = [];
+    var whaMap      = {}; // key yyyy-MM-dd → { wpuList, mpiList, wrongCount, claimCount }
+    var allMpiPerKg = []; // นาที/KG ทุก row สำหรับคำนวณ median baseline
 
     if (whaSheet && whaSheet.getLastRow() >= 2) {
       var whaData = whaSheet.getDataRange().getValues();
@@ -6429,14 +6428,12 @@ function getKpiWHLGData(startDateStr, endDateStr) {
 
         whaMap[wKey].wpuList.push(wpu);
         whaMap[wKey].mpiList.push(mpi);
-        allWpu.push(wpu);
-        allMpi.push(mpi);
+        allMpiPerKg.push(mpi / wpu); // นาที/KG per trip
       }
     }
 
-    // Median จากข้อมูลทั้งหมด (historical baseline)
-    var wpuMedian = median(allWpu);
-    var mpiMedian = median(allMpi);
+    // Median นาที/KG จากข้อมูลทั้งหมด (historical baseline)
+    var mpiPerKgMedian = median(allMpiPerKg);
 
     // ── 2. Sheet Plan → planMinutes ต่อวัน (SUM prodTimeDay Col F × 60) ──
     // Col A(0)=วันที่(yyyyMMdd), Col F(5)=prodTimeDay(ชั่วโมง)
@@ -6541,21 +6538,20 @@ function getKpiWHLGData(startDateStr, endDateStr) {
       var wrongCount  = wha ? (wha.wrongCount || 0) : 0;
       var claimCount  = wha ? (wha.claimCount || 0) : 0;
 
-      if (wha && wha.wpuList.length > 0 && wpuMedian && mpiMedian) {
-        // wpuActual / mpiActual = ค่าเฉลี่ย (ใช้แสดงผลในตาราง)
+      if (wha && wha.wpuList.length > 0 && mpiPerKgMedian) {
+        // wpuActual / mpiActual = ค่าเฉลี่ย (ใช้แสดงผลในตาราง เท่านั้น)
         wpuActual = wha.wpuList.reduce(function(a,b){return a+b;},0) / wha.wpuList.length;
         mpiActual = wha.mpiList.reduce(function(a,b){return a+b;},0) / wha.mpiList.length;
-        // ✅ คำนวณ efficiency ทีละ trip แล้วหาเฉลี่ย (ไม่ใช่ average wpu/mpi ก่อน)
+        // ✅ สูตรใหม่: นาที/KG = MPI÷WPU → normalize ด้วยน้ำหนักต่อรายการ (ยุติธรรมกว่า)
         var effList = [];
         for (var t = 0; t < wha.wpuList.length; t++) {
           var wpu_t = wha.wpuList[t];
           var mpi_t = wha.mpiList[t];
-          if (mpi_t > 0) {
-            // Cap แต่ละ component ที่ 100 ก่อน: เร็ว/หนักกว่า median = 100, ช้า/เบากว่า = proportional
-            var speedScore = Math.min(100, (mpiMedian / mpi_t) * 100);
-            var wpuScore   = Math.min(100, (wpu_t / wpuMedian) * 100);
-            var eff_t      = speedScore * 0.7 + wpuScore * 0.3; // ≤ 100 เสมอ
-            effList.push(eff_t);
+          if (wpu_t > 0 && mpi_t > 0) {
+            var mpiPerKg_t = mpi_t / wpu_t; // นาที/KG ของ trip นี้
+            // เร็วกว่า median → คะแนนสูง, cap ที่ 100
+            var speedScore = Math.min(100, (mpiPerKgMedian / mpiPerKg_t) * 100);
+            effList.push(speedScore);
           }
         }
         if (effList.length > 0) {
@@ -6564,7 +6560,7 @@ function getKpiWHLGData(startDateStr, endDateStr) {
           efficiency = Math.round(Math.max(0, effStep1 - wrongCount * 15 - claimCount * 10) * 10) / 10;
         }
       } else if (wha && (wrongCount > 0 || claimCount > 0)) {
-        // มี penalty แต่ไม่มี Step 1 data → แสดง null (ไม่บังคับคำนวณ)
+        // มี penalty แต่ไม่มี trip data → แสดง null
         efficiency = null;
       }
 
