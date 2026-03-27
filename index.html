@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbzb2TBElKVATmvJEm802ucNVatuKIJA53HCYGSelR7Fn2hiAMt5VdniHqMH_Vkml4t2/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbyYEZlNylAh71BId29yUstgcj-tjYUkGhAEvbN8qJDgDXpNehRaAbIceqnAv4Dh_t1q/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -12544,10 +12544,15 @@ window.forceReloadLogiMaster = function(btn) {
 // ── populate dropdowns ใน Modal ──────────────────────────────────────────────
 function populateLogiDropdowns() {
     // ทะเบียนรถบริษัท — value = plate text (รถพ่วง: แสดง 🔗 + cap แม่/ลูก)
+    // กรองรถลูก (childPlate) ออก — รถลูกวิ่งเองไม่ได้ ต้องต่อกับแม่เท่านั้น
     const truckSel = document.getElementById('logi-truck-plate');
     if (truckSel) {
+        const _childPlateSet = new Set(
+            LOGI_MASTER_CACHE.trucks.map(t => t.childPlate).filter(Boolean)
+        );
+        const _drivableTrucks = LOGI_MASTER_CACHE.trucks.filter(t => !_childPlateSet.has(t.plate));
         truckSel.innerHTML = '<option value="">-- เลือกทะเบียนรถ --</option>' +
-            LOGI_MASTER_CACHE.trucks.map(t =>
+            _drivableTrucks.map(t =>
                 `<option value="${t.plate}"
                     data-is-trailer="${t.isTrailer ? '1' : '0'}"
                     data-cap-mother="${t.capMother || 0}"
@@ -12640,8 +12645,25 @@ window.closeLogisticForm = function closeLogisticForm() {
     if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i> บันทึกแผนการส่งมอบ';
 }
 
-// ── กำหนดรถ (แม่/ลูก) ต่อร้าน — แสดงเฉพาะเมื่อเลือกรถพ่วง ──
+// ── กำหนดรถ (แม่/ลูก) ต่อ item ──
+window.setLogiItemTruck = function setLogiItemTruck(shopIdx, itemIdx, label) {
+    var labelInput = document.getElementById('logi-item-truck-label-' + shopIdx + '-' + itemIdx);
+    var btnM = document.getElementById('logi-item-truck-m-' + shopIdx + '-' + itemIdx);
+    var btnC = document.getElementById('logi-item-truck-c-' + shopIdx + '-' + itemIdx);
+    if (labelInput) labelInput.value = label;
+    if (btnM) {
+        btnM.style.background   = label === 'mother' ? '#bae6fd' : '#fff';
+        btnM.style.borderColor  = label === 'mother' ? '#0ea5e9' : '#d1d5db';
+    }
+    if (btnC) {
+        btnC.style.background   = label === 'child' ? '#ede9fe' : '#fff';
+        btnC.style.borderColor  = label === 'child' ? '#7c3aed' : '#d1d5db';
+    }
+};
+
+// ── กดปุ่ม "รถแม่/รถลูก" ระดับร้าน → batch-set ทุก item ในร้าน ──
 window.setLogiShopTruck = function setLogiShopTruck(idx, label) {
+    // อัปเดต shop-level hidden input (fallback กรณีไม่มี items)
     var labelInput = document.getElementById('logi-shop-truck-label-' + idx);
     var btnM = document.getElementById('logi-shop-truck-m-' + idx);
     var btnC = document.getElementById('logi-shop-truck-c-' + idx);
@@ -12654,6 +12676,12 @@ window.setLogiShopTruck = function setLogiShopTruck(idx, label) {
         btnC.style.background = label === 'child' ? '#ede9fe' : '';
         btnC.style.borderColor = label === 'child' ? '#7c3aed' : '';
     }
+    // batch-set ทุก item ในร้านนี้
+    document.querySelectorAll('[id^="logi-item-truck-label-' + idx + '-"]').forEach(function(el) {
+        var parts = el.id.split('-');
+        var itemIdx = parseInt(parts[parts.length - 1]);
+        setLogiItemTruck(idx, itemIdx, label);
+    });
 };
 
 // ── แสดง/ซ่อน truck assignment เมื่อเปลี่ยนทะเบียนรถ ──
@@ -12661,13 +12689,19 @@ window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
     var truckSel = document.getElementById('logi-truck-plate');
     var opt = truckSel?.options[truckSel.selectedIndex];
     var hasChild = !!(opt?.dataset?.childPlate);
+    // แสดง/ซ่อน shop-level batch wrap
     document.querySelectorAll('[id^="logi-shop-truck-wrap-"]').forEach(function(el) {
         el.classList.toggle('hidden', !hasChild);
     });
-    // reset labels to 'mother' when truck changes
+    // แสดง/ซ่อน per-item truck toggle
+    document.querySelectorAll('[id^="logi-item-truck-"]').forEach(function(el) {
+        // กรองเฉพาะ div wrapper (ไม่ใช่ btn หรือ input)
+        if (el.tagName === 'DIV') el.classList.toggle('hidden', !hasChild);
+    });
+    // reset labels to 'mother' when truck changes (shop + items)
     document.querySelectorAll('[id^="logi-shop-truck-label-"]').forEach(function(el) {
-        var idx = el.id.replace('logi-shop-truck-label-', '');
-        setLogiShopTruck(parseInt(idx), 'mother');
+        var idx = parseInt(el.id.replace('logi-shop-truck-label-', ''));
+        setLogiShopTruck(idx, 'mother');
     });
 };
 
@@ -12759,17 +12793,20 @@ function buildLogiShopCardHTML(idx) {
 
     <!-- Trailer truck assignment (แสดงเฉพาะเมื่อเลือกรถพ่วง) -->
     <div id="logi-shop-truck-wrap-${idx}" class="hidden">
-        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">โหลดขึ้นรถ</label>
+        <label class="text-xs font-black text-slate-500 uppercase mb-1 block flex items-center gap-1">
+            กำหนดรถทุกรายการในร้านนี้
+            <span class="text-[10px] font-normal text-slate-400">(กดเพื่อ set ทีเดียว — หรือเลือกรายละเอียดทีละสินค้า)</span>
+        </label>
         <div class="flex gap-2">
             <button type="button" id="logi-shop-truck-m-${idx}"
                 onclick="setLogiShopTruck(${idx},'mother')"
                 class="flex-1 py-2 rounded-xl font-black text-sm border-2 border-sky-400 bg-sky-50 text-sky-700 hover:bg-sky-200 transition-all">
-                🚛 รถแม่
+                🚛 ทั้งหมด → รถแม่
             </button>
             <button type="button" id="logi-shop-truck-c-${idx}"
                 onclick="setLogiShopTruck(${idx},'child')"
                 class="flex-1 py-2 rounded-xl font-black text-sm border-2 border-purple-300 bg-white text-purple-600 hover:bg-purple-100 transition-all">
-                ⬆ รถลูก
+                ⬆ ทั้งหมด → รถลูก
             </button>
         </div>
         <input type="hidden" id="logi-shop-truck-label-${idx}" value="mother">
@@ -13051,6 +13088,11 @@ window.addLogiItem = function addLogiItem(shopIdx, sku, qty) {
     const wt      = product ? ((parseFloat(qtyStr) || 0) * (product.likelyW || 0)).toFixed(2) : '0.00';
     const nameStr = product ? product.name : '';
 
+    // ตรวจว่าตอนนี้เลือกรถพ่วงอยู่ไหม
+    const _truckSel = document.getElementById('logi-truck-plate');
+    const _truckOpt = _truckSel?.options[_truckSel.selectedIndex];
+    const _hasTrailer = !!(_truckOpt?.dataset?.childPlate);
+
     const row = document.createElement('div');
     row.id    = `logi-item-${shopIdx}-${itemIdx}`;
     row.className = 'grid grid-cols-12 gap-2 items-center bg-white rounded-xl border border-slate-200 p-2';
@@ -13066,15 +13108,29 @@ window.addLogiItem = function addLogiItem(shopIdx, sku, qty) {
                  class="hidden absolute z-50 left-0 w-72 bg-white border-2 border-emerald-300 rounded-xl shadow-2xl max-h-48 overflow-y-auto mt-1">
             </div>
         </div>
-        <div class="col-span-4 text-xs font-bold text-slate-500 truncate logi-item-name" id="logi-item-name-${shopIdx}-${itemIdx}">${nameStr || '<span class="text-slate-300">—</span>'}</div>
+        <div class="col-span-3 text-xs font-bold text-slate-500 truncate logi-item-name" id="logi-item-name-${shopIdx}-${itemIdx}">${nameStr || '<span class="text-slate-300">—</span>'}</div>
         <div class="col-span-2">
             <input type="number" placeholder="จำนวน" value="${qtyStr}" min="0"
                    oninput="onLogiQtyChange(${shopIdx}, ${itemIdx}, this)"
                    class="logi-item-qty w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-emerald-400 text-center">
         </div>
         <div class="col-span-2 text-xs font-black text-emerald-700 text-right logi-item-wt" id="logi-item-wt-${shopIdx}-${itemIdx}">${wt} <span class="font-normal text-slate-400">กก.</span></div>
-        <div class="col-span-1 flex justify-center">
-            <button onclick="removeLogiItem(${shopIdx}, ${itemIdx})" class="w-7 h-7 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-lg flex items-center justify-center text-xs transition-all">
+        <div class="col-span-2 flex items-center justify-end gap-1">
+            <!-- Truck toggle per item (แสดงเมื่อเลือกรถพ่วง) -->
+            <div id="logi-item-truck-${shopIdx}-${itemIdx}" class="${_hasTrailer ? '' : 'hidden'} flex gap-0.5">
+                <button type="button" id="logi-item-truck-m-${shopIdx}-${itemIdx}"
+                    onclick="setLogiItemTruck(${shopIdx},${itemIdx},'mother')"
+                    title="รถแม่"
+                    style="background:#bae6fd;border:1.5px solid #0ea5e9;"
+                    class="w-6 h-6 rounded-l-md flex items-center justify-center text-[10px] font-black text-sky-700 transition-all">🚛</button>
+                <button type="button" id="logi-item-truck-c-${shopIdx}-${itemIdx}"
+                    onclick="setLogiItemTruck(${shopIdx},${itemIdx},'child')"
+                    title="รถลูก"
+                    style="background:#fff;border:1.5px solid #d1d5db;border-left:none;"
+                    class="w-6 h-6 rounded-r-md flex items-center justify-center text-[10px] font-black text-purple-600 transition-all">⬆</button>
+                <input type="hidden" id="logi-item-truck-label-${shopIdx}-${itemIdx}" value="mother">
+            </div>
+            <button onclick="removeLogiItem(${shopIdx}, ${itemIdx})" class="w-6 h-6 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-lg flex items-center justify-center text-xs transition-all">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -13449,12 +13505,18 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 const wt    = wtEl ? parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0 : 0;
                 if (skuEl?.value) {
                     const prod = LOGI_PRODUCTS_MASTER.find(p => p.sku === skuEl.value.trim().toUpperCase());
+                    // อ่าน truckLabel ระดับ item (ปุ่ม 🚛/⬆ ต่อแถว)
+                    const rowParts = row.id.split('-');
+                    const iIdx = rowParts[rowParts.length - 1];
+                    const itemTruckLabelEl = document.getElementById(`logi-item-truck-label-${shopIdxAttr}-${iIdx}`);
+                    const itemTruckLabel = itemTruckLabelEl?.value || 'mother';
                     items.push({
                         sku:           skuEl.value.trim().toUpperCase(),
                         productName:   prod?.name || '',
                         qty:           parseFloat(qtyEl?.value) || 0,
                         weightPerUnit: prod?.likelyW || 0,
                         weight:        wt,
+                        truckLabel:    itemTruckLabel,
                     });
                     totalWt += wt;
                 }

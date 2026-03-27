@@ -4221,29 +4221,42 @@ function saveLogisticPlan(payload) {
       ]));
     } else {
       shops.forEach(function(shop, si) {
-        // Trailer split: แต่ละร้านใช้ planId และทะเบียนรถตาม truckLabel
-        var rowPlanId = isTrailerSplit
-          ? (shop.truckLabel === 'child' ? planIdC : planIdM)
-          : planIdM;
-        var rowPlate = isTrailerSplit
-          ? (shop.truckLabel === 'child' ? childPlate : truckPlate)
-          : truckPlate;
-        var rowTrip = planTrip.slice(); rowTrip[0] = rowPlanId;
-        planSheet.appendRow(rowTrip.concat([
-          shop.shopName        || '',            // G: ชื่อร้านค้า (1 ร้านต่อแถว)
-          parseFloat(shop.distance)     || 0,   // H: ระยะทางต่อร้าน
-          parseFloat(shop.freeDistance) || 0,   // I: ระยะทางฟรีต่อร้าน (ค่าStop)
-          planTail[0],                           // J: ค่าจ้าง
-          shop.sale            || '',            // K: เซลล์ร้าน
-          planTail[1],                           // L: สถานะ
-          shop.loadWarehouse   || '',            // M: คลังโหลด
-          planTail[3],                           // N: สาเหตุ
-          rowPlate,                              // O: ทะเบียนรถ (แม่หรือลูก)
-          planTail[5],                           // P: ระยะทางขากลับ
-          si,                                    // Q: ลำดับร้าน (0-based)
-          shop.shopId          || '',            // R: รหัสร้านค้า
-          shop.remark          || ''             // S: หมายเหตุ/ความด่วน
-        ]));
+        var shopItems = shop.items || [];
+
+        // ── Determine which planIds/plates this shop uses (item-level split) ──
+        var planRows = [];
+        if (!isTrailerSplit) {
+          planRows.push({ pid: planIdM, plate: truckPlate });
+        } else {
+          var hasMotherItems = shopItems.length === 0
+            ? (shop.truckLabel !== 'child')
+            : shopItems.some(function(it) { return (it.truckLabel || 'mother') !== 'child'; });
+          var hasChildItems  = shopItems.length === 0
+            ? (shop.truckLabel === 'child')
+            : shopItems.some(function(it) { return it.truckLabel === 'child'; });
+          if (hasMotherItems) planRows.push({ pid: planIdM, plate: truckPlate });
+          if (hasChildItems)  planRows.push({ pid: planIdC, plate: childPlate });
+          if (planRows.length === 0) planRows.push({ pid: planIdM, plate: truckPlate });
+        }
+
+        planRows.forEach(function(pr) {
+          var rowTrip = planTrip.slice(); rowTrip[0] = pr.pid;
+          planSheet.appendRow(rowTrip.concat([
+            shop.shopName        || '',            // G: ชื่อร้านค้า (1 ร้านต่อแถว)
+            parseFloat(shop.distance)     || 0,   // H: ระยะทางต่อร้าน
+            parseFloat(shop.freeDistance) || 0,   // I: ระยะทางฟรีต่อร้าน (ค่าStop)
+            planTail[0],                           // J: ค่าจ้าง
+            shop.sale            || '',            // K: เซลล์ร้าน
+            planTail[1],                           // L: สถานะ
+            shop.loadWarehouse   || '',            // M: คลังโหลด
+            planTail[3],                           // N: สาเหตุ
+            pr.plate,                              // O: ทะเบียนรถ (แม่หรือลูก)
+            planTail[5],                           // P: ระยะทางขากลับ
+            si,                                    // Q: ลำดับร้าน (0-based)
+            shop.shopId          || '',            // R: รหัสร้านค้า
+            shop.remark          || ''             // S: หมายเหตุ/ความด่วน
+          ]));
+        });
       });
     }
 
@@ -4284,15 +4297,9 @@ function saveLogisticPlan(payload) {
     }
 
     if (!isTransferJob) shops.forEach(function(shop, si) {
-      // Trailer split: ใช้ planId และทะเบียนรถตาม truckLabel ของร้านนั้น
-      var shopPlanId = isTrailerSplit
-        ? (shop.truckLabel === 'child' ? planIdC : planIdM)
-        : planIdM;
-      var shopPlate = isTrailerSplit
-        ? (shop.truckLabel === 'child' ? childPlate : truckPlate)
-        : truckPlate;
+      // baseRow ใช้ค่า default ของร้าน (planId/plate จะ override ต่อ item)
       var baseRow = [
-        shopPlanId,                           // A: PlanID (แม่หรือลูก)
+        planIdM,                              // A: PlanID (placeholder — override ต่อ item)
         '',                                   // B: รหัสสินค้า (placeholder)
         '',                                   // C: ชื่อสินค้า
         0,                                    // D: จำนวน
@@ -4303,7 +4310,7 @@ function saveLogisticPlan(payload) {
         payload.warehouse     || '',          // I: คลังสินค้า
         payload.date          || '',          // J: วันที่
         payload.status        || 'planned',   // K: สถานะ
-        shopPlate,                            // L: ทะเบียนรถ (แม่หรือลูก)
+        truckPlate,                           // L: ทะเบียนรถ (placeholder — override ต่อ item)
         shop.loadWarehouse    || '',          // M: คลังโหลด
         parseFloat(shop.distance)     || 0,   // N: ระยะทาง (กม.) — per-shop
         shop.remark                || '',     // O: หมายเหตุ/ความด่วน — per-shop
@@ -4312,20 +4319,32 @@ function saveLogisticPlan(payload) {
         shop.shopId           || ''           // R: รหัสร้านค้า
       ];
 
-      // ถ้าร้านไม่มีสินค้า → บันทึก 1 แถว placeholder (SKU ว่าง) เพื่อเก็บข้อมูลร้าน
+      // ถ้าร้านไม่มีสินค้า → placeholder 1 แถว โดยใช้ shop.truckLabel
       if (!shop.items || shop.items.length === 0) {
-        itemRows.push(baseRow);
+        var defLabel  = shop.truckLabel || 'mother';
+        var defPlanId = isTrailerSplit ? (defLabel === 'child' ? planIdC : planIdM) : planIdM;
+        var defPlate  = isTrailerSplit ? (defLabel === 'child' ? childPlate : truckPlate) : truckPlate;
+        var defRow = baseRow.slice();
+        defRow[0]  = defPlanId;
+        defRow[11] = defPlate;
+        itemRows.push(defRow);
         return;
       }
 
+      // ── Item-level split: แต่ละ item เลือกรถแม่หรือลูกเองได้ ──
       shop.items.forEach(function(item) {
         if (!item.sku) return;
-        var row = baseRow.slice();  // copy baseRow
-        row[1] = item.sku           || '';   // B: รหัสสินค้า
-        row[2] = item.productName   || '';   // C: ชื่อสินค้า
-        row[3] = item.qty           || 0;    // D: จำนวน
-        row[4] = item.weightPerUnit || 0;    // E: น้ำหนักต่อหน่วย
-        row[5] = item.weight        || 0;    // F: น้ำหนักรวม
+        var itemLabel  = item.truckLabel || shop.truckLabel || 'mother';
+        var itemPlanId = isTrailerSplit ? (itemLabel === 'child' ? planIdC : planIdM) : planIdM;
+        var itemPlate  = isTrailerSplit ? (itemLabel === 'child' ? childPlate : truckPlate) : truckPlate;
+        var row = baseRow.slice();
+        row[0]  = itemPlanId;               // A: PlanID (แม่หรือลูก ตาม item)
+        row[1]  = item.sku           || ''; // B: รหัสสินค้า
+        row[2]  = item.productName   || ''; // C: ชื่อสินค้า
+        row[3]  = item.qty           || 0;  // D: จำนวน
+        row[4]  = item.weightPerUnit || 0;  // E: น้ำหนักต่อหน่วย
+        row[5]  = item.weight        || 0;  // F: น้ำหนักรวม
+        row[11] = itemPlate;                // L: ทะเบียนรถ (แม่หรือลูก ตาม item)
         itemRows.push(row);
       });
     });
