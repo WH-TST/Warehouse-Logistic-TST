@@ -16460,7 +16460,9 @@ window.psdPlanToggleTrailer = function psdPlanToggleTrailer() {
     var singleCap  = document.getElementById('psd-plan-single-cap-wrap');
     if (inputsEl)  inputsEl.classList.toggle('hidden', !isOn);
     if (singleCap) singleCap.classList.toggle('hidden', isOn); // สลับ single cap ↔ trailer caps
-    if (assignBtn) assignBtn.classList.toggle('hidden', !isOn || !_psdPlanData);
+    if (assignBtn) assignBtn.classList.add('hidden'); // ระบบห้าม auto-assign เสมอ
+    // Re-render ตาราง เพื่อแสดง/ซ่อน shop-truck buttons ตาม trailer state
+    if (_psdPlanData) _psdPlanRenderTable(_psdPlanData);
     _psdPlanUpdateWeightBar();
 };
 
@@ -16564,59 +16566,99 @@ window.loadPreShipmentItems = function loadPreShipmentItems() {
 };
 
 // ── Render ตารางสินค้า ────────────────────────────────────────────────────
+// Layout:
+//   [Shop Header Row] ชื่อร้าน | N items | X KG | [🚛 แม่] [⬆ ลูก]   ← user กดที่นี่
+//   [  Item Row     ] # | SKU | ชื่อ | เส้น | มัด | น้ำหนัก | [✂ Cut]  ← ✂ 1 item เท่านั้น
 function _psdPlanRenderTable(res) {
     var items  = res.items || [];
     var tbody  = document.getElementById('psd-plan-item-tbody');
     var html   = '';
     var totPcs = 0, totBnd = 0, totWt = 0;
 
-    // รีเซ็ต overrides ใหม่ทุกครั้งที่ reload สินค้า
+    // รีเซ็ต overrides
     _psdPlanOverrides = {};
-
     items.forEach(function(it, i) {
         var origQty = parseFloat(it.totalQtyPcs)  || 0;
-        var origBnd = parseFloat(it.totalBundles) || 0;
         var origWt  = parseFloat(it.totalWeight)  || 0;
-        var lpb     = it.linesPerBundle || 1;
-
-        // init override
         _psdPlanOverrides[i] = { mode: 'mother', qty: origQty, weight: origWt };
-
         totPcs += origQty;
-        totBnd += origBnd;
+        totBnd += parseFloat(it.totalBundles) || 0;
         totWt  += origWt;
+    });
 
-        var INP = 'width:72px;padding:3px 6px;border:1.5px solid #e2e8f0;border-radius:6px;'
-                + 'font-size:12px;font-weight:700;text-align:right;outline:none;'
-                + 'background:#f8fafc;color:#0f172a;';
+    // จัดกลุ่มตาม shopName
+    var shopGroups = [], shopMap = {};
+    items.forEach(function(it, i) {
+        var sn = it.shopName || '—';
+        if (!shopMap[sn]) {
+            shopMap[sn] = { shopName: sn, indices: [], totalWt: 0, totalPcs: 0 };
+            shopGroups.push(shopMap[sn]);
+        }
+        shopMap[sn].indices.push(i);
+        shopMap[sn].totalWt  += parseFloat(it.totalWeight)  || 0;
+        shopMap[sn].totalPcs += parseFloat(it.totalQtyPcs)  || 0;
+    });
 
-        html += '<tr style="background:' + (i%2===0?'#fff':'#f8fafc') + ';border-bottom:1px solid #e2e8f0;">'
-            // #
-            + '<td style="padding:6px 10px;text-align:center;color:#94a3b8;font-weight:700;font-size:12px;">' + (i+1) + '</td>'
-            // ลูกค้า
-            + '<td style="padding:6px 10px;font-weight:800;color:#0369a1;font-size:13px;">' + escHtml(it.shopName || '—') + '</td>'
-            // รหัสสินค้า
-            + '<td style="padding:6px 10px;font-family:monospace;font-weight:700;color:#334155;font-size:13px;">' + escHtml(it.sku) + '</td>'
-            // ชื่อสินค้า
-            + '<td style="padding:6px 10px;color:#334155;font-size:13px;">' + escHtml(it.productName || '—') + '</td>'
-            // เส้น — editable
-            + '<td style="padding:4px 8px;text-align:right;">'
-            +   '<input type="number" id="psd-qty-' + i + '" value="' + origQty + '" min="0" style="' + INP + '"'
-            +   ' oninput="_psdPlanUpdateQty(' + i + ',' + lpb + ',this.value)"></td>'
-            // มัด — auto (read-only)
-            + '<td style="padding:6px 10px;text-align:right;font-weight:700;font-size:13px;" id="psd-bnd-' + i + '">' + origBnd.toLocaleString('th-TH') + '</td>'
-            // น้ำหนัก — editable
-            + '<td style="padding:4px 8px;text-align:right;">'
-            +   '<input type="number" id="psd-wt-' + i + '" value="' + origWt.toFixed(2) + '" min="0" step="0.01" style="' + INP + 'width:84px;"'
-            +   ' oninput="_psdPlanUpdateWt(' + i + ',this.value)"></td>'
-            // รถ — ปุ่ม 3 ทางเลือก
-            + '<td style="padding:4px 8px;text-align:center;">'
-            +   '<div id="psd-mode-' + i + '" style="display:flex;gap:4px;justify-content:center;">'
-            +     _psdModeBtn(i,'mother','🚛 รถแม่','#0369a1',true)
-            +     _psdModeBtn(i,'cut','✂ Cut','#d97706',false)
-            +     _psdModeBtn(i,'child','⬆ Up','#7c3aed',false)
-            +   '</div></td>'
+    var isTrailer = document.getElementById('psd-plan-trailer-toggle')?.checked;
+    var INP = 'width:72px;padding:3px 6px;border:1.5px solid #e2e8f0;border-radius:6px;'
+            + 'font-size:12px;font-weight:700;text-align:right;outline:none;background:#f8fafc;color:#0f172a;';
+
+    shopGroups.forEach(function(grp) {
+        // ── Shop Header Row ───────────────────────────────────────────────
+        var shopWtStr  = grp.totalWt.toLocaleString('th-TH',{maximumFractionDigits:0}) + ' KG';
+        var shopEncoded = escHtml(grp.shopName).replace(/'/g, "\\'");
+        var shopTruckBtns = isTrailer
+            ? '<div style="display:flex;gap:4px;">'
+              + '<button onclick="_psdPlanSetShopTruck(\'' + shopEncoded + '\',\'mother\')" id="psd-shop-btn-m-' + shopEncoded + '"'
+              + ' style="font-size:10px;font-weight:900;padding:4px 10px;border-radius:6px 0 0 6px;cursor:pointer;border:1.5px solid #0369a1;border-right:none;background:#0369a1;color:#fff;white-space:nowrap;">🚛 แม่</button>'
+              + '<button onclick="_psdPlanSetShopTruck(\'' + shopEncoded + '\',\'child\')" id="psd-shop-btn-c-' + shopEncoded + '"'
+              + ' style="font-size:10px;font-weight:900;padding:4px 10px;border-radius:0 6px 6px 0;cursor:pointer;border:1.5px solid #7c3aed;background:#fff;color:#7c3aed;white-space:nowrap;">⬆ ลูก</button>'
+              + '</div>'
+            : '';
+        html += '<tr style="background:#1e293b;" id="psd-shop-hdr-' + shopEncoded + '">'
+            + '<td colspan="6" style="padding:6px 12px;font-weight:900;font-size:12px;color:#f1f5f9;">'
+            + '📦 ' + escHtml(grp.shopName)
+            + ' <span style="color:#94a3b8;font-weight:600;font-size:11px;">| ' + grp.indices.length + ' รายการ | ' + shopWtStr + '</span>'
+            + '</td>'
+            + '<td style="padding:4px 8px;text-align:right;">' + shopTruckBtns + '</td>'
+            + '<td></td>'
             + '</tr>';
+
+        // ── Item Rows ─────────────────────────────────────────────────────
+        grp.indices.forEach(function(i) {
+            var it      = items[i];
+            var origQty = parseFloat(it.totalQtyPcs)  || 0;
+            var origBnd = parseFloat(it.totalBundles) || 0;
+            var origWt  = parseFloat(it.totalWeight)  || 0;
+            var lpb     = it.linesPerBundle || 1;
+            var mode    = (_psdPlanOverrides[i] && _psdPlanOverrides[i].mode) || 'mother';
+            var rowBg   = mode === 'child' ? '#f5f3ff' : mode === 'cut' ? '#fff7ed' : '#fff';
+
+            html += '<tr style="background:' + rowBg + ';border-bottom:1px solid #e2e8f0;" id="psd-row-' + i + '">'
+                + '<td style="padding:5px 10px;text-align:center;color:#94a3b8;font-weight:700;font-size:11px;padding-left:20px;">' + (i+1) + '</td>'
+                + '<td style="padding:5px 10px;font-family:monospace;font-weight:700;color:#334155;font-size:12px;">' + escHtml(it.sku) + '</td>'
+                + '<td style="padding:5px 10px;color:#334155;font-size:12px;" colspan="2">'
+                +   escHtml(it.productName || '—')
+                +   (mode === 'child' ? ' <span style="font-size:9px;font-weight:900;color:#7c3aed;background:#ede9fe;border:1px solid #7c3aed;border-radius:3px;padding:0 3px;">ลูก</span>' : '')
+                +   (mode === 'cut'   ? ' <span style="font-size:9px;font-weight:900;color:#d97706;background:#fef3c7;border:1px solid #d97706;border-radius:3px;padding:0 3px;">Cut</span>' : '')
+                + '</td>'
+                + '<td style="padding:4px 8px;text-align:right;">'
+                +   '<input type="number" id="psd-qty-' + i + '" value="' + origQty + '" min="0" style="' + INP + '"'
+                +   ' oninput="_psdPlanUpdateQty(' + i + ',' + lpb + ',this.value)"></td>'
+                + '<td style="padding:5px 10px;text-align:right;font-weight:700;font-size:12px;" id="psd-bnd-' + i + '">' + origBnd.toLocaleString('th-TH') + '</td>'
+                + '<td style="padding:4px 8px;text-align:right;">'
+                +   '<input type="number" id="psd-wt-' + i + '" value="' + origWt.toFixed(2) + '" min="0" step="0.01" style="' + INP + 'width:84px;"'
+                +   ' oninput="_psdPlanUpdateWt(' + i + ',this.value)"></td>'
+                // ✂ Cut button เท่านั้น — แม่/ลูก กดที่ Shop Header
+                + '<td style="padding:4px 8px;text-align:center;" id="psd-mode-' + i + '">'
+                +   '<button onclick="_psdPlanSetMode(' + i + ',\'cut\')"'
+                +   ' style="font-size:10px;font-weight:900;padding:4px 8px;border-radius:6px;cursor:pointer;'
+                +   'border:1.5px solid #d97706;white-space:nowrap;'
+                +   (mode === 'cut' ? 'background:#d97706;color:#fff;' : 'background:#fff;color:#d97706;')
+                +   '">✂ Cut</button>'
+                + '</td>'
+                + '</tr>';
+        });
     });
 
     if (!html) html = '<tr><td colspan="8" style="padding:16px;text-align:center;color:#94a3b8;font-weight:700;">ไม่มีข้อมูลสินค้า</td></tr>';
@@ -16628,10 +16670,9 @@ function _psdPlanRenderTable(res) {
     safeSetText('psd-plan-foot-wt',  totWt.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}));
     safeSetText('psd-plan-item-summary', items.length + ' รายการ | รวม ' + totWt.toLocaleString('th-TH',{maximumFractionDigits:0}) + ' KG');
 
-    // แสดงปุ่ม "จัดรถพ่วง" เฉพาะถ้าเปิด trailer mode
-    var isTrailer = document.getElementById('psd-plan-trailer-toggle')?.checked;
+    // ซ่อนปุ่ม auto-assign (ระบบห้ามเลือกให้)
     var assignBtn = document.getElementById('psd-plan-assign-btn');
-    if (assignBtn) assignBtn.classList.toggle('hidden', !isTrailer);
+    if (assignBtn) assignBtn.classList.add('hidden');
 
     document.getElementById('psd-plan-item-wrap').classList.remove('hidden');
 }
@@ -16647,71 +16688,63 @@ function _psdModeBtn(i, mode, label, color, active) {
         + label + '</button>';
 }
 
-// ── Helper: อัปเดตปุ่มรถทุกแถว ────────────────────────────────────────────
-function _psdRefreshAllModeBtns() {
-    var items  = (_psdPlanData && _psdPlanData.items) || [];
-    var colors = { mother:'#0369a1', cut:'#d97706', child:'#7c3aed' };
-    var labels = { mother:'🚛 รถแม่', cut:'✂ Cut', child:'⬆ Up' };
-    items.forEach(function(it, ki) {
-        var wrap = document.getElementById('psd-mode-' + ki);
-        if (!wrap) return;
-        var m = (_psdPlanOverrides[ki] && _psdPlanOverrides[ki].mode) || 'mother';
-        wrap.innerHTML = '';
-        ['mother','cut','child'].forEach(function(btn) {
-            wrap.insertAdjacentHTML('beforeend', _psdModeBtn(ki, btn, labels[btn], colors[btn], btn === m));
-        });
-    });
-}
-
-// ── เปลี่ยน mode รถ ──────────────────────────────────────────────────────
-// กฎ:
-//  ✂ Cut  → เลือกได้แค่ 1 item เท่านั้น (clear Cut ที่อื่น) เฉพาะ item นั้น
-//  ⬆ Up   → ทุก item ของ shop เดียวกัน → ลูก, clear Up shop อื่น
-//  🚛 แม่ → ทุก item ของ shop เดียวกัน → แม่
-//  กดซ้ำ mode เดิม = ยกเลิก (กลับ mother)
+// ── เปลี่ยน mode รถ — ใช้เฉพาะ Cut (แม่/ลูก ผ่าน _psdPlanSetShopTruck) ───
+// กฎ: ✂ Cut เลือกได้แค่ 1 item — กดซ้ำ = ยกเลิก
 window._psdPlanSetMode = function _psdPlanSetMode(i, mode) {
     if (!_psdPlanOverrides[i]) return;
-    var items  = (_psdPlanData && _psdPlanData.items) || [];
-    var myShop = (items[i] && items[i].shopName) || '';
+    var items   = (_psdPlanData && _psdPlanData.items) || [];
+    var newMode = (_psdPlanOverrides[i].mode === mode) ? 'mother' : mode; // toggle
 
-    // toggle: กดซ้ำ = ยกเลิก
-    if (_psdPlanOverrides[i].mode === mode) mode = 'mother';
-
-    if (mode === 'cut') {
-        // ✂ Cut: เฉพาะ item นี้ item เดียว — clear Cut ที่อื่น
+    if (newMode === 'cut') {
+        // clear Cut item อื่น (มีได้แค่ 1)
         items.forEach(function(it, ki) {
             if (ki !== i && _psdPlanOverrides[ki] && _psdPlanOverrides[ki].mode === 'cut') {
                 _psdPlanOverrides[ki].mode = 'mother';
-            }
-        });
-        _psdPlanOverrides[i].mode = 'cut';
-
-    } else if (mode === 'child') {
-        // ⬆ Up: ทุก item ใน shop นี้ → ลูก; clear shop อื่นที่เคย child
-        items.forEach(function(it, ki) {
-            if (!_psdPlanOverrides[ki]) return;
-            var kShop = it.shopName || '';
-            if (kShop === myShop) {
-                // shop เดียวกัน → ลูก (ยกเว้น Cut item ที่ user mark ไว้)
-                if (_psdPlanOverrides[ki].mode !== 'cut') _psdPlanOverrides[ki].mode = 'child';
-            } else if (_psdPlanOverrides[ki].mode === 'child') {
-                // shop อื่นที่เคย child → กลับ mother (ห้ามมีหลาย shop ใน child พร้อมกัน)
-                _psdPlanOverrides[ki].mode = 'mother';
-            }
-        });
-
-    } else { // mother
-        // 🚛 แม่: ทุก item ใน shop นี้ → แม่ (ยกเว้น Cut item)
-        items.forEach(function(it, ki) {
-            if (!_psdPlanOverrides[ki]) return;
-            if ((it.shopName || '') === myShop && _psdPlanOverrides[ki].mode !== 'cut') {
-                _psdPlanOverrides[ki].mode = 'mother';
+                _psdUpdateItemRow(ki);
             }
         });
     }
-
-    _psdRefreshAllModeBtns();
+    _psdPlanOverrides[i].mode = newMode;
+    _psdUpdateItemRow(i);
     _psdPlanUpdateWeightBar();
+};
+
+// ── กำหนดรถให้ทั้ง shop — user กดที่ Shop Header Row ────────────────────
+window._psdPlanSetShopTruck = function _psdPlanSetShopTruck(shopName, truck) {
+    var items = (_psdPlanData && _psdPlanData.items) || [];
+    items.forEach(function(it, i) {
+        if (!_psdPlanOverrides[i]) return;
+        if ((it.shopName || '—') !== shopName) return;
+        if (_psdPlanOverrides[i].mode === 'cut') return; // ไม่แตะ Cut item
+        _psdPlanOverrides[i].mode = truck;
+        _psdUpdateItemRow(i);
+    });
+    // อัปเดตสี Shop Header Buttons
+    var btnM = document.getElementById('psd-shop-btn-m-' + shopName);
+    var btnC = document.getElementById('psd-shop-btn-c-' + shopName);
+    if (btnM) { btnM.style.background = truck === 'mother' ? '#0369a1' : '#fff'; btnM.style.color = truck === 'mother' ? '#fff' : '#0369a1'; }
+    if (btnC) { btnC.style.background = truck === 'child'  ? '#7c3aed' : '#fff'; btnC.style.color = truck === 'child'  ? '#fff' : '#7c3aed'; }
+    _psdPlanUpdateWeightBar();
+};
+
+// ── อัปเดต row สีพื้นหลัง + Cut button + badge ──────────────────────────
+function _psdUpdateItemRow(i) {
+    var items = (_psdPlanData && _psdPlanData.items) || [];
+    var it    = items[i];
+    if (!it || !_psdPlanOverrides[i]) return;
+    var mode = _psdPlanOverrides[i].mode || 'mother';
+    var row  = document.getElementById('psd-row-' + i);
+    if (row) row.style.background = mode === 'child' ? '#f5f3ff' : mode === 'cut' ? '#fff7ed' : '#fff';
+    var wrap = document.getElementById('psd-mode-' + i);
+    if (wrap) {
+        var btn = wrap.querySelector('button');
+        if (btn) { btn.style.background = mode === 'cut' ? '#d97706' : '#fff'; btn.style.color = mode === 'cut' ? '#fff' : '#d97706'; }
+    }
+    if (row && row.cells[3]) {
+        row.cells[3].innerHTML = escHtml(it.productName || '—')
+            + (mode === 'child' ? ' <span style="font-size:9px;font-weight:900;color:#7c3aed;background:#ede9fe;border:1px solid #7c3aed;border-radius:3px;padding:0 3px;">ลูก</span>' : '')
+            + (mode === 'cut'   ? ' <span style="font-size:9px;font-weight:900;color:#d97706;background:#fef3c7;border:1px solid #d97706;border-radius:3px;padding:0 3px;">Cut</span>' : '');
+    }
 }
 
 // ── อัปเดตจำนวน (เส้น) → คำนวณมัด + อัปเดต footer ──────────────────────
