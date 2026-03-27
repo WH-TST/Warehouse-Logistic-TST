@@ -4305,13 +4305,16 @@ thead.sticky {
           <input type="number" id="kpi-edit-finalAdjSEMI" min="0" max="100" step="0.01" placeholder="—"
             class="w-full bg-slate-700 border border-amber-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-amber-400">
         </div>
-        <!-- Space Breakdown (MANUAL) -->
+        <!-- Space Breakdown (กรอกนาที → คำนวณ KPI% AUTO) -->
         <div>
           <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
-            <i class="fas fa-warehouse mr-1 text-sky-400"></i>Space Breakdown (%)
+            <i class="fas fa-warehouse mr-1 text-sky-400"></i>Space Breakdown
           </label>
-          <input type="number" id="kpi-edit-spaceBreakdown" min="0" max="100" step="0.1" placeholder="—"
+          <div class="text-xs text-slate-400 mb-1.5">แผน: <span id="kpi-edit-space-planhours" class="text-sky-300 font-bold">—</span></div>
+          <input type="number" id="kpi-edit-breakdownMins" min="0" step="1" placeholder="กรอกนาที Breakdown"
+            oninput="calcSpaceBreakdownModal()"
             class="w-full bg-slate-700 border border-sky-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+          <div class="mt-1.5 text-xs text-slate-400">KPI: <span id="kpi-edit-space-result" class="font-bold text-slate-300">—</span></div>
         </div>
       </div>
     </div>
@@ -22221,6 +22224,30 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             return `<td class="px-3 py-3 text-center font-mono text-sm bg-slate-800/20"><span class="${pctColor(f)} font-bold">${f.toFixed(1)}%</span></td>`;
         };
 
+        // Helper: Space Breakdown cell (แสดงแผน + กรอกนาที + KPI%)
+        const spaceCell = () => {
+            const planH = auto.planHours;
+            const planM = auto.planMinutes ?? 0;
+            const planHStr = (planH !== null && planH !== undefined) ? planH.toFixed(1) + ' ชม.' : '—';
+            if (isSaved) {
+                const sv = saved.spaceBreakdown;
+                const svTxt = (sv !== null && sv !== undefined) ? sv.toFixed(1) + '%' : '—';
+                const svCls = (sv !== null && sv !== undefined) ? pctColor(sv) : 'text-slate-400';
+                return `<td class="px-3 py-2 text-center bg-sky-900/20">
+                    <div class="text-xs text-slate-400 mb-0.5">แผน: ${planHStr}</div>
+                    <span class="font-bold text-sm ${svCls}">${svTxt}</span>
+                </td>`;
+            }
+            return `<td class="px-3 py-2 text-center bg-sky-900/20">
+                <div class="text-xs text-slate-400 mb-0.5">แผน: ${planHStr}</div>
+                <input type="number" min="0" step="1" placeholder="นาที"
+                    id="kpi-manual-breakdownMins-${isoDate}"
+                    oninput="calcSpaceBreakdown('${isoDate}', ${planM})"
+                    class="w-20 bg-slate-700 border border-sky-700/50 text-white rounded-lg px-2 py-1.5 text-center text-sm font-bold focus:outline-none focus:border-sky-400">
+                <div id="kpi-space-pct-${isoDate}" class="text-xs font-bold text-slate-400 mt-0.5">—</div>
+            </td>`;
+        };
+
         // Helper: manual input cell
         const manualCell = (field, savedVal) => {
             const val = isSaved ? (savedVal !== null && savedVal !== undefined ? savedVal : '') : '';
@@ -22245,7 +22272,7 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             ${autoCell(auto.checkerSEMIPct)}
             ${autoCell(auto.finalAdjFGPct)}
             ${manualCell('finalAdjSEMI',  saved.finalAdjSEMI)}
-            ${manualCell('spaceBreakdown',saved.spaceBreakdown)}
+            ${spaceCell()}
             ${autoCell(auto.efficiency)}
             ${autoCell(auto.damagePct)}
             ${autoCell(auto.prdKPIFG)}
@@ -22281,17 +22308,24 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
     const auto = kpiWHAutoData[isoDate] || kpiWHAutoData[ddmmyyyy] || {};
 
     const getFloatVal = id => { const el = safeGet(id); return (el && el.value !== '') ? parseFloat(el.value) : null; };
+    // คำนวณ Space Breakdown KPI% จากนาทีที่ผู้ใช้กรอก
+    const planM = auto.planMinutes ?? 0;
+    const bMinsEl = safeGet(`kpi-manual-breakdownMins-${isoDate}`);
+    const bMins = (bMinsEl && bMinsEl.value !== '') ? parseFloat(bMinsEl.value) : null;
+    const spaceBreakdownKPI = (bMins !== null && planM > 0)
+        ? Math.min(100, Math.max(0, Math.round(((planM - bMins) / planM) * 1000) / 10))
+        : null;
     const row = {
         date:           ddmmyyyy,
         checkerFGPct:   auto.checkerFGPct    ?? null,
         checkerSEMIPct: auto.checkerSEMIPct  ?? null,
         finalAdjFG:     auto.finalAdjFGPct   ?? null,   // AUTO: (tL-|dL|)/tL×100 จาก KPI Log
         finalAdjSEMI:   getFloatVal(`kpi-manual-finalAdjSEMI-${isoDate}`),  // MANUAL
-        spaceBreakdown: getFloatVal(`kpi-manual-spaceBreakdown-${isoDate}`), // MANUAL
+        spaceBreakdown: spaceBreakdownKPI,              // AUTO-CALC: (planMins-bMins)/planMins×100
         loadScore:      auto.efficiency      ?? null,
         damageScore:    auto.damagePct       ?? null,
-        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG
-        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI
+        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG (KPI Log col O)
+        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI (KPI Log col O)
     };
 
     const saveBtn = safeGet(`btn-kpi-save-${isoDate}`);
@@ -22370,11 +22404,53 @@ window.renderKpiWHSummary = function renderKpiWHSummary(dates) {
     safeSetText('kpi-wh-avg-checkersemi',  fmtPct(avg(csArr)));
     safeSetText('kpi-wh-avg-adjfg',        fmtPct(avg(adjFGArr)));
     safeSetText('kpi-wh-avg-adjsemi',      fmtPct(manualAvg('finalAdjSEMI')));
-    safeSetText('kpi-wh-avg-space',        fmtPct(manualAvg('spaceBreakdown')));
+    const spaceArr = workDays.map(iso => {
+        const s = kpiWHSavedData[iso] || kpiWHSavedData[iso.split('-').reverse().join('/')] || {};
+        return (s.spaceBreakdown !== null && s.spaceBreakdown !== undefined) ? s.spaceBreakdown : null;
+    }).filter(v => v !== null);
+    safeSetText('kpi-wh-avg-space',        fmtPct(avg(spaceArr)));
     safeSetText('kpi-wh-avg-loadscore',    fmtPct(avg(lsArr)));
     safeSetText('kpi-wh-avg-damage',       fmtPct(avg(dmgArr)));
     safeSetText('kpi-wh-avg-dataerr-fg',   fmtPct(avg(defgArr)));
     safeSetText('kpi-wh-avg-dataerr-semi', fmtPct(avg(desemiArr)));
+};
+
+// ── คำนวณ Space Breakdown KPI% แบบ live (ในตาราง) ─────────────────────
+window.calcSpaceBreakdown = function calcSpaceBreakdown(isoDate, planMins) {
+    const inp  = safeGet(`kpi-manual-breakdownMins-${isoDate}`);
+    const disp = safeGet(`kpi-space-pct-${isoDate}`);
+    if (!inp || !disp) return;
+    const bMins = parseFloat(inp.value);
+    if (isNaN(bMins) || planMins <= 0) {
+        disp.textContent = '—';
+        disp.className   = 'text-xs font-bold text-slate-400 mt-0.5';
+        return;
+    }
+    const kpi = Math.min(100, Math.max(0, ((planMins - bMins) / planMins) * 100));
+    disp.textContent = kpi.toFixed(1) + '%';
+    const cls = kpi >= 90 ? 'text-emerald-400' : kpi >= 70 ? 'text-amber-400' : 'text-rose-400';
+    disp.className = `text-xs font-bold ${cls} mt-0.5`;
+};
+
+// ── คำนวณ Space Breakdown KPI% ใน Edit Modal ──────────────────────────
+window.calcSpaceBreakdownModal = function calcSpaceBreakdownModal() {
+    const dateInput = safeGet('kpi-edit-modal-date');
+    const isoDate   = dateInput ? dateInput.value : '';
+    const auto      = isoDate ? (kpiWHAutoData[isoDate] || kpiWHAutoData[isoDate.split('-').reverse().join('/')] || {}) : {};
+    const planMins  = auto.planMinutes ?? 0;
+    const inp       = safeGet('kpi-edit-breakdownMins');
+    const resEl     = safeGet('kpi-edit-space-result');
+    if (!inp || !resEl) return;
+    const bMins = parseFloat(inp.value);
+    if (isNaN(bMins) || planMins <= 0) {
+        resEl.textContent = '—';
+        resEl.className   = 'font-bold text-slate-300';
+        return;
+    }
+    const kpi = Math.min(100, Math.max(0, ((planMins - bMins) / planMins) * 100));
+    resEl.textContent = kpi.toFixed(1) + '%';
+    const cls = kpi >= 90 ? 'text-emerald-400' : kpi >= 70 ? 'text-amber-400' : 'text-rose-400';
+    resEl.className = `font-bold ${cls}`;
 };
 
 // ── เปิด/ปิด Modal แก้ไข KPI ──────────────────────────────────────────
@@ -22388,8 +22464,14 @@ window.openKpiWHEditModal = function openKpiWHEditModal(isoDate) {
     safeSetText('kpi-edit-modal-subtitle', `วันที่ ${ddmmyyyy}`);
 
     const setField = (id, val) => { const el = safeGet(id); if (el) el.value = (val !== null && val !== undefined) ? val : ''; };
-    setField('kpi-edit-finalAdjSEMI',  saved.finalAdjSEMI);
-    setField('kpi-edit-spaceBreakdown',saved.spaceBreakdown);
+    setField('kpi-edit-finalAdjSEMI', saved.finalAdjSEMI);
+    // Space Breakdown: แสดงแผนชม. + ล้าง minutes input
+    const auto = kpiWHAutoData[isoDate] || kpiWHAutoData[ddmmyyyy] || {};
+    const planHEl = safeGet('kpi-edit-space-planhours');
+    if (planHEl) planHEl.textContent = (auto.planHours !== null && auto.planHours !== undefined) ? auto.planHours.toFixed(1) + ' ชม.' : '—';
+    setField('kpi-edit-breakdownMins', '');
+    const resEl = safeGet('kpi-edit-space-result');
+    if (resEl) resEl.textContent = (saved.spaceBreakdown !== null && saved.spaceBreakdown !== undefined) ? 'บันทึกไว้: ' + saved.spaceBreakdown.toFixed(1) + '%' : '—';
 
     const modal = safeGet('kpi-wh-edit-modal');
     if (modal) modal.classList.remove('hidden');
@@ -22410,17 +22492,23 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
     const auto = kpiWHAutoData[isoDate] || kpiWHAutoData[ddmmyyyy] || {};
 
     const getF = id => { const el = safeGet(id); return (el && el.value !== '') ? parseFloat(el.value) : null; };
+    // คำนวณ Space Breakdown KPI% จาก breakdownMins ที่กรอกใหม่ (ถ้ากรอก) หรือใช้ค่าเดิม
+    const editPlanM = auto.planMinutes ?? 0;
+    const editBMins = getF('kpi-edit-breakdownMins');
+    const editSpaceKPI = (editBMins !== null && editPlanM > 0)
+        ? Math.min(100, Math.max(0, Math.round(((editPlanM - editBMins) / editPlanM) * 1000) / 10))
+        : (kpiWHSavedData[isoDate] || {}).spaceBreakdown ?? null;
     const row = {
         date:           ddmmyyyy,
         checkerFGPct:   auto.checkerFGPct    ?? null,
         checkerSEMIPct: auto.checkerSEMIPct  ?? null,
         finalAdjFG:     auto.finalAdjFGPct   ?? null,   // AUTO: (tL-|dL|)/tL×100 จาก KPI Log
         finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),  // MANUAL
-        spaceBreakdown: getF('kpi-edit-spaceBreakdown'), // MANUAL
+        spaceBreakdown: editSpaceKPI,                   // AUTO-CALC: (planMins-bMins)/planMins×100
         loadScore:      auto.efficiency      ?? null,
         damageScore:    auto.damagePct       ?? null,
-        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG
-        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI
+        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG (KPI Log col O)
+        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI (KPI Log col O)
     };
 
     const submitBtn = safeGet('btn-kpi-edit-submit');
