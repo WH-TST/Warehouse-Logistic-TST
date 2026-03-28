@@ -12787,9 +12787,9 @@ function buildLogiShopCardHTML(idx) {
         </div>
         <!-- ระยะทางฟรี -->
         <div>
-            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ระยะทางฟรี (กม.) <span class="text-rose-500">*</span></label>
-            <input type="number" id="logi-shop-free-dist-${idx}" step="0.1" placeholder="0.0"
-                   class="w-full bg-white border-2 border-rose-200 rounded-xl px-4 py-3 font-bold text-slate-800 outline-none focus:border-rose-400 transition-all">
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ระยะทางฟรี (กม.) <span class="text-xs text-slate-400 font-normal ml-1">คำนวณอัตโนมัติ</span></label>
+            <input type="number" id="logi-shop-free-dist-${idx}" step="0.1" placeholder="0.0" readonly
+                   class="w-full bg-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-600 outline-none cursor-not-allowed">
         </div>
     </div>
 
@@ -12877,11 +12877,8 @@ window.onLogiShopSelect = function onLogiShopSelect(idx) {
     if (distEl && opt.dataset.dist !== undefined && opt.dataset.dist !== '') {
         distEl.value = opt.dataset.dist;
     }
-    // ตั้งค่าระยะทางฟรีจาก master data ถ้ามี
-    const freeDistEl = document.getElementById(`logi-shop-free-dist-${idx}`);
-    if (freeDistEl && opt.dataset.freeDist !== undefined && opt.dataset.freeDist !== '') {
-        freeDistEl.value = opt.dataset.freeDist;
-    }
+    // ไม่ override ระยะทางฟรี — autoCalcFreeStop() จัดการเอง
+    autoCalcFreeStop();
 }
 
 // ── คำนวณระยะทางอัตโนมัติ (เรียกเมื่อเลือก/ลบร้านค้า) ─────────────────────
