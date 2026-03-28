@@ -4730,19 +4730,32 @@ function getLogisticPlanById(planId) {
       // ── อ่าน shop จากคอลัมน์ Q(16) ถ้ามี = format ใหม่ ──
       var hasShopRow2 = (row[16] !== '' && row[16] !== null && row[16] !== undefined);
       if (hasShopRow2) {
-        plan.distance += parseFloat(row[7]) || 0;  // H: สะสม
-        plan.stopFee  += parseFloat(row[8]) || 0;  // I: สะสม
-        plan.shops.push({
-          shopSeq:       parseInt(row[16]) || 0,   // Q
-          shopId:        String(row[17] || ''),     // R
-          shopName:      String(row[6]  || ''),     // G
-          distance:      parseFloat(row[7])  || 0, // H
-          freeDistance:  parseFloat(row[8])  || 0, // I
-          sale:          String(row[10] || ''),     // K
-          loadWarehouse: String(row[12] || ''),     // M
-          remark:        String(row[18] || ''),     // S
-          items:         []
-        });
+        var _sName = String(row[6]  || '');
+        var _sId   = String(row[17] || '');
+        // เช็คว่าร้านนี้มีอยู่แล้วไหม (กรณีร้านเดียวกันอยู่ทั้ง -M และ -C)
+        var _dupShop = null;
+        for (var _di = 0; _di < plan.shops.length; _di++) {
+          if (plan.shops[_di].shopName === _sName && plan.shops[_di].shopId === _sId) {
+            _dupShop = plan.shops[_di]; break;
+          }
+        }
+        if (!_dupShop) {
+          // ร้านใหม่ — เพิ่มและสะสม distance
+          plan.distance += parseFloat(row[7]) || 0;
+          plan.stopFee  += parseFloat(row[8]) || 0;
+          plan.shops.push({
+            shopSeq:       parseInt(row[16]) || 0,
+            shopId:        _sId,
+            shopName:      _sName,
+            distance:      parseFloat(row[7])  || 0,
+            freeDistance:  parseFloat(row[8])  || 0,
+            sale:          String(row[10] || ''),
+            loadWarehouse: String(row[12] || ''),
+            remark:        String(row[18] || ''),
+            items:         []
+          });
+        }
+        // ถ้า _dupShop มีอยู่แล้ว → ข้าม (ไม่สร้าง card ซ้ำ, ไม่บวก distance ซ้ำ)
       }
     }
     if (!plan) return { success: false, message: 'ไม่พบ PlanID: ' + planId };
