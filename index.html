@@ -14097,12 +14097,15 @@ function updateLogiKPI() {
             d.shops  += (p.shops || []).length;
             const dist     = parseFloat(p.distance) || 0;
             const stopDist = parseFloat(p.stopFee)  || 0;
-            // รถพ่วง: แม่กับลูกวิ่งด้วยกัน → บวกระยะทาง + Stop ของลูกทุกร้านด้วย
-            const _childPlan    = p.isMother ? companyPlans.find(q => q.id === p.pairId + '-C') : null;
-            const childDist     = parseFloat(_childPlan?.distance) || 0;
-            const childStopDist = parseFloat(_childPlan?.stopFee)  || 0;
+            // รถพ่วง: เพิ่มเฉพาะร้านที่ลูกไปแล้วแม่ไม่ได้ไป (ร้านเดียวกัน Stop นับครั้งเดียว)
+            const _childPlan = p.isMother ? companyPlans.find(q => q.id === p.pairId + '-C') : null;
+            const _motherShopKeys = new Set((p.shops || []).map(s => s.shopId || s.shopName));
+            const _childUniqueShops = (_childPlan?.shops || [])
+                .filter(s => !_motherShopKeys.has(s.shopId || s.shopName));
+            const childDist     = _childUniqueShops.reduce((sum, s) => sum + (parseFloat(s.distance)     || 0), 0);
+            const childStopDist = _childUniqueShops.reduce((sum, s) => sum + (parseFloat(s.freeDistance) || 0), 0);
             const retDist  = parseFloat(p.returnDistance) || 0;
-            // สูตร: Σ(ระยะทางร้าน) + Σ(Stop ทุกร้าน ทั้งแม่+ลูก) + ขากลับ
+            // สูตร: Σ(ระยะทางร้านทั้งหมด) + Σ(Stop ร้านที่ต่างกัน) + ขากลับ
             d.dist += (dist + childDist) + (stopDist + childStopDist) + retDist;
         }
         d.weight  += parseFloat(p.totalWeight) || 0;
