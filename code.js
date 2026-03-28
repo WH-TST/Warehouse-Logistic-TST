@@ -29,6 +29,7 @@ function _handleApiPost(e) {
       'getSafetyStockData','saveSafetyStockData',
       'saveFGCycleCount','saveSemiCycleCount',
       'importInventoryData','uploadOverdueData',
+      'getInventoryCompareData','getCycleCountItems',
       'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders','getAutoplanBundle',
       'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan','getPlannedShopIdsByDateRange',
       'getLogisticPlanSummary','getPreShipmentData','getPreShipmentProductList',
@@ -186,6 +187,7 @@ function doGet(e) {
           'getSafetyStockData','saveSafetyStockData',
           'saveFGCycleCount','saveSemiCycleCount',
           'importInventoryData','uploadOverdueData',
+          'getInventoryCompareData','getCycleCountItems',
           'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders','getAutoplanBundle',
           'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan','getPlannedShopIdsByDateRange',
           'getLogisticPlanSummary','getPreShipmentData','getPreShipmentProductList',
@@ -2637,11 +2639,13 @@ function importInventoryData(rows, dataType) {
     
     // Map dataType → ชื่อชีตปลายทาง
     const sheetMap = {
-      'counting':    'Counting',
-      'onhand_fg':   'ON-HAND FG',
-      'onhand_semi': 'ON-HAND SEMI'
+      'counting':        'Counting',
+      'onhand_fg':       'ON-HAND FG',
+      'onhand_semi':     'ON-HAND SEMI',
+      'transection_fg':  'Transection FG',
+      'transection_semi':'Transection SEMI'
     };
-    
+
     const targetSheetName = sheetMap[dataType];
     if (!targetSheetName) {
       return { success: false, message: 'ไม่รู้จักประเภทข้อมูล: ' + dataType };
@@ -2714,6 +2718,234 @@ function importInventoryData(rows, dataType) {
     };
     
   } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ============================================================
+// INVENTORY CONTROL — NEW BACKEND FUNCTIONS (v8.5+)
+// ============================================================
+
+/**
+ * getInventoryCompareData(type)
+ * type='fg':   อ่าน Counting + ON-HAND FG → เทียบยอดระบบ + counting
+ * type='semi': อ่าน ON-HAND SEMI → แสดงรายละเอียด Batch+Serial
+ */
+function getInventoryCompareData(type) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    if (type === 'fg') {
+      // ─── อ่าน Counting Sheet ─────────────────────────────────
+      // Cols (0-based): B=Item number(1), E=Warehouse(4), H=CW on-hand(7), L=On-hand KG(11)
+      const countingSheet = ss.getSheetByName('Counting');
+      const cntMap = {}; // key = sku+'|'+wh → { sysLine, sysKg }
+      if (countingSheet && countingSheet.getLastRow() >= 2) {
+        const cData = countingSheet.getRange(2, 1, countingSheet.getLastRow()-1, 12).getValues();
+        cData.forEach(function(row) {
+          const sku = String(row[1] || '').trim();
+          const wh  = String(row[4] || '').trim();
+          const cwOnhand = Number(row[7]) || 0;
+          const kgOnhand = Number(row[11]) || 0;
+          if (!sku) return;
+          const key = sku + '|' + wh;
+          if (!cntMap[key]) cntMap[key] = { sku: sku, wh: wh, sysLine: 0, sysKg: 0 };
+          cntMap[key].sysLine += cwOnhand;
+          cntMap[key].sysKg   += kgOnhand;
+        });
+      }
+      // ─── อ่าน ON-HAND FG Sheet ──────────────────────────────
+      // Cols (0-based): A=Item number(0), D=CW physical inventory(3), F=CW physical reserved(5),
+      //                  J=Physical inventory KG(9), M=Warehouse(12), N=Available physical(13)
+      const onhandFgSheet = ss.getSheetByName('ON-HAND FG');
+      const fgMap = {}; // key = sku+'|'+wh → { reserved, counted }
+      if (onhandFgSheet && onhandFgSheet.getLastRow() >= 2) {
+        const fgData = onhandFgSheet.getRange(2, 1, onhandFgSheet.getLastRow()-1, 14).getValues();
+        fgData.forEach(function(row) {
+          const sku      = String(row[0]  || '').trim();
+          const wh       = String(row[12] || '').trim();
+          const cwPhys   = Number(row[3])  || 0; // CW physical inventory (เส้น)
+          const cwRes    = Number(row[5])  || 0; // CW physical reserved
+          const cwAvail  = Number(row[13]) || 0; // CW available physical
+          if (!sku) return;
+          const key = sku + '|' + wh;
+          if (!fgMap[key]) fgMap[key] = { sku: sku, wh: wh, counted: 0, reserved: 0 };
+          fgMap[key].counted  += cwPhys;
+          fgMap[key].reserved += cwRes;
+        });
+      }
+      // ─── Merge ────────────────────────────────────────────────
+      const result = [];
+      const seen = {};
+      Object.values(cntMap).forEach(function(item) {
+        const key = item.sku + '|' + item.wh;
+        seen[key] = true;
+        const fg = fgMap[key] || {};
+        result.push({
+          sku:      item.sku,
+          wh:       item.wh,
+          sysLine:  item.sysLine,
+          sysKg:    Math.round(item.sysKg * 100) / 100,
+          reserved: fg.reserved || 0,
+          counted:  fg.counted !== undefined ? fg.counted : null
+        });
+      });
+      // สินค้าที่อยู่ใน ON-HAND แต่ไม่มีใน Counting
+      Object.values(fgMap).forEach(function(item) {
+        const key = item.sku + '|' + item.wh;
+        if (!seen[key]) {
+          result.push({ sku: item.sku, wh: item.wh, sysLine: 0, sysKg: 0, reserved: item.reserved||0, counted: item.counted });
+        }
+      });
+      return { success: true, data: result, timestamp: new Date().toISOString() };
+
+    } else if (type === 'semi') {
+      // ─── อ่าน ON-HAND SEMI Sheet ────────────────────────────
+      // Cols (0-based): A=Item number(0), C=Warehouse(2), D=Batch(3), E=Serial(4),
+      //                  F=Physical inventory KG(5), G=Available physical(6),
+      //                  K=CW physical inventory(10), T=CW physical reserved(19)
+      const semiSheet = ss.getSheetByName('ON-HAND SEMI');
+      const result = [];
+      if (semiSheet && semiSheet.getLastRow() >= 2) {
+        const sData = semiSheet.getRange(2, 1, semiSheet.getLastRow()-1, 20).getValues();
+        sData.forEach(function(row) {
+          const sku    = String(row[0]  || '').trim();
+          const wh     = String(row[2]  || '').trim();
+          const batch  = String(row[3]  || '').trim();
+          const serial = String(row[4]  || '').trim();
+          const physKg = Number(row[5])  || 0;
+          const availKg= Number(row[6])  || 0;
+          const cwPhys = Number(row[10]) || 0;
+          const cwRes  = Number(row[19]) || 0;
+          if (!sku) return;
+          result.push({ sku: sku, wh: wh, batch: batch, serial: serial,
+            physKg: Math.round(physKg*100)/100, availKg: Math.round(availKg*100)/100,
+            cwPhys: cwPhys, cwRes: cwRes });
+        });
+      }
+      return { success: true, data: result, timestamp: new Date().toISOString() };
+    }
+    return { success: false, message: 'ไม่รู้จัก type: ' + type };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * getCycleCountItems(dateStr, type)
+ * ดึงรายการเคลื่อนไหวตามวันที่ จาก Transection FG หรือ Transection SEMI
+ */
+function getCycleCountItems(dateStr, type) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const targetDate = parseDateValue(dateStr);
+    if (!targetDate) return { success: false, message: 'วันที่ไม่ถูกต้อง: ' + dateStr };
+
+    // ดึง lpb จาก Product Sheet
+    const lpbMap = {};
+    const productSheet = ss.getSheetByName('Product');
+    if (productSheet && productSheet.getLastRow() >= 2) {
+      const pData = productSheet.getRange(2, 1, productSheet.getLastRow()-1, 3).getValues();
+      pData.forEach(function(row) {
+        const sku = String(row[0]||'').trim();
+        const lpb = Number(row[2]) || 0;
+        if (sku) lpbMap[sku] = lpb;
+      });
+    }
+
+    if (type === 'fg') {
+      // Transection FG cols (0-based):
+      //   B=Physical date(1), D=Warehouse(3), E=Item number(4), F=Product name(5),
+      //   H=CW quantity(7), L=Receipt(11), M=Issue(12)
+      const fgSheet = ss.getSheetByName('Transection FG');
+      if (!fgSheet || fgSheet.getLastRow() < 2) return { success: true, items: [], date: dateStr };
+      const fgData = fgSheet.getRange(2, 1, fgSheet.getLastRow()-1, 13).getValues();
+      const grouped = {}; // sku+'|'+wh → { sku, name, wh, receiptQty, issueQty }
+      fgData.forEach(function(row) {
+        const rowDate = parseDateValue(row[1]);
+        if (!rowDate) return;
+        // Compare only date portion
+        if (rowDate.toDateString() !== targetDate.toDateString()) return;
+        const wh    = String(row[3] || '').trim();
+        const sku   = String(row[4] || '').trim();
+        const name  = String(row[5] || '').trim();
+        const cwQty = Number(row[7]) || 0;
+        const receipt = String(row[11]||'').trim().toLowerCase();
+        const issue   = String(row[12]||'').trim().toLowerCase();
+        if (!sku) return;
+        const key = sku + '|' + wh;
+        if (!grouped[key]) grouped[key] = { sku: sku, name: name, wh: wh, receiptQty: 0, issueQty: 0 };
+        if (receipt === 'received' || receipt === 'receipt') grouped[key].receiptQty += cwQty;
+        else if (issue === 'issued' || issue === 'issue')   grouped[key].issueQty  += cwQty;
+        else grouped[key].receiptQty += cwQty; // default to receipt if unclear
+      });
+      const items = Object.values(grouped).map(function(r) {
+        return Object.assign(r, { lpb: lpbMap[r.sku]||0, systemQty: 0 });
+      });
+      // Try to get systemQty from Counting sheet
+      const countingSheet = ss.getSheetByName('Counting');
+      if (countingSheet && countingSheet.getLastRow() >= 2) {
+        const cData = countingSheet.getRange(2, 1, countingSheet.getLastRow()-1, 12).getValues();
+        const sysMap = {};
+        cData.forEach(function(row) {
+          const sku = String(row[1]||'').trim();
+          const wh  = String(row[4]||'').trim();
+          const qty = Number(row[7])||0;
+          const key = sku + '|' + wh;
+          if (!sysMap[key]) sysMap[key] = 0;
+          sysMap[key] += qty;
+        });
+        items.forEach(function(r) {
+          const key = r.sku + '|' + r.wh;
+          r.systemQty = sysMap[key] || 0;
+        });
+      }
+      return { success: true, items: items, date: dateStr };
+
+    } else if (type === 'semi') {
+      // Transection SEMI cols (0-based):
+      //   A=Physical date(0), D=Warehouse(3), G=Item number(6), H=Product name(7),
+      //   I=Issue(8), J=Quantity KG(9), U=Receipt(20)
+      const semiSheet = ss.getSheetByName('Transection SEMI');
+      if (!semiSheet || semiSheet.getLastRow() < 2) return { success: true, items: [], date: dateStr };
+      const semiData = semiSheet.getRange(2, 1, semiSheet.getLastRow()-1, 21).getValues();
+      const grouped = {};
+      semiData.forEach(function(row) {
+        const rowDate = parseDateValue(row[0]);
+        if (!rowDate) return;
+        if (rowDate.toDateString() !== targetDate.toDateString()) return;
+        const wh    = String(row[3]  || '').trim();
+        const sku   = String(row[6]  || '').trim();
+        const name  = String(row[7]  || '').trim();
+        const issue  = Number(row[8])  || 0;
+        const qty    = Number(row[9])  || 0;
+        const receipt= Number(row[20]) || 0;
+        if (!sku) return;
+        const key = sku + '|' + wh;
+        if (!grouped[key]) grouped[key] = { sku: sku, name: name, wh: wh, receiptQty: 0, issueQty: 0, physKg: 0 };
+        grouped[key].receiptQty += receipt;
+        grouped[key].issueQty   += issue;
+      });
+      // Get physKg from ON-HAND SEMI
+      const onhandSemiSheet = ss.getSheetByName('ON-HAND SEMI');
+      if (onhandSemiSheet && onhandSemiSheet.getLastRow() >= 2) {
+        const oData = onhandSemiSheet.getRange(2, 1, onhandSemiSheet.getLastRow()-1, 7).getValues();
+        const physMap = {};
+        oData.forEach(function(row) {
+          const sku = String(row[0]||'').trim();
+          const wh  = String(row[2]||'').trim();
+          const kg  = Number(row[5])||0;
+          const key = sku + '|' + wh;
+          if (!physMap[key]) physMap[key] = 0;
+          physMap[key] += kg;
+        });
+        Object.values(grouped).forEach(function(r) {
+          r.physKg = physMap[r.sku+'|'+r.wh] || 0;
+        });
+      }
+      return { success: true, items: Object.values(grouped), date: dateStr };
+    }
+    return { success: false, message: 'ไม่รู้จัก type: ' + type };
+  } catch(e) {
     return { success: false, message: e.toString() };
   }
 }

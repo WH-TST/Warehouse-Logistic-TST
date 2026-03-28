@@ -673,625 +673,8 @@ thead.sticky {
                 <i class="fas fa-sync-alt mr-2"></i> UPDATE ANALYTICS
             </button>
         </div>
+    </div><!-- end view-analytics-content -->
 
-        <!-- KPI Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div class="bg-emerald-500 p-8 rounded-[2rem] text-white shadow-xl">
-                <p class="text-xs font-black text-emerald-100 uppercase tracking-widest">Total Inbound</p>
-                <h3 id="kpi-inbound-weight" class="text-4xl font-black mt-4 font-mono">0.00 <small class="text-lg">kg</small></h3>
-                <p id="kpi-inbound-lines" class="text-emerald-100 font-bold mt-1">0 lines</p>
-            </div>
-            <div class="bg-rose-500 p-8 rounded-[2rem] text-white shadow-xl">
-                <p class="text-xs font-black text-rose-100 uppercase tracking-widest">Total Outbound</p>
-                <h3 id="kpi-outbound-weight" class="text-4xl font-black mt-4 font-mono">0.00 <small class="text-lg">kg</small></h3>
-                <p id="kpi-outbound-lines" class="text-rose-100 font-bold mt-1">0 lines</p>
-            </div>
-            <div class="bg-amber-500 p-8 rounded-[2rem] text-white shadow-xl">
-                <p class="text-xs font-black text-amber-100 uppercase tracking-widest">Diff (Net Flow)</p>
-                <h3 id="kpi-netflow-weight" class="text-4xl font-black mt-4 font-mono">0.00 <small class="text-lg">kg</small></h3>
-                <p id="kpi-netflow-lines" class="text-amber-100 font-bold mt-1">0 lines</p>
-            </div>
-            <div class="bg-slate-900 p-8 rounded-[2rem] text-white shadow-xl border-t-4 border-amber-500">
-                <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Current Inventory</p>
-                <h3 id="kpi-inventory-weight" class="text-4xl font-black mt-4 font-mono">0.00 <small class="text-lg">kg</small></h3>
-                <p id="kpi-inventory-lines" class="text-amber-500 font-bold mt-1">0 lines</p>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-10">
-            <div class="bg-white p-6 rounded-3xl border shadow-sm h-[400px]">
-                <canvas id="flowChart"></canvas>
-            </div>
-            <div class="bg-white p-6 rounded-3xl border shadow-sm h-[400px]">
-                <canvas id="inventoryTrendChart"></canvas>
-            </div>
-            <div class="bg-white p-6 rounded-3xl border shadow-sm h-[400px]">
-                <canvas id="blockingTrendChart"></canvas>
-            </div>
-        </div>
-    </div>
-<div id="view-overdue-content" class="hidden space-y-6">
-    
-    <!-- Header Card พร้อม KPI Summary -->
-    <div class="bg-gradient-to-br from-rose-50 via-white to-red-50 p-8 rounded-[2.5rem] shadow-2xl border-2 border-rose-100">
-        <div class="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
-            <div class="flex items-center gap-4">
-                <div class="w-16 h-16 bg-gradient-to-br from-rose-600 to-red-600 rounded-2xl flex items-center justify-center text-white text-3xl shadow-xl">
-                    <i class="fas fa-warehouse"></i>
-                </div>
-                <div>
-                    <h2 class="text-3xl font-black text-slate-900 tracking-tight">Space Recovery Center</h2>
-                    <p class="text-slate-500 text-sm font-bold mt-1">ระบบวิเคราะห์พื้นที่คลัง 3 มิติ - เพื่อเร่งระบายและกดดันฝ่ายขาย</p>
-                </div>
-            </div>
-            <div class="flex flex-wrap gap-3">
-                <input type="file" id="overdue-file-input" accept=".xlsx, .xls" class="hidden" onchange="handleFileUpload()">
-                <button onclick="document.getElementById('overdue-file-input').click()" 
-                        class="bg-white text-slate-700 px-6 py-3.5 rounded-xl font-black hover:bg-slate-50 transition-all flex items-center gap-2 border-2 border-slate-200 shadow-md">
-                    <i class="fas fa-file-import text-blue-600"></i> นำเข้าข้อมูลการจอง
-                </button>
-                <button id="btn-save-overdue" onclick="refreshSpaceAnalysis()" 
-                        class="bg-gradient-to-r from-rose-600 to-red-600 text-white px-8 py-3.5 rounded-xl font-black hover:from-rose-700 hover:to-red-700 shadow-xl transition-all flex items-center gap-2">
-                    <i class="fas fa-sync-alt"></i> 
-                    <span id="btn-text">ประมวลผลและวิเคราะห์</span>
-                </button>
-                <button id="btn-ai-select" onclick="runAIProductSelection()" 
-                        class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3.5 rounded-xl font-black hover:from-purple-700 hover:to-indigo-700 shadow-xl transition-all flex items-center gap-2">
-                    <i class="fas fa-brain"></i> 
-                    <span>AI เลือกสินค้า 10 รายการ</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- KPI Summary Cards -->
-        <div id="space-summary-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <!-- จะถูกเติมด้วย JavaScript -->
-        </div>
-    </div>
-
-    <!-- Tab Navigation - ออกแบบใหม่ให้สวยงามขึ้น -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Tab 1: จองค้าง > 5 วัน -->
-        <button onclick="switchSpaceSubTab('reserved')" id="tab-reserved" 
-                class="sub-tab-btn group relative p-6 rounded-2xl font-black transition-all border-2 active text-rose-600 bg-white border-rose-300 shadow-lg hover:shadow-xl">
-            <div class="flex items-center gap-4">
-                <div class="w-14 h-14 bg-rose-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i class="fas fa-clock text-rose-600 text-2xl"></i>
-                </div>
-                <div class="text-left">
-                    <div class="text-xs text-rose-400 uppercase tracking-wider font-extrabold mb-1">ประเด็น 1</div>
-                    <div class="text-base leading-tight">จองสินค้า > 5 วัน</div>
-                    <div class="text-xs text-slate-400 font-normal mt-0.5">(จนมาเบย์)</div>
-                </div>
-            </div>
-            <div class="absolute top-3 right-3 text-4xl opacity-10">🚨</div>
-        </button>
-        
-        <!-- Tab 2: มีออเดอร์+ของพร้อม แต่ไม่จอง -->
-        <button onclick="switchSpaceSubTab('pending')" id="tab-pending" 
-                class="sub-tab-btn group relative p-6 rounded-2xl font-black transition-all border-2 text-slate-500 bg-slate-50 border-slate-200 hover:bg-emerald-50/80 hover:border-emerald-300 hover:shadow-lg">
-            <div class="flex items-center gap-4">
-                <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i class="fas fa-boxes text-emerald-600 text-2xl"></i>
-                </div>
-                <div class="text-left">
-                    <div class="text-xs text-emerald-400 uppercase tracking-wider font-extrabold mb-1">ประเด็น 2</div>
-                    <div class="text-base leading-tight">มีออเดอร์+ของพร้อม</div>
-                    <div class="text-xs text-slate-400 font-normal mt-0.5">(แต่ไม่จอง)</div>
-                </div>
-            </div>
-            <div class="absolute top-3 right-3 text-4xl opacity-10">📦</div>
-        </button>
-        
-        <!-- Tab 3: ผลิตเยอะ ไม่มีออเดอร์ -->
-        <button onclick="switchSpaceSubTab('blind')" id="tab-blind" 
-                class="sub-tab-btn group relative p-6 rounded-2xl font-black transition-all border-2 text-slate-500 bg-slate-50 border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:shadow-lg">
-            <div class="flex items-center gap-4">
-                <div class="w-14 h-14 bg-amber-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i class="fas fa-question-circle text-amber-600 text-2xl"></i>
-                </div>
-                <div class="text-left">
-                    <div class="text-xs text-amber-400 uppercase tracking-wider font-extrabold mb-1">ประเด็น 3</div>
-                    <div class="text-base leading-tight">ผลิตเยอะ ไม่มีออเดอร์</div>
-                    <div class="text-xs text-slate-400 font-normal mt-0.5">(จีเซ็ง)</div>
-                </div>
-            </div>
-            <div class="absolute top-3 right-3 text-4xl opacity-10">🏭</div>
-        </button>
-    </div>
-
-    <!-- Table Container -->
-    <div class="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden min-h-[400px]">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left">
-                <thead id="space-table-head" class="bg-slate-900 text-slate-300 text-xs font-black uppercase tracking-wider sticky top-0 z-10">
-                </thead>
-                <tbody id="space-table-body" class="text-sm font-sarabun">
-                    <tr><td colspan="6" class="p-20 text-center text-slate-400 font-bold text-lg">
-                        <i class="fas fa-info-circle text-4xl mb-4 text-slate-300 block"></i>
-                        กรุณากดปุ่ม "ประมวลผลและวิเคราะห์" เพื่อดูข้อมูลความเสี่ยงคลังสินค้า
-                    </td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- AI Selected Products Section -->
-    <div id="ai-selected-section" class="hidden mt-8 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-[2.5rem] shadow-xl border-4 border-purple-200 overflow-hidden p-8">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-4">
-                <div class="w-16 h-16 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <i class="fas fa-brain text-white text-3xl"></i>
-                </div>
-                <div>
-                    <h3 class="text-2xl font-black text-slate-800">AI เลือกสินค้า 10 รายการแนะนำ</h3>
-                    <p class="text-sm text-slate-500 font-bold">สำหรับส่งรูปให้ฝ่ายขายตรวจสอบและประสานงาน</p>
-                </div>
-            </div>
-            <button onclick="downloadAISelectionAsImage()" class="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-xl font-black hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all flex items-center gap-2">
-                <i class="fas fa-camera"></i> บันทึกเป็นรูปภาพ
-            </button>
-        </div>
-
-        <!-- Grid แสดง 3 หมวด -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Category 1: จองค้าง > 5 วัน -->
-            <div class="bg-white rounded-2xl shadow-lg border-2 border-rose-200 overflow-hidden">
-                <div class="bg-gradient-to-r from-rose-600 to-red-600 text-white p-4">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-clock text-2xl"></i>
-                        <div>
-                            <h4 class="font-black text-lg">จองค้าง > 5 วัน</h4>
-                            <p class="text-xs opacity-90">ควรเร่งจัดส่ง</p>
-                        </div>
-                    </div>
-                </div>
-                <div id="ai-category-reserved" class="p-4 space-y-2 max-h-[600px] overflow-y-auto">
-                    <!-- Items will be inserted here -->
-                </div>
-            </div>
-
-            <!-- Category 2: มีออเดอร์+ของพร้อม -->
-            <div class="bg-white rounded-2xl shadow-lg border-2 border-emerald-200 overflow-hidden">
-                <div class="bg-gradient-to-r from-emerald-600 to-green-600 text-white p-4">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-boxes text-2xl"></i>
-                        <div>
-                            <h4 class="font-black text-lg">มีออเดอร์+ของพร้อม</h4>
-                            <p class="text-xs opacity-90">พร้อมจัดส่ง</p>
-                        </div>
-                    </div>
-                </div>
-                <div id="ai-category-pending" class="p-4 space-y-2 max-h-[600px] overflow-y-auto">
-                    <!-- Items will be inserted here -->
-                </div>
-            </div>
-
-            <!-- Category 3: ผลิตเยอะ ไม่มีออเดอร์ -->
-            <div class="bg-white rounded-2xl shadow-lg border-2 border-amber-200 overflow-hidden">
-                <div class="bg-gradient-to-r from-amber-600 to-yellow-600 text-white p-4">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-question-circle text-2xl"></i>
-                        <div>
-                            <h4 class="font-black text-lg">ผลิตเยอะ ไม่มีออเดอร์</h4>
-                            <p class="text-xs opacity-90">ควรหาช่องทางระบาย</p>
-                        </div>
-                    </div>
-                </div>
-                <div id="ai-category-blind" class="p-4 space-y-2 max-h-[600px] overflow-y-auto">
-                    <!-- Items will be inserted here -->
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ============================================ -->
-<!-- VIEW: WH ACTIVITY LOG                        -->
-<!-- ============================================ -->
-<div id="view-whactivity-content" class="hidden space-y-5">
-
-  <!-- Header -->
-  <div class="bg-gradient-to-r from-indigo-700 to-indigo-600 rounded-2xl p-6 text-white flex items-center justify-between flex-wrap gap-4">
-    <div class="flex items-center gap-4">
-      <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl"><i class="fas fa-clipboard-list"></i></div>
-      <div>
-        <h3 class="text-xl font-black">WH Activity Log</h3>
-        <p class="text-indigo-200 text-xs font-bold uppercase tracking-wider">บันทึกข้อมูลจริงจากหน้างาน — คลังสินค้า</p>
-      </div>
-    </div>
-    <div class="flex gap-3 flex-wrap">
-      <button onclick="whaExport()" class="bg-white/20 hover:bg-white/30 text-white px-5 py-2.5 rounded-xl font-black flex items-center gap-2 text-sm transition-all border border-white/30">
-        <i class="fas fa-file-excel"></i> Export Excel
-      </button>
-      <button id="btn-wha-save-all" onclick="whaSaveAll()" class="bg-emerald-500 hover:bg-emerald-400 text-white px-6 py-2.5 rounded-xl font-black flex items-center gap-2 shadow-lg transition-all">
-        <i class="fas fa-save"></i> บันทึกข้อมูลทั้งหมด
-      </button>
-    </div>
-  </div>
-
-  <!-- KPI Cards -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-    <div class="bg-white rounded-2xl p-4 shadow border border-slate-100 text-center">
-      <div class="text-2xl font-black text-indigo-700" id="wha-kpi-total">0</div>
-      <div class="text-xs text-slate-400 font-bold uppercase mt-1">รายการทั้งหมด</div>
-    </div>
-    <div class="bg-white rounded-2xl p-4 shadow border border-slate-100 text-center">
-      <div class="text-2xl font-black text-emerald-600" id="wha-kpi-weight">0</div>
-      <div class="text-xs text-slate-400 font-bold uppercase mt-1">น้ำหนักรวม (กก.)</div>
-    </div>
-    <div class="bg-white rounded-2xl p-4 shadow border border-slate-100 text-center">
-      <div class="text-2xl font-black text-amber-600" id="wha-kpi-damage">0</div>
-      <div class="text-xs text-slate-400 font-bold uppercase mt-1">รายการเสียหาย/ผิด</div>
-    </div>
-    <div class="bg-white rounded-2xl p-4 shadow border border-slate-100 text-center">
-      <div class="text-2xl font-black text-emerald-600" id="wha-kpi-staff">0</div>
-      <div class="text-xs text-slate-400 font-bold uppercase mt-1">พนักงานที่บันทึก</div>
-    </div>
-  </div>
-
-  <!-- ── Entry Panel ──────────────────────────────────────────────────── -->
-  <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-
-    <!-- Header bar: Date + Type selector + Mode badge -->
-    <div class="bg-slate-50 border-b border-slate-200 p-4 flex flex-wrap gap-4 items-end">
-      <div>
-        <label class="text-xs font-black text-slate-400 uppercase mb-1 block">วันที่บันทึก</label>
-        <input type="date" id="wha-date" onchange="whaLoadDate()" class="bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all">
-      </div>
-      <div>
-        <label class="text-xs font-black text-slate-400 uppercase mb-1 block">ประเภทข้อมูล</label>
-        <select id="wha-entry-type" onchange="whaOnTypeChange()" class="bg-white border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-indigo-400 cursor-pointer transition-all min-w-[260px]">
-          <option value="">-- เลือกประเภทเพื่อเริ่มบันทึก --</option>
-          <optgroup label="📦 บันทึกเป็นทีม (4 ประเภท)">
-            <option value="บันทึกการโหลด">บันทึกการโหลด</option>
-            <option value="เคลมสินค้า">เคลมสินค้า</option>
-            <option value="โหลดสินค้าผิด">โหลดสินค้าผิด</option>
-            <option value="ปัญหาน้ำหนักสินค้า">ปัญหาน้ำหนักสินค้า</option>
-          </optgroup>
-          <optgroup label="👤 บันทึกรายบุคคล (2 ประเภท)">
-            <option value="สินค้าเสียหาย-การเก็บ">สินค้าเสียหาย-การเก็บ</option>
-            <option value="สินค้าเสียหาย-การโหลด">สินค้าเสียหาย-การโหลด</option>
-          </optgroup>
-        </select>
-      </div>
-      <div id="wha-mode-badge" class="hidden self-end pb-0.5"></div>
-    </div>
-
-    <!-- ── Shared Team Section (แสดงสำหรับ 4 ประเภทบันทึกทีม) ── -->
-    <div id="wha-shared-team" class="hidden px-5 pt-5 pb-0 space-y-3">
-      <div class="flex flex-wrap gap-5 items-start">
-        <div class="flex-shrink-0">
-          <label class="text-xs font-black text-indigo-600 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-users"></i> เลือกทีมปฏิบัติงาน</label>
-          <select id="wha-team-select" onchange="whaLoadTeamMembers()" class="bg-slate-50 border-2 border-indigo-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-indigo-500 cursor-pointer transition-all min-w-[180px]">
-            <option value="">-- เลือกทีม --</option>
-          </select>
-        </div>
-        <div class="flex-grow min-w-[260px]">
-          <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-            <label class="text-xs font-black text-indigo-600 uppercase flex items-center gap-1.5"><i class="fas fa-user-check"></i> พนักงานในทีม <span class="text-slate-400 font-normal normal-case">(ติ๊กเพื่อเลือก)</span></label>
-            <div class="flex gap-2">
-              <button type="button" onclick="whaSelectAllMembers(true)" class="text-[10px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 transition-all">เลือกทั้งหมด</button>
-              <button type="button" onclick="whaSelectAllMembers(false)" class="text-[10px] font-black text-slate-500 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 transition-all">ยกเลิก</button>
-            </div>
-          </div>
-          <div id="wha-team-members" class="flex flex-wrap gap-2 min-h-[46px] p-2.5 bg-slate-50 rounded-xl border-2 border-slate-200">
-            <span class="text-slate-400 text-xs self-center font-semibold">← เลือกทีมด้านซ้ายก่อน</span>
-          </div>
-        </div>
-      </div>
-      <div id="wha-team-summary" class="text-sm text-indigo-700 font-bold pb-1"></div>
-      <div class="border-b border-slate-200"></div>
-    </div><!-- end wha-shared-team -->
-
-    <!-- ── ฟอร์ม 1: บันทึกการโหลด (Team) ── -->
-    <div id="wha-form-load" class="hidden p-5 space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="border-l-4 border-amber-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-clock text-amber-500"></i> เวลาเริ่ม</label>
-          <input type="text" id="wha-f-load-timeStart" maxlength="5" placeholder="08:00" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 transition-all w-full text-sm text-center" oninput="whaTimeInputEl(this)" onblur="whaTimeBlurEl(this)">
-        </div>
-        <div class="border-l-4 border-amber-300 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-clock text-amber-400"></i> เวลาเสร็จ</label>
-          <input type="text" id="wha-f-load-timeEnd" maxlength="5" placeholder="17:00" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 transition-all w-full text-sm text-center" oninput="whaTimeInputEl(this)" onblur="whaTimeBlurEl(this)">
-        </div>
-        <div class="border-l-4 border-emerald-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-box text-emerald-500"></i> จำนวนไซส์ (รวม)</label>
-          <input type="number" id="wha-f-load-qty" placeholder="0" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-emerald-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-emerald-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-weight text-emerald-500"></i> น้ำหนักรวม (กก.)</label>
-          <input type="number" id="wha-f-load-weight" step="0.01" placeholder="0.00" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-emerald-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-slate-300 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-sticky-note text-slate-400"></i> หมายเหตุ</label>
-          <input type="text" id="wha-f-load-remarkQ" placeholder="หมายเหตุเพิ่มเติม..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-full text-sm">
-        </div>
-        <div class="border-l-4 border-sky-400 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-truck text-sky-500"></i> ทะเบียนรถที่โหลด <span class="text-slate-400 font-normal normal-case text-[10px]">(ไม่บังคับ)</span></label>
-          <select id="wha-f-load-truck" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-sky-400 cursor-pointer transition-all w-full text-sm">
-            <option value="">— ไม่ระบุ —</option>
-          </select>
-        </div>
-      </div>
-      <button onclick="whaSubmitTeam('บันทึกการโหลด')" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <i class="fas fa-truck-loading"></i> บันทึกข้อมูลการโหลด
-      </button>
-    </div>
-
-    <!-- ── ฟอร์ม 2: เคลมสินค้า (Team) ── -->
-    <div id="wha-form-claim" class="hidden p-5 space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="border-l-4 border-indigo-400 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-barcode text-indigo-500"></i> รหัสสินค้า / ชื่อสินค้า</label>
-          <input type="text" id="wha-f-claim-skuA" list="list-products-wha" placeholder="พิมพ์รหัสหรือชื่อสินค้า..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-full text-sm uppercase" oninput="whaFormAutoFillSku('wha-f-claim-skuA','wha-f-claim-nameA')" autocomplete="off">
-        </div>
-        <div class="border-l-4 border-slate-200 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-tag text-slate-400"></i> ชื่อสินค้า</label>
-          <input type="text" id="wha-f-claim-nameA" placeholder="ชื่อสินค้า (auto-fill)" class="bg-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-600 outline-none focus:border-indigo-400 transition-all w-full text-sm" readonly>
-        </div>
-        <div class="border-l-4 border-rose-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-hashtag text-rose-500"></i> จำนวนเคลม</label>
-          <input type="number" id="wha-f-claim-damageQty" placeholder="0" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-rose-600 outline-none focus:border-rose-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-orange-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-list text-orange-500"></i> ประเภทเคลม</label>
-          <select id="wha-f-claim-causeP" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-orange-400 cursor-pointer transition-all w-full text-sm">
-            <option value="">-- เลือกประเภท --</option>
-            <option value="ลูกค้า (ขาด/ผิด)">ลูกค้า (ขาด/ผิด)</option>
-            <option value="คลัง (ขาด/ผิด)">คลัง (ขาด/ผิด)</option>
-            <option value="ผู้ผลิต (ขาด/ผิด)">ผู้ผลิต (ขาด/ผิด)</option>
-            <option value="ส่งผิด/โหลดผิด">ส่งผิด/โหลดผิด</option>
-            <option value="อื่นๆ">อื่นๆ</option>
-          </select>
-        </div>
-        <div class="border-l-4 border-slate-300 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-sticky-note text-slate-400"></i> หมายเหตุ</label>
-          <input type="text" id="wha-f-claim-remarkQ" placeholder="หมายเหตุเพิ่มเติม..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-full text-sm">
-        </div>
-      </div>
-      <button onclick="whaSubmitTeam('เคลมสินค้า')" class="w-full bg-orange-600 hover:bg-orange-700 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <i class="fas fa-clipboard-check"></i> บันทึกงานเคลม
-      </button>
-    </div>
-
-    <!-- ── ฟอร์ม 3: โหลดสินค้าผิด (Team) ── -->
-    <div id="wha-form-wrongload" class="hidden p-5 space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="border-l-4 border-emerald-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-boxes text-emerald-500"></i> โหลดทั้งหมด (ไซส์)</label>
-          <input type="number" id="wha-f-wl-qty" placeholder="0" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-emerald-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-rose-500 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-times-circle text-rose-500"></i> โหลดผิด (ไซส์)</label>
-          <input type="number" id="wha-f-wl-damageQty" placeholder="0" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-rose-600 outline-none focus:border-rose-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-amber-400 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-exclamation-triangle text-amber-500"></i> สาเหตุ</label>
-          <textarea id="wha-f-wl-causeP" rows="3" placeholder="ระบุรายละเอียดสาเหตุที่โหลดสินค้าผิด..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 transition-all w-full text-sm resize-none"></textarea>
-        </div>
-      </div>
-      <button onclick="whaSubmitTeam('โหลดสินค้าผิด')" class="w-full bg-rose-600 hover:bg-rose-700 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <i class="fas fa-times-circle"></i> บันทึกโหลดผิด
-      </button>
-    </div>
-
-    <!-- ── ฟอร์ม 4: ปัญหาน้ำหนักสินค้า (Team) ── -->
-    <div id="wha-form-weight" class="hidden p-5 space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="border-l-4 border-indigo-400 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-barcode text-indigo-500"></i> รหัสสินค้า / ชื่อสินค้า</label>
-          <input type="text" id="wha-f-wgt-skuA" list="list-products-wha" placeholder="พิมพ์รหัสหรือชื่อสินค้า..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-full text-sm uppercase" oninput="whaFormAutoFillSku('wha-f-wgt-skuA','wha-f-wgt-nameA')" autocomplete="off">
-        </div>
-        <div class="border-l-4 border-slate-200 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-tag text-slate-400"></i> ชื่อสินค้า</label>
-          <input type="text" id="wha-f-wgt-nameA" placeholder="ชื่อสินค้า (auto-fill)" class="bg-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-600 outline-none w-full text-sm" readonly>
-        </div>
-        <div class="border-l-4 border-emerald-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-weight text-emerald-500"></i> น้ำหนักที่ชั่ง (กก.)</label>
-          <input type="number" id="wha-f-wgt-weight" step="0.01" placeholder="0.00" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-emerald-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-teal-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-balance-scale text-teal-500"></i> น้ำหนักต่อหน่วย (กก.)</label>
-          <input type="number" id="wha-f-wgt-wpu" step="0.001" placeholder="0.000" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-teal-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-amber-400 pl-4 md:col-span-2">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-exclamation-triangle text-amber-500"></i> สาเหตุ</label>
-          <textarea id="wha-f-wgt-causeP" rows="2" placeholder="ระบุสาเหตุปัญหาน้ำหนักสินค้า..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 transition-all w-full text-sm resize-none"></textarea>
-        </div>
-      </div>
-      <button onclick="whaSubmitTeam('ปัญหาน้ำหนักสินค้า')" class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <i class="fas fa-balance-scale"></i> บันทึกปัญหาน้ำหนัก
-      </button>
-    </div>
-
-    <!-- ── ฟอร์ม 5: สินค้าเสียหาย-การเก็บ (Individual) ── -->
-    <div id="wha-form-dmgstore" class="hidden p-5 space-y-4">
-      <div class="grid grid-cols-1 gap-4">
-        <div class="border-l-4 border-emerald-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-user text-emerald-500"></i> ผู้รับผิดชอบ</label>
-          <select id="wha-f-dgs-emp" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-emerald-400 cursor-pointer transition-all w-full text-sm">
-            <option value="">-- เลือกผู้รับผิดชอบ --</option>
-          </select>
-        </div>
-        <div class="border-l-4 border-indigo-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-barcode text-indigo-500"></i> รหัสสินค้า / ชื่อสินค้า</label>
-          <input type="text" id="wha-f-dgs-skuA" list="list-products-wha" placeholder="พิมพ์รหัสหรือชื่อสินค้า..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-full text-sm uppercase" oninput="whaFormAutoFillSku('wha-f-dgs-skuA','wha-f-dgs-nameA')" autocomplete="off">
-        </div>
-        <div class="border-l-4 border-slate-200 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-tag text-slate-400"></i> ชื่อสินค้า</label>
-          <input type="text" id="wha-f-dgs-nameA" placeholder="ชื่อสินค้า (auto-fill)" class="bg-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-600 outline-none w-full text-sm" readonly>
-        </div>
-        <div class="border-l-4 border-rose-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-hashtag text-rose-500"></i> จำนวนเสียหาย</label>
-          <input type="number" id="wha-f-dgs-damageQty" placeholder="0" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-rose-600 outline-none focus:border-rose-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-amber-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-exclamation-triangle text-amber-500"></i> สาเหตุ</label>
-          <textarea id="wha-f-dgs-causeP" rows="3" placeholder="ระบุสาเหตุความเสียหาย..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 transition-all w-full text-sm resize-none"></textarea>
-        </div>
-      </div>
-      <button onclick="whaSubmitIndiv('สินค้าเสียหาย-การเก็บ')" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <i class="fas fa-archive"></i> บันทึกเสียหาย (เก็บ)
-      </button>
-    </div>
-
-    <!-- ── ฟอร์ม 6: สินค้าเสียหาย-การโหลด (Individual) ── -->
-    <div id="wha-form-dmgload" class="hidden p-5 space-y-4">
-      <div class="grid grid-cols-1 gap-4">
-        <div class="border-l-4 border-emerald-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-user text-emerald-500"></i> ผู้รับผิดชอบ</label>
-          <select id="wha-f-dgl-emp" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-emerald-400 cursor-pointer transition-all w-full text-sm">
-            <option value="">-- เลือกผู้รับผิดชอบ --</option>
-          </select>
-        </div>
-        <div class="border-l-4 border-indigo-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-barcode text-indigo-500"></i> รหัสสินค้า / ชื่อสินค้า</label>
-          <input type="text" id="wha-f-dgl-skuA" list="list-products-wha" placeholder="พิมพ์รหัสหรือชื่อสินค้า..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-full text-sm uppercase" oninput="whaFormAutoFillSku('wha-f-dgl-skuA','wha-f-dgl-nameA')" autocomplete="off">
-        </div>
-        <div class="border-l-4 border-slate-200 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-tag text-slate-400"></i> ชื่อสินค้า</label>
-          <input type="text" id="wha-f-dgl-nameA" placeholder="ชื่อสินค้า (auto-fill)" class="bg-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-600 outline-none w-full text-sm" readonly>
-        </div>
-        <div class="border-l-4 border-rose-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-hashtag text-rose-500"></i> จำนวนเสียหาย</label>
-          <input type="number" id="wha-f-dgl-damageQty" placeholder="0" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-rose-600 outline-none focus:border-rose-400 transition-all w-full text-sm text-right">
-        </div>
-        <div class="border-l-4 border-amber-400 pl-4">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1.5 flex items-center gap-1.5"><i class="fas fa-exclamation-triangle text-amber-500"></i> สาเหตุ</label>
-          <textarea id="wha-f-dgl-causeP" rows="3" placeholder="ระบุสาเหตุความเสียหาย..." class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 transition-all w-full text-sm resize-none"></textarea>
-        </div>
-      </div>
-      <button onclick="whaSubmitIndiv('สินค้าเสียหาย-การโหลด')" class="w-full bg-orange-600 hover:bg-orange-700 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <i class="fas fa-truck-loading"></i> บันทึกเสียหาย (โหลด)
-      </button>
-    </div>
-
-  </div><!-- end Entry Panel -->
-
-  <!-- ── Filter bar + History button ── -->
-  <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-wrap gap-3 items-end">
-    <div>
-      <label class="text-xs font-black text-slate-400 uppercase mb-1 block">กรองประเภท</label>
-      <select id="wha-filter-type" onchange="whaRenderTable()" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-indigo-400 cursor-pointer">
-        <option value="">ทั้งหมด</option>
-        <option value="บันทึกการโหลด">บันทึกการโหลด</option>
-        <option value="เคลมสินค้า">เคลมสินค้า</option>
-        <option value="สินค้าเสียหาย-การเก็บ">สินค้าเสียหาย-การเก็บ</option>
-        <option value="สินค้าเสียหาย-การโหลด">สินค้าเสียหาย-การโหลด</option>
-        <option value="โหลดสินค้าผิด">โหลดสินค้าผิด</option>
-        <option value="ปัญหาน้ำหนักสินค้า">ปัญหาน้ำหนักสินค้า</option>
-      </select>
-    </div>
-    <div>
-      <label class="text-xs font-black text-slate-400 uppercase mb-1 block">ค้นหา</label>
-      <input type="text" id="wha-search" placeholder="ชื่อพนักงาน / รหัสสินค้า..." oninput="whaRenderTable()" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all w-52">
-    </div>
-    <div class="flex-grow"></div>
-    <button onclick="whaToggleHistory()" class="bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-black hover:bg-slate-200 transition-all flex items-center gap-2">
-      <i class="fas fa-history"></i> ย้อนหลัง
-    </button>
-  </div>
-
-  <!-- History Panel -->
-  <div id="wha-history-panel" class="hidden bg-white rounded-2xl border-2 border-indigo-200 shadow-sm overflow-hidden">
-    <div class="bg-indigo-50 px-5 py-3 flex flex-wrap gap-3 items-end border-b border-indigo-100">
-      <div>
-        <label class="text-[10px] font-black text-indigo-600 uppercase block mb-1">วันที่เริ่มต้น</label>
-        <input type="date" id="wha-hist-from" class="bg-white border-2 border-indigo-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:border-indigo-400 text-sm">
-      </div>
-      <div>
-        <label class="text-[10px] font-black text-indigo-600 uppercase block mb-1">วันที่สิ้นสุด</label>
-        <input type="date" id="wha-hist-to" class="bg-white border-2 border-indigo-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:border-indigo-400 text-sm">
-      </div>
-      <div>
-        <label class="text-[10px] font-black text-indigo-600 uppercase block mb-1">ประเภท</label>
-        <select id="wha-hist-type" class="bg-white border-2 border-indigo-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:border-indigo-400 text-sm cursor-pointer">
-          <option value="">ทั้งหมด</option>
-          <option value="บันทึกการโหลด">บันทึกการโหลด</option>
-          <option value="เคลมสินค้า">เคลมสินค้า</option>
-          <option value="สินค้าเสียหาย-การเก็บ">สินค้าเสียหาย-การเก็บ</option>
-          <option value="สินค้าเสียหาย-การโหลด">สินค้าเสียหาย-การโหลด</option>
-          <option value="โหลดสินค้าผิด">โหลดสินค้าผิด</option>
-          <option value="ปัญหาน้ำหนักสินค้า">ปัญหาน้ำหนักสินค้า</option>
-        </select>
-      </div>
-      <button onclick="whaLoadHistory()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all">
-        <i class="fas fa-search"></i> โหลดข้อมูล
-      </button>
-      <span id="wha-hist-count" class="text-xs font-bold text-indigo-700 ml-1"></span>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-xs border-collapse">
-        <thead>
-          <tr class="bg-indigo-800 text-white text-[10px] font-black uppercase tracking-wider">
-            <th class="px-2 py-2">#</th>
-            <th class="px-2 py-2 text-left">ประเภท</th>
-            <th class="px-2 py-2">วันที่</th>
-            <th class="px-2 py-2 text-left">รหัสพนักงาน</th>
-            <th class="px-2 py-2 text-left">ชื่อพนักงาน</th>
-            <th class="px-2 py-2 text-left">ทีม</th>
-            <th class="px-2 py-2">เริ่ม</th>
-            <th class="px-2 py-2">เสร็จ</th>
-            <th class="px-2 py-2 text-right">นาที</th>
-            <th class="px-2 py-2 text-right bg-emerald-950">จำนวน</th>
-            <th class="px-2 py-2 text-right bg-emerald-900">น้ำหนัก</th>
-            <th class="px-2 py-2 text-right">นาที/รายการ</th>
-            <th class="px-2 py-2 text-right">น.หนัก/หน่วย</th>
-            <th class="px-2 py-2 text-left">รหัสสินค้า</th>
-            <th class="px-2 py-2 text-left">ชื่อสินค้า</th>
-            <th class="px-2 py-2 text-right bg-rose-900">เสียหาย/ผิด</th>
-            <th class="px-2 py-2 text-left">สาเหตุ</th>
-            <th class="px-2 py-2 text-left">หมายเหตุ</th>
-            <th class="px-2 py-2 text-left">รหัสที่ถูก</th>
-            <th class="px-2 py-2 text-left">ชื่อที่ถูก</th>
-          </tr>
-        </thead>
-        <tbody id="wha-hist-tbody"></tbody>
-      </table>
-      <div id="wha-hist-empty" class="py-8 text-center text-slate-400 text-sm font-bold">ไม่มีข้อมูลในช่วงวันที่เลือก</div>
-    </div>
-  </div>
-
-  <!-- Main Entry Table -->
-  <div class="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="text-xs border-collapse" style="min-width:1800px;width:max-content;" id="wha-table">
-        <thead>
-          <tr class="bg-slate-800 text-slate-200 text-[10px] font-black uppercase tracking-wider">
-            <th class="px-3 py-3 text-center" style="width:52px">#</th>
-            <th class="px-3 py-3 text-left" style="min-width:160px">ประเภทข้อมูล</th>
-            <th class="px-3 py-3 text-left" style="min-width:120px">รหัสพนักงาน</th>
-            <th class="px-3 py-3 text-left" style="min-width:180px">ชื่อพนักงาน</th>
-            <th class="px-3 py-3 text-left" style="min-width:110px">ทีม</th>
-            <th class="px-3 py-3 text-center bg-amber-900" style="min-width:90px">เวลาเริ่ม</th>
-            <th class="px-3 py-3 text-center bg-amber-800" style="min-width:90px">เวลาเสร็จ</th>
-            <th class="px-3 py-3 text-right bg-slate-700" style="min-width:72px">นาที</th>
-            <th class="px-3 py-3 text-right bg-emerald-950" style="min-width:90px">จำนวน (I)</th>
-            <th class="px-3 py-3 text-right bg-emerald-900" style="min-width:110px">น้ำหนัก กก.</th>
-            <th class="px-3 py-3 text-right" style="min-width:100px">นาที/รายการ</th>
-            <th class="px-3 py-3 text-right" style="min-width:110px">น.หนัก/หน่วย</th>
-            <th class="px-3 py-3 text-left" style="min-width:130px">รหัสสินค้า (A)</th>
-            <th class="px-3 py-3 text-left" style="min-width:200px">ชื่อสินค้า (A)</th>
-            <th class="px-3 py-3 text-right bg-rose-900" style="min-width:110px">เสียหาย/ผิด (O)</th>
-            <th class="px-3 py-3 text-left" style="min-width:180px">สาเหตุ/ประเภท (P)</th>
-            <th class="px-3 py-3 text-left" style="min-width:180px">หมายเหตุ (Q)</th>
-            <th class="px-3 py-3 text-left" style="min-width:130px">รหัสที่ถูก (B)</th>
-            <th class="px-3 py-3 text-left" style="min-width:200px">ชื่อที่ถูก (B)</th>
-            <th class="px-3 py-3 text-center" style="width:48px">ลบ</th>
-          </tr>
-        </thead>
-        <tbody id="wha-tbody"></tbody>
-      </table>
-    </div>
-    <div id="wha-empty" class="py-16 text-center text-slate-400">
-      <i class="fas fa-clipboard-list text-5xl mb-4 opacity-20 block text-indigo-300"></i>
-      <p class="font-bold text-lg">กดปุ่ม "เพิ่มแถว" เพื่อเริ่มบันทึกข้อมูลจากหน้างาน</p>
-    </div>
-  </div>
-
-</div><!-- end view-whactivity-content -->
 
 <!-- ============================================ -->
 <!-- VIEW 6: INVENTORY CONTROL -->
@@ -1310,934 +693,467 @@ thead.sticky {
         </div>
     </div>
 
-    <!-- Sub-Tab Navigation -->
+    <!-- Sub-Tab Navigation (3 tabs) -->
     <div class="flex gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
-        <button onclick="switchInvSubTab('fg')" id="inv-tab-fg"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all bg-teal-600 text-white shadow-lg">
-            <i class="fas fa-boxes mr-2"></i> FINISH GOOD (FG)
-        </button>
-        <button onclick="switchInvSubTab('semi')" id="inv-tab-semi"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-slate-50">
-            <i class="fas fa-film mr-2"></i> SEMI (Film)
-        </button>
         <button onclick="switchInvSubTab('import')" id="inv-tab-import"
+            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all bg-teal-600 text-white shadow-lg">
+            <i class="fas fa-file-import mr-2"></i> นำเข้าข้อมูล
+        </button>
+        <button onclick="switchInvSubTab('compare')" id="inv-tab-compare"
             class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-slate-50">
-            <i class="fas fa-file-import mr-2"></i> IMPORT DATA
+            <i class="fas fa-balance-scale mr-2"></i> เทียบสต๊อก
         </button>
-        <button onclick="switchInvSubTab('prodverify')" id="inv-tab-prodverify"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-orange-50 hover:text-orange-700">
-            <i class="fas fa-check-double mr-2"></i> PRODUCTION VERIFY
-        </button>
-        <button onclick="switchInvSubTab('policycheck')" id="inv-tab-policycheck"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-violet-50 hover:text-violet-700">
-            <i class="fas fa-shield-alt mr-2"></i> POLICY CHECK
-        </button>
-        <button onclick="switchInvSubTab('safetystock')" id="inv-tab-safetystock"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-amber-50 hover:text-amber-700">
-            <i class="fas fa-warehouse mr-2"></i> SAFETY STOCK
+        <button onclick="switchInvSubTab('cyclecount')" id="inv-tab-cyclecount"
+            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-slate-50">
+            <i class="fas fa-clipboard-list mr-2"></i> ตรวจนับ
         </button>
     </div>
 
-    <!-- ====== SUB-TAB: SAFETY STOCK FG ====== -->
-    <div id="inv-sub-safetystock" class="hidden space-y-6">
+    <!-- ====== SUB-TAB: นำเข้าข้อมูล (Import) ====== -->
+    <div id="inv-sub-import" class="space-y-6">
 
-      <!-- Info Banner -->
-      <div class="bg-gradient-to-r from-amber-600 to-amber-500 rounded-2xl p-5 flex items-start gap-4">
-        <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white text-xl flex-shrink-0">
-          <i class="fas fa-warehouse"></i>
+      <!-- 5 Import Type Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+
+        <div id="inv-import-card-counting"
+             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-teal-400 hover:bg-teal-50"
+             onclick="invSelectImport('counting')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-teal-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
+              <i class="fas fa-database"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="font-black text-teal-700 text-xs uppercase tracking-wider truncate">COUNTING</p>
+              <p class="text-[10px] text-teal-500 font-bold">ชีต: Counting</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 font-bold leading-relaxed">ยอดสต๊อกจาก D365 • เทียบสต๊อก + Dashboard</p>
+          <p id="inv-import-lastdate-counting" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
         </div>
-        <div>
-          <p class="font-black text-white text-base">จัดการ Safety Stock FG</p>
-          <p class="text-amber-100 text-xs font-semibold mt-1">กำหนดสถานะและจำนวนคันรถที่ต้องวาง Safety Stock ต่อสินค้าแต่ละรายการ</p>
+
+        <div id="inv-import-card-onhand_fg"
+             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50"
+             onclick="invSelectImport('onhand_fg')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="font-black text-blue-700 text-xs uppercase tracking-wider truncate">ON-HAND FG</p>
+              <p class="text-[10px] text-blue-500 font-bold">ชีต: ON-HAND FG</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 font-bold leading-relaxed">สต๊อก FG • จอง + คงเหลือ</p>
+          <p id="inv-import-lastdate-onhand_fg" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
         </div>
-        <div class="ml-auto flex gap-2 flex-shrink-0">
-          <button onclick="loadSafetyStockData()" id="btn-ss-load"
-                  class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all">
-            <i class="fas fa-sync-alt"></i> โหลดข้อมูล
+
+        <div id="inv-import-card-onhand_semi"
+             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-purple-400 hover:bg-purple-50"
+             onclick="invSelectImport('onhand_semi')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-purple-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
+              <i class="fas fa-film"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="font-black text-purple-700 text-xs uppercase tracking-wider truncate">ON-HAND SEMI</p>
+              <p class="text-[10px] text-purple-500 font-bold">ชีต: ON-HAND SEMI</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 font-bold leading-relaxed">สต๊อก SEMI • ระดับ Batch + Serial</p>
+          <p id="inv-import-lastdate-onhand_semi" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
+        </div>
+
+        <div id="inv-import-card-transection_fg"
+             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-orange-400 hover:bg-orange-50"
+             onclick="invSelectImport('transection_fg')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-orange-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
+              <i class="fas fa-exchange-alt"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="font-black text-orange-700 text-xs uppercase tracking-wider truncate">TRANSACTION FG</p>
+              <p class="text-[10px] text-orange-500 font-bold">ชีต: Transection FG</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 font-bold leading-relaxed">การเคลื่อนไหว FG • ใช้สร้างใบตรวจนับ</p>
+          <p id="inv-import-lastdate-transection_fg" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
+        </div>
+
+        <div id="inv-import-card-transection_semi"
+             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-rose-400 hover:bg-rose-50"
+             onclick="invSelectImport('transection_semi')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-rose-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
+              <i class="fas fa-retweet"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="font-black text-rose-700 text-xs uppercase tracking-wider truncate">TRANSACTION SEMI</p>
+              <p class="text-[10px] text-rose-500 font-bold">ชีต: Transection SEMI</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 font-bold leading-relaxed">การเคลื่อนไหว SEMI • ใช้สร้างใบตรวจนับ SEMI</p>
+          <p id="inv-import-lastdate-transection_semi" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
+        </div>
+
+      </div>
+
+      <!-- Upload Panel -->
+      <div id="inv-upload-panel" class="hidden bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 space-y-6">
+        <div class="flex items-center gap-3">
+          <div id="inv-upload-icon" class="w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg bg-teal-600">
+            <i class="fas fa-database"></i>
+          </div>
+          <div>
+            <h3 id="inv-upload-title" class="text-lg font-black text-slate-700 uppercase tracking-wider">COUNTING</h3>
+            <p id="inv-upload-desc" class="text-xs text-slate-400 font-bold">ยอดสต๊อกจาก D365</p>
+          </div>
+          <button onclick="invCancelImport()" class="ml-auto text-slate-400 hover:text-rose-500 transition-all text-sm font-black flex items-center gap-1">
+            <i class="fas fa-times"></i> ปิด
           </button>
-          <button onclick="saveSafetyStock()" id="btn-ss-save"
-                  class="bg-white text-amber-700 hover:bg-amber-50 px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
-            <i class="fas fa-save"></i> บันทึกทั้งหมด
+        </div>
+        <div id="inv-file-drop-zone"
+             class="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50 transition-all"
+             onclick="document.getElementById('inv-file-input').click()"
+             ondragover="event.preventDefault(); this.classList.add('border-teal-400','bg-teal-50')"
+             ondragleave="this.classList.remove('border-teal-400','bg-teal-50')"
+             ondrop="invImportHandleDrop(event)">
+          <input type="file" id="inv-file-input" accept=".xlsx,.xls" class="hidden" onchange="invImportHandleFile(this)">
+          <i class="fas fa-cloud-upload-alt text-5xl text-slate-300 mb-4 block"></i>
+          <p id="inv-file-label" class="font-black text-slate-400 text-base">คลิกหรือลากไฟล์ Excel มาวาง</p>
+          <p class="text-slate-300 text-sm mt-1 font-bold">.xlsx, .xls</p>
+        </div>
+        <div id="inv-import-preview" class="hidden space-y-4">
+          <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+            <div class="flex items-center gap-4 p-4 border-b border-slate-200">
+              <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                <i class="fas fa-file-excel text-lg"></i>
+              </div>
+              <div class="flex-1">
+                <p id="inv-preview-text" class="font-black text-slate-700 text-sm"></p>
+                <p id="inv-preview-sub" class="text-xs text-slate-400 font-bold mt-0.5"></p>
+              </div>
+              <button onclick="invClearImportFile()" class="text-rose-400 hover:text-rose-600 transition-all text-sm font-black">
+                <i class="fas fa-times mr-1"></i> ล้าง
+              </button>
+            </div>
+            <div class="overflow-x-auto max-h-48">
+              <table id="inv-preview-table" class="w-full text-xs"></table>
+            </div>
+          </div>
+          <button onclick="invConfirmImport()"
+                  class="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-xl font-black transition-all shadow-md flex items-center justify-center gap-2 text-base">
+            <i class="fas fa-check-circle"></i> ยืนยันนำเข้าข้อมูลเข้าชีต
+            <span id="inv-confirm-sheet-name" class="bg-white/20 px-2 py-0.5 rounded-lg text-sm">Counting</span>
           </button>
         </div>
       </div>
 
-      <!-- Filter & Summary Bar -->
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-wrap items-center gap-4">
+      <!-- Import Log -->
+      <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
+        <h3 class="text-lg font-black text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <i class="fas fa-history text-slate-400"></i> ประวัติการนำเข้าข้อมูล
+        </h3>
+        <div id="inv-import-log" class="text-center text-slate-300 py-10">
+          <i class="fas fa-database text-4xl mb-3 block opacity-20"></i>
+          <p class="font-bold">ยังไม่มีประวัติการนำเข้า</p>
+        </div>
+      </div>
+
+    </div><!-- end inv-sub-import -->
+
+    <!-- ====== SUB-TAB: เทียบสต๊อก (Compare) ====== -->
+    <div id="inv-sub-compare" class="hidden space-y-6">
+
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-wrap items-center gap-4">
         <div class="flex gap-2">
-          <button onclick="filterSafetyStock('all')" id="ss-filter-all"
-                  class="ss-filter-btn px-4 py-2 rounded-xl font-black text-xs bg-amber-600 text-white shadow">
+          <button onclick="invCompareMode('fg')" id="inv-cmp-btn-fg"
+                  class="inv-cmp-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-teal-600 text-white shadow transition-all">
+            <i class="fas fa-boxes mr-1"></i> FG
+          </button>
+          <button onclick="invCompareMode('semi')" id="inv-cmp-btn-semi"
+                  class="inv-cmp-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 transition-all">
+            <i class="fas fa-film mr-1"></i> SEMI
+          </button>
+        </div>
+        <div id="inv-cmp-wh-filter" class="flex gap-2">
+          <button onclick="invCmpSetWH('all')" id="inv-cmp-wh-all"
+                  class="inv-cmp-wh-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-700 text-white shadow transition-all">
             ทั้งหมด
           </button>
-          <button onclick="filterSafetyStock('safety_stock')" id="ss-filter-safety_stock"
-                  class="ss-filter-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700">
-            <i class="fas fa-check-circle mr-1"></i> Safety Stock
+          <button onclick="invCmpSetWH('FG-BP')" id="inv-cmp-wh-fg-bp"
+                  class="inv-cmp-wh-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-100 text-slate-600 hover:bg-teal-100 hover:text-teal-700 transition-all">
+            FG-BP
           </button>
-          <button onclick="filterSafetyStock('no_safety')" id="ss-filter-no_safety"
-                  class="ss-filter-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700">
-            <i class="fas fa-minus-circle mr-1"></i> No Safety
-          </button>
-          <button onclick="filterSafetyStock('disable')" id="ss-filter-disable"
-                  class="ss-filter-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-100 text-slate-600 hover:bg-rose-100 hover:text-rose-700">
-            <i class="fas fa-ban mr-1"></i> Disabled
+          <button onclick="invCmpSetWH('FG-A-')" id="inv-cmp-wh-fg-a"
+                  class="inv-cmp-wh-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-100 text-slate-600 hover:bg-teal-100 hover:text-teal-700 transition-all">
+            FG-A-
           </button>
         </div>
-        <div class="ml-auto">
-          <input type="text" id="ss-search" placeholder="ค้นหารหัส / ชื่อสินค้า..." oninput="filterSafetyStock()"
-                 class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-amber-400 w-56">
+        <input type="text" id="inv-cmp-search" placeholder="ค้นหารหัส / ชื่อสินค้า..."
+               oninput="invFilterCompare()"
+               class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400 w-56 transition-all">
+        <div class="ml-auto flex gap-2">
+          <button onclick="invLoadCompare()"
+                  class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+            <i class="fas fa-sync-alt"></i> โหลดข้อมูล
+          </button>
+          <button onclick="invExportCompare()"
+                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+            <i class="fas fa-file-excel"></i> Export
+          </button>
         </div>
       </div>
 
-      <!-- KPI Cards -->
-      <div id="ss-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-black text-amber-600 uppercase">สินค้าทั้งหมด</p>
-          <p id="ss-kpi-total" class="text-3xl font-black text-amber-700 mt-1 font-mono">0</p>
-          <p class="text-[10px] text-amber-500 font-bold">รายการ</p>
+      <div id="inv-cmp-kpi-fg" class="hidden grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div class="bg-teal-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-teal-100 uppercase">Total SKU</p>
+          <p id="inv-cmp-kpi-total" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
-        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-black text-emerald-600 uppercase">Safety Stock</p>
-          <p id="ss-kpi-ss" class="text-3xl font-black text-emerald-700 mt-1 font-mono">0</p>
-          <p class="text-[10px] text-emerald-500 font-bold">รายการ</p>
+        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-blue-400">
+          <p class="text-[10px] font-black text-slate-400 uppercase">ยอดระบบ (เส้น)</p>
+          <p id="inv-cmp-kpi-sys-line" class="text-2xl font-black mt-1 font-mono text-blue-300">0</p>
         </div>
-        <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-black text-blue-600 uppercase">No Safety</p>
-          <p id="ss-kpi-nosafety" class="text-3xl font-black text-blue-700 mt-1 font-mono">0</p>
-          <p class="text-[10px] text-blue-500 font-bold">รายการ</p>
+        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-indigo-400">
+          <p class="text-[10px] font-black text-slate-400 uppercase">ยอดระบบ (KG)</p>
+          <p id="inv-cmp-kpi-sys-kg" class="text-2xl font-black mt-1 font-mono text-indigo-300">0</p>
         </div>
-        <div class="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-black text-rose-600 uppercase">Disabled</p>
-          <p id="ss-kpi-disabled" class="text-3xl font-black text-rose-700 mt-1 font-mono">0</p>
-          <p class="text-[10px] text-rose-500 font-bold">รายการ</p>
+        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-amber-400">
+          <p class="text-[10px] font-black text-slate-400 uppercase">จอง (เส้น)</p>
+          <p id="inv-cmp-kpi-reserved" class="text-2xl font-black mt-1 font-mono text-amber-300">0</p>
         </div>
-        <div class="bg-violet-50 border border-violet-200 rounded-2xl p-4 text-center">
-          <p class="text-[10px] font-black text-violet-600 uppercase">รถรวม (คัน)</p>
-          <p id="ss-kpi-trucks" class="text-3xl font-black text-violet-700 mt-1 font-mono">0</p>
-          <p class="text-[10px] text-violet-500 font-bold">คัน</p>
+        <div class="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-emerald-100 uppercase">✓ ตรงกัน</p>
+          <p id="inv-cmp-kpi-match" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+        <div class="bg-rose-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-rose-100 uppercase">⚠ ผลต่าง</p>
+          <p id="inv-cmp-kpi-diff" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
       </div>
 
-      <!-- Table -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div id="ss-table-empty" class="py-20 text-center text-slate-300">
-          <i class="fas fa-warehouse text-5xl mb-4 opacity-20 block text-amber-300"></i>
-          <p class="font-bold text-slate-400">กด <strong>โหลดข้อมูล</strong> เพื่อดึงรายการสินค้าจากชีต Product</p>
+      <div id="inv-cmp-kpi-semi" class="hidden grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-purple-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-purple-100 uppercase">Total SKU</p>
+          <p id="inv-cmp-kpi-semi-total" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
-        <div id="ss-table-container" class="hidden overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="sticky top-0 z-10 text-[11px] font-black uppercase tracking-wider" style="background:#1e293b;color:#f1f5f9;">
+        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-purple-400">
+          <p class="text-[10px] font-black text-slate-400 uppercase">ม้วนทั้งหมด</p>
+          <p id="inv-cmp-kpi-semi-rolls" class="text-2xl font-black mt-1 font-mono text-purple-300">0</p>
+        </div>
+        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-indigo-400">
+          <p class="text-[10px] font-black text-slate-400 uppercase">น้ำหนักรวม (KG)</p>
+          <p id="inv-cmp-kpi-semi-kg" class="text-2xl font-black mt-1 font-mono text-indigo-300">0</p>
+        </div>
+        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-teal-400">
+          <p class="text-[10px] font-black text-slate-400 uppercase">คงเหลือ (KG)</p>
+          <p id="inv-cmp-kpi-semi-avail" class="text-2xl font-black mt-1 font-mono text-teal-300">0</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div id="inv-cmp-empty" class="py-20 text-center text-slate-300">
+          <i class="fas fa-balance-scale text-6xl mb-4 opacity-20 block"></i>
+          <p class="font-bold text-slate-400">กดปุ่ม <strong>โหลดข้อมูล</strong> เพื่อดึงข้อมูลจาก Google Sheet</p>
+        </div>
+        <div id="inv-cmp-loading" class="hidden py-20 text-center">
+          <i class="fas fa-spinner fa-spin text-4xl text-teal-400 mb-4 block"></i>
+          <p class="text-slate-500 font-bold">กำลังโหลดข้อมูล...</p>
+        </div>
+        <div id="inv-cmp-table-wrap" class="hidden overflow-x-auto">
+          <table id="inv-cmp-table-fg" class="w-full text-sm hidden">
+            <thead class="bg-slate-900 text-slate-300 text-[11px] font-black uppercase tracking-wider sticky top-0 z-10">
               <tr>
-                <th class="px-3 py-3 text-center w-10">#</th>
-                <th class="px-4 py-3 text-left" style="min-width:100px">รหัสสินค้า</th>
-                <th class="px-4 py-3 text-left" style="min-width:160px">ชื่อสินค้า</th>
-                <th class="px-3 py-3 text-center" style="min-width:80px;background:#0f766e;color:#99f6e4;">น้ำหนัก/เส้น<br><span style="font-size:9px;font-weight:600;opacity:0.85">(กก.)</span></th>
-                <th class="px-3 py-3 text-center" style="min-width:90px;background:#1e40af;color:#bfdbfe;">เส้น/มัด</th>
-                <th class="px-3 py-3 text-center" style="min-width:180px;background:#374151;color:#f9fafb;">สถานะ</th>
-                <th class="px-3 py-3 text-center" style="min-width:100px;background:#7c3aed;color:#ede9fe;">จำนวนรถ<br><span style="font-size:9px;font-weight:600;opacity:0.85">(คัน)</span></th>
-                <th class="px-3 py-3 text-center" style="min-width:100px;background:#065f46;color:#d1fae5;">น้ำหนักรวม<br><span style="font-size:9px;font-weight:600;opacity:0.85">(กก.)</span></th>
-                <th class="px-3 py-3 text-center" style="min-width:100px;background:#1d4ed8;color:#bfdbfe;">จำนวน<br><span style="font-size:9px;font-weight:600;opacity:0.85">(เส้น)</span></th>
-                <th class="px-3 py-3 text-center" style="min-width:100px;background:#92400e;color:#fef3c7;">จำนวน<br><span style="font-size:9px;font-weight:600;opacity:0.85">(มัด)</span></th>
-                <th class="px-3 py-3 text-center" style="min-width:80px">หมายเหตุ</th>
+                <th class="px-3 py-3 text-center w-10">No.</th>
+                <th class="px-4 py-3 text-left min-w-[80px]">WH</th>
+                <th class="px-4 py-3 text-left min-w-[120px]">Item number</th>
+                <th class="px-4 py-3 text-left min-w-[160px]">Product name</th>
+                <th class="px-3 py-3 text-right bg-blue-900 min-w-[90px]">ยอดระบบ<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-right bg-indigo-900 min-w-[90px]">ยอดระบบ<br><span class="text-[9px] font-normal opacity-70">(KG)</span></th>
+                <th class="px-3 py-3 text-right bg-amber-900 min-w-[80px]">จอง<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-right bg-teal-900 min-w-[80px]">คงเหลือ<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-right bg-green-900 min-w-[90px]">Counting<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-right bg-slate-700 min-w-[80px]">ผลต่าง</th>
+                <th class="px-3 py-3 text-center min-w-[80px]">สถานะ</th>
               </tr>
             </thead>
-            <tbody id="ss-tbody"></tbody>
+            <tbody id="inv-cmp-tbody-fg" class="divide-y divide-slate-100"></tbody>
+          </table>
+          <table id="inv-cmp-table-semi" class="w-full text-sm hidden">
+            <thead class="bg-slate-900 text-slate-300 text-[11px] font-black uppercase tracking-wider sticky top-0 z-10">
+              <tr>
+                <th class="px-3 py-3 text-center w-10">No.</th>
+                <th class="px-4 py-3 text-left min-w-[80px]">WH</th>
+                <th class="px-4 py-3 text-left min-w-[120px]">Item number</th>
+                <th class="px-4 py-3 text-left min-w-[160px]">Product name</th>
+                <th class="px-4 py-3 text-left min-w-[100px]">Batch</th>
+                <th class="px-4 py-3 text-left min-w-[100px]">Serial</th>
+                <th class="px-3 py-3 text-right bg-purple-900 min-w-[90px]">น้ำหนัก<br><span class="text-[9px] font-normal opacity-70">(KG)</span></th>
+                <th class="px-3 py-3 text-right bg-teal-900 min-w-[90px]">คงเหลือ<br><span class="text-[9px] font-normal opacity-70">(KG)</span></th>
+                <th class="px-3 py-3 text-center min-w-[80px]">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="inv-cmp-tbody-semi" class="divide-y divide-slate-100"></tbody>
           </table>
         </div>
       </div>
 
-      <!-- Legend -->
-      <div class="flex flex-wrap gap-4 text-xs font-bold text-slate-500">
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span> Safety Stock — สินค้ายังผลิตและกำหนดให้วาง Safety</span>
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-400 inline-block"></span> No Safety Stock — สินค้ายังผลิตแต่ไม่วาง Safety</span>
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-rose-400 inline-block"></span> Disabled — หยุดผลิตแล้ว</span>
-        <span class="ml-auto flex items-center gap-1"><i class="fas fa-info-circle text-amber-400"></i> 1 คัน = 15,000 กก. | น้ำหนัก/เส้น จาก TST QC Standard</span>
+    </div><!-- end inv-sub-compare -->
+
+    <!-- ====== SUB-TAB: ตรวจนับ (Cycle Count) ====== -->
+    <div id="inv-sub-cyclecount" class="hidden space-y-6">
+
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-wrap items-center gap-4">
+        <div class="flex gap-2">
+          <button onclick="invCycleMode('fg')" id="inv-cyc-btn-fg"
+                  class="inv-cyc-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-teal-600 text-white shadow transition-all">
+            <i class="fas fa-boxes mr-1"></i> FG
+          </button>
+          <button onclick="invCycleMode('semi')" id="inv-cyc-btn-semi"
+                  class="inv-cyc-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 transition-all">
+            <i class="fas fa-film mr-1"></i> SEMI
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-black text-slate-400 uppercase tracking-wider"><i class="fas fa-calendar-alt mr-1"></i> วันที่</label>
+          <input type="date" id="inv-cyc-date"
+                 class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400 transition-all">
+        </div>
+        <input type="text" id="inv-cyc-search" placeholder="ค้นหารหัส / ชื่อสินค้า..."
+               oninput="invFilterCycle()"
+               class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400 w-52 transition-all">
+        <div class="ml-auto flex gap-2">
+          <button onclick="invLoadCycleCount()"
+                  class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+            <i class="fas fa-sync-alt"></i> โหลด
+          </button>
+          <button onclick="invPrintCycleForm()"
+                  class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+            <i class="fas fa-print"></i> พิมพ์
+          </button>
+          <button onclick="invSaveCycleCount()"
+                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+            <i class="fas fa-save"></i> บันทึก
+          </button>
+        </div>
       </div>
-    </div><!-- end inv-sub-safetystock -->
 
-    <!-- ====== SUB-TAB: FINISH GOOD (FG) ====== -->
-    <div id="inv-sub-fg" class="space-y-6">
-
-        <!-- Section 1: Control Panel -->
-        <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
-            <h3 class="text-lg font-black text-slate-700 uppercase tracking-wider mb-6 flex items-center gap-2">
-                <i class="fas fa-sliders-h text-teal-500"></i> ตั้งค่าการตรวจนับ
-            </h3>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-                <!-- File Upload -->
-                <div class="md:col-span-2">
-                    <label class="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                        <i class="fas fa-file-excel text-green-600 mr-1"></i> แนบไฟล์ Excel (Movement Data)
-                    </label>
-                    <div id="fg-file-drop-zone"
-                         class="border-2 border-dashed border-slate-200 rounded-xl p-5 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50 transition-all"
-                         onclick="document.getElementById('fg-excel-input').click()"
-                         ondragover="event.preventDefault(); this.classList.add('border-teal-400','bg-teal-50')"
-                         ondragleave="this.classList.remove('border-teal-400','bg-teal-50')"
-                         ondrop="handleFGFileDrop(event)">
-                        <input type="file" id="fg-excel-input" accept=".xlsx,.xls" class="hidden" onchange="handleFGFileSelect(this)">
-                        <i class="fas fa-cloud-upload-alt text-3xl text-slate-300 mb-2"></i>
-                        <p id="fg-file-label" class="text-sm font-bold text-slate-400">คลิกหรือลากไฟล์มาวางที่นี่</p>
-                        <p class="text-xs text-slate-300 mt-1">.xlsx, .xls</p>
-                    </div>
-                </div>
-
-                <!-- Cycle Date -->
-                <div>
-                    <label class="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                        <i class="fas fa-calendar-alt text-teal-500 mr-1"></i> วันที่ Cycle Count
-                    </label>
-                    <input type="date" id="fg-cycle-date"
-                           class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl p-4 font-bold text-slate-700 outline-none focus:border-teal-500 transition-all">
-                </div>
-
-                <!-- Lines Per Bundle -->
-                <div>
-                    <label class="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                        <i class="fas fa-layer-group text-amber-500 mr-1"></i> เส้นต่อมัด (Default)
-                    </label>
-                    <input type="number" id="fg-lines-per-bundle" value="10" min="1"
-                           class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl p-4 font-black text-slate-700 text-center text-lg outline-none focus:border-teal-500 transition-all">
-                </div>
-            </div>
-
-            <div class="flex flex-wrap gap-3 mt-6">
-                <button onclick="buildFGCycleTable()"
-                        class="bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2">
-                    <i class="fas fa-table"></i> สร้างตารางเทียบ
-                </button>
-                <button onclick="refreshFGSystemStock()" id="btn-fg-refresh"
-                        class="bg-sky-600 hover:bg-sky-700 text-white px-6 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2"
-                        title="รีเฟรชยอดระบบ (systemQty) โดยไม่ล้างค่าที่กรอกไว้">
-                    <i class="fas fa-sync-alt"></i> รีเฟรชยอดระบบ
-                </button>
-                <button onclick="addFGManualRow()"
-                        class="bg-slate-700 hover:bg-slate-800 text-white px-6 py-4 rounded-xl font-black transition-all flex items-center gap-2">
-                    <i class="fas fa-plus"></i> เพิ่มรายการ
-                </button>
-                <button onclick="saveFGCycleCount()"
-                        class="bg-emerald-600 hover:bg-emerald-800 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2">
-                    <i class="fas fa-save"></i> บันทึกผลการตรวจนับ
-                </button>
-                <button onclick="loadFGRecheckList()" id="btn-fg-recheck"
-                        class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-8 py-4 rounded-xl font-black transition-all border-2 border-amber-600 flex items-center gap-2">
-                    <i class="fas fa-exclamation-triangle"></i> ดึงรายการที่ต้อง Re-Check
-                    <span id="fg-recheck-badge" class="hidden bg-red-600 text-white text-[11px] px-2 py-0.5 rounded-full font-black">0</span>
-                </button>
-                <button onclick="toggleFGDiffFilter()" id="btn-fg-filter-diff"
-                  class="bg-white border-2 border-rose-500 text-rose-600 hover:bg-rose-50 px-6 py-4 rounded-xl font-black transition-all flex items-center gap-2 shadow-sm">
-                  <i class="fas fa-filter"></i> <span>แสดงเฉพาะ Diff != 0</span>
-                </button>
-                <button id="btn-kpi" onclick="openKPIDrawer()"
-                        class="hidden bg-violet-600 hover:bg-violet-500 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2">
-                    <i class="fas fa-chart-bar"></i> คำนวณ KPI
-                </button>
-                <button onclick="printFGStockForm()"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2 ml-auto">
-                    <i class="fas fa-print"></i> พิมพ์แบบฟอร์มตรวจนับ
-                </button>
-            </div>
-
-            <!-- Re-Check Banner FG -->
-            <div id="fg-recheck-banner" class="hidden mt-5 rounded-2xl p-5 border-2 flex items-center gap-4">
-                <div id="fg-recheck-banner-icon" class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-white"></div>
-                <div class="flex-1">
-                    <div id="fg-recheck-banner-title" class="font-black text-base"></div>
-                    <div id="fg-recheck-banner-sub" class="text-sm font-bold mt-0.5 opacity-80"></div>
-                </div>
-                <button onclick="clearFGRecheckMode()" class="text-xs font-black px-4 py-2 rounded-xl bg-white/30 hover:bg-white/50 transition-all">
-                    <i class="fas fa-times mr-1"></i> ล้างโหมด Re-Check
-                </button>
-            </div>
+      <div id="inv-cyc-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="bg-teal-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-teal-100 uppercase">รายการทั้งหมด</p>
+          <p id="inv-cyc-kpi-total" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
-
-        <!-- Section 2: Summary KPI -->
-        <div id="fg-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div class="bg-teal-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs font-black text-teal-100 uppercase tracking-wider">รายการสินค้า</p>
-                <p id="fg-kpi-items" class="text-4xl font-black mt-2 font-mono">0</p>
-                <p class="text-xs text-teal-200 mt-1">รายการ</p>
-            </div>
-            <div class="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs font-black text-emerald-100 uppercase tracking-wider">ตรงกัน</p>
-                <p id="fg-kpi-match" class="text-4xl font-black mt-2 font-mono">0</p>
-                <p class="text-xs text-emerald-200 mt-1">รายการ</p>
-            </div>
-            <div class="bg-rose-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs font-black text-rose-100 uppercase tracking-wider">ไม่ตรง</p>
-                <p id="fg-kpi-diff" class="text-4xl font-black mt-2 font-mono">0</p>
-                <p class="text-xs text-rose-200 mt-1">รายการ</p>
-            </div>
-            <div class="bg-slate-900 text-white p-6 rounded-2xl shadow-lg border-t-4 border-amber-500">
-                <p class="text-xs font-black text-slate-400 uppercase tracking-wider">ผลรวมส่วนต่าง</p>
-                <p id="fg-kpi-total-diff" class="text-4xl font-black mt-2 font-mono text-amber-400">0</p>
-                <p class="text-xs text-slate-400 mt-1">เส้น</p>
-            </div>
-            <div class="bg-slate-900 text-white p-6 rounded-2xl shadow-lg border-t-4 border-blue-500">
-                <p class="text-xs font-black text-slate-400 uppercase tracking-wider">Production SKU / Lines</p>
-                <p id="fg-kpi-prod" class="text-3xl font-black mt-2 font-mono text-blue-400">0 / 0</p>
-                <p class="text-xs text-slate-400 mt-1">จาก Transection FG</p>
-            </div>
+        <div class="bg-blue-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-blue-100 uppercase">รับเข้า (SKU)</p>
+          <p id="inv-cyc-kpi-in" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
-
-        <!-- Section 3: Comparison Table -->
-        <div id="fg-table-wrapper" class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-            <!-- Empty state -->
-            <div id="fg-table-empty" class="p-20 text-center text-slate-300">
-                <i class="fas fa-clipboard-list text-7xl mb-6 opacity-20"></i>
-                <p class="text-xl font-bold text-slate-400">กรุณาแนบไฟล์และกดสร้างตารางเทียบ</p>
-            </div>
-
-            <!-- Table -->
-            <div id="fg-table-container" class="hidden overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-slate-900 text-slate-300 text-xs font-black uppercase tracking-wider sticky top-0 z-10">
-                        <tr>
-                            <th class="px-4 py-4 text-center w-12">ลำดับ</th>
-                            <th class="px-4 py-4 text-left">รหัสสินค้า</th>
-                            <th class="px-4 py-4 text-left">ชื่อสินค้า</th>
-                            <th class="px-3 py-4 text-center bg-blue-900 w-24">กองที่ 1<br><span class="text-blue-300 text-[9px] normal-case">มัด</span></th>
-                            <th class="px-3 py-4 text-center bg-blue-900 w-24">กองที่ 2<br><span class="text-blue-300 text-[9px] normal-case">มัด</span></th>
-                            <th class="px-3 py-4 text-center bg-purple-900 w-24">เศษที่ 1<br><span class="text-purple-300 text-[9px] normal-case">เส้น</span></th>
-                            <th class="px-3 py-4 text-center bg-purple-900 w-24">เศษที่ 2<br><span class="text-purple-300 text-[9px] normal-case">เส้น</span></th>
-                            <th class="px-3 py-4 text-center bg-rose-900 w-24">Hold<br><span class="text-rose-300 text-[9px] normal-case">เส้น</span></th>
-                            <th class="px-3 py-4 text-center bg-teal-900 w-28">นับจริง<br><span class="text-teal-300 text-[9px] normal-case">เส้น</span></th>
-                            <th class="px-3 py-4 text-center bg-amber-900 w-28">ระบบ<br><span class="text-amber-300 text-[9px] normal-case">เส้น</span></th>
-                            <th class="px-3 py-4 text-center bg-slate-700 w-28">ส่วนต่าง<br><span class="text-slate-300 text-[9px] normal-case">เส้น</span></th>
-                            <th class="px-3 py-4 text-left bg-amber-900" style="min-width:140px">หมายเหตุ<br><span style="color:#fcd34d;font-size:9px;font-weight:400">มีคำ &quot;ผลิต&quot; = PRD Error</span></th>
-                            <th class="px-3 py-4 text-center bg-violet-900 w-20">วิเคราะห์</th>
-                            <th class="px-3 py-4 text-center bg-teal-900 w-16">แก้ไข</th>
-                            <th class="px-3 py-4 text-center w-16">ลบ</th>
-                        </tr>
-                    </thead>
-                    <tbody id="fg-cycle-tbody" class="divide-y divide-slate-100">
-                    </tbody>
-                </table>
-            </div>
+        <div class="bg-rose-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-rose-100 uppercase">เบิกออก (SKU)</p>
+          <p id="inv-cyc-kpi-out" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
-    </div>
+        <div class="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-emerald-100 uppercase">กรอกแล้ว</p>
+          <p id="inv-cyc-kpi-filled" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+        <div class="bg-amber-500 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-amber-100 uppercase">รอกรอก</p>
+          <p id="inv-cyc-kpi-pending" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+      </div>
 
-    <!-- ====== SUB-TAB: SEMI (Film) ====== -->
-    <div id="inv-sub-semi" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div id="inv-cyc-empty" class="py-20 text-center text-slate-300">
+          <i class="fas fa-clipboard-list text-6xl mb-4 opacity-20 block"></i>
+          <p class="font-bold text-slate-400">เลือกวันที่และกดปุ่ม <strong>โหลด</strong> เพื่อดึงรายการเคลื่อนไหว</p>
+        </div>
+        <div id="inv-cyc-loading" class="hidden py-20 text-center">
+          <i class="fas fa-spinner fa-spin text-4xl text-teal-400 mb-4 block"></i>
+          <p class="text-slate-500 font-bold">กำลังโหลดข้อมูล...</p>
+        </div>
+        <div id="inv-cyc-table-wrap" class="hidden overflow-x-auto">
+          <table id="inv-cyc-table-fg" class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
+              <tr>
+                <th class="px-3 py-3 text-center w-8">No.</th>
+                <th class="px-3 py-3 text-left min-w-[70px]">WH</th>
+                <th class="px-4 py-3 text-left min-w-[110px]">Item number</th>
+                <th class="px-4 py-3 text-left min-w-[150px]">Product name</th>
+                <th class="px-3 py-3 text-right bg-blue-900 w-20">รับเข้า<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-right bg-rose-900 w-20">เบิกออก<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-center bg-blue-800 w-20">bundle_1<br><span class="text-[8px] font-normal opacity-70">(มัด)</span></th>
+                <th class="px-3 py-3 text-center bg-blue-700 w-20">bundle_2<br><span class="text-[8px] font-normal opacity-70">(มัด)</span></th>
+                <th class="px-3 py-3 text-center bg-purple-800 w-20">Pcs.(1)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-center bg-purple-700 w-20">Pcs.(2)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-center bg-rose-800 w-20">Hold<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-right bg-teal-900 w-24">นับจริง<br><span class="text-[8px] font-normal opacity-70">(คำนวณ)</span></th>
+                <th class="px-3 py-3 text-right bg-amber-900 w-24">ระบบ<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
+                <th class="px-3 py-3 text-right bg-slate-700 w-24">ผลต่าง</th>
+              </tr>
+            </thead>
+            <tbody id="inv-cyc-tbody-fg" class="divide-y divide-slate-100"></tbody>
+          </table>
+          <table id="inv-cyc-table-semi" class="w-full text-sm hidden">
+            <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
+              <tr>
+                <th class="px-3 py-3 text-center w-8">No.</th>
+                <th class="px-3 py-3 text-left min-w-[70px]">WH</th>
+                <th class="px-4 py-3 text-left min-w-[110px]">Item number</th>
+                <th class="px-4 py-3 text-left min-w-[150px]">Product name</th>
+                <th class="px-3 py-3 text-right bg-blue-900 w-24">รับเข้า<br><span class="text-[8px] font-normal opacity-70">(KG)</span></th>
+                <th class="px-3 py-3 text-right bg-rose-900 w-24">เบิกออก<br><span class="text-[8px] font-normal opacity-70">(KG)</span></th>
+                <th class="px-3 py-3 text-right bg-purple-900 w-24">น้ำหนัก<br><span class="text-[8px] font-normal opacity-70">(KG)</span></th>
+                <th class="px-3 py-3 text-center w-28">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="inv-cyc-tbody-semi" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
 
-    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
-        <h3 class="text-lg font-black text-slate-700 uppercase tracking-wider mb-6 flex items-center gap-2">
-            <i class="fas fa-film text-purple-500"></i> ตั้งค่าการตรวจนับ SEMI (FILM)
-        </h3>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-            <div class="md:col-span-2">
-                <label class="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                    <i class="fas fa-file-excel text-green-600 mr-1"></i> แนบไฟล์ Excel (SEMI Movement)
-                </label>
-                <div id="semi-file-drop-zone"
-                     class="border-2 border-dashed border-slate-200 rounded-xl p-5 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all"
-                     onclick="document.getElementById('semi-excel-input').click()"
-                     ondragover="event.preventDefault(); this.classList.add('border-purple-400','bg-purple-50')"
-                     ondragleave="this.classList.remove('border-purple-400','bg-purple-50')"
-                     ondrop="handleSemiFileDrop(event)">
-                    <input type="file" id="semi-excel-input" accept=".xlsx,.xls" class="hidden" onchange="handleSemiFileSelect(this)">
-                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-300 mb-2"></i>
-                    <p id="semi-file-label" class="text-sm font-bold text-slate-400">คลิกหรือลากไฟล์ SEMI มาวางที่นี่</p>
-                    <p class="text-xs text-slate-300 mt-1">.xlsx, .xls</p>
-                </div>
-
-                <!-- ── Column Mapping Panel (แสดงหลังอ่านไฟล์) ──────── -->
-                <div id="semi-col-map-panel" class="hidden mt-3 p-4 bg-purple-50 border-2 border-purple-200 rounded-xl">
-                    <div class="flex items-center gap-2 mb-2 flex-wrap">
-                        <i class="fas fa-columns text-purple-500 text-sm"></i>
-                        <span class="text-sm font-bold text-purple-700">Column ที่เป็น "รหัส SEMI (Item number)"</span>
-                        <span id="semi-col-auto-badge"
-                              class="hidden text-xs bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
-                            <i class="fas fa-magic mr-1"></i>ตรวจจับอัตโนมัติ
-                        </span>
-                        <span id="semi-col-manual-badge"
-                              class="hidden text-xs bg-amber-100 text-amber-700 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
-                            <i class="fas fa-hand-pointer mr-1"></i>เลือกเอง
-                        </span>
-                    </div>
-                    <select id="semi-sku-col-select" onchange="setSemiSkuColumn(this.value)"
-                        class="w-full bg-white border-2 border-purple-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:border-purple-500 outline-none transition-colors">
-                    </select>
-                    <div class="flex items-start gap-2 mt-2">
-                        <i class="fas fa-eye text-purple-400 text-xs mt-0.5 flex-shrink-0"></i>
-                        <p class="text-xs text-slate-500">
-                            ตัวอย่างค่าใน Column นี้:
-                            <span id="semi-col-preview" class="font-mono text-purple-700 font-bold ml-1">—</span>
-                        </p>
-                    </div>
-                </div>
-            </div>
-
+      <!-- Print Area -->
+      <div id="inv-print-area" class="hidden">
+        <div style="font-family:'Sarabun',sans-serif;font-size:11pt;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;">
             <div>
-                <label class="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                    <i class="fas fa-calendar-alt text-purple-500 mr-1"></i> วันที่ Cycle Count
-                </label>
-                <input type="date" id="semi-cycle-date"
-                       class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl p-4 font-bold text-slate-700 outline-none focus:border-purple-500 transition-all">
+              <div style="font-size:14pt;font-weight:900;">TST — ใบตรวจนับสินค้า</div>
+              <div style="font-size:9pt;color:#555;">Warehouse Cycle Count Form</div>
             </div>
-            
+            <div style="text-align:right;font-size:9pt;">
+              <div style="font-weight:700;">FM-WH-03Rev.00</div>
+              <div>วันที่: <span id="inv-print-date"></span></div>
+            </div>
+          </div>
+          <table id="inv-print-table" style="width:100%;border-collapse:collapse;font-size:9pt;">
+            <thead>
+              <tr style="background:#1e293b;color:#fff;">
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">No.</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:left;">WH</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:left;">Item number</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:left;">Product name</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">bundle_1</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">bundle_2</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">Pcs.(1)</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">Pcs.(2)</th>
+                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">Hold pcs.</th>
+              </tr>
+            </thead>
+            <tbody id="inv-print-tbody"></tbody>
+          </table>
+          <div style="margin-top:24px;display:flex;gap:60px;">
             <div>
-                <label class="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                    <i class="fas fa-search text-purple-500 mr-1"></i> ค้นหาในตาราง
-                </label>
-                <input type="text" id="semi-search-input" placeholder="ค้นหารหัส..." oninput="filterSemiTable()"
-                       class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl p-4 font-bold text-slate-700 outline-none focus:border-purple-500 transition-all">
+              <div style="font-size:9pt;">ลงชื่อผู้ตรวจเช็ค / Checker Name</div>
+              <div style="border-bottom:1px solid #333;width:200px;margin-top:20px;"></div>
             </div>
+            <div>
+              <div style="font-size:9pt;">วันที่ / Date</div>
+              <div style="border-bottom:1px solid #333;width:120px;margin-top:20px;"></div>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div class="flex flex-wrap gap-3 mt-6">
-            <button onclick="buildSemiCycleTableFromExcel()"
-                    class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2">
-                <i class="fas fa-table"></i> สร้างตารางเทียบ (จากไฟล์)
-            </button>
-            <button onclick="refreshSemiSystemStock()" id="btn-semi-refresh"
-                    class="bg-sky-600 hover:bg-sky-700 text-white px-6 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2"
-                    title="รีเฟรชยอดระบบ (systemQty) โดยไม่ล้างค่าที่กรอกไว้">
-                <i class="fas fa-sync-alt"></i> รีเฟรชยอดระบบ
-            </button>
-            <button onclick="openAddSemiModal()"
-                    class="bg-slate-700 hover:bg-slate-800 text-white px-6 py-4 rounded-xl font-black transition-all flex items-center gap-2">
-                <i class="fas fa-plus"></i> เพิ่มรายการ
-            </button>
-            <button onclick="saveSemiCycleCount()"
-                    class="bg-emerald-600 hover:bg-emerald-800 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2">
-                <i class="fas fa-save"></i> บันทึกผลการตรวจนับ
-            </button>
-            <button onclick="loadSemiRecheckList()" id="btn-semi-recheck"
-                    class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-8 py-4 rounded-xl font-black transition-all border-2 border-amber-600 flex items-center gap-2">
-                <i class="fas fa-exclamation-triangle"></i> รายการที่ต้อง Re-Check
-            </button>
-            <button onclick="toggleSemiDiffFilter()" id="btn-semi-filter-diff"
-                class="bg-white border-2 border-rose-500 text-rose-600 hover:bg-rose-50 px-6 py-4 rounded-xl font-black transition-all flex items-center gap-2 shadow-sm">
-                <i class="fas fa-filter"></i> <span>แสดงเฉพาะ Diff != 0</span>
-            </button>
-            <button id="btn-semi-kpi" onclick="openSemiKPIDrawer()"
-                    class="hidden bg-violet-600 hover:bg-violet-500 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2">
-                <i class="fas fa-chart-bar"></i> คำนวณ KPI
-            </button>
-            <button onclick="printSemiStockForm()"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-xl font-black transition-all shadow-md flex items-center gap-2 ml-auto">
-                <i class="fas fa-print"></i> พิมพ์แบบฟอร์มตรวจนับ
-            </button>
-        </div>
+    </div><!-- end inv-sub-cyclecount -->
 
-        <div id="semi-recheck-banner" class="hidden mt-5 rounded-2xl p-5 border-2 flex items-center gap-4">
-            <div id="semi-recheck-banner-icon" class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"></div>
-            <div class="flex-1">
-                <div id="semi-recheck-banner-title" class="font-black text-base"></div>
-                <div id="semi-recheck-banner-sub" class="text-sm font-bold mt-0.5 opacity-80"></div>
-            </div>
-            <button onclick="clearSemiRecheckMode()" class="text-xs font-black px-4 py-2 rounded-xl bg-white/30 hover:bg-white/50 transition-all">
-                ล้างโหมด Re-Check
-            </button>
-        </div>
-    </div>
-
-    <div id="semi-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-purple-600 text-white p-6 rounded-2xl shadow-lg">
-            <p class="text-xs font-black text-purple-100 uppercase tracking-wider">รายการ SEMI</p>
-            <p id="semi-kpi-items" class="text-4xl font-black mt-2 font-mono">0</p>
-            <p class="text-xs text-purple-200 mt-1">รหัส</p>
-        </div>
-        <div class="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg">
-            <p class="text-xs font-black text-emerald-100 uppercase tracking-wider">ตรงกัน</p>
-            <p id="semi-kpi-match" class="text-4xl font-black mt-2 font-mono">0</p>
-            <p class="text-xs text-emerald-200 mt-1">รายการ</p>
-        </div>
-        <div class="bg-rose-600 text-white p-6 rounded-2xl shadow-lg">
-            <p class="text-xs font-black text-rose-100 uppercase tracking-wider">ไม่ตรง</p>
-            <p id="semi-kpi-diff" class="text-4xl font-black mt-2 font-mono">0</p>
-            <p class="text-xs text-rose-200 mt-1">รายการ</p>
-        </div>
-        <div class="bg-slate-900 text-white p-6 rounded-2xl shadow-lg border-t-4 border-purple-500">
-            <p class="text-xs font-black text-slate-400 uppercase tracking-wider">ยอดรวม (แถว)</p>
-            <p id="semi-kpi-total" class="text-4xl font-black mt-2 font-mono text-purple-400">0</p>
-            <p class="text-xs text-slate-400 mt-1">แถว</p>
-        </div>
-    </div>
-
-    <div id="semi-table-wrapper" class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div id="semi-table-empty" class="p-20 text-center text-slate-300">
-            <i class="fas fa-film text-7xl mb-6 opacity-20"></i>
-            <p class="text-xl font-bold text-slate-400">กรุณาแนบไฟล์ SEMI Movement และกดสร้างตารางเทียบ</p>
-        </div>
-        <div id="semi-table-container" class="hidden overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-slate-900 text-slate-300 text-[11px] font-black uppercase tracking-wider sticky top-0 z-10">
-                    <tr>
-                        <th class="px-3 py-4 text-center w-10">#</th>
-                        <th class="px-4 py-4 text-left min-w-[130px]">SEMI CODE</th>
-                        <th class="px-3 py-4 text-right bg-blue-900 w-24">SYSTEM (แถว)</th>
-                        <th class="px-4 py-4 text-center bg-green-900 min-w-[100px]">FG1 CODE</th>
-                        <th class="px-4 py-4 text-left bg-green-900 min-w-[140px]">FG1 NAME</th>
-                        <th class="px-3 py-4 text-center bg-green-700 w-24">QTY FG1 (นับ)</th>
-                        <th class="px-4 py-4 text-center bg-orange-900 min-w-[100px]">FG2 CODE</th>
-                        <th class="px-4 py-4 text-left bg-orange-900 min-w-[140px]">FG2 NAME</th>
-                        <th class="px-3 py-4 text-center bg-orange-700 w-24">QTY FG2 (นับ)</th>
-                        <th class="px-4 py-4 text-right bg-teal-900 w-24">TOTAL</th>
-                        <th class="px-4 py-4 text-right bg-slate-700 w-24">DIFF</th>
-                        <th class="px-4 py-4 text-center bg-indigo-900 w-24">แก้ไข</th>
-                        <th class="px-4 py-4 text-center bg-amber-900 w-24">ลบ</th>
-                    </tr>
-                </thead>
-                <tbody id="semi-cycle-tbody" class="divide-y divide-slate-100"></tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-    <!-- ====== SUB-TAB: PRODUCTION VERIFY ====== -->
-    <div id="inv-sub-prodverify" class="hidden space-y-6">
-
-        <!-- Header + Control Panel -->
-        <div class="bg-gradient-to-br from-orange-900 via-slate-900 to-slate-800 rounded-[2rem] p-8 shadow-2xl">
-            <div class="flex items-center gap-4 mb-6">
-                <div class="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl">
-                    <i class="fas fa-check-double"></i>
-                </div>
-                <div>
-                    <h3 class="text-2xl font-black text-white">PRODUCTION VERIFY</h3>
-                    <p class="text-orange-300 text-xs font-bold uppercase tracking-widest mt-1">ตรวจสอบยอดคีย์ระบบ VS ใบรายงานยอดผลิต</p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
-                <!-- Date Picker -->
-                <div>
-                    <label class="text-orange-300 text-xs font-black uppercase tracking-widest block mb-2">
-                        <i class="fas fa-calendar-alt mr-1"></i> เลือกวันที่ตรวจสอบ
-                    </label>
-                    <input type="date" id="pv-date"
-                           class="w-full bg-slate-800 border-2 border-slate-600 text-white p-4 rounded-xl font-bold outline-none focus:border-orange-400 transition-all">
-                </div>
-
-                <!-- Load Button -->
-                <div>
-                    <button onclick="loadProductionVerify()"
-                            class="w-full bg-orange-500 hover:bg-orange-600 text-white h-[54px] rounded-xl font-black text-base transition-all shadow-lg flex items-center justify-center gap-2">
-                        <i class="fas fa-search"></i> ดึงข้อมูลและตรวจสอบ
-                    </button>
-                </div>
-
-                <!-- Export Button -->
-                <div>
-                    <button onclick="exportPVToExcel()"
-                            class="w-full bg-emerald-600 hover:bg-emerald-800 text-white h-[54px] rounded-xl font-black text-base transition-all shadow-lg flex items-center justify-center gap-2">
-                        <i class="fas fa-file-excel"></i> Export Excel
-                    </button>
-                </div>
-            </div>
-
-            <!-- ปุ่มเพิ่มสินค้า -->
-            <div class="mt-4">
-                <button onclick="openPVAddModal()"
-                        class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 h-[44px] rounded-xl font-black text-sm transition-all shadow-lg flex items-center gap-2">
-                    <i class="fas fa-plus-circle"></i> เพิ่มสินค้า (ผลิตแล้วแต่คีย์ไม่ได้)
-                </button>
-            </div>
-
-            <!-- เงื่อนไขที่ใช้ดึงข้อมูล -->
-            <div class="mt-5 bg-white/10 rounded-xl p-4 flex flex-wrap gap-4 text-xs font-bold text-orange-200">
-                <span><i class="fas fa-filter mr-1"></i> Col G (Reference) = <span class="bg-orange-500 text-white px-2 py-0.5 rounded-full">Production</span></span>
-                <span><i class="fas fa-filter mr-1"></i> Col L (Receipt) = <span class="bg-emerald-500 text-white px-2 py-0.5 rounded-full">Received</span></span>
-                <span><i class="fas fa-calendar mr-1"></i> วันที่อิงจาก Col T</span>
-                <span><i class="fas fa-database mr-1"></i> ชีต: Transection FG</span>
-            </div>
-        </div>
-
-        <!-- KPI Summary Row -->
-        <div id="pv-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="bg-orange-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs font-black text-orange-100 uppercase tracking-wider">รายการทั้งหมด</p>
-                <p id="pv-kpi-total" class="text-4xl font-black mt-2 font-mono">0</p>
-                <p class="text-xs text-orange-200 mt-1">รายการ</p>
-            </div>
-            <div class="bg-emerald-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs font-black text-emerald-100 uppercase tracking-wider">ตรงกัน ✓</p>
-                <p id="pv-kpi-match" class="text-4xl font-black mt-2 font-mono">0</p>
-                <p class="text-xs text-emerald-200 mt-1">รายการ</p>
-            </div>
-            <div class="bg-rose-600 text-white p-6 rounded-2xl shadow-lg">
-                <p class="text-xs font-black text-rose-100 uppercase tracking-wider">ไม่ตรง ✗</p>
-                <p id="pv-kpi-diff" class="text-4xl font-black mt-2 font-mono">0</p>
-                <p class="text-xs text-rose-200 mt-1">รายการ</p>
-            </div>
-            <div class="bg-slate-900 text-white p-6 rounded-2xl shadow-lg border-t-4 border-orange-500">
-                <p class="text-xs font-black text-slate-400 uppercase tracking-wider">รายการยังไม่มีใบ</p>
-                <p id="pv-kpi-noreport" class="text-4xl font-black mt-2 font-mono text-orange-400">0</p>
-                <p class="text-xs text-slate-400 mt-1">รายการ</p>
-            </div>
-        </div>
-
-        <!-- Result Table -->
-        <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-            <div id="pv-table-empty" class="p-20 text-center text-slate-300">
-                <i class="fas fa-check-double text-7xl mb-6 opacity-20"></i>
-                <p class="text-xl font-bold text-slate-400">เลือกวันที่และกด "ดึงข้อมูลและตรวจสอบ"</p>
-                <p class="text-sm text-slate-300 mt-2">ระบบจะดึงข้อมูลจากชีต Transection FG ตามเงื่อนไขที่กำหนด</p>
-            </div>
-            <div id="pv-table-container" class="hidden overflow-x-auto">
-                <!-- Summary bar -->
-                <div id="pv-date-label" class="bg-orange-50 border-b border-orange-100 px-6 py-3 flex items-center gap-3">
-                    <i class="fas fa-calendar-check text-orange-500"></i>
-                    <span id="pv-date-display" class="font-black text-orange-700 text-sm"></span>
-                    <span class="text-slate-400 text-xs font-bold ml-auto">อัปเดตล่าสุด: <span id="pv-last-update"></span></span>
-                </div>
-                <table class="w-full text-sm">
-                    <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
-                        <tr>
-                            <th class="px-3 py-3 text-center w-8" rowspan="2">#</th>
-                            <th class="px-4 py-3 text-left min-w-[130px]" rowspan="2">รหัสสินค้า</th>
-                            <th class="px-4 py-3 text-left min-w-[170px]" rowspan="2">ชื่อสินค้า</th>
-                            <!-- ยอดระบบ -->
-                            <th class="px-2 py-2 text-center bg-blue-900 w-20" rowspan="2">ยอดระบบ<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-blue-800 w-24" rowspan="2">น้ำหนักระบบ<br><span class="text-[8px] font-normal opacity-70">(กก. เกรดA)</span></th>
-                            <!-- กรอกจากใบรายงาน: เส้น -->
-                            <th colspan="5" class="px-2 py-2 text-center bg-green-900 border-b border-green-700">ข้อมูลจากใบรายงานผลิต (เส้น)</th>
-                            <!-- เกรด B/C -->
-                            <th colspan="2" class="px-2 py-2 text-center bg-purple-900 border-b border-purple-700">เกรด (เส้น)</th>
-                            <!-- ผลลัพธ์ -->
-                            <th class="px-2 py-2 text-center bg-teal-900 w-20" rowspan="2">รวม<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-indigo-900 w-24" rowspan="2">น้ำหนักรวม<br><span class="text-[8px] font-normal opacity-70">(กก.)</span></th>
-                            <th class="px-2 py-2 text-center bg-slate-700 w-20" rowspan="2">Diff<br><span class="text-[8px] font-normal opacity-70">(ระบบ−ใบ)</span></th>
-                            <th class="px-2 py-2 text-center w-24" rowspan="2">สถานะ</th>
-                            <!-- เครื่อง/กะ/ช่าง -->
-                            <th colspan="3" class="px-2 py-2 text-center bg-cyan-900 border-b border-cyan-700">ข้อมูลการผลิต</th>
-                            <th class="px-2 py-2 text-left min-w-[130px] bg-amber-900" rowspan="2">หมายเหตุ</th>
-                        </tr>
-                        <tr>
-                            <th class="px-2 py-2 text-center bg-green-900 w-18">มัดเต็ม<br><span class="text-[8px] font-normal opacity-70">(มัด)</span></th>
-                            <th class="px-2 py-2 text-center bg-amber-900 w-18">ผสมเศษเก่า<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-amber-800 w-18">ผสมเศษHold<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-rose-900 w-18">เศษใหม่<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-rose-800 w-18">Holdใหม่<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-purple-900 w-18">เกรดB<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-purple-800 w-18">เกรดC<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-2 text-center bg-cyan-900 w-28">เครื่องผลิต</th>
-                            <th class="px-2 py-2 text-center bg-cyan-800 w-20">กะ</th>
-                            <th class="px-2 py-2 text-center bg-cyan-700 w-28">ช่างเครื่อง</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pv-tbody" class="divide-y divide-slate-100"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- คำอธิบาย -->
-        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <p class="text-xs font-black text-slate-400 uppercase tracking-wider"><i class="fas fa-info-circle mr-1"></i> คำอธิบายสูตรคำนวณ</p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <p class="text-xs font-black text-slate-500 mb-2">📊 สูตร "รวม" (จำนวนเส้น)</p>
-                    <div class="bg-slate-50 rounded-xl p-3 font-mono text-xs text-slate-600 border border-slate-200 leading-relaxed">
-                        รวม = (มัดเต็ม × เส้นต่อมัด)<br>− ผสมเศษเก่า − ผสมเศษHold<br>+ เศษใหม่ + Holdใหม่
-                    </div>
-                </div>
-                <div>
-                    <p class="text-xs font-black text-slate-500 mb-2">⚖️ สูตร "น้ำหนักรวม"</p>
-                    <div class="bg-slate-50 rounded-xl p-3 font-mono text-xs text-slate-600 border border-slate-200 leading-relaxed">
-                        น้ำหนักA = Col J จากระบบ<br>
-                        Median = จาก Col U ของ SKU นั้น<br>
-                        น้ำหนักB+C = (B+C) × Median<br>
-                        <span class="font-black text-indigo-700">รวม = น้ำหนักA + น้ำหนักB+C</span>
-                    </div>
-                </div>
-                <div>
-                    <p class="text-xs font-black text-slate-500 mb-2">🔴 สูตร Diff</p>
-                    <div class="bg-slate-50 rounded-xl p-3 font-mono text-xs text-slate-600 border border-slate-200 leading-relaxed">
-                        Diff = ยอดระบบ − รวมใบรายงาน<br>
-                        <span class="text-slate-400">(เปรียบเทียบเฉพาะเส้น)</span>
-                    </div>
-                </div>
-            </div>
-            <div class="flex flex-wrap gap-3 mt-2">
-                <div class="flex items-center gap-2"><span class="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-700 border border-emerald-300">✓ MATCH</span><span class="text-xs text-slate-500 font-bold">ยอดตรงกัน (Diff = 0)</span></div>
-                <div class="flex items-center gap-2"><span class="px-3 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-300">✗ DIFF</span><span class="text-xs text-slate-500 font-bold">ยอดไม่ตรง</span></div>
-                <div class="flex items-center gap-2"><span class="px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-700 border border-amber-300">— รอกรอก</span><span class="text-xs text-slate-500 font-bold">ยังไม่ได้กรอกข้อมูลจากใบรายงาน</span></div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- ====== SUB-TAB: IMPORT DATA ====== -->
-    <!-- ====== SUB-TAB: POLICY CHECK ====== -->
-    <div id="inv-sub-policycheck" class="hidden space-y-6">
-
-        <!-- Header -->
-        <div class="bg-gradient-to-br from-violet-900 via-slate-900 to-slate-800 rounded-[2rem] p-8 shadow-2xl">
-            <div class="flex items-center gap-4 mb-5">
-                <div class="w-14 h-14 bg-violet-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl">
-                    <i class="fas fa-shield-alt"></i>
-                </div>
-                <div>
-                    <h3 class="text-2xl font-black text-white">WAREHOUSE POLICY CHECK</h3>
-                    <p class="text-violet-300 text-xs font-bold uppercase tracking-widest mt-1">ตรวจสอบนโยบายคลัง · ดึงจากประวัติการนับ Daily Cycle Count FG</p>
-                </div>
-            </div>
-            <!-- Date picker + Load -->
-            <div class="flex gap-3 items-end flex-wrap">
-                <div>
-                    <label class="block text-violet-300 text-[10px] font-black uppercase tracking-wider mb-1.5">วันที่ Cycle Count</label>
-                    <input type="date" id="pc-date-picker"
-                           class="bg-white/10 border-2 border-violet-400/40 text-white rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-violet-400 transition-all"
-                           onchange="runPolicyCheck()">
-                </div>
-                <button onclick="pcClearDate()"
-                        class="px-4 py-2.5 rounded-xl text-violet-300 hover:text-white border border-violet-400/40 hover:border-violet-400 text-sm font-bold transition-all">
-                    ทุกวัน (ล่าสุดของแต่ละ SKU)
-                </button>
-                <button onclick="runPolicyCheck()"
-                        class="ml-auto bg-violet-500 hover:bg-violet-400 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow-lg flex items-center gap-2 transition-all">
-                    <i class="fas fa-sync-alt"></i> โหลดข้อมูล
-                </button>
-            </div>
-            <!-- Dates available -->
-            <div id="pc-available-dates" class="mt-4 hidden">
-                <p class="text-violet-300 text-[10px] font-black uppercase tracking-wider mb-2">วันที่มีประวัติ:</p>
-                <div id="pc-date-chips" class="flex flex-wrap gap-2"></div>
-            </div>
-            <!-- นโยบาย -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
-                <div class="bg-white/10 rounded-xl p-4 border border-violet-400/30">
-                    <p class="text-violet-200 text-xs font-black uppercase tracking-wider mb-1"><i class="fas fa-cubes mr-1"></i> นโยบาย 1: 1 สินค้า = 1 กอง</p>
-                    <p class="text-slate-300 text-xs font-bold leading-relaxed">สินค้าชนิดเดียวกันต้องอยู่กองเดียวกัน — ห้ามกรอก กอง1 + กอง2 พร้อมกัน หรือกรอกเป็นสูตร เช่น <span class="bg-amber-500/30 px-1 rounded">=15+10+5</span> (หลายแหล่ง)</p>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 border border-violet-400/30">
-                    <p class="text-violet-200 text-xs font-black uppercase tracking-wider mb-1"><i class="fas fa-recycle mr-1"></i> นโยบาย 2: เศษ ≤ 1 กอง</p>
-                    <p class="text-slate-300 text-xs font-bold leading-relaxed">เศษสินค้าต้องมีแค่กองเดียว — ห้ามกรอก เศษ1 + เศษ2 พร้อมกัน หรือกรอกเป็นสูตร เช่น <span class="bg-amber-500/30 px-1 rounded">=15+10+5</span></p>
-                </div>
-            </div>
-        </div>
-
-        <!-- KPI Summary -->
-        <div id="pc-kpi-row" class="hidden grid grid-cols-4 gap-4">
-            <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 text-center">
-                <p class="text-xs font-black text-slate-400 uppercase tracking-wider">รายการทั้งหมด</p>
-                <p id="pc-kpi-total" class="text-4xl font-black mt-2 font-mono text-slate-700">0</p>
-                <p class="text-xs text-slate-400 mt-1">SKU</p>
-            </div>
-            <div class="bg-emerald-50 rounded-2xl border border-emerald-100 shadow-sm p-6 text-center">
-                <p class="text-xs font-black text-emerald-600 uppercase tracking-wider">✓ ผ่านนโยบาย</p>
-                <p id="pc-kpi-pass" class="text-4xl font-black mt-2 font-mono text-emerald-600">0</p>
-                <p class="text-xs text-emerald-500 mt-1">รายการ</p>
-            </div>
-            <div class="bg-rose-50 rounded-2xl border border-rose-100 shadow-sm p-6 text-center">
-                <p class="text-xs font-black text-rose-600 uppercase tracking-wider">✗ ไม่ผ่านนโยบาย</p>
-                <p id="pc-kpi-fail" class="text-4xl font-black mt-2 font-mono text-rose-600">0</p>
-                <p class="text-xs text-rose-500 mt-1">รายการ</p>
-            </div>
-            <div class="bg-amber-50 rounded-2xl border border-amber-100 shadow-sm p-6 text-center">
-                <p class="text-xs font-black text-amber-600 uppercase tracking-wider">⚠ หลายแหล่ง (สูตร)</p>
-                <p id="pc-kpi-multiterm" class="text-4xl font-black mt-2 font-mono text-amber-600">0</p>
-                <p class="text-xs text-amber-500 mt-1">รายการ</p>
-            </div>
-        </div>
-
-        <!-- Empty state -->
-        <div id="pc-empty" class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center text-slate-300">
-            <i class="fas fa-shield-alt text-6xl mb-4 opacity-20 block"></i>
-            <p class="text-lg font-bold text-slate-400">กดปุ่ม "โหลดข้อมูล" เพื่อตรวจสอบนโยบาย</p>
-            <p class="text-sm text-slate-300 mt-2">ระบบจะดึงข้อมูลจากชีต Daily Cycle Count FG โดยตรง ไม่ต้องโหลด FG Cycle Count ก่อน</p>
-        </div>
-
-        <!-- Loading state -->
-        <div id="pc-loading" class="hidden bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center">
-            <i class="fas fa-spinner fa-spin text-4xl text-violet-400 mb-4 block"></i>
-            <p class="text-slate-500 font-bold">กำลังดึงข้อมูลจาก Google Sheet...</p>
-        </div>
-
-        <!-- Result Table -->
-        <div id="pc-table-wrap" class="hidden bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3 flex-wrap">
-                <i class="fas fa-table text-violet-500"></i>
-                <span class="font-black text-slate-700">ผลการตรวจสอบนโยบายคลัง</span>
-                <span id="pc-cycle-date-label" class="text-xs text-violet-600 font-black bg-violet-50 px-3 py-1 rounded-full border border-violet-200"></span>
-                <span class="ml-auto text-xs text-slate-400 font-bold">แหล่งข้อมูล: Daily Cycle Count FG Sheet</span>
-            </div>
-            <!-- Filter -->
-            <div class="px-6 py-3 bg-slate-50 border-b border-slate-100 flex gap-3 items-center flex-wrap">
-                <select id="pc-filter" onchange="renderPolicyTable()"
-                        class="bg-white border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none focus:border-violet-400">
-                    <option value="all">แสดงทั้งหมด</option>
-                    <option value="fail">เฉพาะที่ไม่ผ่าน</option>
-                    <option value="multiterm">เฉพาะที่กรอกเป็นสูตร</option>
-                    <option value="pass">เฉพาะที่ผ่าน</option>
-                </select>
-                <span class="text-xs text-slate-400 font-bold">
-                    <span class="inline-block w-3 h-3 rounded-full bg-amber-400 mr-1"></span>สีเหลือง = กรอกหลายแหล่ง (สูตร)
-                </span>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider">
-                        <tr>
-                            <th class="px-3 py-3 text-center w-8">#</th>
-                            <th class="px-3 py-3 text-left">วันที่ Cycle</th>
-                            <th class="px-4 py-3 text-left min-w-[110px]">รหัสสินค้า</th>
-                            <th class="px-4 py-3 text-left min-w-[140px]">ชื่อสินค้า</th>
-                            <th class="px-2 py-3 text-center bg-blue-900 w-20">กอง 1<br><span class="text-[8px] font-normal opacity-70">(มัด)</span></th>
-                            <th class="px-2 py-3 text-center bg-blue-800 w-20">กอง 2<br><span class="text-[8px] font-normal opacity-70">(มัด)</span></th>
-                            <th class="px-2 py-3 text-center bg-purple-900 w-20">เศษ 1<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-3 text-center bg-purple-800 w-20">เศษ 2<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                            <th class="px-2 py-3 text-center bg-rose-900 w-16">Hold</th>
-                            <th class="px-3 py-3 text-center bg-teal-900 w-20">นับจริง</th>
-                            <th class="px-3 py-3 text-center bg-slate-700 w-16">Diff</th>
-                            <th class="px-3 py-3 text-center w-32 bg-violet-900">นโยบาย 1<br><span class="text-[8px] font-normal opacity-70">1 กอง</span></th>
-                            <th class="px-3 py-3 text-center w-32 bg-violet-800">นโยบาย 2<br><span class="text-[8px] font-normal opacity-70">1 เศษ</span></th>
-                            <th class="px-3 py-3 text-center w-24">สรุป</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pc-tbody" class="divide-y divide-slate-100"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <div id="inv-sub-import" class="hidden space-y-6">
-
-        <!-- Type Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <!-- COUNTING -->
-            <div id="import-card-counting"
-                 class="import-type-card cursor-pointer rounded-2xl border-2 p-6 transition-all border-teal-400 bg-teal-50 shadow-lg"
-                 onclick="selectImportType('counting')">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="w-11 h-11 bg-teal-600 text-white rounded-xl flex items-center justify-center text-lg">
-                        <i class="fas fa-boxes"></i>
-                    </div>
-                    <div>
-                        <p class="font-black text-teal-700 text-sm uppercase tracking-wider">COUNTING</p>
-                        <p class="text-[10px] text-teal-500 font-bold">ชีต: Counting</p>
-                    </div>
-                    <div id="import-check-counting" class="ml-auto w-6 h-6 bg-teal-600 text-white rounded-full flex items-center justify-center text-xs">
-                        <i class="fas fa-check"></i>
-                    </div>
-                </div>
-                <p class="text-xs text-teal-600 font-bold leading-relaxed">ข้อมูลสต๊อก FG ในระบบ (มี Batch)<br>บันทึกลงชีต <strong>Counting</strong></p>
-                <div class="mt-3 bg-white rounded-lg p-2 border border-teal-200 text-[10px] text-slate-500 font-bold">
-                    <i class="fas fa-info-circle text-teal-400 mr-1"></i>
-                    เส้นต่อมัด → ดึงจากชีต Product Col C
-                </div>
-            </div>
-
-            <!-- ON-HAND FG -->
-            <div id="import-card-onhand_fg"
-                 class="import-type-card cursor-pointer rounded-2xl border-2 p-6 transition-all border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50"
-                 onclick="selectImportType('onhand_fg')">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="w-11 h-11 bg-blue-600 text-white rounded-xl flex items-center justify-center text-lg">
-                        <i class="fas fa-warehouse"></i>
-                    </div>
-                    <div>
-                        <p class="font-black text-blue-700 text-sm uppercase tracking-wider">ON-HAND FG</p>
-                        <p class="text-[10px] text-blue-500 font-bold">ชีต: ON-HAND FG</p>
-                    </div>
-                    <div id="import-check-onhand_fg" class="ml-auto w-6 h-6 bg-slate-200 rounded-full hidden items-center justify-center text-xs">
-                        <i class="fas fa-check text-blue-600"></i>
-                    </div>
-                </div>
-                <p class="text-xs text-slate-600 font-bold leading-relaxed">ข้อมูลสต๊อก FG ในระบบ (มี Batch)<br>บันทึกลงชีต <strong>ON-HAND FG</strong></p>
-                <div class="mt-3 bg-slate-50 rounded-lg p-2 border border-slate-200 text-[10px] text-slate-500 font-bold">
-                    <i class="fas fa-info-circle text-blue-400 mr-1"></i>
-                    เส้นต่อมัด → ดึงจากชีต Product Col C
-                </div>
-            </div>
-
-            <!-- ON-HAND SEMI -->
-            <div id="import-card-onhand_semi"
-                 class="import-type-card cursor-pointer rounded-2xl border-2 p-6 transition-all border-slate-200 bg-white hover:border-purple-300 hover:bg-purple-50"
-                 onclick="selectImportType('onhand_semi')">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="w-11 h-11 bg-purple-600 text-white rounded-xl flex items-center justify-center text-lg">
-                        <i class="fas fa-film"></i>
-                    </div>
-                    <div>
-                        <p class="font-black text-purple-700 text-sm uppercase tracking-wider">ON-HAND SEMI</p>
-                        <p class="text-[10px] text-purple-500 font-bold">ชีต: ON-HAND SEMI</p>
-                    </div>
-                    <div id="import-check-onhand_semi" class="ml-auto w-6 h-6 bg-slate-200 rounded-full hidden items-center justify-center text-xs">
-                        <i class="fas fa-check text-purple-600"></i>
-                    </div>
-                </div>
-                <p class="text-xs text-slate-600 font-bold leading-relaxed">ข้อมูลสต๊อก SEMI<br>บันทึกลงชีต <strong>ON-HAND SEMI</strong></p>
-                <div class="mt-3 bg-slate-50 rounded-lg p-2 border border-slate-200 text-[10px] text-slate-500 font-bold">
-                    <i class="fas fa-info-circle text-purple-400 mr-1"></i>
-                    ข้อมูล Semi-Finished Product
-                </div>
-            </div>
-        </div>
-
-        <!-- Upload Panel -->
-        <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
-            <h3 class="text-lg font-black text-slate-700 uppercase tracking-wider mb-6 flex items-center gap-3">
-                <i class="fas fa-file-import text-teal-500"></i> นำเข้าข้อมูล Batch Import
-                <span id="import-type-badge" class="text-sm bg-teal-100 text-teal-700 px-3 py-1 rounded-full font-black normal-case tracking-normal">
-                    COUNTING
-                </span>
-            </h3>
-
-            <!-- Column Mapping Info -->
-            <div id="import-col-info" class="mb-6 bg-slate-50 border border-slate-200 rounded-xl p-4">
-                <p class="text-xs font-black text-slate-500 uppercase tracking-wider mb-3"><i class="fas fa-table mr-1"></i> โครงสร้างคอลัมน์ที่คาดหวัง</p>
-                <div id="import-col-detail" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                    <!-- จะถูกเติมจาก JS -->
-                </div>
-            </div>
-
-            <!-- File Drop Zone -->
-            <div id="import-file-drop"
-                 class="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50 transition-all"
-                 onclick="document.getElementById('import-file-input').click()"
-                 ondragover="event.preventDefault(); this.classList.add('border-teal-400','bg-teal-50')"
-                 ondragleave="this.classList.remove('border-teal-400','bg-teal-50')"
-                 ondrop="handleImportDrop(event)">
-                <input type="file" id="import-file-input" accept=".xlsx,.xls" class="hidden" onchange="handleImportFile(this)">
-                <i class="fas fa-cloud-upload-alt text-5xl text-slate-300 mb-4 block"></i>
-                <p id="import-file-label" class="font-black text-slate-400 text-lg">คลิกหรือลากไฟล์ Excel มาวาง</p>
-                <p class="text-slate-300 text-sm mt-1 font-bold">.xlsx, .xls</p>
-            </div>
-
-            <!-- Preview -->
-            <div id="import-preview" class="mt-6 hidden">
-                <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-                    <!-- Summary row -->
-                    <div class="flex items-center gap-4 p-4 border-b border-slate-200">
-                        <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-file-excel text-lg"></i>
-                        </div>
-                        <div class="flex-1">
-                            <p id="import-preview-text" class="font-black text-slate-700 text-sm"></p>
-                            <p id="import-preview-sub" class="text-xs text-slate-400 font-bold mt-0.5"></p>
-                        </div>
-                        <button onclick="clearImport()" class="text-rose-400 hover:text-rose-600 transition-all text-sm font-black">
-                            <i class="fas fa-times mr-1"></i> ล้าง
-                        </button>
-                    </div>
-                    <!-- Data Preview Table (first 5 rows) -->
-                    <div class="overflow-x-auto max-h-48">
-                        <table id="import-preview-table" class="w-full text-xs"></table>
-                    </div>
-                </div>
-                <button onclick="confirmImport()"
-                        class="mt-4 w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-xl font-black transition-all shadow-md flex items-center justify-center gap-2 text-base">
-                    <i class="fas fa-check-circle"></i> ยืนยันนำเข้าข้อมูลเข้าชีต
-                    <span id="import-confirm-sheet-name" class="bg-white/20 px-2 py-0.5 rounded-lg text-sm">Counting</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Import Log -->
-        <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
-            <h3 class="text-lg font-black text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <i class="fas fa-history text-slate-400"></i> ประวัติการนำเข้าข้อมูล
-            </h3>
-            <div id="import-log-container" class="text-center text-slate-300 py-10">
-                <i class="fas fa-database text-4xl mb-3 block opacity-20"></i>
-                <p class="font-bold">ยังไม่มีประวัติการนำเข้า</p>
-            </div>
-        </div>
-    </div>
-</div>
-
+</div><!-- end view-inventory-control-content -->
 <!-- VIEW 7: FG DASHBOARD SUMMARY -->
 <div id="view-fg-dashboard-content" class="hidden space-y-6">
   <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row gap-6 items-center justify-between border-b-4 border-amber-500">
@@ -8141,24 +7057,636 @@ function renderBlockingTrendChart(data) {
     let fgExcelRows = [];        // Raw rows from uploaded Excel (movement data)
 
     /** Switch Inventory sub-tabs */
+    /** Switch Inventory sub-tabs (3 tabs: import, compare, cyclecount) */
     window.switchInvSubTab = function switchInvSubTab(tab) {
-        ['fg', 'semi', 'import', 'prodverify', 'policycheck', 'safetystock'].forEach(t => {
-            document.getElementById(`inv-sub-${t}`).classList.add('hidden');
-            const btn = document.getElementById(`inv-tab-${t}`);
-            btn.classList.remove('active-inv', 'bg-teal-600', 'bg-orange-600', 'bg-violet-600', 'text-white', 'shadow-lg');
-            btn.classList.add('text-slate-500');
+        ['import', 'compare', 'cyclecount'].forEach(t => {
+            const sub = document.getElementById('inv-sub-' + t);
+            if (sub) sub.classList.add('hidden');
+            const btn = document.getElementById('inv-tab-' + t);
+            if (btn) {
+                btn.classList.remove('active-inv', 'bg-teal-600', 'text-white', 'shadow-lg');
+                btn.classList.add('text-slate-500');
+            }
         });
-        document.getElementById(`inv-sub-${tab}`).classList.remove('hidden');
-        const activeBtn = document.getElementById(`inv-tab-${tab}`);
-        const colorMap  = { prodverify: 'bg-orange-600', policycheck: 'bg-violet-600', safetystock: 'bg-amber-600' };
-        const activeColor = colorMap[tab] || 'bg-teal-600';
-        activeBtn.classList.add('active-inv', activeColor, 'text-white', 'shadow-lg');
-        activeBtn.classList.remove('text-slate-500');
-        // ถ้าเปิด Policy Check → run อัตโนมัติ
-        if (tab === 'policycheck') runPolicyCheck();
-        // ถ้าเปิด Safety Stock → โหลดข้อมูลอัตโนมัติ
-        if (tab === 'safetystock' && typeof loadSafetyStockData === 'function') loadSafetyStockData();
+        const activeSub = document.getElementById('inv-sub-' + tab);
+        if (activeSub) activeSub.classList.remove('hidden');
+        const activeBtn = document.getElementById('inv-tab-' + tab);
+        if (activeBtn) {
+            activeBtn.classList.add('active-inv', 'bg-teal-600', 'text-white', 'shadow-lg');
+            activeBtn.classList.remove('text-slate-500');
+        }
+        // Auto-actions when switching tabs
+        if (tab === 'cyclecount') {
+            // Set default date to yesterday
+            const yest = new Date();
+            yest.setDate(yest.getDate() - 1);
+            const yestStr = yest.toISOString().split('T')[0];
+            const dateEl = document.getElementById('inv-cyc-date');
+            if (dateEl && !dateEl.value) dateEl.value = yestStr;
+        }
     }
+
+    // ============================================================
+    // INVENTORY CONTROL — NEW 3-TAB SYSTEM
+    // ============================================================
+
+    var INV_IMPORT_CONFIG = {
+        counting:        { label: 'COUNTING',         sheet: 'Counting',       color: 'teal',   icon: 'fa-database',     desc: 'ยอดสต๊อกจาก D365 • เทียบสต๊อก + Dashboard' },
+        onhand_fg:       { label: 'ON-HAND FG',       sheet: 'ON-HAND FG',     color: 'blue',   icon: 'fa-boxes',        desc: 'สต๊อก FG • จอง + คงเหลือ' },
+        onhand_semi:     { label: 'ON-HAND SEMI',     sheet: 'ON-HAND SEMI',   color: 'purple', icon: 'fa-film',         desc: 'สต๊อก SEMI • ระดับ Batch + Serial' },
+        transection_fg:  { label: 'TRANSACTION FG',   sheet: 'Transection FG', color: 'orange', icon: 'fa-exchange-alt', desc: 'การเคลื่อนไหว FG • ใช้สร้างใบตรวจนับ' },
+        transection_semi:{ label: 'TRANSACTION SEMI', sheet: 'Transection SEMI',color: 'rose',  icon: 'fa-retweet',      desc: 'การเคลื่อนไหว SEMI • ใช้สร้างใบตรวจนับ SEMI' }
+    };
+    var invCurrentImportType = null;
+    var invImportBuffer = null;
+    var invImportLogs = [];
+    var invCompareCurrentMode = 'fg';
+    var invCompareCurrentWH = 'all';
+    var invCompareData = [];
+    var invCycleCurrentMode = 'fg';
+    var invCycleData = [];
+
+    // ── TAB 1: IMPORT ─────────────────────────────────────────────
+
+    window.invSelectImport = function(type) {
+        invCurrentImportType = type;
+        const cfg = INV_IMPORT_CONFIG[type];
+        if (!cfg) return;
+        // Highlight selected card
+        Object.keys(INV_IMPORT_CONFIG).forEach(k => {
+            const card = document.getElementById('inv-import-card-' + k);
+            if (!card) return;
+            card.classList.remove('border-teal-400','bg-teal-50','border-blue-400','bg-blue-50',
+                'border-purple-400','bg-purple-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50');
+            card.classList.add('border-slate-200','bg-white');
+        });
+        const selCard = document.getElementById('inv-import-card-' + type);
+        const colorBorder = { teal:'border-teal-400', blue:'border-blue-400', purple:'border-purple-400', orange:'border-orange-400', rose:'border-rose-400' }[cfg.color] || 'border-teal-400';
+        const colorBg    = { teal:'bg-teal-50',    blue:'bg-blue-50',    purple:'bg-purple-50',    orange:'bg-orange-50',    rose:'bg-rose-50'    }[cfg.color] || 'bg-teal-50';
+        if (selCard) { selCard.classList.remove('border-slate-200','bg-white'); selCard.classList.add(colorBorder, colorBg); }
+        // Show upload panel
+        const panel = document.getElementById('inv-upload-panel');
+        if (panel) panel.classList.remove('hidden');
+        const icon = document.getElementById('inv-upload-icon');
+        const colorBgSolid = { teal:'bg-teal-600', blue:'bg-blue-600', purple:'bg-purple-600', orange:'bg-orange-600', rose:'bg-rose-600' }[cfg.color] || 'bg-teal-600';
+        if (icon) { icon.className = 'w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg ' + colorBgSolid; icon.innerHTML = '<i class="fas ' + cfg.icon + '"></i>'; }
+        const titleEl = document.getElementById('inv-upload-title');
+        const descEl  = document.getElementById('inv-upload-desc');
+        const sheetEl = document.getElementById('inv-confirm-sheet-name');
+        if (titleEl) titleEl.textContent = cfg.label;
+        if (descEl)  descEl.textContent  = cfg.desc;
+        if (sheetEl) sheetEl.textContent = cfg.sheet;
+        // Reset file state
+        invImportBuffer = null;
+        const preview = document.getElementById('inv-import-preview');
+        if (preview) preview.classList.add('hidden');
+        const fileLabel = document.getElementById('inv-file-label');
+        if (fileLabel) fileLabel.textContent = 'คลิกหรือลากไฟล์ Excel มาวาง';
+        const fileInput = document.getElementById('inv-file-input');
+        if (fileInput) fileInput.value = '';
+    };
+
+    window.invCancelImport = function() {
+        const panel = document.getElementById('inv-upload-panel');
+        if (panel) panel.classList.add('hidden');
+        invCurrentImportType = null;
+        invImportBuffer = null;
+        // Deselect all cards
+        Object.keys(INV_IMPORT_CONFIG).forEach(k => {
+            const card = document.getElementById('inv-import-card-' + k);
+            if (card) { card.classList.remove('border-teal-400','bg-teal-50','border-blue-400','bg-blue-50','border-purple-400','bg-purple-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50'); card.classList.add('border-slate-200','bg-white'); }
+        });
+    };
+
+    window.invImportHandleDrop = function(e) {
+        e.preventDefault();
+        const zone = document.getElementById('inv-file-drop-zone');
+        if (zone) { zone.classList.remove('border-teal-400','bg-teal-50'); }
+        const file = e.dataTransfer.files[0];
+        if (file) invProcessImportFile(file);
+    };
+
+    window.invImportHandleFile = function(input) {
+        const file = input.files[0];
+        if (file) invProcessImportFile(file);
+    };
+
+    function invProcessImportFile(file) {
+        const label = document.getElementById('inv-file-label');
+        if (label) label.textContent = '⏳ กำลังอ่านไฟล์...';
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array', cellDates: true });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+                invImportBuffer = rows;
+                if (label) label.textContent = '✅ ' + file.name + ' (' + (rows.length - 1) + ' รายการ)';
+                // Build preview
+                const preview = document.getElementById('inv-import-preview');
+                if (preview) preview.classList.remove('hidden');
+                const textEl = document.getElementById('inv-preview-text');
+                const subEl  = document.getElementById('inv-preview-sub');
+                if (textEl) textEl.textContent = file.name;
+                if (subEl)  subEl.textContent  = 'ทั้งหมด ' + (rows.length - 1) + ' แถว, ' + (rows[0] ? rows[0].length : 0) + ' คอลัมน์';
+                // Preview table (first 5 rows)
+                const tbl = document.getElementById('inv-preview-table');
+                if (tbl && rows.length > 0) {
+                    const header = rows[0];
+                    const sample = rows.slice(1, 6);
+                    tbl.innerHTML = '<thead><tr>' + header.map(h => '<th class="px-3 py-2 bg-slate-800 text-slate-200 font-black text-left whitespace-nowrap">' + (h||'') + '</th>').join('') + '</tr></thead>'
+                        + '<tbody>' + sample.map((r,i) => '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '">' + r.map(c => '<td class="px-3 py-1.5 text-slate-600 whitespace-nowrap border-b border-slate-100">' + (c instanceof Date ? c.toLocaleDateString('th-TH') : (c||'')) + '</td>').join('') + '</tr>').join('') + '</tbody>';
+                }
+                showToast('โหลดไฟล์ ' + file.name + ' สำเร็จ (' + (rows.length-1) + ' rows)');
+            } catch(err) {
+                if (label) label.textContent = '❌ อ่านไฟล์ไม่สำเร็จ';
+                showToast('เกิดข้อผิดพลาด: ' + err.message, true);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    window.invClearImportFile = function() {
+        invImportBuffer = null;
+        const preview = document.getElementById('inv-import-preview');
+        if (preview) preview.classList.add('hidden');
+        const label = document.getElementById('inv-file-label');
+        if (label) label.textContent = 'คลิกหรือลากไฟล์ Excel มาวาง';
+        const fileInput = document.getElementById('inv-file-input');
+        if (fileInput) fileInput.value = '';
+    };
+
+    window.invConfirmImport = function() {
+        if (!invImportBuffer || !invCurrentImportType) return showToast('กรุณาเลือกประเภทและไฟล์ก่อน', true);
+        const cfg = INV_IMPORT_CONFIG[invCurrentImportType];
+        if (!cfg) return;
+        const rows = invImportBuffer;
+        // Sanitize for GAS
+        const cleanRows = rows.map(row => row.map(cell => {
+            if (cell instanceof Date) {
+                const d = cell;
+                const p = n => String(n).padStart(2,'0');
+                return (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+            }
+            if (cell === null || cell === undefined) return '';
+            if (typeof cell === 'number' && !isFinite(cell)) return 0;
+            return cell;
+        }));
+        showConfirmModal(
+            'ยืนยันนำเข้าข้อมูล',
+            'นำเข้า <strong class="text-white">' + (rows.length-1) + ' แถว</strong> → ชีต <strong class="text-white">' + cfg.sheet + '</strong>?',
+            function() {
+                showToast('กำลังนำเข้าข้อมูล...');
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (res.success) {
+                            showToast('✅ ' + res.message);
+                            // Add log entry
+                            invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: cfg.sheet, message: res.message });
+                            invRenderImportLog();
+                            // Update last import date on card
+                            const ldEl = document.getElementById('inv-import-lastdate-' + invCurrentImportType);
+                            if (ldEl) ldEl.textContent = 'นำเข้าล่าสุด: ' + new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'});
+                            invClearImportFile();
+                        } else {
+                            showToast('❌ ' + res.message, true);
+                        }
+                    })
+                    .withFailureHandler(function(err) { showToast('Error: ' + err.message, true); })
+                    .importInventoryData(cleanRows, invCurrentImportType);
+            },
+            { type: 'info', okText: 'นำเข้า' }
+        );
+    };
+
+    function invRenderImportLog() {
+        const el = document.getElementById('inv-import-log');
+        if (!el) return;
+        if (invImportLogs.length === 0) {
+            el.innerHTML = '<div class="text-center text-slate-300 py-10"><i class="fas fa-database text-4xl mb-3 block opacity-20"></i><p class="font-bold">ยังไม่มีประวัติการนำเข้า</p></div>';
+            return;
+        }
+        const colorMap = { 'COUNTING':'teal', 'ON-HAND FG':'blue', 'ON-HAND SEMI':'purple', 'TRANSACTION FG':'orange', 'TRANSACTION SEMI':'rose' };
+        el.innerHTML = invImportLogs.map((log, i) => {
+            const c = colorMap[log.label] || 'slate';
+            return '<div class="flex items-center gap-4 p-4 ' + (i%2===0?'bg-slate-50':'bg-white') + ' rounded-xl border border-slate-100 mb-2">'
+                + '<span class="text-xs font-bold text-' + c + '-600 bg-' + c + '-100 px-2 py-1 rounded-lg">' + log.label + '</span>'
+                + '<span class="text-xs text-slate-500 font-bold">' + log.time + '</span>'
+                + '<span class="text-xs text-slate-600 flex-1">' + log.message + '</span>'
+                + '</div>';
+        }).join('');
+    }
+
+    // ── TAB 2: COMPARE ────────────────────────────────────────────
+
+    window.invCompareMode = function(mode) {
+        invCompareCurrentMode = mode;
+        ['fg','semi'].forEach(m => {
+            const btn = document.getElementById('inv-cmp-btn-' + m);
+            if (btn) {
+                if (m === mode) { btn.classList.remove('bg-slate-100','text-slate-600'); btn.classList.add(m==='fg'?'bg-teal-600':'bg-purple-600','text-white','shadow'); }
+                else { btn.classList.add('bg-slate-100','text-slate-600'); btn.classList.remove('bg-teal-600','bg-purple-600','text-white','shadow'); }
+            }
+        });
+        // Show/hide WH filter (only for FG)
+        const whFilter = document.getElementById('inv-cmp-wh-filter');
+        if (whFilter) whFilter.style.display = mode === 'fg' ? '' : 'none';
+        invRenderCompareTable(invCompareData);
+    };
+
+    window.invCmpSetWH = function(wh) {
+        invCompareCurrentWH = wh;
+        ['all','fg-bp','fg-a'].forEach(k => {
+            const btn = document.getElementById('inv-cmp-wh-' + k);
+            if (btn) { btn.classList.remove('bg-slate-700','text-white','shadow'); btn.classList.add('bg-slate-100','text-slate-600'); }
+        });
+        const whKeyMap = { 'all':'all', 'FG-BP':'fg-bp', 'FG-A-':'fg-a' };
+        const activeKey = whKeyMap[wh] || 'all';
+        const activeBtn = document.getElementById('inv-cmp-wh-' + activeKey);
+        if (activeBtn) { activeBtn.classList.remove('bg-slate-100','text-slate-600'); activeBtn.classList.add('bg-slate-700','text-white','shadow'); }
+        invFilterCompare();
+    };
+
+    window.invLoadCompare = function() {
+        const empty = document.getElementById('inv-cmp-empty');
+        const loading = document.getElementById('inv-cmp-loading');
+        const wrap = document.getElementById('inv-cmp-table-wrap');
+        if (empty) empty.classList.add('hidden');
+        if (loading) loading.classList.remove('hidden');
+        if (wrap) wrap.classList.add('hidden');
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (loading) loading.classList.add('hidden');
+                if (res.success) {
+                    invCompareData = res.data || [];
+                    invRenderCompareTable(invCompareData);
+                } else {
+                    if (empty) empty.classList.remove('hidden');
+                    showToast('❌ ' + res.message, true);
+                }
+            })
+            .withFailureHandler(function(err) {
+                if (loading) loading.classList.add('hidden');
+                if (empty) empty.classList.remove('hidden');
+                showToast('Error: ' + err.message, true);
+            })
+            .getInventoryCompareData(invCompareCurrentMode);
+    };
+
+    window.invFilterCompare = function() {
+        invRenderCompareTable(invCompareData);
+    };
+
+    window.invRenderCompareTable = function(data) {
+        const mode = invCompareCurrentMode;
+        const wrap = document.getElementById('inv-cmp-table-wrap');
+        const empty = document.getElementById('inv-cmp-empty');
+        const kpiFg   = document.getElementById('inv-cmp-kpi-fg');
+        const kpiSemi = document.getElementById('inv-cmp-kpi-semi');
+        const tblFg   = document.getElementById('inv-cmp-table-fg');
+        const tblSemi = document.getElementById('inv-cmp-table-semi');
+        if (!data || data.length === 0) {
+            if (wrap) wrap.classList.add('hidden');
+            if (empty) empty.classList.remove('hidden');
+            if (kpiFg)   kpiFg.classList.add('hidden');
+            if (kpiSemi) kpiSemi.classList.add('hidden');
+            return;
+        }
+        const search = (document.getElementById('inv-cmp-search') || {}).value || '';
+        const q = search.toLowerCase();
+        let filtered = data.filter(r => {
+            if (q && !((r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q))) return false;
+            if (mode === 'fg' && invCompareCurrentWH !== 'all') {
+                if (!String(r.wh||'').toUpperCase().includes(invCompareCurrentWH.toUpperCase())) return false;
+            }
+            return true;
+        });
+        if (wrap) wrap.classList.remove('hidden');
+        if (empty) empty.classList.add('hidden');
+        // Show/hide tables and KPIs
+        if (tblFg)   tblFg.classList.toggle('hidden', mode !== 'fg');
+        if (tblSemi) tblSemi.classList.toggle('hidden', mode !== 'semi');
+        if (kpiFg)   kpiFg.classList.toggle('hidden', mode !== 'fg');
+        if (kpiSemi) kpiSemi.classList.toggle('hidden', mode !== 'semi');
+        if (mode === 'fg') {
+            let totalLine=0, totalKg=0, totalRes=0, match=0, diff=0;
+            const rows = filtered.map((r,i) => {
+                const sysLine = Number(r.sysLine||0);
+                const sysKg   = Number(r.sysKg||0);
+                const reserved= Number(r.reserved||0);
+                const avail   = sysLine - reserved;
+                const counted = r.counted !== undefined ? Number(r.counted) : null;
+                const d = counted !== null ? (counted - sysLine) : null;
+                totalLine += sysLine; totalKg += sysKg; totalRes += reserved;
+                if (d === null) { /* no data */ } else if (d === 0) match++; else diff++;
+                const rowClass = d === null ? 'bg-slate-50' : (d === 0 ? 'bg-emerald-50' : 'bg-rose-50');
+                const diffCell = d === null ? '<span class="text-slate-400 text-xs">—</span>' : ('<span class="font-black ' + (d===0?'text-emerald-700':'text-rose-700') + '">' + (d>0?'+':'') + d + '</span>');
+                const status = d === null ? '<span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-black">ไม่มีข้อมูล</span>'
+                    : (d === 0 ? '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black">✓ ตรงกัน</span>'
+                              : '<span class="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-black">⚠ ผลต่าง</span>');
+                return '<tr class="' + rowClass + ' hover:opacity-90">'
+                    + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-slate-700">' + (r.name||'') + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-blue-700">' + sysLine.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-indigo-700">' + sysKg.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-amber-700">' + reserved.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-teal-700">' + avail.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-green-700">' + (counted !== null ? counted.toLocaleString() : '—') + '</td>'
+                    + '<td class="px-3 py-2 text-right">' + diffCell + '</td>'
+                    + '<td class="px-3 py-2 text-center">' + status + '</td>'
+                    + '</tr>';
+            });
+            const tbody = document.getElementById('inv-cmp-tbody-fg');
+            if (tbody) tbody.innerHTML = rows.join('');
+            safeSetText('inv-cmp-kpi-total', filtered.length);
+            safeSetText('inv-cmp-kpi-sys-line', totalLine.toLocaleString());
+            safeSetText('inv-cmp-kpi-sys-kg', totalKg.toLocaleString());
+            safeSetText('inv-cmp-kpi-reserved', totalRes.toLocaleString());
+            safeSetText('inv-cmp-kpi-match', match);
+            safeSetText('inv-cmp-kpi-diff', diff);
+        } else {
+            // SEMI mode
+            let totalKg=0, totalAvail=0;
+            const rows = filtered.map((r,i) => {
+                const kg    = Number(r.physKg||0);
+                const avail = Number(r.availKg||0);
+                totalKg += kg; totalAvail += avail;
+                const status = avail > 0
+                    ? '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black">มีสต๊อก</span>'
+                    : '<span class="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-black">หมด</span>';
+                return '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + ' hover:bg-purple-50">'
+                    + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-slate-700">' + (r.name||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono text-slate-600">' + (r.batch||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono text-slate-600">' + (r.serial||'') + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-purple-700">' + kg.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-teal-700">' + avail.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-center">' + status + '</td>'
+                    + '</tr>';
+            });
+            const tbody = document.getElementById('inv-cmp-tbody-semi');
+            if (tbody) tbody.innerHTML = rows.join('');
+            safeSetText('inv-cmp-kpi-semi-total', filtered.length);
+            safeSetText('inv-cmp-kpi-semi-rolls', filtered.length.toLocaleString());
+            safeSetText('inv-cmp-kpi-semi-kg', totalKg.toLocaleString());
+            safeSetText('inv-cmp-kpi-semi-avail', totalAvail.toLocaleString());
+        }
+    };
+
+    window.invExportCompare = function() {
+        if (!invCompareData || invCompareData.length === 0) return showToast('ไม่มีข้อมูล', true);
+        const mode = invCompareCurrentMode;
+        let wsData;
+        if (mode === 'fg') {
+            wsData = [['No.','WH','Item number','Product name','ยอดระบบ(เส้น)','ยอดระบบ(KG)','จอง(เส้น)','คงเหลือ(เส้น)','Counting(เส้น)','ผลต่าง','สถานะ']];
+            invCompareData.forEach((r,i) => {
+                const sysLine = Number(r.sysLine||0);
+                const reserved = Number(r.reserved||0);
+                const counted = r.counted !== undefined ? Number(r.counted) : null;
+                const diff = counted !== null ? counted - sysLine : null;
+                wsData.push([i+1, r.wh||'', r.sku||'', r.name||'', sysLine, Number(r.sysKg||0), reserved, sysLine-reserved, counted !== null ? counted : '', diff !== null ? diff : '', diff === null ? 'ไม่มีข้อมูล' : (diff===0?'ตรงกัน':'ผลต่าง')]);
+            });
+        } else {
+            wsData = [['No.','WH','Item number','Product name','Batch','Serial','น้ำหนัก(KG)','คงเหลือ(KG)','สถานะ']];
+            invCompareData.forEach((r,i) => {
+                wsData.push([i+1, r.wh||'', r.sku||'', r.name||'', r.batch||'', r.serial||'', Number(r.physKg||0), Number(r.availKg||0), Number(r.availKg||0)>0?'มีสต๊อก':'หมด']);
+            });
+        }
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Compare');
+        XLSX.writeFile(wb, 'INV_Compare_' + mode.toUpperCase() + '_' + new Date().toISOString().split('T')[0] + '.xlsx');
+        showToast('Export สำเร็จ');
+    };
+
+    // ── TAB 3: CYCLE COUNT ────────────────────────────────────────
+
+    window.invCycleMode = function(mode) {
+        invCycleCurrentMode = mode;
+        ['fg','semi'].forEach(m => {
+            const btn = document.getElementById('inv-cyc-btn-' + m);
+            if (btn) {
+                if (m === mode) { btn.classList.remove('bg-slate-100','text-slate-600'); btn.classList.add(m==='fg'?'bg-teal-600':'bg-purple-600','text-white','shadow'); }
+                else { btn.classList.add('bg-slate-100','text-slate-600'); btn.classList.remove('bg-teal-600','bg-purple-600','text-white','shadow'); }
+            }
+        });
+        const tblFg   = document.getElementById('inv-cyc-table-fg');
+        const tblSemi = document.getElementById('inv-cyc-table-semi');
+        if (tblFg)   tblFg.classList.toggle('hidden', mode !== 'fg');
+        if (tblSemi) tblSemi.classList.toggle('hidden', mode !== 'semi');
+        invRenderCycleTable(invCycleData);
+    };
+
+    window.invLoadCycleCount = function() {
+        const dateEl = document.getElementById('inv-cyc-date');
+        const dateStr = dateEl ? dateEl.value : '';
+        if (!dateStr) return showToast('กรุณาเลือกวันที่', true);
+        const empty   = document.getElementById('inv-cyc-empty');
+        const loading = document.getElementById('inv-cyc-loading');
+        const wrap    = document.getElementById('inv-cyc-table-wrap');
+        if (empty)   empty.classList.add('hidden');
+        if (loading) loading.classList.remove('hidden');
+        if (wrap)    wrap.classList.add('hidden');
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (loading) loading.classList.add('hidden');
+                if (res.success) {
+                    invCycleData = res.items || [];
+                    if (wrap) wrap.classList.remove('hidden');
+                    invRenderCycleTable(invCycleData);
+                } else {
+                    if (empty) empty.classList.remove('hidden');
+                    showToast('❌ ' + res.message, true);
+                }
+            })
+            .withFailureHandler(function(err) {
+                if (loading) loading.classList.add('hidden');
+                if (empty) empty.classList.remove('hidden');
+                showToast('Error: ' + err.message, true);
+            })
+            .getCycleCountItems(dateStr, invCycleCurrentMode);
+    };
+
+    window.invFilterCycle = function() {
+        invRenderCycleTable(invCycleData);
+    };
+
+    window.invRenderCycleTable = function(data) {
+        const mode = invCycleCurrentMode;
+        if (!data || data.length === 0) return;
+        const q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
+        const filtered = data.filter(r => !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q));
+        if (mode === 'fg') {
+            const tbody = document.getElementById('inv-cyc-tbody-fg');
+            if (!tbody) return;
+            const rows = filtered.map((r, i) => {
+                const lpb   = Number(r.lpb||0);
+                const sysQty= Number(r.systemQty||0);
+                const rowId = 'cyc-row-' + i;
+                return '<tr id="' + rowId + '" class="hover:bg-teal-50 border-b border-slate-100">'
+                    + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
+                    + '<td class="px-3 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-slate-700">' + (r.name||'') + '</td>'
+                    + '<td class="px-3 py-2 text-right text-xs font-bold text-blue-700">' + Number(r.receiptQty||0).toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right text-xs font-bold text-rose-700">' + Number(r.issueQty||0).toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="b1" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-blue-300 rounded-lg px-1 py-1 text-xs font-bold text-blue-700 focus:outline-none focus:border-blue-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="b2" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-blue-300 rounded-lg px-1 py-1 text-xs font-bold text-blue-700 focus:outline-none focus:border-blue-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="p1" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-purple-300 rounded-lg px-1 py-1 text-xs font-bold text-purple-700 focus:outline-none focus:border-purple-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="p2" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-purple-300 rounded-lg px-1 py-1 text-xs font-bold text-purple-700 focus:outline-none focus:border-purple-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="hold" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-rose-300 rounded-lg px-1 py-1 text-xs font-bold text-rose-700 focus:outline-none focus:border-rose-500"></td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-black text-teal-700" id="inv-actual-' + i + '">—</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-amber-700">' + sysQty.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-black" id="inv-diff-' + i + '">—</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = rows.join('');
+        } else {
+            // SEMI
+            const tbody = document.getElementById('inv-cyc-tbody-semi');
+            if (!tbody) return;
+            const rows = filtered.map((r, i) => {
+                const inKg  = Number(r.receiptQty||0);
+                const outKg = Number(r.issueQty||0);
+                const physKg= Number(r.physKg||0);
+                const status = physKg > 0 ? '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black">มีสต๊อก</span>' : '<span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-black">—</span>';
+                return '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + ' hover:bg-purple-50 border-b border-slate-100">'
+                    + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
+                    + '<td class="px-3 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-slate-700">' + (r.name||'') + '</td>'
+                    + '<td class="px-3 py-2 text-right text-xs font-bold text-blue-700">' + inKg.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right text-xs font-bold text-rose-700">' + outKg.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-right text-xs font-bold text-purple-700">' + physKg.toLocaleString() + '</td>'
+                    + '<td class="px-3 py-2 text-center">' + status + '</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = rows.join('');
+        }
+        invUpdateCycleKPI();
+    };
+
+    window.invCalcActual = function(rowIdx) {
+        const get = field => { const el = document.querySelector('[data-row="' + rowIdx + '"][data-field="' + field + '"]'); return el ? (Number(el.value)||0) : 0; };
+        const b1 = get('b1'), b2 = get('b2'), p1 = get('p1'), p2 = get('p2'), hold = get('hold');
+        const r = invCycleData[rowIdx];
+        const lpb = r ? (Number(r.lpb)||0) : 0;
+        const actual = (b1 + b2) * lpb + p1 + p2;
+        const sysQty = r ? Number(r.systemQty||0) : 0;
+        const diff = actual - sysQty;
+        const actualEl = document.getElementById('inv-actual-' + rowIdx);
+        const diffEl   = document.getElementById('inv-diff-'   + rowIdx);
+        if (actualEl) actualEl.textContent = actual.toLocaleString();
+        if (diffEl) {
+            diffEl.textContent = (diff >= 0 ? '+' : '') + diff;
+            diffEl.className = 'px-3 py-2 text-right font-mono text-xs font-black ' + (diff === 0 ? 'text-emerald-700' : 'text-rose-700');
+        }
+        if (r) { r._b1=b1; r._b2=b2; r._p1=p1; r._p2=p2; r._hold=hold; r._actual=actual; r._diff=diff; }
+        invUpdateCycleKPI();
+    };
+
+    window.invUpdateCycleKPI = function() {
+        const kpiRow = document.getElementById('inv-cyc-kpi-row');
+        if (kpiRow) kpiRow.classList.remove('hidden');
+        const mode = invCycleCurrentMode;
+        const q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
+        const filtered = invCycleData.filter(r => !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q));
+        const total = filtered.length;
+        const inSku  = filtered.filter(r => (r.receiptQty||0) > 0).length;
+        const outSku = filtered.filter(r => (r.issueQty||0)  > 0).length;
+        let filled = 0, pending = 0;
+        if (mode === 'fg') {
+            filtered.forEach((r, i) => {
+                const el = document.querySelector('[data-row="' + invCycleData.indexOf(r) + '"][data-field="b1"]');
+                const hasValue = el && (Number(el.value)||0) > 0;
+                if (hasValue) filled++; else pending++;
+            });
+        }
+        safeSetText('inv-cyc-kpi-total', total);
+        safeSetText('inv-cyc-kpi-in',    inSku);
+        safeSetText('inv-cyc-kpi-out',   outSku);
+        safeSetText('inv-cyc-kpi-filled', filled);
+        safeSetText('inv-cyc-kpi-pending', pending || (total - filled));
+    };
+
+    window.invPrintCycleForm = function() {
+        const dateEl = document.getElementById('inv-cyc-date');
+        const dateStr = dateEl ? dateEl.value : '';
+        const printDate = document.getElementById('inv-print-date');
+        if (printDate) printDate.textContent = dateStr || new Date().toLocaleDateString('th-TH');
+        const mode = invCycleCurrentMode;
+        const tbody = document.getElementById('inv-print-tbody');
+        if (tbody && mode === 'fg') {
+            const q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
+            const filtered = invCycleData.filter(r => !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q));
+            tbody.innerHTML = filtered.map((r, i) => {
+                const ri = invCycleData.indexOf(r);
+                const get = field => { const el = document.querySelector('[data-row="' + ri + '"][data-field="' + field + '"]'); return el ? (el.value||'') : ''; };
+                return '<tr style="border-bottom:1px solid #eee;">'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + (i+1) + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (r.wh||'') + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;font-family:monospace;">' + (r.sku||'') + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (r.name||'') + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('b1') + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('b2') + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('p1') + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('p2') + '</td>'
+                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('hold') + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+        // Open print window
+        const printArea = document.getElementById('inv-print-area');
+        if (!printArea) return;
+        const printWin = window.open('', '_blank', 'width=900,height=700');
+        printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+            + '<style>@page{size:A4;margin:15mm}body{font-family:"Sarabun",sans-serif;font-size:11pt;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:4px 6px;font-size:9pt;}th{background:#1e293b;color:#fff;}</style>'
+            + '</head><body onload="window.print();window.close();">' + printArea.innerHTML + '</body></html>');
+        printWin.document.close();
+    };
+
+    window.invSaveCycleCount = function() {
+        if (!invCycleData || invCycleData.length === 0) return showToast('ไม่มีข้อมูล', true);
+        const dateEl = document.getElementById('inv-cyc-date');
+        const dateStr = dateEl ? dateEl.value : '';
+        if (!dateStr) return showToast('กรุณาเลือกวันที่', true);
+        const mode = invCycleCurrentMode;
+        const saveRows = invCycleData.map((r, i) => ({
+            date: dateStr,
+            sku:  r.sku||'',
+            name: r.name||'',
+            wh:   r.wh||'',
+            lpb:  Number(r.lpb||0),
+            bundle1: Number(r._b1||0),
+            bundle2: Number(r._b2||0),
+            pcs1: Number(r._p1||0),
+            pcs2: Number(r._p2||0),
+            hold: Number(r._hold||0),
+            actual: Number(r._actual||0),
+            systemQty: Number(r.systemQty||0),
+            diff: Number(r._diff||0)
+        }));
+        showConfirmModal(
+            'ยืนยันบันทึก Cycle Count',
+            'บันทึกผล Cycle Count ' + mode.toUpperCase() + ' จำนวน <strong class="text-white">' + saveRows.length + ' รายการ</strong> วันที่ <strong class="text-white">' + dateStr + '</strong>?',
+            function() {
+                showToast('กำลังบันทึก...');
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (res.success) { showToast('✅ ' + res.message); }
+                        else { showToast('❌ ' + res.message, true); }
+                    })
+                    .withFailureHandler(function(err) { showToast('Error: ' + err.message, true); })
+                    .saveFGCycleCount(saveRows, [], dateStr);
+            },
+            { type: 'info', okText: 'บันทึก' }
+        );
+    };
 
     /** Handle FG File Drop */
     window.handleFGFileDrop = function handleFGFileDrop(e) {
