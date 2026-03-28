@@ -16099,7 +16099,16 @@ window.psdTrailerAssign = function psdTrailerAssign() {
                 childItems.push(_psdCutItem(item, item.qty));
                 remChild -= itemWt;
             } else {
-                overflowItems.push(item.sku + ' ' + item.qty.toLocaleString() + ' เส้น (เกิน capacity ทั้งคู่)');
+                // เกิน capacity ทั้งคู่ → ยัง assign ไปรถที่เหลือมากกว่า (ให้ปรากฏในเอกสาร)
+                // ไม่ตัดออก เพราะ user ต้องเห็นว่ามีสินค้าชิ้นนี้อยู่
+                if (remChild >= remMother) {
+                    childItems.push(_psdCutItem(item, item.qty));
+                    remChild -= itemWt;
+                } else {
+                    motherItems.push(_psdCutItem(item, item.qty));
+                    remMother -= itemWt;
+                }
+                overflowItems.push(item.sku + ' ' + item.qty.toLocaleString() + ' เส้น (⚠️ เกิน capacity — ยังแสดงในเอกสาร)');
             }
         }
     });
