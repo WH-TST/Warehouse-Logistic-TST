@@ -4692,8 +4692,7 @@ function getLogisticPlanById(planId) {
       var _rowBase  = String(row[0]).replace(/-[MC]$/, '');
       var _planBase = String(planId).replace(/-[MC]$/, '');
       if (_rowBase !== _planBase) continue;
-      // ถ้าไม่ได้ขอ -C plan → ข้าม child rows
-      if (String(row[0]).endsWith('-C') && !childPlanId) continue;
+      // รวม -M และ -C ทุกแถวไว้ใน plan เดียว (ใช้ truckLabel แยกแทน)
 
       var rowDate = row[1] instanceof Date
         ? Utilities.formatDate(row[1], 'GMT+7', 'yyyy-MM-dd')
@@ -4703,7 +4702,7 @@ function getLogisticPlanById(planId) {
         // สร้าง plan object จากแถวแรกที่พบ (A–P เหมือนกันทุกแถว)
         var isNewFmt2 = (row[16] !== '' && row[16] !== null && row[16] !== undefined);
         plan = {
-          id:              String(row[0]  || ''),
+          id:              basePlanId,  // ใช้ base ID (strip -M/-C) เพื่อให้ edit ทำงานถูกต้อง
           date:            rowDate,
           truckType:       String(row[2]  || 'company'),
           driverTransport: String(row[3]  || ''),
@@ -4752,6 +4751,7 @@ function getLogisticPlanById(planId) {
             sale:          String(row[10] || ''),
             loadWarehouse: String(row[12] || ''),
             remark:        String(row[18] || ''),
+            truckLabel:    String(row[0]).endsWith('-C') ? 'child' : 'mother',
             items:         []
           });
         }
@@ -4769,8 +4769,10 @@ function getLogisticPlanById(planId) {
       for (var j = 1; j < itemData.length; j++) {
         var irow = itemData[j];
         var itemPlanId  = String(irow[0]);
-        var isChildItem = (childPlanId && itemPlanId === String(childPlanId));
-        if (itemPlanId !== String(planId) && !isChildItem) continue;
+        // base-match: รองรับทั้ง planId เดิม (ไม่มี suffix) และ planId ใหม่ (-M/-C)
+        var _itemBase = itemPlanId.replace(/-[MC]$/, '');
+        if (_itemBase !== basePlanId) continue;
+        var _itemTruckLabel = itemPlanId.endsWith('-C') ? 'child' : 'mother';
 
         var shopName = String(irow[7] || '');  // Col H
         if (!shopName) continue;  // ข้ามแถวที่ไม่มีชื่อร้าน
@@ -4801,7 +4803,7 @@ function getLogisticPlanById(planId) {
           qty:           parseFloat(irow[3]) || 0,
           weightPerUnit: parseFloat(irow[4]) || 0,
           weight:        itemWt,
-          truckLabel:    isChildItem ? 'child' : 'mother'  // per-item truck label
+          truckLabel:    _itemTruckLabel  // per-item truck label (ดูจาก planId suffix)
         });
         plan.totalWeight += itemWt;
       }

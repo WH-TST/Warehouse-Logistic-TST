@@ -13597,6 +13597,15 @@ window.saveLogisticPlan = function saveLogisticPlan() {
         }
     };
 
+    // ── Debug: ตรวจสอบ childPlate + trailer split ──────────────────────────
+    console.log('💾 saveLogisticPlan payload:', {
+        truckType:   payload.truckType,
+        truckPlate:  payload.truckPlate,
+        childPlate:  payload.childPlate,
+        shopCount:   (payload.shops || []).length,
+        shops: (payload.shops || []).map(s => ({ name: s.shopName, truck: s.truckLabel, items: (s.items||[]).length }))
+    });
+
     // ── เรียก GAS ──────────────────────────────────────────────────────────
     google.script.run
         .withSuccessHandler(function(res) {
@@ -18372,6 +18381,11 @@ window.editLogiPlan = function editLogiPlan(planId) {
                     // คลังโหลด: ดึงจาก Sheet (col M)
                     const loadWhEl = document.getElementById(`logi-shop-load-wh-${cardIdx}`);
                     if (loadWhEl) loadWhEl.value = s.loadWarehouse || '';
+
+                    // restore shop truck label BEFORE adding items (ไม่มี items ยัง → propagation ไม่กระทบ)
+                    if (s.truckLabel && s.truckLabel !== 'mother') {
+                        setLogiShopTruck(cardIdx, s.truckLabel);
+                    }
 
                     // สินค้าทุกรายการ + restore truckLabel (mother/child)
                     (s.items || []).forEach((it) => {
