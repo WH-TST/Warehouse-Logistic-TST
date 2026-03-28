@@ -13852,6 +13852,10 @@ window.renderLogisticList = function renderLogisticList() {
             { dot: 'bg-emerald-500',text: 'text-emerald-600' },
             { dot: 'bg-rose-400',   text: 'text-rose-600' },
         ];
+        // รถลูก (-C): ลำดับร้านต่อจากรถแม่ (-M)
+        const _shopOffset = p.isChild
+            ? ((list.find(q => q.id === p.pairId + '-M')?.shops || []).length)
+            : 0;
 
         const rows = [];
         let isFirstPlanRow = true;
@@ -13963,7 +13967,7 @@ window.renderLogisticList = function renderLogisticList() {
                     row += `
                     <td rowspan="${shopRows}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200 ${shopSepClass}" style="vertical-align:top">
                         <div class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full ${accent.dot} text-white text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">${si+1}</span>
+                            <span class="w-5 h-5 rounded-full ${accent.dot} text-white text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">${si + _shopOffset + 1}</span>
                             <div>
                                 <div class="font-bold text-xs text-slate-800 leading-snug">${s.shopName}</div>
                                 ${s.sale ? `<div class="text-[10px] ${accent.text} font-semibold mt-0.5"><i class="fas fa-user-tie mr-1 opacity-70"></i>${s.sale}</div>` : ''}
