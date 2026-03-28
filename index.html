@@ -13734,9 +13734,20 @@ window.renderLogisticList = function renderLogisticList() {
     tbody.innerHTML = list.flatMap((p, i) => {
 
         const st = LOGI_STATUS_MAP[p.status] || { label: p.status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
-        const truckDisplay = p.truckType === 'hire'
-            ? (p.driverTransport || '—')
-            : (p.truckPlate || '—');
+        const truckDisplay = (() => {
+            if (p.truckType === 'hire') return p.driverTransport || '—';
+            const plate = p.truckPlate || '—';
+            if (p.isMother) {
+                // หา childPlate จาก LOGI_MASTER_CACHE
+                const t = (LOGI_MASTER_CACHE?.trucks || []).find(tk => tk.plate === p.truckPlate);
+                const cp = t?.childPlate;
+                if (cp) return `<span class="font-mono">${plate}</span>`
+                    + `<div class="text-[10px] text-purple-600 font-bold mt-0.5 whitespace-nowrap">+ ${cp} 🔗</div>`;
+            }
+            if (p.isChild) return `<span class="font-mono text-purple-700">${plate}</span>`
+                + `<div class="text-[10px] text-purple-500 mt-0.5">⬆ รถลูก</div>`;
+            return `<span class="font-mono">${plate}</span>`;
+        })();
         const driver    = p.truckType === 'hire' ? '—' : (p.driverTransport || '—');
         const trip      = p.truckType === 'hire' ? '—' : (p.tripNo || '—');
         const wt        = p.totalWeight ? parseFloat(p.totalWeight).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00';
@@ -13765,7 +13776,7 @@ window.renderLogisticList = function renderLogisticList() {
         // Col 1-4: ทะเบียน / เที่ยว / คนขับ / ประเภทงาน — rowspan ทั้งเที่ยว, align top
         const leftCells = (rs) => `
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-center align-top border-r border-slate-200 ${planBorderTop}" style="vertical-align:top">
-                <div class="font-black text-sm text-slate-800 whitespace-nowrap">${truckDisplay}</div>
+                <div class="font-black text-sm text-slate-800">${truckDisplay}</div>
                 <div class="text-[10px] text-slate-400 mt-0.5">${p.id}</div>
             </td>
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-center align-top border-r border-slate-200 ${planBorderTop}" style="vertical-align:top">
