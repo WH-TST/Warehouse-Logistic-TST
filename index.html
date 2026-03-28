@@ -14096,15 +14096,14 @@ function updateLogiKPI() {
             d.trips  += 1;
             d.shops  += (p.shops || []).length;
             const dist     = parseFloat(p.distance) || 0;
-            // รถพ่วง: แม่กับลูกวิ่งด้วยกัน → บวกระยะทางร้านของลูกด้วย
-            const childDist = p.isMother
-                ? (parseFloat(companyPlans.find(q => q.id === p.pairId + '-C')?.distance) || 0)
-                : 0;
-            const totalOneway = dist + childDist;
+            const stopDist = parseFloat(p.stopFee)  || 0;
+            // รถพ่วง: แม่กับลูกวิ่งด้วยกัน → บวกระยะทาง + Stop ของลูกทุกร้านด้วย
+            const _childPlan    = p.isMother ? companyPlans.find(q => q.id === p.pairId + '-C') : null;
+            const childDist     = parseFloat(_childPlan?.distance) || 0;
+            const childStopDist = parseFloat(_childPlan?.stopFee)  || 0;
             const retDist  = parseFloat(p.returnDistance) || 0;
-            const stopDist = parseFloat(p.stopFee)        || 0;
-            // ระยะทางรวม = Σร้าน(แม่+ลูก) + Σ Stop + ขากลับ (ห้ามคูณ 2)
-            d.dist += totalOneway + stopDist + retDist;
+            // สูตร: Σ(ระยะทางร้าน) + Σ(Stop ทุกร้าน ทั้งแม่+ลูก) + ขากลับ
+            d.dist += (dist + childDist) + (stopDist + childStopDist) + retDist;
         }
         d.weight  += parseFloat(p.totalWeight) || 0;
         if (p.status === 'success') d.success += 1;
