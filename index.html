@@ -14105,8 +14105,18 @@ function updateLogiKPI() {
             const childDist     = _childUniqueShops.reduce((sum, s) => sum + (parseFloat(s.distance)     || 0), 0);
             const childStopDist = _childUniqueShops.reduce((sum, s) => sum + (parseFloat(s.freeDistance) || 0), 0);
             const retDist  = parseFloat(p.returnDistance) || 0;
-            // สูตร: Σ(ระยะทางร้านทั้งหมด) + Σ(Stop ร้านที่ต่างกัน) + ขากลับ
-            d.dist += (dist + childDist) + (stopDist + childStopDist) + retDist;
+
+            // ── Stop ที่บริษัท (overhead per trip) ──
+            // รถเดี่ยว / แม่คนเดียว: 1 stop=15 กม., >1 stop=10×จำนวนStop
+            // รถพ่วงแม่+ลูก:          1 stop=30 กม., >1 stop=15×จำนวนStop
+            const isFullTrailer   = p.isMother && !!_childPlan;
+            const totalUniqueStops = (p.shops || []).length + _childUniqueShops.length;
+            const companyStop = isFullTrailer
+                ? (totalUniqueStops <= 1 ? 30 : totalUniqueStops * 15)
+                : (totalUniqueStops <= 1 ? 15 : totalUniqueStops * 10);
+
+            // สูตรรวม: Σ(ร้าน) + Σ(Stop ร้าน) + ขากลับ + Stop บริษัท
+            d.dist += (dist + childDist) + (stopDist + childStopDist) + retDist + companyStop;
         }
         d.weight  += parseFloat(p.totalWeight) || 0;
         if (p.status === 'success') d.success += 1;
