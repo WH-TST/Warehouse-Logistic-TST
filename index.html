@@ -1091,17 +1091,18 @@ thead.sticky {
             </thead>
             <tbody id="inv-cyc-tbody-fg" class="divide-y divide-slate-100"></tbody>
           </table>
-          <table id="inv-cyc-table-semi" class="w-full text-sm hidden">
+          <table id="inv-cyc-table-semi" class="w-full text-xs hidden">
             <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
               <tr>
-                <th class="px-3 py-3 text-center w-8">No.</th>
-                <th class="px-3 py-3 text-left min-w-[70px]">WH</th>
-                <th class="px-4 py-3 text-left min-w-[110px]">Item number</th>
-                <th class="px-4 py-3 text-left min-w-[150px]">Product name</th>
-                <th class="px-3 py-3 text-right bg-blue-900 w-24">รับเข้า<br><span class="text-[8px] font-normal opacity-70">(KG)</span></th>
-                <th class="px-3 py-3 text-right bg-rose-900 w-24">เบิกออก<br><span class="text-[8px] font-normal opacity-70">(KG)</span></th>
-                <th class="px-3 py-3 text-right bg-purple-900 w-24">น้ำหนัก<br><span class="text-[8px] font-normal opacity-70">(KG)</span></th>
-                <th class="px-3 py-3 text-center w-28">สถานะ</th>
+                <th class="px-2 py-3 text-center w-8">No.</th>
+                <th class="px-2 py-3 text-left w-16">WH</th>
+                <th class="px-2 py-3 text-left min-w-[100px]">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 1</span></th>
+                <th class="px-2 py-3 text-left min-w-[140px]">Product name 1</th>
+                <th class="px-2 py-3 text-center bg-teal-900 w-28">Check 1<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span></th>
+                <th class="px-2 py-3 text-left min-w-[100px] bg-slate-800">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 2</span></th>
+                <th class="px-2 py-3 text-left min-w-[140px] bg-slate-800">Product name 2</th>
+                <th class="px-2 py-3 text-center bg-teal-900 w-28">Check 2<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span></th>
+                <th class="px-2 py-3 text-left bg-purple-900 min-w-[100px]">Item Semi<br><span class="text-[8px] opacity-70 normal-case font-normal">รหัสฟิล์ม</span></th>
               </tr>
             </thead>
             <tbody id="inv-cyc-tbody-semi" class="divide-y divide-slate-100"></tbody>
@@ -1146,6 +1147,51 @@ thead.sticky {
             <div>
               <div style="font-size:9pt;">วันที่ / Date</div>
               <div style="border-bottom:1px solid #333;width:120px;margin-top:20px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEMI Print Area (landscape) -->
+      <div id="inv-print-area-semi" class="hidden">
+        <div style="font-family:'Sarabun',sans-serif;font-size:10pt;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px;">
+            <div>
+              <u style="font-weight:900;font-size:11pt;">Checker Name</u>
+              <span id="inv-semi-print-checker" style="font-size:11pt;margin-left:12px;">___________________</span>
+              &nbsp;&nbsp;&nbsp;
+              <u style="font-weight:900;">AREA</u>
+              <span id="inv-semi-print-area" style="margin-left:8px;">___________</span>
+            </div>
+            <div style="text-align:right;font-size:8pt;">
+              <span id="inv-semi-print-date"></span>
+              &nbsp;&nbsp;&nbsp;
+              <strong>FM-WH-03Rev.00</strong>
+            </div>
+          </div>
+          <table id="inv-semi-print-table" style="width:100%;border-collapse:collapse;font-size:8.5pt;">
+            <thead>
+              <tr style="background:#1e293b;color:#fff;">
+                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:40px;">WH</th>
+                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:110px;">Item number</th>
+                <th style="border:1px solid #999;padding:3px 5px;text-align:left;">Product 1</th>
+                <th style="border:1px solid #999;padding:3px 5px;text-align:center;width:70px;">Check1</th>
+                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:110px;">Item number</th>
+                <th style="border:1px solid #999;padding:3px 5px;text-align:left;">Product 2</th>
+                <th style="border:1px solid #999;padding:3px 5px;text-align:center;width:70px;">Check2</th>
+                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:100px;">Item Semi</th>
+              </tr>
+            </thead>
+            <tbody id="inv-semi-print-tbody"></tbody>
+          </table>
+          <div style="margin-top:18px;display:flex;gap:40px;">
+            <div>
+              <div style="font-size:8pt;">ลงชื่อผู้ตรวจเช็ค / Checker Name</div>
+              <div style="border-bottom:1px solid #333;width:180px;margin-top:18px;"></div>
+            </div>
+            <div>
+              <div style="font-size:8pt;">วันที่ / Date</div>
+              <div style="border-bottom:1px solid #333;width:100px;margin-top:18px;"></div>
             </div>
           </div>
         </div>
@@ -7547,23 +7593,31 @@ function renderBlockingTrendChart(data) {
             });
             tbody.innerHTML = rows.join('');
         } else {
-            // SEMI
+            // SEMI — layout matches physical form: WH | Item1 | Product1 | Check1 | Item2 | Product2 | Check2 | ItemSemi
             const tbody = document.getElementById('inv-cyc-tbody-semi');
             if (!tbody) return;
             const rows = filtered.map((r, i) => {
-                const inKg  = Number(r.receiptQty||0);
-                const outKg = Number(r.issueQty||0);
-                const physKg= Number(r.physKg||0);
-                const status = physKg > 0 ? '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black">มีสต๊อก</span>' : '<span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-black">—</span>';
+                const ri = invCycleData.indexOf(r);
+                const inpCls1 = 'w-full text-center border border-teal-400 rounded-lg px-1 py-1 text-xs font-bold text-teal-800 focus:outline-none focus:border-teal-600 bg-teal-50';
+                const inpCls2 = 'w-full text-center border border-teal-400 rounded-lg px-1 py-1 text-xs font-bold text-teal-800 focus:outline-none focus:border-teal-600 bg-teal-50';
+                // item2 / name2 / itemSemi may be separate fields or blank if only 1 product
+                const sku2     = r.sku2     || '';
+                const name2    = r.name2    || '';
+                const itemSemi = r.itemSemi || r.serial || '';
                 return '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + ' hover:bg-purple-50 border-b border-slate-100">'
-                    + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
-                    + '<td class="px-3 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
-                    + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-slate-700">' + (r.name||'') + '</td>'
-                    + '<td class="px-3 py-2 text-right text-xs font-bold text-blue-700">' + inKg.toLocaleString() + '</td>'
-                    + '<td class="px-3 py-2 text-right text-xs font-bold text-rose-700">' + outKg.toLocaleString() + '</td>'
-                    + '<td class="px-3 py-2 text-right text-xs font-bold text-purple-700">' + physKg.toLocaleString() + '</td>'
-                    + '<td class="px-3 py-2 text-center">' + status + '</td>'
+                    + '<td class="px-2 py-2 text-center text-[10px] text-slate-400 font-bold">' + (i+1) + '</td>'
+                    + '<td class="px-2 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] text-slate-700 max-w-[160px]">' + (r.name||'') + '</td>'
+                    + '<td class="px-2 py-2 bg-teal-50">'
+                    +   '<input type="text" placeholder="เช่น 9+1" data-row="' + ri + '" data-field="check1" oninput="invSemiMarkFilled(' + ri + ')" class="' + inpCls1 + '">'
+                    + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] font-mono font-black text-slate-600 bg-slate-50">' + sku2 + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] text-slate-600 bg-slate-50 max-w-[160px]">' + name2 + '</td>'
+                    + '<td class="px-2 py-2 bg-teal-50">'
+                    +   '<input type="text" placeholder="เช่น 7+2" data-row="' + ri + '" data-field="check2" oninput="invSemiMarkFilled(' + ri + ')" class="' + inpCls2 + '">'
+                    + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] font-mono font-black text-purple-700 bg-purple-50">' + itemSemi + '</td>'
                     + '</tr>';
             });
             tbody.innerHTML = rows.join('');
@@ -7600,13 +7654,13 @@ function renderBlockingTrendChart(data) {
         const inSku  = filtered.filter(r => (r.receiptQty||0) > 0).length;
         const outSku = filtered.filter(r => (r.issueQty||0)  > 0).length;
         let filled = 0, pending = 0;
-        if (mode === 'fg') {
-            filtered.forEach((r, i) => {
-                const el = document.querySelector('[data-row="' + invCycleData.indexOf(r) + '"][data-field="b1"]');
-                const hasValue = el && (Number(el.value)||0) > 0;
-                if (hasValue) filled++; else pending++;
-            });
-        }
+        filtered.forEach((r) => {
+            const ri = invCycleData.indexOf(r);
+            const field = mode === 'fg' ? 'b1' : 'check1';
+            const el = document.querySelector('[data-row="' + ri + '"][data-field="' + field + '"]');
+            const hasValue = el && ((el.value||'').trim() !== '' && (el.value||'') !== '0');
+            if (hasValue) filled++; else pending++;
+        });
         safeSetText('inv-cyc-kpi-total', total);
         safeSetText('inv-cyc-kpi-in',    inSku);
         safeSetText('inv-cyc-kpi-out',   outSku);
@@ -7614,40 +7668,79 @@ function renderBlockingTrendChart(data) {
         safeSetText('inv-cyc-kpi-pending', pending || (total - filled));
     };
 
+    window.invSemiMarkFilled = function(rowIdx) {
+        invUpdateCycleKPI();
+    };
+
     window.invPrintCycleForm = function() {
         const dateEl = document.getElementById('inv-cyc-date');
         const dateStr = dateEl ? dateEl.value : '';
-        const printDate = document.getElementById('inv-print-date');
-        if (printDate) printDate.textContent = dateStr || new Date().toLocaleDateString('th-TH');
         const mode = invCycleCurrentMode;
-        const tbody = document.getElementById('inv-print-tbody');
-        if (tbody && mode === 'fg') {
-            const q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
-            const filtered = invCycleData.filter(r => !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q));
-            tbody.innerHTML = filtered.map((r, i) => {
-                const ri = invCycleData.indexOf(r);
-                const get = field => { const el = document.querySelector('[data-row="' + ri + '"][data-field="' + field + '"]'); return el ? (el.value||'') : ''; };
-                return '<tr style="border-bottom:1px solid #eee;">'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + (i+1) + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (r.wh||'') + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;font-family:monospace;">' + (r.sku||'') + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (r.name||'') + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('b1') + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('b2') + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('p1') + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('p2') + '</td>'
-                    + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + get('hold') + '</td>'
-                    + '</tr>';
-            }).join('');
+        const q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
+        const filtered = invCycleData.filter(r => !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q));
+
+        if (mode === 'fg') {
+            // ── FG: A4 Portrait — FM-WH-03Rev.00 ──
+            const printDate = document.getElementById('inv-print-date');
+            if (printDate) printDate.textContent = dateStr || new Date().toLocaleDateString('th-TH');
+            const tbody = document.getElementById('inv-print-tbody');
+            if (tbody) {
+                tbody.innerHTML = filtered.map((r, i) => {
+                    const ri = invCycleData.indexOf(r);
+                    const get = f => { const el = document.querySelector('[data-row="'+ri+'"][data-field="'+f+'"]'); return el ? (el.value||'') : ''; };
+                    return '<tr style="border-bottom:1px solid #eee;' + (i%2===0?'':'background:#f8fafc;') + '">'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + (i+1) + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (r.wh||'') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;font-family:monospace;font-size:8pt;">' + (r.sku||'') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (r.name||'') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;min-width:50px;">' + get('b1') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;min-width:50px;">' + get('b2') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;min-width:50px;">' + get('p1') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;min-width:50px;">' + get('p2') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;min-width:60px;">' + get('hold') + '</td>'
+                        + '</tr>';
+                }).join('');
+            }
+            const printArea = document.getElementById('inv-print-area');
+            if (!printArea) return;
+            const printWin = window.open('', '_blank', 'width=900,height=700');
+            printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;900&display=swap" rel="stylesheet">'
+                + '<style>@page{size:A4 portrait;margin:12mm}body{font-family:"Sarabun",sans-serif;font-size:10pt;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #bbb;padding:4px 6px;font-size:9pt;}th{background:#1e293b;color:#fff;}</style>'
+                + '</head><body onload="window.print();">' + printArea.innerHTML + '</body></html>');
+            printWin.document.close();
+
+        } else {
+            // ── SEMI: A4 Landscape ──
+            const dateSpan = document.getElementById('inv-semi-print-date');
+            if (dateSpan) dateSpan.textContent = dateStr || new Date().toLocaleDateString('th-TH');
+            const tbody = document.getElementById('inv-semi-print-tbody');
+            if (tbody) {
+                tbody.innerHTML = filtered.map((r, i) => {
+                    const ri = invCycleData.indexOf(r);
+                    const get = f => { const el = document.querySelector('[data-row="'+ri+'"][data-field="'+f+'"]'); return el ? (el.value||'') : ''; };
+                    const sku2     = r.sku2     || '';
+                    const name2    = r.name2    || '';
+                    const itemSemi = r.itemSemi || r.serial || '';
+                    return '<tr style="border-bottom:1px solid #eee;' + (i%2===0?'':'background:#f8fafc;') + '">'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;">' + (r.wh||'') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;font-family:monospace;font-size:7.5pt;">' + (r.sku||'') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;">' + (r.name||'') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;text-align:center;min-width:55px;">' + get('check1') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;font-family:monospace;font-size:7.5pt;">' + sku2 + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;">' + name2 + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;text-align:center;min-width:55px;">' + get('check2') + '</td>'
+                        + '<td style="border:1px solid #ccc;padding:3px 5px;font-family:monospace;font-size:7.5pt;color:#7c3aed;">' + itemSemi + '</td>'
+                        + '</tr>';
+                }).join('');
+            }
+            const printArea = document.getElementById('inv-print-area-semi');
+            if (!printArea) return;
+            const printWin = window.open('', '_blank', 'width=1100,height=700');
+            printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;900&display=swap" rel="stylesheet">'
+                + '<style>@page{size:A4 landscape;margin:10mm}body{font-family:"Sarabun",sans-serif;font-size:9pt;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #bbb;padding:3px 5px;font-size:8pt;}th{background:#1e293b;color:#fff;}</style>'
+                + '</head><body onload="window.print();">' + printArea.innerHTML + '</body></html>');
+            printWin.document.close();
         }
-        // Open print window
-        const printArea = document.getElementById('inv-print-area');
-        if (!printArea) return;
-        const printWin = window.open('', '_blank', 'width=900,height=700');
-        printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
-            + '<style>@page{size:A4;margin:15mm}body{font-family:"Sarabun",sans-serif;font-size:11pt;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:4px 6px;font-size:9pt;}th{background:#1e293b;color:#fff;}</style>'
-            + '</head><body onload="window.print();window.close();">' + printArea.innerHTML + '</body></html>');
-        printWin.document.close();
     };
 
     window.invSaveCycleCount = function() {
