@@ -4688,7 +4688,12 @@ function getLogisticPlanById(planId) {
 
     for (var i = 1; i < planData.length; i++) {
       var row = planData[i];
-      if (String(row[0]) !== String(planId)) continue;
+      // base-match: รองรับทั้ง old plans (WLTST2603149) และ new plans (WLTST2603149-M)
+      var _rowBase  = String(row[0]).replace(/-[MC]$/, '');
+      var _planBase = String(planId).replace(/-[MC]$/, '');
+      if (_rowBase !== _planBase) continue;
+      // ถ้าไม่ได้ขอ -C plan → ข้าม child rows
+      if (String(row[0]).endsWith('-C') && !childPlanId) continue;
 
       var rowDate = row[1] instanceof Date
         ? Utilities.formatDate(row[1], 'GMT+7', 'yyyy-MM-dd')
