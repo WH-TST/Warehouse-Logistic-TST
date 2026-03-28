@@ -14132,10 +14132,23 @@ function updateLogiKPI() {
             const childStopDist = _childUniqueShops.reduce((sum, s) => sum + (parseFloat(s.freeDistance) || 0), 0);
             const retDist  = parseFloat(p.returnDistance) || 0;
 
-            // ── Stop ที่บริษัท (fixed per trip ตามประเภทรถ) ──
-            // รถพ่วงแม่+ลูก = 30 กม. | รถเดี่ยว/แม่คนเดียว = 15 กม.
-            const isFullTrailer = p.isMother && !!_childPlan;
-            const companyStop   = isFullTrailer ? 30 : 15;
+            // ── Stop ที่บริษัท: มีเฉพาะถ้ามีเที่ยวถัดไปในวันเดียวกัน ──
+            // ไม่มีเที่ยวถัดไป = 0 | รถเดี่ยว/แม่คนเดียว = 15 | รถพ่วงแม่+ลูก = 30
+            const _nextTrip = companyPlans
+                .filter(q =>
+                    q.date === p.date &&
+                    q.driverTransport === p.driverTransport &&
+                    !q.isChild &&
+                    (parseInt(q.tripNo) || 0) > (parseInt(p.tripNo) || 0)
+                )
+                .sort((a, b) => (parseInt(a.tripNo) || 0) - (parseInt(b.tripNo) || 0))[0];
+            let companyStop = 0;
+            if (_nextTrip) {
+                const _nextChildPlan = _nextTrip.isMother
+                    ? companyPlans.find(q => q.id === _nextTrip.pairId + '-C')
+                    : null;
+                companyStop = (_nextTrip.isMother && _nextChildPlan) ? 30 : 15;
+            }
 
             // สูตรรวม: Σ(ร้าน) + Σ(Stop ร้าน) + ขากลับ + Stop บริษัท
             d.dist += (dist + childDist) + (stopDist + childStopDist) + retDist + companyStop;
