@@ -5146,16 +5146,25 @@ function getPreShipmentData(planId) {
     var result = getLogisticPlans(null);
     if (!result.success) return { success: false, message: result.message };
     var plan = null;
+    var childPlan = null;
+    var childPlanId = planId.endsWith('-M') ? planId.replace(/-M$/, '-C') : null;
     for (var pi = 0; pi < result.plans.length; pi++) {
-      if (result.plans[pi].id === planId) { plan = result.plans[pi]; break; }
+      if (result.plans[pi].id === planId) { plan = result.plans[pi]; }
+      if (childPlanId && result.plans[pi].id === childPlanId) { childPlan = result.plans[pi]; }
     }
     if (!plan) return { success: false, message: 'ไม่พบแผน: ' + planId };
 
-        // ── 5. คำนวณ lift rows สำหรับแต่ละ item ─────────────────────────────
-        // 1 lift = 1 รอบยก = bundlesPerLift มัด
-        // จำนวน lifts = ceil(totalBundles / bundlesPerLift)
+    // ── 5. คำนวณ lift rows สำหรับแต่ละ item ─────────────────────────────
+    // ถ้าเป็น -M plan → รวม shops จาก -C plan ด้วย (truckLabel: 'child')
     var allItems = [];
-    plan.shops.forEach(function(shop) {
+    var _shopsToProcess = [];
+    plan.shops.forEach(function(s) { _shopsToProcess.push({ shop: s, truckLabel: 'mother' }); });
+    if (childPlan) {
+      childPlan.shops.forEach(function(s) { _shopsToProcess.push({ shop: s, truckLabel: 'child' }); });
+    }
+    _shopsToProcess.forEach(function(entry) {
+      var shop = entry.shop;
+      var truckLabel = entry.truckLabel;
       (shop.items || []).forEach(function(it) {
         var pInfo        = prodMap[it.sku] || { name: it.productName || '', linesPerBundle: 1, bundlesPerLift: 1, weightRange: '' };
         var totalLines   = parseFloat(it.qty) || 0;
@@ -5196,7 +5205,8 @@ function getPreShipmentData(planId) {
           linesPerBundle: linesPerBnd,
           bundlesPerLift: bndPerLift,
           weightRange:    pInfo.weightRange || '', // ← ดึงจาก TST QC Standard Col F
-          liftRows:       liftRows
+          liftRows:       liftRows,
+          truckLabel:     truckLabel        // 'mother' | 'child'
         });
       });
     });
@@ -5209,14 +5219,16 @@ function getPreShipmentData(planId) {
     }
 
     return {
-      success:     true,
-      mode:        'doc',
-      planId:      plan.id,
-      truckPlate:  plan.truckPlate        || '—',
-      loadingDate: loadingDate,
-      driverName:  plan.driverTransport   || '—',
-      totalWeight: plan.totalWeight  || 0,
-      items:       allItems
+      success:       true,
+      mode:          'doc',
+      planId:        plan.id,
+      truckPlate:    plan.truckPlate        || '—',
+      childTruckPlate: childPlan ? (childPlan.truckPlate || '') : '',
+      isTrailerPlan: !!childPlan,
+      loadingDate:   loadingDate,
+      driverName:    plan.driverTransport   || '—',
+      totalWeight:   plan.totalWeight  || 0,
+      items:         allItems
     };
 
   } catch (e) {

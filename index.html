@@ -16926,6 +16926,19 @@ window.loadPreShipmentItems = function loadPreShipmentItems() {
             document.getElementById('psd-loading').classList.add('hidden');
             if (!res.success) { showToast('โหลดไม่สำเร็จ: ' + res.message, true); return; }
             _psdPlanData = res;
+            // ถ้า backend ส่ง isTrailerPlan=true → auto-enable trailer toggle + ใส่ plate info
+            if (res.isTrailerPlan) {
+                var tog = document.getElementById('psd-plan-trailer-toggle');
+                if (tog && !tog.checked) { tog.checked = true; psdPlanToggleTrailer(); }
+                var infoEl = document.getElementById('psd-plan-trailer-plate-info');
+                if (infoEl) {
+                    infoEl.textContent = '🚛 รถแม่: ' + (res.truckPlate || '—') + '   |   🔗 รถลูก: ' + (res.childTruckPlate || '—');
+                    infoEl.classList.remove('hidden');
+                }
+                // ใส่ childPlate เพื่อให้ render ถูก
+                _psdPlanData.motherPlate = res.truckPlate || '';
+                _psdPlanData.childPlate  = res.childTruckPlate || '';
+            }
             _psdPlanRenderTable(res);
         })
         .withFailureHandler(function(e) {
@@ -16948,9 +16961,10 @@ function _psdPlanRenderTable(res) {
     // รีเซ็ต overrides
     _psdPlanOverrides = {};
     items.forEach(function(it, i) {
-        var origQty = parseFloat(it.totalQtyPcs)  || 0;
-        var origWt  = parseFloat(it.totalWeight)  || 0;
-        _psdPlanOverrides[i] = { mode: 'mother', autoMode: 'mother', qty: origQty, weight: origWt };
+        var origQty  = parseFloat(it.totalQtyPcs)  || 0;
+        var origWt   = parseFloat(it.totalWeight)  || 0;
+        var initMode = (it.truckLabel === 'child') ? 'child' : 'mother';
+        _psdPlanOverrides[i] = { mode: initMode, autoMode: initMode, qty: origQty, weight: origWt };
         totPcs += origQty;
         totBnd += parseFloat(it.totalBundles) || 0;
         totWt  += origWt;
