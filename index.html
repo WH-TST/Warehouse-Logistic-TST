@@ -13747,20 +13747,38 @@ window.renderLogisticList = function renderLogisticList() {
     if (empty) empty.classList.add('hidden');
     if (wrap) wrap.classList.remove('hidden');
 
-    // ── จัดเรียงตามประเภทรถ (บริษัทก่อน) → ทะเบียนรถ → คนขับ → เที่ยว (1, 2, 3...) ──
+    // ── จัดเรียง: บริษัทก่อน → คนขับ → เที่ยว → -M ก่อน -C ──
+    // -C ใช้ sort key ของ mother pair เพื่อให้อยู่ถัดจาก -M เสมอ
+    const _planIdx = {};
+    list.forEach(p => { _planIdx[p.id] = p; });
+    const _sortKey = p => {
+        if (p.isChild) {
+            const m = _planIdx[p.pairId + '-M'] || {};
+            return {
+                own:    p.truckType !== 'hire' ? 0 : 1,
+                driver: (m.driverTransport || p.driverTransport || '').toLowerCase(),
+                plate:  (m.truckPlate || '').toLowerCase(),
+                trip:   parseInt(m.tripNo) || 9999,
+                sub:    1,
+            };
+        }
+        return {
+            own:    p.truckType !== 'hire' ? 0 : 1,
+            driver: (p.driverTransport || '').toLowerCase(),
+            plate:  (p.truckPlate || '').toLowerCase(),
+            trip:   parseInt(p.tripNo) || 9999,
+            sub:    0,
+        };
+    };
     list = [...list].sort((a, b) => {
-        const ownA = a.truckType !== 'hire' ? 0 : 1;
-        const ownB = b.truckType !== 'hire' ? 0 : 1;
-        if (ownA !== ownB) return ownA - ownB;
-        const pA = (a.truckPlate || '').toLowerCase();
-        const pB = (b.truckPlate || '').toLowerCase();
-        if (pA < pB) return -1;
-        if (pA > pB) return 1;
-        const dA = (a.driverTransport || '').toLowerCase();
-        const dB = (b.driverTransport || '').toLowerCase();
-        if (dA < dB) return -1;
-        if (dA > dB) return 1;
-        return (parseInt(a.tripNo) || 9999) - (parseInt(b.tripNo) || 9999);
+        const ka = _sortKey(a), kb = _sortKey(b);
+        if (ka.own    !== kb.own)    return ka.own    - kb.own;
+        if (ka.driver < kb.driver)   return -1;
+        if (ka.driver > kb.driver)   return  1;
+        if (ka.plate  < kb.plate)    return -1;
+        if (ka.plate  > kb.plate)    return  1;
+        if (ka.trip   !== kb.trip)   return ka.trip   - kb.trip;
+        return ka.sub - kb.sub;
     });
 
     tbody.innerHTML = list.flatMap((p, i) => {
