@@ -3960,7 +3960,7 @@ function generateLogisticPlanId() {
 // ดึง Master ทั้งหมด: ทะเบียนรถ, คนขับ, ขนส่ง, ร้านค้า, สินค้า+LikelyW
 // ─────────────────────────────────────────────────────────────────────────────
 function getLogisticMasterData() {
-  return _withCache('logisticMaster', 300, function() {
+  return _withCache('logisticMaster', 30, function() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
