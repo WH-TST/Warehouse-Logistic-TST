@@ -14065,7 +14065,7 @@ function updateLogiKPI() {
             driverMap[key] = {
                 id:      p.driverId        || '—',
                 name:    p.driverTransport || '—',
-                plate:   p.truckPlate      || '—',
+                plates:  new Set(p.truckPlate ? [p.truckPlate] : []),
                 trips:   0,
                 shops:   0,
                 dist:    0,
@@ -14075,6 +14075,21 @@ function updateLogiKPI() {
             };
         }
         const d = driverMap[key];
+
+        // ── รถลูก (-C): รถแม่วิ่งแทน → นับแค่น้ำหนัก + ร้านที่ต่างจากแม่ ──
+        // (ระยะทาง, เที่ยว, สถานะ นับที่รถแม่แล้ว)
+        if (p.isChild) {
+            if (p.truckPlate) d.plates.add(p.truckPlate); // เก็บทะเบียนลูกด้วย
+            d.weight += parseFloat(p.totalWeight) || 0;
+            // นับร้านที่ลูกไปเพิ่ม เฉพาะร้านที่แม่ไม่ได้ไป
+            const motherPlan = companyPlans.find(q => q.id === p.pairId + '-M');
+            const motherShopKeys = new Set((motherPlan?.shops || []).map(s => s.shopId || s.shopName));
+            const extraShops = (p.shops || []).filter(s => !motherShopKeys.has(s.shopId || s.shopName));
+            d.shops += extraShops.length;
+            return;
+        }
+        if (p.truckPlate) d.plates.add(p.truckPlate); // เก็บทะเบียนรถทุกคัน
+
         if (p.jobType !== 'maintenance_pm') {
             d.trips  += 1;
             d.shops  += (p.shops || []).length;
@@ -14117,7 +14132,9 @@ function updateLogiKPI() {
                 </div>
             </td>
             <td class="px-3 py-1.5 text-center">
-                <span class="${lowDist ? 'bg-rose-600' : 'bg-slate-700'} text-white text-[10px] font-black px-2 py-0.5 rounded-md tracking-wide whitespace-nowrap inline-block">${d.plate}</span>
+                <div class="flex flex-wrap gap-1 justify-center">
+                ${[...d.plates].map(pl => `<span class="${lowDist ? 'bg-rose-600' : 'bg-slate-700'} text-white text-[10px] font-black px-2 py-0.5 rounded-md tracking-wide whitespace-nowrap inline-block">${pl}</span>`).join('')}
+                </div>
             </td>
             <td class="px-3 py-1.5 text-center">
                 <span class="text-base font-black text-emerald-700 font-mono">${d.trips}</span>
