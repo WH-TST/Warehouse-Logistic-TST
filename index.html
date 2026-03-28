@@ -12682,6 +12682,8 @@ window.setLogiShopTruck = function setLogiShopTruck(idx, label) {
         var itemIdx = parseInt(parts[parts.length - 1]);
         setLogiItemTruck(idx, itemIdx, label);
     });
+    // คำนวณ Stop ฟรีใหม่ทันทีเมื่อ label เปลี่ยน (อาจเปลี่ยน trailer→single หรือกลับกัน)
+    autoCalcFreeStop();
 };
 
 // ── แสดง/ซ่อน truck assignment เมื่อเปลี่ยนทะเบียนรถ ──
@@ -13068,14 +13070,21 @@ window.removeLogiShop = function removeLogiShop(idx) {
 function autoCalcFreeStop() {
     const truckSel = document.getElementById('logi-truck-plate');
     const opt      = truckSel?.options[truckSel?.selectedIndex];
-    const hasChild = !!(opt?.dataset?.childPlate);
+    const hasChildPlate = !!(opt?.dataset?.childPlate);
 
     const cards = document.querySelectorAll('#logi-shops-container > div[id^="logi-shop-card-"]');
     const shopCount = cards.length;
     if (shopCount === 0) return;
 
+    // ถือว่าเป็น trailer trip ก็ต่อเมื่อรถมี childPlate AND มีร้านที่ assign ไว้กับ "รถลูก" จริงๆ
+    const isTrailerTrip = hasChildPlate && Array.from(cards).some(card => {
+        const si = card.id.replace('logi-shop-card-', '');
+        const lbl = document.getElementById(`logi-shop-truck-label-${si}`);
+        return lbl?.value === 'child';
+    });
+
     // รถพ่วง: 1 Stop=30, >1=15/Stop | รถเดี่ยว/แม่คนเดียว: 1 Stop=15, >1=10/Stop
-    const ratePerShop = hasChild
+    const ratePerShop = isTrailerTrip
         ? (shopCount === 1 ? 30 : 15)
         : (shopCount === 1 ? 15 : 10);
 
