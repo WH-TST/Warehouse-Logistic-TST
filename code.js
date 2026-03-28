@@ -4678,6 +4678,11 @@ function getLogisticPlanById(planId) {
     var itemSheet = ss.getSheetByName(LOGI_ITEM_SHEET);
     if (!planSheet || planSheet.getLastRow() < 2) return { success: false, message: 'ไม่พบชีต' };
 
+    // ถ้าเป็นแผนแม่ (-M) → โหลด items ของ -C มาด้วย
+    var basePlanId  = String(planId).replace(/-[MC]$/, '');
+    var isMother    = String(planId).endsWith('-M');
+    var childPlanId = isMother ? (basePlanId + '-C') : null;
+
     var planData = planSheet.getDataRange().getValues();
     var plan = null;
 
@@ -4745,7 +4750,9 @@ function getLogisticPlanById(planId) {
       //      N=ระยะทาง(กม.) O=หมายเหตุ/ความด่วน P=shopSeq Q=ระยะทางฟรี R=shopId
       for (var j = 1; j < itemData.length; j++) {
         var irow = itemData[j];
-        if (String(irow[0]) !== String(planId)) continue;
+        var itemPlanId  = String(irow[0]);
+        var isChildItem = (childPlanId && itemPlanId === String(childPlanId));
+        if (itemPlanId !== String(planId) && !isChildItem) continue;
 
         var shopName = String(irow[7] || '');  // Col H
         if (!shopName) continue;  // ข้ามแถวที่ไม่มีชื่อร้าน
@@ -4775,7 +4782,8 @@ function getLogisticPlanById(planId) {
           productName:   String(irow[2] || ''),
           qty:           parseFloat(irow[3]) || 0,
           weightPerUnit: parseFloat(irow[4]) || 0,
-          weight:        itemWt
+          weight:        itemWt,
+          truckLabel:    isChildItem ? 'child' : 'mother'  // per-item truck label
         });
         plan.totalWeight += itemWt;
       }

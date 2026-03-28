@@ -18126,7 +18126,10 @@ window.editLogiPlan = function editLogiPlan(planId) {
                 if (truckTypeVal === 'company') {
                     // ทะเบียนรถ
                     const plateEl = document.getElementById('logi-truck-plate');
-                    if (plateEl) plateEl.value = p.truckPlate || '';
+                    if (plateEl) {
+                        plateEl.value = p.truckPlate || '';
+                        onLogiTruckPlateChange(); // แสดง per-item truck toggle ถ้าเป็นรถพ่วง
+                    }
 
                     // คนขับ — match จาก driverTransport (Col D ของชีต)
                     const driverEl = document.getElementById('logi-driver');
@@ -18288,9 +18291,14 @@ window.editLogiPlan = function editLogiPlan(planId) {
                     const loadWhEl = document.getElementById(`logi-shop-load-wh-${cardIdx}`);
                     if (loadWhEl) loadWhEl.value = s.loadWarehouse || '';
 
-                    // สินค้าทุกรายการ
+                    // สินค้าทุกรายการ + restore truckLabel (mother/child)
                     (s.items || []).forEach((it) => {
+                        const container = document.getElementById(`logi-items-${cardIdx}`);
+                        const itemIdxBefore = container ? container.children.length : 0;
                         addLogiItem(cardIdx, it.sku || '', it.qty || 0);
+                        if (it.truckLabel && it.truckLabel !== 'mother') {
+                            setLogiItemTruck(cardIdx, itemIdxBefore, it.truckLabel);
+                        }
                     });
                 });
 
