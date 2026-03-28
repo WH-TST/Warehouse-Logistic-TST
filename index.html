@@ -12703,6 +12703,7 @@ window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
         var idx = parseInt(el.id.replace('logi-shop-truck-label-', ''));
         setLogiShopTruck(idx, 'mother');
     });
+    autoCalcFreeStop(); // คำนวณ Stop ฟรีใหม่เมื่อเปลี่ยนรถ
 };
 
 // ── เพิ่มการ์ดร้านค้าใหม่ ──
@@ -12726,6 +12727,7 @@ window.addLogiShop = function addLogiShop() {
         if (wrap) wrap.classList.remove('hidden');
         setLogiShopTruck(idx, 'mother');
     }
+    autoCalcFreeStop(); // คำนวณ Stop ฟรีใหม่เมื่อเพิ่มร้าน
 }
 
 // ── สร้าง HTML สำหรับการ์ดร้านค้า ──
@@ -13059,9 +13061,33 @@ window.removeLogiShop = function removeLogiShop(idx) {
             logiShopList = logiShopList.filter(s => s.idx !== idx);
             updateLogiShopNumbers();
             updateLogiTotalWeight();
+            autoCalcFreeStop(); // คำนวณ Stop ฟรีใหม่เมื่อลบร้าน
         },
         { type: 'warning', okText: 'ลบออก' }
     );
+}
+
+// ── คำนวณ Stop ฟรีต่อร้านอัตโนมัติ ──
+function autoCalcFreeStop() {
+    const truckSel = document.getElementById('logi-truck-plate');
+    const opt      = truckSel?.options[truckSel?.selectedIndex];
+    const hasChild = !!(opt?.dataset?.childPlate);
+
+    const cards = document.querySelectorAll('#logi-shops-container > div[id^="logi-shop-card-"]');
+    const shopCount = cards.length;
+    if (shopCount === 0) return;
+
+    // รถพ่วง: 1 Stop=30, >1=15/Stop | รถเดี่ยว/แม่คนเดียว: 1 Stop=15, >1=10/Stop
+    const ratePerShop = hasChild
+        ? (shopCount === 1 ? 30 : 15)
+        : (shopCount === 1 ? 15 : 10);
+
+    cards.forEach(card => {
+        const shopIdxAttr = card.id.replace('logi-shop-card-', '');
+        const el = document.getElementById(`logi-shop-free-dist-${shopIdxAttr}`);
+        if (el) el.value = ratePerShop;
+    });
+    updateLogiDistSummary();
 }
 
 // ── อัปเดตลำดับตัวเลขร้าน ──
@@ -18318,6 +18344,7 @@ window.editLogiPlan = function editLogiPlan(planId) {
 
                 requestAnimationFrame(() => {
                     updateLogiTotalWeight();
+                    autoCalcFreeStop(); // คำนวณ Stop ฟรีอัตโนมัติเมื่อแก้ไขแผน
                     // restore ระยะทางขากลับที่บันทึกไว้ (ถ้ามี)
                     const retEl = document.getElementById('logi-return-distance');
                     if (retEl) retEl.value = (p.returnDistance > 0) ? p.returnDistance : '';
