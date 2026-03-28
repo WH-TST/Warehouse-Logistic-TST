@@ -14098,11 +14098,16 @@ function updateLogiKPI() {
         if (p.jobType !== 'maintenance_pm') {
             d.trips  += 1;
             d.shops  += (p.shops || []).length;
-            const dist     = parseFloat(p.distance)       || 0;
+            const dist     = parseFloat(p.distance) || 0;
+            // รถพ่วง: แม่กับลูกวิ่งด้วยกัน → บวกระยะทางร้านของลูกด้วย
+            const childDist = p.isMother
+                ? (parseFloat(companyPlans.find(q => q.id === p.pairId + '-C')?.distance) || 0)
+                : 0;
+            const totalOneway = dist + childDist;
             const retDist  = parseFloat(p.returnDistance) || 0;
             const stopDist = parseFloat(p.stopFee)        || 0;
-            // ระยะทางรวม = ขาไป + ขากลับ + Stop (freeDistance รวมทุกร้าน)
-            d.dist += (retDist > 0 ? (dist + retDist) : dist * 2) + stopDist;
+            // ระยะทางรวม = ขาไป + ขากลับ + Stop
+            d.dist += (retDist > 0 ? (totalOneway + retDist) : totalOneway * 2) + stopDist;
         }
         d.weight  += parseFloat(p.totalWeight) || 0;
         if (p.status === 'success') d.success += 1;
