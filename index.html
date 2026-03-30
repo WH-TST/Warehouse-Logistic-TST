@@ -659,19 +659,143 @@ thead.sticky {
     <!-- ============================================ -->
     <!-- VIEW 4: WAREHOUSE ANALYTICS -->
     <!-- ============================================ -->
-    <div id="view-analytics-content" class="hidden space-y-8">
-        <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-wrap gap-4 items-end">
-            <div class="flex-grow">
-                <label class="text-xs font-black text-slate-400 uppercase mb-2 block">Date Range</label>
-                <div class="flex gap-2">
-                    <input type="date" id="analytics-start" class="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold">
-                    <span class="self-center font-bold text-slate-400">TO</span>
-                    <input type="date" id="analytics-end" class="bg-slate-50 border-2 border-slate-100 p-3 rounded-xl font-bold">
+    <div id="view-analytics-content" class="hidden space-y-6">
+
+        <!-- ── Header Banner ── -->
+        <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#0f172a 100%);border:1px solid rgba(99,102,241,0.25);" class="rounded-[2rem] p-8 shadow-2xl">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div class="flex items-center gap-5">
+                    <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);" class="w-16 h-16 rounded-2xl flex items-center justify-center shadow-xl flex-shrink-0">
+                        <i class="fas fa-chart-area text-white text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">Warehouse Intelligence</p>
+                        <h2 class="text-white text-2xl font-black tracking-tight mt-0.5">Analytics &amp; Flow Dashboard</h2>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-end gap-3">
+                    <div>
+                        <label class="text-slate-400 text-[10px] font-black uppercase tracking-widest block mb-1.5">FROM</label>
+                        <input type="date" id="analytics-start" style="background:#1e293b;border:1px solid #334155;color:#f1f5f9;" class="p-3 rounded-xl font-bold outline-none focus:border-indigo-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-slate-400 text-[10px] font-black uppercase tracking-widest block mb-1.5">TO</label>
+                        <input type="date" id="analytics-end" style="background:#1e293b;border:1px solid #334155;color:#f1f5f9;" class="p-3 rounded-xl font-bold outline-none focus:border-indigo-500 transition-all">
+                    </div>
+                    <button onclick="loadAnalytics()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);" class="text-white px-8 py-3 rounded-xl font-black hover:opacity-90 transition-all shadow-lg flex items-center gap-2">
+                        <i class="fas fa-sync-alt"></i> UPDATE
+                    </button>
                 </div>
             </div>
-            <button onclick="loadAnalytics()" class="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black hover:bg-indigo-700 transition-all">
-                <i class="fas fa-sync-alt mr-2"></i> UPDATE ANALYTICS
-            </button>
+        </div>
+
+        <!-- ── KPI Cards ── -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Inbound -->
+            <div style="background:linear-gradient(135deg,#059669 0%,#10b981 60%,#34d399 100%);position:relative;overflow:hidden;" class="rounded-[1.5rem] p-7 shadow-xl">
+                <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;background:rgba(255,255,255,0.08);border-radius:50%;pointer-events:none;"></div>
+                <div class="flex justify-between items-start relative">
+                    <div>
+                        <p class="text-emerald-100 text-[10px] font-black uppercase tracking-[0.2em]">Total Inbound</p>
+                        <h3 id="kpi-inbound-weight" class="text-white mt-3 font-black" style="font-family:'Orbitron',sans-serif;font-size:1.9rem;line-height:1.1;">0.00 <small style="font-size:0.85rem;font-family:'Sarabun',sans-serif;opacity:0.75;">kg</small></h3>
+                        <p id="kpi-inbound-lines" class="text-emerald-100 text-sm font-bold mt-2">0 lines</p>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.15);" class="w-13 h-13 rounded-2xl flex items-center justify-center p-3 flex-shrink-0">
+                        <i class="fas fa-arrow-circle-down text-white text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+            <!-- Outbound -->
+            <div style="background:linear-gradient(135deg,#be123c 0%,#e11d48 60%,#fb7185 100%);position:relative;overflow:hidden;" class="rounded-[1.5rem] p-7 shadow-xl">
+                <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;background:rgba(255,255,255,0.08);border-radius:50%;pointer-events:none;"></div>
+                <div class="flex justify-between items-start relative">
+                    <div>
+                        <p class="text-rose-100 text-[10px] font-black uppercase tracking-[0.2em]">Total Outbound</p>
+                        <h3 id="kpi-outbound-weight" class="text-white mt-3 font-black" style="font-family:'Orbitron',sans-serif;font-size:1.9rem;line-height:1.1;">0.00 <small style="font-size:0.85rem;font-family:'Sarabun',sans-serif;opacity:0.75;">kg</small></h3>
+                        <p id="kpi-outbound-lines" class="text-rose-100 text-sm font-bold mt-2">0 lines</p>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.15);" class="rounded-2xl flex items-center justify-center p-3 flex-shrink-0">
+                        <i class="fas fa-arrow-circle-up text-white text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+            <!-- Net Flow -->
+            <div style="background:linear-gradient(135deg,#b45309 0%,#d97706 60%,#fbbf24 100%);position:relative;overflow:hidden;" class="rounded-[1.5rem] p-7 shadow-xl">
+                <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;background:rgba(255,255,255,0.08);border-radius:50%;pointer-events:none;"></div>
+                <div class="flex justify-between items-start relative">
+                    <div>
+                        <p class="text-amber-100 text-[10px] font-black uppercase tracking-[0.2em]">Net Flow (Diff)</p>
+                        <h3 id="kpi-netflow-weight" class="text-white mt-3 font-black" style="font-family:'Orbitron',sans-serif;font-size:1.9rem;line-height:1.1;">0.00 <small style="font-size:0.85rem;font-family:'Sarabun',sans-serif;opacity:0.75;">kg</small></h3>
+                        <p id="kpi-netflow-lines" class="text-amber-100 text-sm font-bold mt-2">0 lines</p>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.15);" class="rounded-2xl flex items-center justify-center p-3 flex-shrink-0">
+                        <i class="fas fa-exchange-alt text-white text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+            <!-- Current Inventory -->
+            <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border:1px solid rgba(99,102,241,0.35);position:relative;overflow:hidden;" class="rounded-[1.5rem] p-7 shadow-xl">
+                <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;background:rgba(99,102,241,0.08);border-radius:50%;pointer-events:none;"></div>
+                <div class="flex justify-between items-start relative">
+                    <div>
+                        <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Current Inventory</p>
+                        <h3 id="kpi-inventory-weight" class="mt-3 font-black" style="font-family:'Orbitron',sans-serif;font-size:1.9rem;line-height:1.1;color:#a78bfa;">0.00 <small style="font-size:0.85rem;font-family:'Sarabun',sans-serif;color:#64748b;">kg</small></h3>
+                        <p id="kpi-inventory-lines" class="text-indigo-400 text-sm font-bold mt-2">0 lines</p>
+                    </div>
+                    <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);" class="rounded-2xl flex items-center justify-center p-3 flex-shrink-0">
+                        <i class="fas fa-warehouse text-indigo-400 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Charts ── -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Flow Chart — full width -->
+            <div class="lg:col-span-2 rounded-[1.5rem] overflow-hidden shadow-xl" style="border:1px solid #e2e8f0;">
+                <div style="background:linear-gradient(135deg,#0f172a,#1e293b);" class="px-7 py-4 flex items-center gap-3">
+                    <div style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);" class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-chart-area text-emerald-400 text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-white font-black text-sm leading-tight">Daily Warehouse Flow</p>
+                        <p class="text-slate-400 text-xs">Inbound vs Outbound Weight (kg)</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6" style="height:380px;">
+                    <canvas id="flowChart"></canvas>
+                </div>
+            </div>
+            <!-- Inventory Trend -->
+            <div class="rounded-[1.5rem] overflow-hidden shadow-xl" style="border:1px solid #e2e8f0;">
+                <div style="background:linear-gradient(135deg,#0f172a,#1e293b);" class="px-7 py-4 flex items-center gap-3">
+                    <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);" class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-layer-group text-indigo-400 text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-white font-black text-sm leading-tight">Inventory Trend</p>
+                        <p class="text-slate-400 text-xs">น้ำหนัก (kg) &amp; จำนวนเส้น รายวัน</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6" style="height:380px;">
+                    <canvas id="inventoryTrendChart"></canvas>
+                </div>
+            </div>
+            <!-- Blocking Trend -->
+            <div class="rounded-[1.5rem] overflow-hidden shadow-xl" style="border:1px solid #e2e8f0;">
+                <div style="background:linear-gradient(135deg,#0f172a,#1e293b);" class="px-7 py-4 flex items-center gap-3">
+                    <div style="background:rgba(225,29,72,0.15);border:1px solid rgba(225,29,72,0.35);" class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-lock text-rose-400 text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-white font-black text-sm leading-tight">Blocking / Hold Trend</p>
+                        <p class="text-slate-400 text-xs">สินค้ากักกัน (kg) &amp; จำนวนเส้น</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6" style="height:380px;">
+                    <canvas id="blockingTrendChart"></canvas>
+                </div>
+            </div>
         </div>
     </div><!-- end view-analytics-content -->
 
@@ -5502,9 +5626,13 @@ function renderAnalyticsDashboard(data) {
     const ctxFlow = document.getElementById('flowChart');
     if (ctxFlow) {
         const ctx = ctxFlow.getContext('2d');
-        if (window.flowChartInstance) {
-            window.flowChartInstance.destroy();
-        }
+        if (window.flowChartInstance) window.flowChartInstance.destroy();
+        const gIn = ctx.createLinearGradient(0, 0, 0, 340);
+        gIn.addColorStop(0, 'rgba(16,185,129,0.45)');
+        gIn.addColorStop(1, 'rgba(16,185,129,0)');
+        const gOut = ctx.createLinearGradient(0, 0, 0, 340);
+        gOut.addColorStop(0, 'rgba(239,68,68,0.45)');
+        gOut.addColorStop(1, 'rgba(239,68,68,0)');
         window.flowChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -5514,40 +5642,44 @@ function renderAnalyticsDashboard(data) {
                         label: 'Inbound (kg)',
                         data: data.dailyInbound || [],
                         borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        fill: true,
-                        tension: 0.3
+                        backgroundColor: gIn,
+                        fill: true, tension: 0.4, borderWidth: 3,
+                        pointRadius: 4, pointHoverRadius: 7,
+                        pointBackgroundColor: '#fff', pointBorderColor: '#10b981', pointBorderWidth: 2
                     },
                     {
                         label: 'Outbound (kg)',
                         data: data.dailyOutbound || [],
                         borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        fill: true,
-                        tension: 0.3
+                        backgroundColor: gOut,
+                        fill: true, tension: 0.4, borderWidth: 3,
+                        pointRadius: 4, pointHoverRadius: 7,
+                        pointBackgroundColor: '#fff', pointBorderColor: '#ef4444', pointBorderWidth: 2
                     }
                 ]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    title: {
-                        display: true,
-                        text: 'Daily Warehouse Flow (Weight)',
-                        font: { size: 16, family: 'Sarabun', weight: 'bold' },
-                        padding: 20
+                    title: { display: false },
+                    legend: {
+                        position: 'bottom',
+                        labels: { usePointStyle: true, pointStyleWidth: 12, padding: 20, font: { family: 'Sarabun', size: 13, weight: 'bold' } }
                     },
-                    legend: { position: 'bottom' }
+                    tooltip: {
+                        backgroundColor: '#0f172a', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+                        borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1, padding: 14, cornerRadius: 10,
+                        titleFont: { family: 'Sarabun', size: 12 }, bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
+                        callbacks: { label: ctx2 => ' ' + ctx2.dataset.label + ': ' + ctx2.parsed.y.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg' }
+                    }
                 },
                 scales: {
+                    x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8' } },
                     y: {
                         beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return value.toLocaleString() + ' kg';
-                            }
-                        }
+                        grid: { color: '#f1f5f9' },
+                        ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8', callback: v => v.toLocaleString() + ' kg' }
                     }
                 }
             }
@@ -5665,152 +5797,73 @@ window.confirmExtraJobPrint = function confirmExtraJobPrint() {
 // ✅ ฟังก์ชันวาดกราฟ Trend น้ำหนักและจำนวนเส้นคงคลัง (2 แกน Y)
 function renderInventoryTrendChart(data) {
     const ctx = document.getElementById('inventoryTrendChart');
-    if (!ctx) return; // ป้องกัน Error ถ้าหา Canvas ไม่เจอ
-
-    // ตรวจสอบข้อมูลก่อนวาด
-    const labels = data.inventoryTrendDates || [];
+    if (!ctx) return;
+    const context = ctx.getContext('2d');
+    const labels  = data.inventoryTrendDates  || [];
     const weights = data.inventoryTrendWeight || [];
-    const lines = data.inventoryTrendLines || [];
-
-    // ถ้ามีกราฟเดิมอยู่ ให้ทำลายทิ้งก่อนวาดใหม่
-    if (window.inventoryTrendChartInstance) {
-        window.inventoryTrendChartInstance.destroy();
-    }
-    
-    window.inventoryTrendChartInstance = new Chart(ctx.getContext('2d'), {
+    const lines   = data.inventoryTrendLines  || [];
+    if (window.inventoryTrendChartInstance) window.inventoryTrendChartInstance.destroy();
+    const gW = context.createLinearGradient(0, 0, 0, 340);
+    gW.addColorStop(0, 'rgba(99,102,241,0.45)'); gW.addColorStop(1, 'rgba(99,102,241,0)');
+    const gL = context.createLinearGradient(0, 0, 0, 340);
+    gL.addColorStop(0, 'rgba(16,185,129,0.3)');  gL.addColorStop(1, 'rgba(16,185,129,0)');
+    window.inventoryTrendChartInstance = new Chart(context, {
         type: 'line',
         data: {
-            labels: labels, // แกน X: วันที่ (ที่ Generate มาครบทุกวัน)
+            labels,
             datasets: [
                 {
-                    label: 'น้ำหนักคงคลังรวม (kg)',
-                    data: weights, // แกน Y ซ้าย: น้ำหนัก
-                    borderColor: '#6366f1', // สีม่วง Indigo
-                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#fff',
-                    pointBorderColor: '#6366f1',
-                    yAxisID: 'y-weight' // ใช้แกน Y ซ้าย
+                    label: 'น้ำหนักคงคลัง (kg)', data: weights,
+                    borderColor: '#6366f1', backgroundColor: gW,
+                    fill: true, tension: 0.4, borderWidth: 3,
+                    pointRadius: 3, pointHoverRadius: 6,
+                    pointBackgroundColor: '#fff', pointBorderColor: '#6366f1', pointBorderWidth: 2,
+                    yAxisID: 'y-weight'
                 },
                 {
-                    label: 'จำนวนเส้นคงคลังรวม (เส้น)',
-                    data: lines, // แกน Y ขวา: จำนวนเส้น
-                    borderColor: '#10b981', // สีเขียว Emerald
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#fff',
-                    pointBorderColor: '#10b981',
-                    yAxisID: 'y-lines' // ใช้แกน Y ขวา
+                    label: 'จำนวนเส้น', data: lines,
+                    borderColor: '#10b981', backgroundColor: gL,
+                    fill: true, tension: 0.4, borderWidth: 3,
+                    pointRadius: 3, pointHoverRadius: 6,
+                    pointBackgroundColor: '#fff', pointBorderColor: '#10b981', pointBorderWidth: 2,
+                    yAxisID: 'y-lines'
                 }
             ]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                title: {
-                    display: true,
-                    text: 'แนวโน้มน้ำหนักและจำนวนเส้นสินค้าคงคลังรายวัน (Daily Inventory Trend)',
-                    font: { size: 16, family: 'Sarabun', weight: 'bold' },
-                    padding: 20
-                },
-                legend: { 
+                title: { display: false },
+                legend: {
                     position: 'bottom',
-                    labels: {
-                        usePointStyle: true,
-                        padding: 15
-                    }
+                    labels: { usePointStyle: true, pointStyleWidth: 12, padding: 20, font: { family: 'Sarabun', size: 13, weight: 'bold' } }
                 },
                 tooltip: {
+                    backgroundColor: '#0f172a', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+                    borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1, padding: 14, cornerRadius: 10,
+                    titleFont: { family: 'Sarabun', size: 12 }, bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
                     callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                if (context.datasetIndex === 0) {
-                                    // น้ำหนัก
-                                    label += context.parsed.y.toLocaleString('th-TH', {
-                                        minimumFractionDigits: 2, 
-                                        maximumFractionDigits: 2
-                                    }) + ' kg';
-                                } else {
-                                    // จำนวนเส้น
-                                    label += context.parsed.y.toLocaleString('th-TH', {
-                                        minimumFractionDigits: 0, 
-                                        maximumFractionDigits: 0
-                                    }) + ' เส้น';
-                                }
-                            }
-                            return label;
+                        label: function(c) {
+                            const v = c.parsed.y;
+                            return c.datasetIndex === 0
+                                ? ' น้ำหนักคงคลัง: ' + v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg'
+                                : ' จำนวนเส้น: ' + v.toLocaleString('th-TH') + ' เส้น';
                         }
                     }
                 }
             },
             scales: {
-                x: {
-                    grid: {
-                        display: false
-                    }
-                },
+                x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8' } },
                 'y-weight': {
-                    type: 'linear',
-                    position: 'left',
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'น้ำหนัก (kg)',
-                        font: { 
-                            size: 14, 
-                            family: 'Sarabun', 
-                            weight: 'bold' 
-                        },
-                        color: '#6366f1'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString() + ' kg';
-                        },
-                        color: '#6366f1'
-                    },
-                    grid: {
-                        color: 'rgba(99, 102, 241, 0.1)'
-                    }
+                    type: 'linear', position: 'left', beginAtZero: true,
+                    grid: { color: '#f1f5f9' },
+                    ticks: { font: { family: 'Sarabun', size: 11 }, color: '#6366f1', callback: v => v.toLocaleString() + ' kg' }
                 },
                 'y-lines': {
-                    type: 'linear',
-                    position: 'right',
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'จำนวนเส้น',
-                        font: { 
-                            size: 14, 
-                            family: 'Sarabun', 
-                            weight: 'bold' 
-                        },
-                        color: '#10b981'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString() + ' เส้น';
-                        },
-                        color: '#10b981'
-                    },
-                    grid: {
-                        drawOnChartArea: false // ไม่ให้เส้น grid ทับกัน
-                    }
+                    type: 'linear', position: 'right', beginAtZero: true,
+                    grid: { drawOnChartArea: false },
+                    ticks: { font: { family: 'Sarabun', size: 11 }, color: '#10b981', callback: v => v.toLocaleString() + ' เส้น' }
                 }
             }
         }
@@ -6452,6 +6505,20 @@ window.switchView = function switchView(view) {
         refreshSpaceAnalysis();
     }
 
+    // Analytics: auto-set date range (30 วันย้อนหลัง) และ auto-load เมื่อเปิดครั้งแรก
+    if (view === 'analytics') {
+        const startEl = document.getElementById('analytics-start');
+        const endEl   = document.getElementById('analytics-end');
+        if (startEl && endEl && !startEl.value) {
+            const today = new Date();
+            const d30   = new Date();
+            d30.setDate(today.getDate() - 30);
+            endEl.value   = today.toISOString().split('T')[0];
+            startEl.value = d30.toISOString().split('T')[0];
+            loadAnalytics();
+        }
+    }
+
     // WH Activity Log — init เมื่อเปิดครั้งแรก
     if (view === 'whactivity') {
         whaInit();
@@ -7011,74 +7078,68 @@ let blockingChartInstance = null;
 function renderBlockingTrendChart(data) {
     const ctx = document.getElementById('blockingTrendChart');
     if (!ctx) return;
-
-    if (window.blockingChartInstance) {
-        window.blockingChartInstance.destroy();
-    }
-
-    window.blockingChartInstance = new Chart(ctx.getContext('2d'), {
+    const context = ctx.getContext('2d');
+    if (window.blockingChartInstance) window.blockingChartInstance.destroy();
+    const gB = context.createLinearGradient(0, 0, 0, 340);
+    gB.addColorStop(0, 'rgba(225,29,72,0.45)'); gB.addColorStop(1, 'rgba(225,29,72,0)');
+    window.blockingChartInstance = new Chart(context, {
         type: 'line',
         data: {
             labels: data.blockingDates || [],
             datasets: [
                 {
-                    label: 'น้ำหนักกักกัน (kg)',
-                    data: data.blockingWeights || [],
-                    borderColor: '#e11d48',
-                    backgroundColor: 'rgba(225, 29, 72, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.3,
+                    label: 'น้ำหนักกักกัน (kg)', data: data.blockingWeights || [],
+                    borderColor: '#e11d48', backgroundColor: gB,
+                    fill: true, tension: 0.4, borderWidth: 3,
+                    pointRadius: 3, pointHoverRadius: 6,
+                    pointBackgroundColor: '#fff', pointBorderColor: '#e11d48', pointBorderWidth: 2,
                     yAxisID: 'y-weight'
                 },
                 {
-                    label: 'จำนวนเส้นกักกัน',
-                    data: data.blockingLines || [],
-                    borderColor: '#0284c7',
-                    borderWidth: 3,
-                    borderDash: [5, 5],
-                    tension: 0.3,
+                    label: 'จำนวนเส้นกักกัน', data: data.blockingLines || [],
+                    borderColor: '#0ea5e9', backgroundColor: 'transparent',
+                    borderWidth: 3, borderDash: [6, 4],
+                    tension: 0.4, fill: false,
+                    pointRadius: 3, pointHoverRadius: 6,
+                    pointBackgroundColor: '#fff', pointBorderColor: '#0ea5e9', pointBorderWidth: 2,
                     yAxisID: 'y-lines'
                 }
             ]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                // 🚩 จุดที่ต้องเช็ค: ตรวจสอบว่าคำสั่ง title อยู่ใน plugins และมี display: true
-                title: {
-                    display: true,
-                    text: 'แนวโน้มการกักกันสินค้า (น้ำหนัก vs จำนวนเส้น)',
-                    font: { 
-                        size: 18, 
-                        family: 'Sarabun', 
-                        weight: 'bold' 
-                    },
-                    padding: {
-                        top: 10,
-                        bottom: 30
-                    },
-                    color: '#1e293b'
+                title: { display: false },
+                legend: {
+                    position: 'bottom',
+                    labels: { usePointStyle: true, pointStyleWidth: 12, padding: 20, font: { family: 'Sarabun', size: 13, weight: 'bold' } }
                 },
-                legend: { position: 'bottom' }
+                tooltip: {
+                    backgroundColor: '#0f172a', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+                    borderColor: 'rgba(225,29,72,0.3)', borderWidth: 1, padding: 14, cornerRadius: 10,
+                    titleFont: { family: 'Sarabun', size: 12 }, bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
+                    callbacks: {
+                        label: function(c) {
+                            const v = c.parsed.y;
+                            return c.datasetIndex === 0
+                                ? ' น้ำหนักกักกัน: ' + v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg'
+                                : ' จำนวนเส้น: ' + v.toLocaleString('th-TH') + ' เส้น';
+                        }
+                    }
+                }
             },
             scales: {
+                x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8' } },
                 'y-weight': {
-                    type: 'linear',
-                    position: 'left',
-                    beginAtZero: true,
-                    title: { display: true, text: 'น้ำหนัก (kg)', color: '#e11d48' },
-                    ticks: { callback: v => v.toLocaleString() + ' kg' }
+                    type: 'linear', position: 'left', beginAtZero: true,
+                    grid: { color: '#f1f5f9' },
+                    ticks: { font: { family: 'Sarabun', size: 11 }, color: '#e11d48', callback: v => v.toLocaleString() + ' kg' }
                 },
                 'y-lines': {
-                    type: 'linear',
-                    position: 'right',
-                    beginAtZero: true,
-                    title: { display: true, text: 'จำนวนเส้น', color: '#0284c7' },
+                    type: 'linear', position: 'right', beginAtZero: true,
                     grid: { drawOnChartArea: false },
-                    ticks: { callback: v => v.toLocaleString() + ' เส้น' }
+                    ticks: { font: { family: 'Sarabun', size: 11 }, color: '#0ea5e9', callback: v => v.toLocaleString() + ' เส้น' }
                 }
             }
         }
