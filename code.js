@@ -4365,6 +4365,8 @@ function saveLogisticPlan(payload) {
 
     // ── Trailer split: childPlate มีค่า → แยก 2 PlanID (-M แม่, -C ลูก) ──
     var childPlate     = payload.truckType === 'hire' ? '' : (payload.childPlate || '');
+    var trailerMode    = String(payload.trailerMode || '');
+    if (trailerMode === 'mother_only') { childPlate = ''; }  // force single-truck mode
     var isTrailerSplit  = !!(childPlate);
     var basePlanId     = planId.replace(/-[MC]$/, '');  // strip suffix กรณี update
     var planIdM = isTrailerSplit ? basePlanId + '-M' : basePlanId;
@@ -4449,7 +4451,8 @@ function saveLogisticPlan(payload) {
         planTail[3],   // N
         planTail[4],   // O
         planTail[5],   // P
-        '','',''       // Q,R,S ว่าง
+        '','','',      // Q,R,S ว่าง
+        trailerMode    // T: รูปแบบการวิ่งรถพ่วง
       ]));
     } else {
       shops.forEach(function(shop, si) {
@@ -4486,7 +4489,8 @@ function saveLogisticPlan(payload) {
             planTail[5],                           // P: ระยะทางขากลับ
             si,                                    // Q: ลำดับร้าน (0-based)
             shop.shopId          || '',            // R: รหัสร้านค้า
-            shop.remark          || ''             // S: หมายเหตุ/ความด่วน
+            shop.remark          || '',            // S: หมายเหตุ/ความด่วน
+            trailerMode                            // T: รูปแบบการวิ่งรถพ่วง
           ]));
         });
       });
@@ -4654,6 +4658,7 @@ function getLogisticPlans(date) {
           transferRemark:  String(row[13] || ''),
           truckPlate:      String(row[14] || ''),
           returnDistance:  parseFloat(row[15]) || 0,
+          trailerMode:     String(row[19] || ''),
           whSource:        (function(g){ var p=String(g||'').split(' → '); return p[0]?p[0].trim():''; })(row[6]),
           whDest:          (function(g){ var p=String(g||'').split(' → '); return p[1]?p[1].trim():''; })(row[6]),
           totalWeight:     0,
@@ -4951,6 +4956,7 @@ function getLogisticPlanById(planId) {
           transferRemark:  String(row[13] || ''),
           truckPlate:      String(row[14] || ''),
           returnDistance:  parseFloat(row[15]) || 0,
+          trailerMode:     String(row[19] || ''),
           whSource:        (function(g){ var p=String(g||'').split(' → '); return p[0]?p[0].trim():''; })(row[6]),
           whDest:          (function(g){ var p=String(g||'').split(' → '); return p[1]?p[1].trim():''; })(row[6]),
           totalWeight:     0,
@@ -5080,19 +5086,20 @@ function deleteLogisticPlan(planId) {
     var planSheet = ss.getSheetByName(LOGI_PLAN_SHEET);
     var itemSheet = ss.getSheetByName(LOGI_ITEM_SHEET);
 
+    var basePlanId = String(planId).replace(/-[MC]$/, '');
     if (planSheet && planSheet.getLastRow() >= 2) {
       var pr = planSheet.getRange(2, 1, planSheet.getLastRow() - 1, 1).getValues();
       for (var i = pr.length - 1; i >= 0; i--) {
-        if (String(pr[i][0]) === planId) planSheet.deleteRow(i + 2);
+        if (String(pr[i][0]).replace(/-[MC]$/, '') === basePlanId) planSheet.deleteRow(i + 2);
       }
     }
     if (itemSheet && itemSheet.getLastRow() >= 2) {
       var ir = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 1).getValues();
       for (var i = ir.length - 1; i >= 0; i--) {
-        if (String(ir[i][0]) === planId) itemSheet.deleteRow(i + 2);
+        if (String(ir[i][0]).replace(/-[MC]$/, '') === basePlanId) itemSheet.deleteRow(i + 2);
       }
     }
-    return { success: true, message: 'ลบ ' + planId + ' เรียบร้อยแล้ว' };
+    return { success: true, message: 'ลบ ' + basePlanId + ' (รวม -M/-C) เรียบร้อยแล้ว' };
   } catch (e) {
     return { success: false, message: e.toString() };
   }
