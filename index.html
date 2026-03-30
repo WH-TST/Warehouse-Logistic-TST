@@ -12399,11 +12399,10 @@ window.onLogiTrailerModeChange = function onLogiTrailerModeChange() {
 window.autoAssignTrailerItems = function autoAssignTrailerItems(shopIdx) {
     var truckSel = document.getElementById('logi-truck-plate');
     var opt = truckSel?.options[truckSel?.selectedIndex];
-    var capM = parseInt(opt?.dataset?.capMother || 0);
-    var capC = parseInt(opt?.dataset?.capChild  || 0);
-    if (!capM && !capC) { showToast('ไม่พบข้อมูล capacity รถพ่วง', true); return; }
+    var capM = parseInt(opt?.dataset?.capMother || 0); // kg
+    var capC = parseInt(opt?.dataset?.capChild  || 0); // kg
+    if (!capM && !capC) return; // ไม่มี cap — ไม่ทำอะไร
 
-    // รวบรวม items ในร้านนั้น
     var card = document.getElementById('logi-shop-card-' + shopIdx);
     if (!card) return;
     var itemRows = Array.from(card.querySelectorAll('[id^="logi-item-' + shopIdx + '-"]')).filter(function(el) {
@@ -12413,24 +12412,56 @@ window.autoAssignTrailerItems = function autoAssignTrailerItems(shopIdx) {
         var parts = row.id.split('-');
         var iIdx = parseInt(parts[parts.length - 1]);
         var wtEl = document.getElementById('logi-item-wt-' + shopIdx + '-' + iIdx);
-        var wt = wtEl ? (parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0) : 0;
-        return { iIdx: iIdx, wt: wt };
-    }).filter(function(it) { return it.wt > 0; });
+        var qtyEl = row.querySelector('.logi-item-qty');
+        var qty = parseFloat(qtyEl?.value) || 0;
+        var totalWt = wtEl ? (parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0) : 0;
+        var wtPerBundle = (qty > 0 && totalWt > 0) ? totalWt / qty : 0;
+        return { iIdx: iIdx, row: row, qty: qty, totalWt: totalWt, wtPerBundle: wtPerBundle };
+    }).filter(function(it) { return it.totalWt > 0 && it.qty > 0; });
 
-    // assign: เติมแม่ก่อนจนเต็ม capM → ที่เหลือใส่ลูก
+    // Greedy fill: เติมแม่ก่อนแบบยกมัด → เหลือไปลูก
     var usedM = 0;
     items.forEach(function(it) {
-        var label = 'mother';
-        if (capM > 0 && usedM + it.wt > capM) {
-            label = 'child';
+        var remainM = capM - usedM;
+        var motherBundles, childBundles;
+        if (it.wtPerBundle <= 0 || remainM <= 0) {
+            motherBundles = 0;
+            childBundles = it.qty;
         } else {
-            usedM += it.wt;
+            motherBundles = Math.min(it.qty, Math.floor(remainM / it.wtPerBundle));
+            childBundles = it.qty - motherBundles;
         }
-        setLogiItemTruck(shopIdx, it.iIdx, label);
+        var motherWt = motherBundles * it.wtPerBundle;
+        usedM += motherWt;
+
+        // เก็บ split data ไว้บน DOM element
+        it.row.dataset.motherBundles = motherBundles;
+        it.row.dataset.childBundles  = childBundles;
+        it.row.dataset.wtPerBundle   = it.wtPerBundle;
+
+        // set truck label
+        var label = (motherBundles === it.qty) ? 'mother' : (motherBundles === 0 ? 'child' : 'split');
+        var labelEl = document.getElementById('logi-item-truck-label-' + shopIdx + '-' + it.iIdx);
+        if (labelEl) labelEl.value = label;
+
+        // อัปเดต split badge
+        var badgeEl = document.getElementById('logi-item-split-info-' + shopIdx + '-' + it.iIdx);
+        if (badgeEl) {
+            if (label === 'split') {
+                var childWt = childBundles * it.wtPerBundle;
+                badgeEl.innerHTML = '<span class="bg-sky-100 text-sky-700 border border-sky-300 px-2 py-0.5 rounded-full font-black">🚛 แม่: ' + motherBundles + ' มัด (' + (motherWt/1000).toFixed(2) + 't)</span>'
+                    + '<span class="bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full font-black ml-1">⬆ ลูก: ' + childBundles + ' มัด (' + (childWt/1000).toFixed(2) + 't)</span>';
+                badgeEl.classList.remove('hidden');
+            } else {
+                badgeEl.innerHTML = label === 'child'
+                    ? '<span class="bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full font-black">⬆ ทั้งหมดไปรถลูก</span>'
+                    : '';
+                badgeEl.classList.toggle('hidden', label !== 'child');
+            }
+        }
     });
 
     updateTrailerWeightGauges();
-    showToast('✅ Auto-assign เรียบร้อย — แม่: ' + (usedM/1000).toFixed(2) + 't');
 };
 
 // ── render Trailer Planner consolidated table ──
@@ -12532,8 +12563,17 @@ function updateTrailerWeightGauges() {
                 var itemIdx = itemMatch ? itemMatch[2] : null;
                 var labelEl = itemIdx ? document.getElementById('logi-item-truck-label-' + idx + '-' + itemIdx) : null;
                 var label = labelEl ? labelEl.value : 'mother';
-                var wt = parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0;
-                if (label === 'child') childKg += wt; else motherKg += wt;
+                if (label === 'split') {
+                    var itemRow = document.getElementById('logi-item-' + idx + '-' + itemIdx);
+                    var mB  = parseInt(itemRow?.dataset?.motherBundles || 0);
+                    var cB  = parseInt(itemRow?.dataset?.childBundles  || 0);
+                    var wpb = parseFloat(itemRow?.dataset?.wtPerBundle  || 0);
+                    motherKg += mB * wpb;
+                    childKg  += cB * wpb;
+                } else {
+                    var wt = parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0;
+                    if (label === 'child') childKg += wt; else motherKg += wt;
+                }
             });
         } else {
             // multi-shop: shop-level assignment
@@ -13038,6 +13078,7 @@ window.addLogiItem = function addLogiItem(shopIdx, sku, qty) {
                 <i class="fas fa-times"></i>
             </button>
         </div>
+        <div id="logi-item-split-info-${shopIdx}-${itemIdx}" class="hidden col-span-12 flex gap-1.5 flex-wrap text-[10px] pb-1 px-1"></div>
     `;
     itemsContainer.appendChild(row);
     if (emptyEl) emptyEl.classList.add('hidden');
@@ -13377,7 +13418,10 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             if (logiTrailerMode === 'full_trailer') {
                 const anyChildShop = Object.values(logiChildAssignments).some(v => v);
                 // single-shop: ตรวจ item-level labels แทน shop-level
-                const anyChildItem = !anyChildShop && !!document.querySelector('[id^="logi-item-truck-label-"][value="child"]');
+                const anyChildItem = !anyChildShop && !!(
+                    document.querySelector('[id^="logi-item-truck-label-"][value="child"]') ||
+                    document.querySelector('[id^="logi-item-truck-label-"][value="split"]')
+                );
                 if (!anyChildShop && !anyChildItem) return showToast('กรุณากำหนดร้านอย่างน้อย 1 ร้านให้รถลูก', true);
             }
         }
@@ -13438,19 +13482,28 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 const wt    = wtEl ? parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0 : 0;
                 if (skuEl?.value) {
                     const prod = LOGI_PRODUCTS_MASTER.find(p => p.sku === skuEl.value.trim().toUpperCase());
-                    // อ่าน truckLabel ระดับ item (ปุ่ม 🚛/⬆ ต่อแถว)
                     const rowParts = row.id.split('-');
                     const iIdx = rowParts[rowParts.length - 1];
                     const itemTruckLabelEl = document.getElementById(`logi-item-truck-label-${shopIdxAttr}-${iIdx}`);
                     const itemTruckLabel = itemTruckLabelEl?.value || 'mother';
-                    items.push({
-                        sku:           skuEl.value.trim().toUpperCase(),
-                        productName:   prod?.name || '',
-                        qty:           parseFloat(qtyEl?.value) || 0,
-                        weightPerUnit: prod?.likelyW || 0,
-                        weight:        wt,
-                        truckLabel:    itemTruckLabel,
-                    });
+                    const skuVal = skuEl.value.trim().toUpperCase();
+                    if (itemTruckLabel === 'split') {
+                        // แบ่งระดับมัด: push 2 แถว (แม่ + ลูก)
+                        const mB  = parseInt(row.dataset.motherBundles || 0);
+                        const cB  = parseInt(row.dataset.childBundles  || 0);
+                        const wpb = parseFloat(row.dataset.wtPerBundle  || 0);
+                        if (mB > 0) items.push({ sku: skuVal, productName: prod?.name || '', qty: mB, weightPerUnit: prod?.likelyW || 0, weight: Math.round(mB * wpb * 100) / 100, truckLabel: 'mother' });
+                        if (cB > 0) items.push({ sku: skuVal, productName: prod?.name || '', qty: cB, weightPerUnit: prod?.likelyW || 0, weight: Math.round(cB * wpb * 100) / 100, truckLabel: 'child' });
+                    } else {
+                        items.push({
+                            sku:           skuVal,
+                            productName:   prod?.name || '',
+                            qty:           parseFloat(qtyEl?.value) || 0,
+                            weightPerUnit: prod?.likelyW || 0,
+                            weight:        wt,
+                            truckLabel:    itemTruckLabel,
+                        });
+                    }
                     totalWt += wt;
                 }
             });
@@ -17998,10 +18051,18 @@ function renderLogiCalendar() {
 // ── ดูรายละเอียด (popup) ──
 window.viewLogiPlan = function viewLogiPlan(planId) {
     // หาจากทั้ง logiPlanList และ logiCalPlanList
-    const p = logiPlanList.find(x => x.id === planId)
-           || (typeof logiCalPlanList !== 'undefined' && logiCalPlanList.find(x => x.id === planId));
+    const allPlans = (logiPlanList || []).concat(typeof logiCalPlanList !== 'undefined' ? (logiCalPlanList || []) : []);
+    const p = allPlans.find(x => x.id === planId);
     if (!p) return;
-    const shopsHtml = (p.shops || []).map((s, si) => {
+
+    // รวม shops จาก -C plan ด้วย (ถ้าเป็น -M plan)
+    const childPlanId = p.isMother ? (p.pairId + '-C') : null;
+    const cp = childPlanId ? allPlans.find(x => x.id === childPlanId) : null;
+    const motherShops = (p.shops || []).map(s => ({ ...s, _truckRole: 'mother' }));
+    const childShops  = cp ? (cp.shops || []).map(s => ({ ...s, _truckRole: 'child' })) : [];
+    const allShops    = [...motherShops, ...childShops];
+
+    const shopsHtml = allShops.map((s, si) => {
         const itemsHtml = (s.items || []).map(it => {
             // ใช้ productName ที่บันทึกไว้ก่อน ถ้าไม่มีค่อย fallback ไป LOGI_PRODUCTS_MASTER
             const pName = it.productName
