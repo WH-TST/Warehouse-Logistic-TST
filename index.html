@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbwAgsf4b-7PhvfF4XM-XZBWM7HLu-d_32sP1SsKBEXOGgZpMXaYMUBZanLYnDooRe73/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbybq5YaOilEkQICIce-AbrczvIK2V4qlleXkPhh4GEsYAzvqxodkYtcl10Z-UjIKrHB/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -13000,12 +13000,9 @@ function autoCalcFreeStop() {
     const shopCount = cards.length;
     if (shopCount === 0) return;
 
-    // ถือว่าเป็น trailer trip ก็ต่อเมื่อรถมี childPlate AND มีร้านที่ assign ไว้กับ "รถลูก" จริงๆ
-    const isTrailerTrip = hasChildPlate && Array.from(cards).some(card => {
-        const si = card.id.replace('logi-shop-card-', '');
-        const lbl = document.getElementById(`logi-shop-truck-label-${si}`);
-        return lbl?.value === 'child';
-    });
+    // ถือว่าเป็น trailer trip ก็ต่อเมื่อรถมี childPlate (hasChildPlate)
+    // ไม่จำเป็นต้องมีร้าน label='child' — กรณีร้านเดียวทั้งพ่วง label จะเป็น 'split' หรือ 'mother'
+    const isTrailerTrip = hasChildPlate;
 
     // รถพ่วง: 1 Stop=30, >1=15/Stop | รถเดี่ยว/แม่คนเดียว: 1 Stop=15, >1=10/Stop
     const ratePerShop = isTrailerTrip
@@ -17680,21 +17677,79 @@ var _psdAutoPrintAfterLoad = false;
 window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
     _psdAutoPrintAfterLoad = true;  // auto-print mode
     switchLogiTab('preshipment');
-    var attempts = 0;
-    var trySet = function() {
-        attempts++;
-        var sel = document.getElementById('psd-plan-select');
-        if (!sel) { if (attempts < 20) setTimeout(trySet, 300); return; }
-        if (sel.querySelector('option[value="'+planId+'"]')) {
-            sel.value = planId;
-            loadPreShipmentItems();
-        } else if (attempts < 25) {
-            setTimeout(trySet, 300);
-        } else {
+
+    // โหลดข้อมูลแผนตาม planId โดยตรง — ไม่รอ dropdown
+    // reset UI
+    var loadingEl = document.getElementById('psd-loading');
+    var wrapEl    = document.getElementById('psd-plan-item-wrap');
+    var prevEl    = document.getElementById('psd-preview-wrap');
+    var printBtn  = document.getElementById('psd-print-btn');
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (wrapEl)    wrapEl.classList.add('hidden');
+    if (prevEl)    prevEl.classList.add('hidden');
+    if (printBtn)  { printBtn.disabled = true; printBtn.className = 'bg-slate-200 text-slate-400 px-8 py-2.5 rounded-xl font-black flex items-center gap-2 cursor-not-allowed transition-all'; }
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (loadingEl) loadingEl.classList.add('hidden');
+            if (!res || !res.success) {
+                _psdAutoPrintAfterLoad = false;
+                showToast('โหลดข้อมูลแผนไม่สำเร็จ: ' + (res ? res.message : ''), true);
+                return;
+            }
+            _psdPlanData = res;
+
+            // sync dropdown ให้ตรงกับ planId ที่โหลดมา (ถ้ามี option อยู่แล้ว)
+            var sel = document.getElementById('psd-plan-select');
+            if (sel) {
+                // ถ้า dropdown ยังว่าง → สร้าง option ชั่วคราว
+                if (!sel.querySelector('option[value="'+planId+'"]')) {
+                    var tmpOpt = document.createElement('option');
+                    tmpOpt.value = planId;
+                    tmpOpt.dataset.truck = res.truckPlate || '';
+                    tmpOpt.textContent = planId;
+                    sel.appendChild(tmpOpt);
+                }
+                sel.value = planId;
+            }
+
+            // auto-detect รถพ่วงจากข้อมูลแผน
+            if (res.isTrailerPlan) {
+                var tog = document.getElementById('psd-plan-trailer-toggle');
+                if (tog && !tog.checked) { tog.checked = true; psdPlanToggleTrailer(); }
+                var infoEl = document.getElementById('psd-plan-trailer-plate-info');
+                if (infoEl) {
+                    infoEl.textContent = '🚛 รถแม่: ' + (res.truckPlate || '—') + '   |   🔗 รถลูก: ' + (res.childTruckPlate || '—');
+                    infoEl.classList.remove('hidden');
+                }
+                _psdPlanData.motherPlate = res.truckPlate || '';
+                _psdPlanData.childPlate  = res.childTruckPlate || '';
+            } else {
+                // รถธรรมดา: fill cap
+                var capEl = document.getElementById('psd-plan-cap');
+                if (capEl && res.truckPlate) {
+                    var truck = (LOGI_MASTER_CACHE.trucks || []).find(function(t) { return t.plate === res.truckPlate; });
+                    if (truck && !truck.isTrailer) capEl.value = truck.netWeight || '';
+                }
+            }
+
+            _psdPlanRenderTable(res);
+
+            // auto-print
+            if (_psdAutoPrintAfterLoad) {
+                _psdAutoPrintAfterLoad = false;
+                setTimeout(function() {
+                    psdPlanAssignTrailer();
+                    setTimeout(printPreShipment, 800);
+                }, 400);
+            }
+        })
+        .withFailureHandler(function(e) {
+            if (loadingEl) loadingEl.classList.add('hidden');
             _psdAutoPrintAfterLoad = false;
-        }
-    };
-    setTimeout(trySet, 500);
+            showToast('โหลดแผนไม่สำเร็จ: ' + (e.message || String(e)), true);
+        })
+        .getPreShipmentData(planId);
 }
 
 // ── Calendar State (Date Range) ───────────────────────────────────────────
