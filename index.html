@@ -781,21 +781,6 @@ thead.sticky {
                     <canvas id="inventoryTrendChart"></canvas>
                 </div>
             </div>
-            <!-- Blocking Trend -->
-            <div class="rounded-[1.5rem] overflow-hidden shadow-xl" style="border:1px solid #e2e8f0;">
-                <div style="background:linear-gradient(135deg,#0f172a,#1e293b);" class="px-7 py-4 flex items-center gap-3">
-                    <div style="background:rgba(225,29,72,0.15);border:1px solid rgba(225,29,72,0.35);" class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-lock text-rose-400 text-sm"></i>
-                    </div>
-                    <div>
-                        <p class="text-white font-black text-sm leading-tight">Blocking / Hold Trend</p>
-                        <p class="text-slate-400 text-xs">สินค้ากักกัน (kg) &amp; จำนวนเส้น</p>
-                    </div>
-                </div>
-                <div class="bg-white p-6" style="height:380px;">
-                    <canvas id="blockingTrendChart"></canvas>
-                </div>
-            </div>
         </div>
     </div><!-- end view-analytics-content -->
 
@@ -5691,15 +5676,6 @@ function renderAnalyticsDashboard(data) {
     // ============================================
     renderInventoryTrendChart(data);
 
-    // ============================================
-    // 7. ✅ เรียกกราฟแนวโน้มสินค้ากักกัน (Blocking Trend Chart)
-    // แทนที่ส่วนตาราง Urgent Clearance เดิม
-    // ============================================
-    renderBlockingTrendChart({
-        blockingDates: data.blockingTrendDates,
-        blockingWeights: data.blockingTrendWeights,
-        blockingLines: data.blockingTrendLines // ตรวจสอบว่ามีตัวแปรนี้ส่งมาจาก backend แล้ว
-    });
 }
 // --- Global Variable สำหรับเก็บข้อมูลสินค้าทั้งหมด ---
 let allProductListCache = [];
@@ -7075,76 +7051,6 @@ let blockingChartInstance = null;
 /**
  * ✅ ฟังก์ชันวาดกราฟเส้น 2 แกน พร้อมแสดงชื่อกราฟ
  */
-function renderBlockingTrendChart(data) {
-    const ctx = document.getElementById('blockingTrendChart');
-    if (!ctx) return;
-    const context = ctx.getContext('2d');
-    if (window.blockingChartInstance) window.blockingChartInstance.destroy();
-    const gB = context.createLinearGradient(0, 0, 0, 340);
-    gB.addColorStop(0, 'rgba(225,29,72,0.45)'); gB.addColorStop(1, 'rgba(225,29,72,0)');
-    window.blockingChartInstance = new Chart(context, {
-        type: 'line',
-        data: {
-            labels: data.blockingDates || [],
-            datasets: [
-                {
-                    label: 'น้ำหนักกักกัน (kg)', data: data.blockingWeights || [],
-                    borderColor: '#e11d48', backgroundColor: gB,
-                    fill: true, tension: 0.4, borderWidth: 3,
-                    pointRadius: 3, pointHoverRadius: 6,
-                    pointBackgroundColor: '#fff', pointBorderColor: '#e11d48', pointBorderWidth: 2,
-                    yAxisID: 'y-weight'
-                },
-                {
-                    label: 'จำนวนเส้นกักกัน', data: data.blockingLines || [],
-                    borderColor: '#0ea5e9', backgroundColor: 'transparent',
-                    borderWidth: 3, borderDash: [6, 4],
-                    tension: 0.4, fill: false,
-                    pointRadius: 3, pointHoverRadius: 6,
-                    pointBackgroundColor: '#fff', pointBorderColor: '#0ea5e9', pointBorderWidth: 2,
-                    yAxisID: 'y-lines'
-                }
-            ]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                title: { display: false },
-                legend: {
-                    position: 'bottom',
-                    labels: { usePointStyle: true, pointStyleWidth: 12, padding: 20, font: { family: 'Sarabun', size: 13, weight: 'bold' } }
-                },
-                tooltip: {
-                    backgroundColor: '#0f172a', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
-                    borderColor: 'rgba(225,29,72,0.3)', borderWidth: 1, padding: 14, cornerRadius: 10,
-                    titleFont: { family: 'Sarabun', size: 12 }, bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
-                    callbacks: {
-                        label: function(c) {
-                            const v = c.parsed.y;
-                            return c.datasetIndex === 0
-                                ? ' น้ำหนักกักกัน: ' + v.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg'
-                                : ' จำนวนเส้น: ' + v.toLocaleString('th-TH') + ' เส้น';
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8' } },
-                'y-weight': {
-                    type: 'linear', position: 'left', beginAtZero: true,
-                    grid: { color: '#f1f5f9' },
-                    ticks: { font: { family: 'Sarabun', size: 11 }, color: '#e11d48', callback: v => v.toLocaleString() + ' kg' }
-                },
-                'y-lines': {
-                    type: 'linear', position: 'right', beginAtZero: true,
-                    grid: { drawOnChartArea: false },
-                    ticks: { font: { family: 'Sarabun', size: 11 }, color: '#0ea5e9', callback: v => v.toLocaleString() + ' เส้น' }
-                }
-            }
-        }
-    });
-}
         // --- INIT ---
         window.onload = () => {
             const today = new Date().toISOString().split('T')[0];
