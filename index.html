@@ -13051,6 +13051,11 @@ window.onLogiSkuChange = function onLogiSkuChange(shopIdx, itemIdx, input) {
     }
     updateLogiShopWeight(shopIdx);
     updateLogiTotalWeight();
+    // single-shop full_trailer → auto-assign real-time
+    if (logiTrailerMode === 'full_trailer') {
+        const _cards = document.querySelectorAll('#logi-shops-container > div[id^="logi-shop-card-"]');
+        if (_cards.length === 1) autoAssignTrailerItems(shopIdx);
+    }
 }
 
 // ── SKU Combobox ──────────────────────────────────────────────────────────
@@ -13113,6 +13118,11 @@ window.onLogiQtyChange = function onLogiQtyChange(shopIdx, itemIdx, input) {
     }
     updateLogiShopWeight(shopIdx);
     updateLogiTotalWeight();
+    // single-shop full_trailer → auto-assign real-time
+    if (logiTrailerMode === 'full_trailer') {
+        const _cards = document.querySelectorAll('#logi-shops-container > div[id^="logi-shop-card-"]');
+        if (_cards.length === 1) autoAssignTrailerItems(shopIdx);
+    }
 }
 
 // ── ลบแถวสินค้า ──
@@ -13235,6 +13245,11 @@ window.confirmLogiDump = function confirmLogiDump() {
     parsed.forEach(p => addLogiItem(logiDumpShopIdx, p.sku, p.qty));
     closeLogiDumpModal();
     showToast(`✅ Dump สำเร็จ ${parsed.length} รายการ`);
+    // single-shop full_trailer → auto-assign ทันทีหลัง dump
+    if (logiTrailerMode === 'full_trailer') {
+        const _cards = document.querySelectorAll('#logi-shops-container > div[id^="logi-shop-card-"]');
+        if (_cards.length === 1) autoAssignTrailerItems(logiDumpShopIdx);
+    }
 }
 
 // ── Dump สำหรับงานย้าย (ใช้ modal เดิม ส่งผลไป addTransferItem) ──
