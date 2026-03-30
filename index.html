@@ -12401,7 +12401,7 @@ window.autoAssignTrailerItems = function autoAssignTrailerItems(shopIdx) {
     var opt = truckSel?.options[truckSel?.selectedIndex];
     var capM = parseInt(opt?.dataset?.capMother || 0); // kg
     var capC = parseInt(opt?.dataset?.capChild  || 0); // kg
-    if (!capM && !capC) return; // ไม่มี cap — ไม่ทำอะไร
+    if (!capM && !capC) return;
 
     var card = document.getElementById('logi-shop-card-' + shopIdx);
     if (!card) return;
@@ -12413,48 +12413,60 @@ window.autoAssignTrailerItems = function autoAssignTrailerItems(shopIdx) {
         var iIdx = parseInt(parts[parts.length - 1]);
         var wtEl = document.getElementById('logi-item-wt-' + shopIdx + '-' + iIdx);
         var qtyEl = row.querySelector('.logi-item-qty');
-        var qty = parseFloat(qtyEl?.value) || 0;
+        var skuEl = row.querySelector('.logi-item-sku');
+        var sku = skuEl ? skuEl.value.trim().toUpperCase() : '';
+        var prod = sku ? (LOGI_PRODUCTS_MASTER || []).find(function(p) { return p.sku === sku; }) : null;
+        var qty = parseFloat(qtyEl?.value) || 0;                          // หน่วย: เส้น
         var totalWt = wtEl ? (parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0) : 0;
-        var wtPerBundle = (qty > 0 && totalWt > 0) ? totalWt / qty : 0;
-        return { iIdx: iIdx, row: row, qty: qty, totalWt: totalWt, wtPerBundle: wtPerBundle };
+        var lpb = (prod && prod.linesPerBundle > 0) ? prod.linesPerBundle : 1; // เส้น/มัด
+        var wtPerLine   = qty > 0 ? totalWt / qty : 0;   // กก./เส้น
+        var wtPerBundle = wtPerLine * lpb;                // กก./มัด
+        var totalBundles    = Math.floor(qty / lpb);      // มัดทั้งหมด
+        var remainderLines  = qty - totalBundles * lpb;   // เส้นเศษที่ไม่ครบมัด
+        return { iIdx, row, qty, totalWt, lpb, wtPerLine, wtPerBundle, totalBundles, remainderLines };
     }).filter(function(it) { return it.totalWt > 0 && it.qty > 0; });
 
-    // Greedy fill: เติมแม่ก่อนแบบยกมัด → เหลือไปลูก
+    // Greedy fill: เติมแม่ก่อนแบบยกมัด → เหลือไปลูก (เส้นเศษที่ไม่ครบมัด → ลูก)
     var usedM = 0;
     items.forEach(function(it) {
         var remainM = capM - usedM;
         var motherBundles, childBundles;
         if (it.wtPerBundle <= 0 || remainM <= 0) {
             motherBundles = 0;
-            childBundles = it.qty;
+            childBundles = it.totalBundles;
         } else {
-            motherBundles = Math.min(it.qty, Math.floor(remainM / it.wtPerBundle));
-            childBundles = it.qty - motherBundles;
+            motherBundles = Math.min(it.totalBundles, Math.floor(remainM / it.wtPerBundle));
+            childBundles  = it.totalBundles - motherBundles;
         }
-        var motherWt = motherBundles * it.wtPerBundle;
+        var motherLines = motherBundles * it.lpb + it.remainderLines; // เศษเส้นที่ไม่ครบมัด → แม่ (ห้ามแบ่งเศษ)
+        var childLines  = childBundles  * it.lpb;
+        var motherWt    = motherLines * it.wtPerLine;
+        var childWt     = childLines  * it.wtPerLine;
         usedM += motherWt;
 
-        // เก็บ split data ไว้บน DOM element
+        // เก็บ split data บน row element
+        it.row.dataset.motherLines   = motherLines;
+        it.row.dataset.childLines    = childLines;
         it.row.dataset.motherBundles = motherBundles;
         it.row.dataset.childBundles  = childBundles;
-        it.row.dataset.wtPerBundle   = it.wtPerBundle;
+        it.row.dataset.wtPerLine     = it.wtPerLine;
 
         // set truck label
-        var label = (motherBundles === it.qty) ? 'mother' : (motherBundles === 0 ? 'child' : 'split');
+        var label = (childLines === 0) ? 'mother' : (motherLines === 0 ? 'child' : 'split');
         var labelEl = document.getElementById('logi-item-truck-label-' + shopIdx + '-' + it.iIdx);
         if (labelEl) labelEl.value = label;
 
-        // อัปเดต split badge
+        // badge แสดงผล
         var badgeEl = document.getElementById('logi-item-split-info-' + shopIdx + '-' + it.iIdx);
         if (badgeEl) {
             if (label === 'split') {
-                var childWt = childBundles * it.wtPerBundle;
-                badgeEl.innerHTML = '<span class="bg-sky-100 text-sky-700 border border-sky-300 px-2 py-0.5 rounded-full font-black">🚛 แม่: ' + motherBundles + ' มัด (' + (motherWt/1000).toFixed(2) + 't)</span>'
-                    + '<span class="bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full font-black ml-1">⬆ ลูก: ' + childBundles + ' มัด (' + (childWt/1000).toFixed(2) + 't)</span>';
+                badgeEl.innerHTML =
+                    '<span class="bg-sky-100 text-sky-700 border border-sky-300 px-2 py-0.5 rounded-full font-black">🚛 แม่: ' + motherBundles + ' มัด / ' + motherLines + ' เส้น (' + (motherWt/1000).toFixed(2) + 't)</span>'
+                    + '<span class="bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full font-black ml-1">⬆ ลูก: ' + childBundles + ' มัด / ' + childLines + ' เส้น (' + (childWt/1000).toFixed(2) + 't)</span>';
                 badgeEl.classList.remove('hidden');
             } else {
                 badgeEl.innerHTML = label === 'child'
-                    ? '<span class="bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full font-black">⬆ ทั้งหมดไปรถลูก</span>'
+                    ? '<span class="bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full font-black">⬆ ทั้งหมดไปรถลูก (' + it.totalBundles + ' มัด / ' + it.qty + ' เส้น)</span>'
                     : '';
                 badgeEl.classList.toggle('hidden', label !== 'child');
             }
@@ -12565,11 +12577,11 @@ function updateTrailerWeightGauges() {
                 var label = labelEl ? labelEl.value : 'mother';
                 if (label === 'split') {
                     var itemRow = document.getElementById('logi-item-' + idx + '-' + itemIdx);
-                    var mB  = parseInt(itemRow?.dataset?.motherBundles || 0);
-                    var cB  = parseInt(itemRow?.dataset?.childBundles  || 0);
-                    var wpb = parseFloat(itemRow?.dataset?.wtPerBundle  || 0);
-                    motherKg += mB * wpb;
-                    childKg  += cB * wpb;
+                    var mL  = parseInt(itemRow?.dataset?.motherLines || 0);
+                    var cL  = parseInt(itemRow?.dataset?.childLines  || 0);
+                    var wpl = parseFloat(itemRow?.dataset?.wtPerLine  || 0);
+                    motherKg += mL * wpl;
+                    childKg  += cL * wpl;
                 } else {
                     var wt = parseFloat(wtEl.textContent.replace(/[^0-9.]/g, '')) || 0;
                     if (label === 'child') childKg += wt; else motherKg += wt;
@@ -13488,12 +13500,12 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                     const itemTruckLabel = itemTruckLabelEl?.value || 'mother';
                     const skuVal = skuEl.value.trim().toUpperCase();
                     if (itemTruckLabel === 'split') {
-                        // แบ่งระดับมัด: push 2 แถว (แม่ + ลูก)
-                        const mB  = parseInt(row.dataset.motherBundles || 0);
-                        const cB  = parseInt(row.dataset.childBundles  || 0);
-                        const wpb = parseFloat(row.dataset.wtPerBundle  || 0);
-                        if (mB > 0) items.push({ sku: skuVal, productName: prod?.name || '', qty: mB, weightPerUnit: prod?.likelyW || 0, weight: Math.round(mB * wpb * 100) / 100, truckLabel: 'mother' });
-                        if (cB > 0) items.push({ sku: skuVal, productName: prod?.name || '', qty: cB, weightPerUnit: prod?.likelyW || 0, weight: Math.round(cB * wpb * 100) / 100, truckLabel: 'child' });
+                        // แบ่งระดับมัด (หน่วยเส้น): push 2 แถว (แม่ + ลูก)
+                        const mL  = parseInt(row.dataset.motherLines || 0);
+                        const cL  = parseInt(row.dataset.childLines  || 0);
+                        const wpl = parseFloat(row.dataset.wtPerLine  || 0);
+                        if (mL > 0) items.push({ sku: skuVal, productName: prod?.name || '', qty: mL, weightPerUnit: prod?.likelyW || 0, weight: Math.round(mL * wpl * 100) / 100, truckLabel: 'mother' });
+                        if (cL > 0) items.push({ sku: skuVal, productName: prod?.name || '', qty: cL, weightPerUnit: prod?.likelyW || 0, weight: Math.round(cL * wpl * 100) / 100, truckLabel: 'child' });
                     } else {
                         items.push({
                             sku:           skuVal,
