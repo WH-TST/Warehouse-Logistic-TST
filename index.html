@@ -16682,20 +16682,62 @@ function initPreShipmentTab() {
             _psdListLoaded = true;
             if (!res.success) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
             var plans = (res.plans || []).filter(function(p) { return p.status !== 'success'; });
-            var opts = '<option value="">— กรุณาเลือกแผน —</option>';
+
+            // รวม -M และ -C เข้าด้วยกัน → แสดงแค่รายการเดียวต่อเที่ยว
+            // กฎ: ถ้ามี -M ใช้ -M เป็น representative, ซ่อน -C ออก
+            // ถ้าไม่มี -M (เที่ยวปกติ) ใช้ id ตรงๆ
+            var pairMap = {}; // basePlanId → plan object ที่จะแสดง
+            var pairOrder = [];
             plans.forEach(function(p) {
-                // รวมชื่อร้านทุกร้านในเที่ยวนี้
+                var base = p.id.replace(/-[MC]$/, '');
+                if (!pairMap[base]) {
+                    pairMap[base] = p;
+                    pairOrder.push(base);
+                } else {
+                    // ถ้า p เป็น -M → ให้ -M เป็น representative แทน -C
+                    if (p.isMother || p.id.endsWith('-M')) {
+                        // รวม childTruckPlate จาก -C ไว้ใน -M
+                        pairMap[base]._childPlate = p._childPlate || pairMap[base].truckPlate;
+                        pairMap[base] = p;
+                    }
+                    // เก็บ childPlate จาก -C ไว้ใน mother
+                    if (p.id.endsWith('-C')) {
+                        pairMap[base]._childPlate = p.truckPlate || '';
+                    }
+                    if (p.id.endsWith('-M')) {
+                        // หา -C ใน pairMap เพื่อดึง childPlate
+                        var childInPlan = plans.find(function(x){ return x.id === base + '-C'; });
+                        if (childInPlan) pairMap[base]._childPlate = childInPlan.truckPlate || '';
+                    }
+                }
+            });
+            // pass 2: เติม _childPlate สำหรับ -M ที่ยังไม่ได้รับค่า
+            plans.forEach(function(p) {
+                if (p.id.endsWith('-C')) {
+                    var base = p.id.replace(/-C$/, '');
+                    if (pairMap[base]) pairMap[base]._childPlate = p.truckPlate || '';
+                }
+            });
+
+            var opts = '<option value="">— กรุณาเลือกแผน —</option>';
+            pairOrder.forEach(function(base) {
+                var p = pairMap[base];
                 var shopStr = '';
                 if (p.shops && p.shops.length > 0) {
                     var shopNames = p.shops.map(function(s){ return s.shopName||s.shopId||''; }).filter(Boolean);
+                    // deduplicate ชื่อร้าน (กรณี -M และ -C ไปร้านเดียวกัน)
+                    shopNames = shopNames.filter(function(v, i, a){ return a.indexOf(v) === i; });
                     if (shopNames.length > 0) shopStr = ' → ' + shopNames.join(' / ');
                 }
                 var truckStr = p.truckPlate || p.driverTransport || '—';
-                var label = p.id + ' | ' + (p.date||'') + ' | ' + truckStr
+                var label = base + ' | ' + (p.date||'') + ' | ' + truckStr
                     + (p.driverTransport && p.driverTransport !== truckStr ? ' | ' + p.driverTransport : '')
                     + ' | ' + (p.totalWeight ? parseFloat(p.totalWeight).toLocaleString() + ' กก.' : '—')
                     + shopStr;
-                opts += '<option value="' + p.id + '" data-truck="' + (p.truckPlate || '') + '">' + label + '</option>';
+                opts += '<option value="' + base + '"'
+                    + ' data-truck="' + (p.truckPlate || '') + '"'
+                    + ' data-child-plate="' + (p._childPlate || '') + '"'
+                    + '>' + label + '</option>';
             });
             sel.innerHTML = opts;
         })
@@ -16710,43 +16752,55 @@ function initPreShipmentTab() {
 window.psdPlanCheckTrailer = function psdPlanCheckTrailer() {
     var sel = document.getElementById('psd-plan-select');
     if (!sel) return;
-    var opt        = sel.options[sel.selectedIndex];
-    var truckPlate = opt ? (opt.dataset.truck || '') : '';
-    var truck      = (LOGI_MASTER_CACHE.trucks || []).find(function(t) { return t.plate === truckPlate; });
-    var toggle     = document.getElementById('psd-plan-trailer-toggle');
-    var inputs     = document.getElementById('psd-plan-trailer-inputs');
-    var capMEl     = document.getElementById('psd-plan-trailer-cap-mother');
-    var capCEl     = document.getElementById('psd-plan-trailer-cap-child');
+    var opt         = sel.options[sel.selectedIndex];
+    var truckPlate  = opt ? (opt.dataset.truck || '') : '';
+    var childPlate  = opt ? (opt.dataset.childPlate || '') : '';
+    var truck       = (LOGI_MASTER_CACHE.trucks || []).find(function(t) { return t.plate === truckPlate; });
+    // ถ้าหา truck จาก mother plate ไม่เจอ ลองหาจาก child plate
+    if (!truck && childPlate) {
+        truck = (LOGI_MASTER_CACHE.trucks || []).find(function(t) { return t.childPlate === childPlate; });
+    }
+    var toggle       = document.getElementById('psd-plan-trailer-toggle');
+    var inputs       = document.getElementById('psd-plan-trailer-inputs');
+    var capMEl       = document.getElementById('psd-plan-trailer-cap-mother');
+    var capCEl       = document.getElementById('psd-plan-trailer-cap-child');
     var plateDisplay = document.getElementById('psd-plan-trailer-plate-info');
-    if (truck && truck.isTrailer) {
+    var isTrailer    = (truck && truck.isTrailer) || !!childPlate;
+
+    if (isTrailer) {
         // รถพ่วง: auto-check + fill cap + show inputs
         if (toggle) toggle.checked = true;
         if (inputs) inputs.classList.remove('hidden');
-        if (capMEl) capMEl.value = truck.capMother || '';
-        if (capCEl) capCEl.value = truck.capChild  || '';
+        if (capMEl) capMEl.value = (truck && truck.capMother) ? truck.capMother : '';
+        if (capCEl) capCEl.value = (truck && truck.capChild)  ? truck.capChild  : '';
         var assignBtn = document.getElementById('psd-plan-assign-btn');
         if (assignBtn) assignBtn.classList.remove('hidden');
         // เก็บ plates บน _psdPlanData เพื่อใช้ใน document generation
+        var mPlate = (truck && truck.plate) || truckPlate;
+        var cPlate = (truck && truck.childPlate) || childPlate;
         if (_psdPlanData) {
-            _psdPlanData.motherPlate = truck.plate;
-            _psdPlanData.childPlate  = truck.childPlate || '';
+            _psdPlanData.motherPlate = mPlate;
+            _psdPlanData.childPlate  = cPlate;
         }
         // แสดงทะเบียนแม่/ลูก
         if (plateDisplay) {
             plateDisplay.innerHTML = '<i class="fas fa-truck mr-1 text-emerald-500"></i>'
-                + ' รถแม่: <span class="font-mono font-black text-slate-800">' + truck.plate + '</span>'
+                + ' รถแม่: <span class="font-mono font-black text-slate-800">' + (mPlate || '—') + '</span>'
                 + '&nbsp;|&nbsp;<i class="fas fa-truck-moving mr-1 text-purple-500"></i>'
-                + ' รถลูก: <span class="font-mono font-black text-slate-800">' + (truck.childPlate || '—') + '</span>';
+                + ' รถลูก: <span class="font-mono font-black text-slate-800">' + (cPlate || '—') + '</span>';
             plateDisplay.classList.remove('hidden');
         }
     } else {
-        // รถธรรมดา: reset trailer section
+        // รถธรรมดา: reset trailer section + fill capacity ถ้ามี
         if (toggle) toggle.checked = false;
         if (inputs) inputs.classList.add('hidden');
         if (capMEl) capMEl.value = '';
         if (capCEl) capCEl.value = '';
         if (plateDisplay) plateDisplay.classList.add('hidden');
         if (_psdPlanData) { _psdPlanData.motherPlate = ''; _psdPlanData.childPlate = ''; }
+        // fill capacity สำหรับรถธรรมดา
+        var capEl = document.getElementById('psd-plan-cap');
+        if (capEl && truck) capEl.value = truck.netWeight || truck.capMother || '';
     }
 };
 
@@ -17706,17 +17760,30 @@ window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
                 if (!sel.querySelector('option[value="'+planId+'"]')) {
                     var tmpOpt = document.createElement('option');
                     tmpOpt.value = planId;
-                    tmpOpt.dataset.truck = res.truckPlate || '';
+                    tmpOpt.dataset.truck      = res.truckPlate      || '';
+                    tmpOpt.dataset.childPlate = res.childTruckPlate || '';
                     tmpOpt.textContent = planId;
                     sel.appendChild(tmpOpt);
                 }
                 sel.value = planId;
+                // trigger trailer detection ทันทีหลัง set value
+                psdPlanCheckTrailer();
             }
 
-            // auto-detect รถพ่วงจากข้อมูลแผน
+            // auto-detect รถพ่วงจากข้อมูลแผน (fill cap จาก res โดยตรง ถ้า psdPlanCheckTrailer ยังไม่มี truck ใน cache)
             if (res.isTrailerPlan) {
                 var tog = document.getElementById('psd-plan-trailer-toggle');
                 if (tog && !tog.checked) { tog.checked = true; psdPlanToggleTrailer(); }
+                var capMEl2 = document.getElementById('psd-plan-trailer-cap-mother');
+                var capCEl2 = document.getElementById('psd-plan-trailer-cap-child');
+                // fill จาก LOGI_MASTER_CACHE ก่อน ถ้าไม่มีค่าค่อย skip (รอให้ผู้ใช้กรอกเอง)
+                var truckMaster = (LOGI_MASTER_CACHE.trucks || []).find(function(t) {
+                    return t.plate === res.truckPlate || t.childPlate === res.childTruckPlate;
+                });
+                if (truckMaster && truckMaster.isTrailer) {
+                    if (capMEl2 && !capMEl2.value) capMEl2.value = truckMaster.capMother || '';
+                    if (capCEl2 && !capCEl2.value) capCEl2.value = truckMaster.capChild  || '';
+                }
                 var infoEl = document.getElementById('psd-plan-trailer-plate-info');
                 if (infoEl) {
                     infoEl.textContent = '🚛 รถแม่: ' + (res.truckPlate || '—') + '   |   🔗 รถลูก: ' + (res.childTruckPlate || '—');
