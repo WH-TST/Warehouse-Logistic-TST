@@ -17057,9 +17057,10 @@ function _psdPlanRenderTable(res) {
     items.forEach(function(it, i) {
         var sn  = it.shopName || '—';
         // ✅ ใช้ shopSeq เป็น key หลัก — ร้านที่กดเพิ่มแยกกัน shopSeq ต่างกันเสมอ
+        // fallback: shopId → shopName (ไม่ใช้ index)
         var key = (it.shopSeq !== undefined && it.shopSeq !== null && it.shopSeq !== '')
             ? ('seq_' + it.shopSeq)
-            : ((it.shopId && it.shopId !== '') ? it.shopId : (sn + '||' + i));
+            : ((it.shopId && it.shopId !== '') ? it.shopId : sn);
         if (!shopMap[key]) {
             shopMap[key] = { shopName: sn, shopId: it.shopId || '', shopSeq: it.shopSeq, indices: [], totalWt: 0, totalPcs: 0 };
             shopGroups.push(shopMap[key]);
@@ -17390,12 +17391,13 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
     // helper: จัดกลุ่มตาม shopSeq (unique ต่อร้านในแผน) — แยกร้านชื่อเดียวกันที่ส่งคนละที่
     function _groupByShop(items) {
         var groups = [], keyMap = {};
-        items.forEach(function(item, idx) {
+        items.forEach(function(item) {
             var sn  = item.shopName || '—';
             // ✅ ใช้ shopSeq เป็น key หลัก — ร้านที่กดเพิ่มแยกกัน shopSeq ต่างกันเสมอ
+            // fallback: shopId → shopName (ไม่ใช้ index)
             var key = (item.shopSeq !== undefined && item.shopSeq !== null && item.shopSeq !== '')
                 ? ('seq_' + item.shopSeq)
-                : ((item.shopId && item.shopId !== '') ? item.shopId : (sn + '||' + idx));
+                : ((item.shopId && item.shopId !== '') ? item.shopId : sn);
             if (!keyMap[key]) {
                 keyMap[key] = [];
                 groups.push({ shopName: sn, shopId: item.shopId || '', shopSeq: item.shopSeq, items: keyMap[key] });
@@ -17721,9 +17723,10 @@ function renderPreShipmentDoc(data) {
     items.forEach(function(item) {
         var sn  = item.shopName || '—';
         // ✅ ใช้ shopSeq เป็น key หลัก — ร้านที่กดเพิ่มแยกกัน shopSeq ต่างกันเสมอ
+        // fallback: shopId → shopName (ไม่ใช้ index เพราะทำให้ items ที่ไม่มี shopSeq แตกเป็นคนละกลุ่ม)
         var key = (item.shopSeq !== undefined && item.shopSeq !== null && item.shopSeq !== '')
             ? ('seq_' + item.shopSeq)
-            : ((item.shopId && item.shopId !== '') ? item.shopId : (sn + '||' + shopGroups.length));
+            : ((item.shopId && item.shopId !== '') ? item.shopId : sn);
         if (!shopKeyMap[key]) {
             shopKeyMap[key] = [];
             shopGroups.push({ shopName: sn, shopId: item.shopId || '', shopSeq: item.shopSeq, items: shopKeyMap[key] });
