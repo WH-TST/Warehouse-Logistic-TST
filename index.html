@@ -17384,8 +17384,22 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         }
     });
 
+    // ── รวม cut child items กลับเข้า motherItems ─────────────────────────────
+    // Cut items ควรอยู่ในใบเดียวกับสินค้าอื่นของร้านเดิม (ไม่สร้างใบใหม่แยก)
+    // childItems ที่ cutMode='Cut' → ย้ายเข้า motherItems (อยู่ด้วยกัน)
+    // childItems ที่ cutMode ไม่ใช่ Cut (pure "Up" items) → คงไว้ใน childItems
+    var finalChildItems = [];
+    childItems.forEach(function(ci) {
+        if (ci.cutMode === 'Cut') {
+            motherItems.push(ci);   // อยู่ด้วยกันกับสินค้าอื่นของร้าน
+        } else {
+            finalChildItems.push(ci);
+        }
+    });
+    childItems = finalChildItems;
+
     // ── Render Document (Multi-shop × Truck aware) ─────────────────────────
-    // แยกใบตาม ร้าน × รถ: แม่-Shop1, แม่-Shop2, ลูก-Shop1, ...
+    // แยกใบตาม ร้าน: แม่-Shop1, แม่-Shop2, ลูก-Shop2 (ถ้า shop ถูก assign ลูก)
     var area = document.getElementById('psd-document-area');
 
     // helper: จัดกลุ่มตาม shopSeq (unique ต่อร้านในแผน) — แยกร้านชื่อเดียวกันที่ส่งคนละที่
