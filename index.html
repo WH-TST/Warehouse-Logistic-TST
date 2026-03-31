@@ -17322,33 +17322,22 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         var useWt   = (ov.weight !== undefined) ? ov.weight : (parseFloat(it.totalWeight) || 0);
         var likelyW = useQty > 0 ? useWt / useQty : 0;
 
-        // ✅ mode: ใช้ truckLabel จากแผนที่บันทึกไว้เป็น default
-        // override ด้วย Cut (user mark) หรือ Up (user กดย้ายไปลูก)
-        // กรณี truckLabel='child' (บันทึกใน -C plan) → child เสมอ เว้นแต่ user กด Cut
+        // ✅ รถ: ใช้ truckLabel จากแผนเท่านั้น (การจัดรถทำตอนวางแผนแล้ว)
+        // Cut / Up เป็นแค่ label annotation ในเอกสาร — ไม่ย้ายสินค้าข้ามรถ
+        //   ✂ Cut = "ถ้าน้ำหนักเกิน ตัดรายการนี้ออกได้"
+        //   ⬆ Up  = "ถ้าใส่ได้อีก เติมได้"
         var savedTruck = it.truckLabel || 'mother';
         var ovMode     = (ov && ov.mode) ? ov.mode : null;
-        var mode;
-        if (ovMode === 'cut') {
-            mode = 'cut';                                           // user mark Cut → ตัดแบ่ง
-        } else if (savedTruck === 'child' || ovMode === 'child') {
-            mode = 'child';                                         // บันทึกเป็น -C หรือ user กด Up
-        } else {
-            mode = 'mother';                                        // default: แม่
-        }
 
-        if (mode === 'child') {
+        if (savedTruck === 'child') {
             var ci = _psdPlanBuildItem(it, useQty, likelyW, 'รถลูก');
-            var isUserUp = savedTruck !== 'child'; // user กด Up เอง (ไม่ใช่จากแผน)
-            if (isUserUp) ci.cutMode = 'Up';
+            if (ovMode === 'cut')   ci.cutMode = 'Cut';  // label only
+            if (ovMode === 'child') ci.cutMode = 'Up';   // label only (user กด Up)
             childItems.push(ci); childWt += ci.totalWeight || 0;
-        } else if (mode === 'cut') {
-            // Cut = แสดงสัญลักษณ์ // Cut ในเอกสารเฉยๆ ไม่แบ่งสินค้าข้ามรถ
-            // อยู่กับรถแม่ตามปกติ แค่ติด cutMode เพื่อแสดง label
-            var mi = _psdPlanBuildItem(it, useQty, likelyW, 'รถแม่');
-            mi.cutMode = 'Cut';
-            motherItems.push(mi); motherWt += mi.totalWeight || 0;
         } else {
             var mi = _psdPlanBuildItem(it, useQty, likelyW, 'รถแม่');
+            if (ovMode === 'cut')   mi.cutMode = 'Cut';  // label only
+            if (ovMode === 'child') mi.cutMode = 'Up';   // label only (user กด Up)
             motherItems.push(mi); motherWt += mi.totalWeight || 0;
         }
     });
@@ -17586,6 +17575,8 @@ function buildSheetHtml(data, shopGroup, shopIdx, totalShops) {
                     html += '<td rowspan="'+rowCount+'" style="'+TD+'text-align:center;font-weight:900;font-size:7.5pt;vertical-align:middle;">'+(idx+1)+'</td>';
                     var cutSuffix = item.cutMode === 'Cut'
                         ? '<span style="font-weight:900;color:#f97316;"> // Cut</span>'
+                        : item.cutMode === 'Up'
+                        ? '<span style="font-weight:900;color:#0284c7;"> // Up</span>'
                         : '';
                     // คำนวณ weight per bundle range: min = rangeMin × linesPerBundle, max = rangeMax × linesPerBundle
                     var bndRangeStr = '';
