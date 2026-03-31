@@ -5143,11 +5143,13 @@ function getLogisticPlanById(planId) {
       if (hasShopRow2) {
         var _sName = String(row[6]  || '');
         var _sId   = String(row[17] || '');
-        // เช็คว่าร้านนี้มีอยู่แล้วไหม (กรณีร้านเดียวกันอยู่ทั้ง -M และ -C)
+        var _sSeq  = parseInt(row[16]) || 0;  // Col Q: shopSeq
+        // ✅ dup-check ใช้ shopSeq ด้วย — ร้านชื่อเดียวกัน shopId เดียวกัน แต่ shopSeq ต่าง = คนละร้าน
         var _dupShop = null;
         for (var _di = 0; _di < plan.shops.length; _di++) {
-          if (plan.shops[_di].shopName === _sName && plan.shops[_di].shopId === _sId) {
-            _dupShop = plan.shops[_di]; break;
+          var _ds = plan.shops[_di];
+          if (_ds.shopName === _sName && _ds.shopId === _sId && _ds.shopSeq === _sSeq) {
+            _dupShop = _ds; break;
           }
         }
         if (!_dupShop) {
@@ -5155,7 +5157,7 @@ function getLogisticPlanById(planId) {
           plan.distance += parseFloat(row[7]) || 0;
           plan.stopFee  += parseFloat(row[8]) || 0;
           plan.shops.push({
-            shopSeq:       parseInt(row[16]) || 0,
+            shopSeq:       _sSeq,
             shopId:        _sId,
             shopName:      _sName,
             distance:      parseFloat(row[7])  || 0,
@@ -5167,7 +5169,7 @@ function getLogisticPlanById(planId) {
             items:         []
           });
         }
-        // ถ้า _dupShop มีอยู่แล้ว → ข้าม (ไม่สร้าง card ซ้ำ, ไม่บวก distance ซ้ำ)
+        // ถ้า _dupShop มีอยู่แล้ว (shopName+shopId+shopSeq ตรงกัน) → ข้าม
       }
     }
     if (!plan) return { success: false, message: 'ไม่พบ PlanID: ' + planId };
