@@ -454,11 +454,20 @@ function parseDateValue(dateVal) {
 
   const strDate = String(dateVal).trim();
   
-  // รูปแบบ 1: dd/MM/yyyy
+  // รูปแบบ 1: dd/MM/yyyy หรือ M/d/yyyy HH:mm (US format จาก frontend เดิม)
   if (strDate.includes('/')) {
-    const parts = strDate.split('/');
+    const datePart = strDate.split(' ')[0]; // ตัด time portion ถ้ามี เช่น "3/31/2026 00:00" → "3/31/2026"
+    const parts = datePart.split('/');
     if (parts.length === 3) {
-      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      const p0 = parseInt(parts[0]);
+      const p1 = parseInt(parts[1]);
+      const p2 = parseInt(parts[2]);
+      // ตรวจ M/d/yyyy (US): p0≤12 และ p1>12 แสดงว่า p0=เดือน, p1=วัน
+      if (p0 <= 12 && p1 > 12) {
+        return new Date(p2, p0 - 1, p1);
+      }
+      // dd/MM/yyyy (Thai): p0=วัน, p1=เดือน
+      return new Date(p2, p1 - 1, p0);
     }
   }
   
@@ -2676,31 +2685,56 @@ function importInventoryData(rows, dataType) {
       return { success: false, message: 'ไม่พบข้อมูลในไฟล์ (หลังจากข้าม Header)' };
     }
 
-    // ── ลบข้อมูลเดิมทั้งหมดออก แล้วเขียนใหม่ (clear + rewrite) ──────────
-    targetSheet.clearContents();
+    // ── วันที่นำเข้าวันนี้ (GMT+7) สำหรับเขียนลง Col T ──────────────────────
+    const importDateStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+    const COL_T_IDX = 19; // index 0-based ของ Column T (คอลัมน์ที่ 20)
 
-    // เขียน Header (แถวที่ 1)
-    const headerRow = rows[0] ? [...rows[0]] : [];
-    if (dataType === 'counting' || dataType === 'onhand_fg') {
-      headerRow.push('เส้นต่อมัด (จากProduct)');
+    // ── โหมดการบันทึก ─────────────────────────────────────────────────────
+    // transection_fg  → Append ต่อท้ายข้อมูลเดิม (สะสมประวัติ)
+    // ทุกประเภทอื่น   → Clear แล้วเขียนใหม่ทั้งหมด
+    const isAppendMode = (dataType === 'transection_fg');
+
+    if (!isAppendMode) {
+      targetSheet.clearContents();
     }
-    targetSheet.getRange(1, 1, 1, headerRow.length)
-      .setValues([headerRow])
-      .setFontWeight('bold')
-      .setBackground('#1e293b')
-      .setFontColor('#ffffff');
+
+    // เขียน Header (แถวที่ 1) — เฉพาะเมื่อ clear หรือ sheet ยังว่าง
+    const needHeader = !isAppendMode || targetSheet.getLastRow() < 1;
+    if (needHeader) {
+      const headerRow = rows[0] ? [...rows[0]] : [];
+      if (dataType === 'counting' || dataType === 'onhand_fg') {
+        headerRow.push('เส้นต่อมัด (จากProduct)');
+      }
+      // Pad header ถึง col T แล้วใส่ label
+      while (headerRow.length <= COL_T_IDX) headerRow.push('');
+      if (!headerRow[COL_T_IDX] || String(headerRow[COL_T_IDX]).trim() === '') {
+        headerRow[COL_T_IDX] = 'วันที่นำเข้า';
+      }
+      targetSheet.getRange(1, 1, 1, headerRow.length)
+        .setValues([headerRow])
+        .setFontWeight('bold')
+        .setBackground('#1e293b')
+        .setFontColor('#ffffff');
+    }
 
     // เพิ่ม linesPerBundle ให้แต่ละแถว (สำหรับ counting / onhand_fg)
+    // และเขียนวันที่นำเข้าลง col T ทุกแถว ทุกประเภทไฟล์
     const processedRows = dataRows.map(row => {
       const newRow = [...row];
       if (dataType === 'counting' || dataType === 'onhand_fg') {
         const sku = String(row[0] || '').trim(); // Col A = SKU
         newRow.push(lpbMap[sku] || '');
       }
+      // Pad ถึง col T แล้วเขียนวันที่นำเข้า (ไม่แตะ col A/B)
+      while (newRow.length <= COL_T_IDX) newRow.push('');
+      newRow[COL_T_IDX] = importDateStr;
       return newRow;
     });
 
-    const startRow = 2; // เขียนจากแถว 2 เสมอ (แถว 1 = header)
+    // กำหนดแถวเริ่มต้นเขียน
+    const startRow = isAppendMode
+      ? Math.max(2, targetSheet.getLastRow() + 1) // append: ต่อจากแถวสุดท้าย
+      : 2; // clear mode: เริ่มจากแถว 2 เสมอ
     const numCols = Math.max(...processedRows.map(r => r.length));
 
     // Normalize row length
@@ -2854,14 +2888,15 @@ function getCycleCountItems(dateStr, type) {
 
     if (type === 'fg') {
       // Transection FG cols (0-based):
-      //   B=Physical date(1), D=Warehouse(3), E=Item number(4), F=Product name(5),
-      //   H=CW quantity(7), L=Receipt(11), M=Issue(12)
+      //   D=Warehouse(3), E=Item number(4), F=Product name(5),
+      //   H=CW quantity(7), L=Receipt(11), M=Issue(12), T=วันที่นำเข้า(19)
+      // ✅ Filter ด้วย Col T (วันที่นำเข้า) — ไม่แตะ col A/B จากต้นฉบับ
       const fgSheet = ss.getSheetByName('Transection FG');
       if (!fgSheet || fgSheet.getLastRow() < 2) return { success: true, items: [], date: dateStr };
-      const fgData = fgSheet.getRange(2, 1, fgSheet.getLastRow()-1, 13).getValues();
+      const fgData = fgSheet.getRange(2, 1, fgSheet.getLastRow()-1, 20).getValues(); // อ่านถึง col T
       const grouped = {}; // sku+'|'+wh → { sku, name, wh, receiptQty, issueQty }
       fgData.forEach(function(row) {
-        const rowDate = parseDateValue(row[1]);
+        const rowDate = parseDateValue(row[19]); // Col T = วันที่นำเข้า (index 19)
         if (!rowDate) return;
         // Compare only date portion
         if (rowDate.toDateString() !== targetDate.toDateString()) return;
@@ -2914,14 +2949,15 @@ function getCycleCountItems(dateStr, type) {
 
     } else if (type === 'semi') {
       // Transection SEMI cols (0-based):
-      //   A=Physical date(0), D=Warehouse(3), G=Item number(6), H=Product name(7),
-      //   I=Issue(8), J=Quantity KG(9), U=Receipt(20)
+      //   D=Warehouse(3), G=Item number(6), H=Product name(7),
+      //   I=Issue(8), J=Quantity KG(9), T=วันที่นำเข้า(19), U=Receipt(20)
+      // ✅ Filter ด้วย Col T (วันที่นำเข้า) — ไม่แตะ col A/B จากต้นฉบับ
       const semiSheet = ss.getSheetByName('Transection SEMI');
       if (!semiSheet || semiSheet.getLastRow() < 2) return { success: true, items: [], date: dateStr };
       const semiData = semiSheet.getRange(2, 1, semiSheet.getLastRow()-1, 21).getValues();
       const grouped = {};
       semiData.forEach(function(row) {
-        const rowDate = parseDateValue(row[0]);
+        const rowDate = parseDateValue(row[19]); // Col T = วันที่นำเข้า (index 19)
         if (!rowDate) return;
         if (rowDate.toDateString() !== targetDate.toDateString()) return;
         const wh    = String(row[3]  || '').trim();
@@ -2981,23 +3017,15 @@ function getLatestCycleDate(type) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var latest = null;
-    if (type === 'fg') {
-      const sh = ss.getSheetByName('Transection FG');
-      if (!sh || sh.getLastRow() < 2) return { success: false, message: 'ไม่มีข้อมูล Transection FG' };
-      const col = sh.getRange(2, 2, sh.getLastRow()-1, 1).getValues(); // col B = Physical date
-      col.forEach(function(r) {
-        const d = parseDateValue(r[0]);
-        if (d && d.getFullYear() > 2000 && (!latest || d > latest)) latest = d;
-      });
-    } else {
-      const sh = ss.getSheetByName('Transection SEMI');
-      if (!sh || sh.getLastRow() < 2) return { success: false, message: 'ไม่มีข้อมูล Transection SEMI' };
-      const col = sh.getRange(2, 1, sh.getLastRow()-1, 1).getValues(); // col A = Physical date
-      col.forEach(function(r) {
-        const d = parseDateValue(r[0]);
-        if (d && d.getFullYear() > 2000 && (!latest || d > latest)) latest = d;
-      });
-    }
+    // ✅ ใช้ Col T (index 19 = คอลัมน์ที่ 20) = วันที่นำเข้า สำหรับทั้ง FG และ SEMI
+    const shName = (type === 'fg') ? 'Transection FG' : 'Transection SEMI';
+    const sh = ss.getSheetByName(shName);
+    if (!sh || sh.getLastRow() < 2) return { success: false, message: 'ไม่มีข้อมูล ' + shName };
+    const col = sh.getRange(2, 20, sh.getLastRow()-1, 1).getValues(); // col T = วันที่นำเข้า
+    col.forEach(function(r) {
+      const d = parseDateValue(r[0]);
+      if (d && d.getFullYear() > 2000 && (!latest || d > latest)) latest = d;
+    });
     if (!latest) return { success: false, message: 'ไม่พบวันที่ในข้อมูล' };
     const p = function(n) { return String(n).padStart(2,'0'); };
     const dateStr = latest.getFullYear() + '-' + p(latest.getMonth()+1) + '-' + p(latest.getDate());
