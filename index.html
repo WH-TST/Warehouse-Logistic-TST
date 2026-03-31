@@ -17700,16 +17700,18 @@ function renderPreShipmentDoc(data) {
 
     var items = data.items || [];
 
-    // ── จัดกลุ่มตาม shopName ──
+    // ── จัดกลุ่มตาม shopId (แยกร้านชื่อเดียวกันที่ส่งคนละที่) ──
     var shopGroups = [];
-    var shopSeen   = [];
+    var shopKeyMap = {};
     items.forEach(function(item) {
-        var sn = item.shopName || '—';
-        if (!shopSeen.includes(sn)) {
-            shopSeen.push(sn);
-            shopGroups.push({ shopName: sn, items: [] });
+        var sn  = item.shopName || '—';
+        // ✅ ใช้ shopId เป็น key — ร้านชื่อเดียวกันแต่ต่าง shopId = กลุ่มต่างกัน
+        var key = (item.shopId && item.shopId !== '') ? item.shopId : (sn + '||' + shopGroups.length);
+        if (!shopKeyMap[key]) {
+            shopKeyMap[key] = [];
+            shopGroups.push({ shopName: sn, shopId: item.shopId || '', items: shopKeyMap[key] });
         }
-        shopGroups[shopSeen.indexOf(sn)].items.push(item);
+        shopKeyMap[key].push(item);
     });
 
     // ถ้าไม่มีร้านเลย ให้สร้าง group เดียวจาก items ทั้งหมด
