@@ -16721,7 +16721,7 @@ function initPreShipmentTab() {
         .withSuccessHandler(function(res) {
             _psdListLoaded = true;
             if (!res.success) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
-            var plans = (res.plans || []).filter(function(p) { return p.status !== 'success'; });
+            var plans = (res.plans || []).filter(function(p) { return p.status === 'planned'; });
 
             // รวม -M และ -C เข้าด้วยกัน → แสดงแค่รายการเดียวต่อเที่ยว
             // กฎ: ถ้ามี -M ใช้ -M เป็น representative, ซ่อน -C ออก
@@ -17052,17 +17052,19 @@ function _psdPlanRenderTable(res) {
         totWt  += origWt;
     });
 
-    // จัดกลุ่มตาม shopName
+    // จัดกลุ่มตาม shopId + shopName (แยกร้านที่ชื่อเดียวกันแต่ส่งคนละที่)
     var shopGroups = [], shopMap = {};
     items.forEach(function(it, i) {
-        var sn = it.shopName || '—';
-        if (!shopMap[sn]) {
-            shopMap[sn] = { shopName: sn, indices: [], totalWt: 0, totalPcs: 0 };
-            shopGroups.push(shopMap[sn]);
+        var sn  = it.shopName || '—';
+        // ✅ ใช้ shopId เป็น key หลัก — ป้องกันร้านชื่อซ้ำถูกรวมกัน
+        var key = (it.shopId && it.shopId !== '') ? it.shopId : (sn + '||' + i);
+        if (!shopMap[key]) {
+            shopMap[key] = { shopName: sn, shopId: it.shopId || '', indices: [], totalWt: 0, totalPcs: 0 };
+            shopGroups.push(shopMap[key]);
         }
-        shopMap[sn].indices.push(i);
-        shopMap[sn].totalWt  += parseFloat(it.totalWeight)  || 0;
-        shopMap[sn].totalPcs += parseFloat(it.totalQtyPcs)  || 0;
+        shopMap[key].indices.push(i);
+        shopMap[key].totalWt  += parseFloat(it.totalWeight)  || 0;
+        shopMap[key].totalPcs += parseFloat(it.totalQtyPcs)  || 0;
     });
 
     var isTrailer = document.getElementById('psd-plan-trailer-toggle')?.checked;
@@ -17372,13 +17374,18 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
     // แยกใบตาม ร้าน × รถ: แม่-Shop1, แม่-Shop2, ลูก-Shop1, ...
     var area = document.getElementById('psd-document-area');
 
-    // helper: จัดกลุ่มตาม shopName คง order เดิม
+    // helper: จัดกลุ่มตาม shopId (แยกร้านชื่อเดียวกันที่ส่งคนละที่) คง order เดิม
     function _groupByShop(items) {
-        var groups = [], shopMap = {};
-        items.forEach(function(item) {
-            var sn = item.shopName || '—';
-            if (!shopMap[sn]) { shopMap[sn] = []; groups.push({ shopName: sn, items: shopMap[sn] }); }
-            shopMap[sn].push(item);
+        var groups = [], keyMap = {};
+        items.forEach(function(item, idx) {
+            var sn  = item.shopName || '—';
+            // ✅ ใช้ shopId เป็น key — ร้านชื่อเดียวกันแต่ต่าง shopId = กลุ่มต่างกัน
+            var key = (item.shopId && item.shopId !== '') ? item.shopId : (sn + '||' + idx);
+            if (!keyMap[key]) {
+                keyMap[key] = [];
+                groups.push({ shopName: sn, shopId: item.shopId || '', items: keyMap[key] });
+            }
+            keyMap[key].push(item);
         });
         return groups;
     }

@@ -5611,6 +5611,8 @@ function getPreShipmentData(planId) {
 
         allItems.push({
           shopName:       shop.shopName    || '',
+          shopId:         shop.shopId      || '',   // ✅ เพิ่ม shopId เพื่อแยกร้านชื่อเดียวกัน
+          shopSeq:        shop.shopSeq     || 0,    // ✅ ลำดับร้านในแผน
           sku:            it.sku,
           productName:    pInfo.name       || it.productName || '',
           totalQtyPcs:    totalLines,
