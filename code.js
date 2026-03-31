@@ -187,7 +187,7 @@ function doGet(e) {
           'getSafetyStockData','saveSafetyStockData',
           'saveFGCycleCount','saveSemiCycleCount',
           'importInventoryData','uploadOverdueData',
-          'getInventoryCompareData','getCycleCountItems',
+          'getInventoryCompareData','getCycleCountItems','getLatestCycleDate',
           'getLogisticMasterData','clearLogiMasterCache','calcRouteDistance','saveLogisticPlan','saveBatchLogisticPlans','getReadyToShipOrders','getAutoplanBundle',
           'getLogisticPlans','getLogisticPlanById','deleteLogisticPlan','getPlannedShopIdsByDateRange',
           'getLogisticPlanSummary','getPreShipmentData','getPreShipmentProductList',
@@ -2878,8 +2878,19 @@ function getCycleCountItems(dateStr, type) {
         else if (issue === 'issued' || issue === 'issue')   grouped[key].issueQty  += cwQty;
         else grouped[key].receiptQty += cwQty; // default to receipt if unclear
       });
+      // Build sort order from Product sheet
+      const fgOrderMap = {};
+      const productSheet2 = ss.getSheetByName('Product');
+      if (productSheet2 && productSheet2.getLastRow() >= 2) {
+        const pRows = productSheet2.getRange(2, 1, productSheet2.getLastRow()-1, 1).getValues();
+        pRows.forEach(function(r, i) { const s = String(r[0]||'').trim(); if (s) fgOrderMap[s] = i; });
+      }
       const items = Object.values(grouped).map(function(r) {
         return Object.assign(r, { lpb: lpbMap[r.sku]||0, systemQty: 0 });
+      }).sort(function(a, b) {
+        const oa = (fgOrderMap[a.sku] !== undefined) ? fgOrderMap[a.sku] : 99999;
+        const ob = (fgOrderMap[b.sku] !== undefined) ? fgOrderMap[b.sku] : 99999;
+        return oa - ob;
       });
       // Try to get systemQty from Counting sheet
       const countingSheet = ss.getSheetByName('Counting');
@@ -2942,9 +2953,55 @@ function getCycleCountItems(dateStr, type) {
           r.physKg = physMap[r.sku+'|'+r.wh] || 0;
         });
       }
-      return { success: true, items: Object.values(grouped), date: dateStr };
+      // Sort SEMI items by Product sheet order
+      const semiOrderMap = {};
+      const productSheet3 = ss.getSheetByName('Product');
+      if (productSheet3 && productSheet3.getLastRow() >= 2) {
+        const pRows3 = productSheet3.getRange(2, 1, productSheet3.getLastRow()-1, 1).getValues();
+        pRows3.forEach(function(r, i) { const s = String(r[0]||'').trim(); if (s) semiOrderMap[s] = i; });
+      }
+      const semiItems = Object.values(grouped).sort(function(a, b) {
+        const oa = (semiOrderMap[a.sku] !== undefined) ? semiOrderMap[a.sku] : 99999;
+        const ob = (semiOrderMap[b.sku] !== undefined) ? semiOrderMap[b.sku] : 99999;
+        return oa - ob;
+      });
+      return { success: true, items: semiItems, date: dateStr };
     }
     return { success: false, message: 'ไม่รู้จัก type: ' + type };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * getLatestCycleDate(type)
+ * คืนวันที่ล่าสุดที่มีข้อมูลใน Transection FG หรือ SEMI
+ */
+function getLatestCycleDate(type) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var latest = null;
+    if (type === 'fg') {
+      const sh = ss.getSheetByName('Transection FG');
+      if (!sh || sh.getLastRow() < 2) return { success: false, message: 'ไม่มีข้อมูล Transection FG' };
+      const col = sh.getRange(2, 2, sh.getLastRow()-1, 1).getValues(); // col B = Physical date
+      col.forEach(function(r) {
+        const d = parseDateValue(r[0]);
+        if (d && d.getFullYear() > 2000 && (!latest || d > latest)) latest = d;
+      });
+    } else {
+      const sh = ss.getSheetByName('Transection SEMI');
+      if (!sh || sh.getLastRow() < 2) return { success: false, message: 'ไม่มีข้อมูล Transection SEMI' };
+      const col = sh.getRange(2, 1, sh.getLastRow()-1, 1).getValues(); // col A = Physical date
+      col.forEach(function(r) {
+        const d = parseDateValue(r[0]);
+        if (d && d.getFullYear() > 2000 && (!latest || d > latest)) latest = d;
+      });
+    }
+    if (!latest) return { success: false, message: 'ไม่พบวันที่ในข้อมูล' };
+    const p = function(n) { return String(n).padStart(2,'0'); };
+    const dateStr = latest.getFullYear() + '-' + p(latest.getMonth()+1) + '-' + p(latest.getDate());
+    return { success: true, date: dateStr };
   } catch(e) {
     return { success: false, message: e.toString() };
   }
@@ -4293,18 +4350,19 @@ function getLogisticMasterData() {
         if (!sku) continue;
         var qc = qcMap[sku] || {};
         products.push({
-          sku:     sku,
-          name:    name || qc.name || '',
-          likelyW: qc.likelyW || 0,
-          minW:    qc.minW    || 0,
-          maxW:    qc.maxW    || 0
+          sku:            sku,
+          name:           name || qc.name || '',
+          likelyW:        qc.likelyW || 0,
+          minW:           qc.minW    || 0,
+          maxW:           qc.maxW    || 0,
+          linesPerBundle: Number(pd[i][2]) || 1   // Col C: เส้น/มัด
         });
       }
     } else {
       // Fallback: ใช้จาก QC Standard ถ้าไม่มีชีต Product
       Object.keys(qcMap).forEach(function(sku) {
         var qc = qcMap[sku];
-        products.push({ sku: sku, name: qc.name, likelyW: qc.likelyW, minW: qc.minW, maxW: qc.maxW });
+        products.push({ sku: sku, name: qc.name, likelyW: qc.likelyW, minW: qc.minW, maxW: qc.maxW, linesPerBundle: 1 });
       });
     }
 
@@ -4680,6 +4738,7 @@ function getLogisticPlans(date) {
           sale:          String(row[10] || ''),         // K
           loadWarehouse: String(row[12] || ''),         // M
           remark:        String(row[18] || ''),         // S
+          truckLabel:    String(row[0]).endsWith('-C') ? 'child' : 'mother',
           items: []
         });
         // อัปเดต shopNames จาก per-shop rows
@@ -4729,12 +4788,14 @@ function getLogisticPlans(date) {
         // ข้ามการ push item ถ้าเป็นแถว placeholder (SKU ว่าง)
         if (!irow[1]) continue;
         var itemWt = parseFloat(irow[5]) || 0;
+        var _lgItemTruckLabel = String(irow[0]).endsWith('-C') ? 'child' : 'mother';
         shop.items.push({
           sku:           String(irow[1] || ''),
           productName:   String(irow[2] || ''),
           qty:           parseFloat(irow[3]) || 0,
           weightPerUnit: parseFloat(irow[4]) || 0,
-          weight:        itemWt
+          weight:        itemWt,
+          truckLabel:    _lgItemTruckLabel
         });
         plan.totalWeight += itemWt;
       }
@@ -5382,29 +5443,46 @@ function getPreShipmentData(planId) {
     }
 
     // ── 4. ดึงข้อมูล Plan + Items สำหรับ planId ที่ระบุ ──────────────────
-    var result = getLogisticPlans(null);
-    if (!result.success) return { success: false, message: result.message };
-    var plan = null;
+    // ใช้ getLogisticPlanById แทน getLogisticPlans เพื่อ base-match รองรับทั้ง
+    // WLTST2603167, WLTST2603167-M, WLTST2603167-C
+    var byIdResult = getLogisticPlanById(planId);
+    if (!byIdResult.success) return { success: false, message: byIdResult.message };
+    var plan = byIdResult.plan;
+
+    // รถพ่วง: ดึง -C plan แยกเพื่อเอา childTruckPlate
     var childPlan = null;
-    var childPlanId = planId.endsWith('-M') ? planId.replace(/-M$/, '-C') : null;
-    for (var pi = 0; pi < result.plans.length; pi++) {
-      if (result.plans[pi].id === planId) { plan = result.plans[pi]; }
-      if (childPlanId && result.plans[pi].id === childPlanId) { childPlan = result.plans[pi]; }
+    var basePlanIdPsd  = String(planId).replace(/-[MC]$/, '');
+    var childPlanIdPsd = basePlanIdPsd + '-C';
+    // ตรวจว่า plan มี shops จาก -C หรือเปล่า (getLogisticPlanById รวมมาแล้ว)
+    // แต่ยังต้องการ childTruckPlate → ดึงจาก planSheet โดยตรง
+    var _ss2 = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var _ps2 = _ss2.getSheetByName(LOGI_PLAN_SHEET);
+    var childTruckPlate = '';
+    var isTrailerPlan   = false;
+    if (_ps2 && _ps2.getLastRow() >= 2) {
+      var _pd2 = _ps2.getDataRange().getValues();
+      for (var _ci = 1; _ci < _pd2.length; _ci++) {
+        var _cPid = String(_pd2[_ci][0] || '').replace(/-[MC]$/, '');
+        if (_cPid !== basePlanIdPsd) continue;
+        if (String(_pd2[_ci][0]).endsWith('-M')) { isTrailerPlan = true; }
+        if (String(_pd2[_ci][0]).endsWith('-C')) {
+          childTruckPlate = String(_pd2[_ci][14] || '');  // Col O: ทะเบียนรถลูก
+          isTrailerPlan = true;
+        }
+      }
     }
-    if (!plan) return { success: false, message: 'ไม่พบแผน: ' + planId };
 
     // ── 5. คำนวณ lift rows สำหรับแต่ละ item ─────────────────────────────
-    // ถ้าเป็น -M plan → รวม shops จาก -C plan ด้วย (truckLabel: 'child')
+    // getLogisticPlanById รวม shops ของ -M และ -C ไว้ด้วยกันแล้ว (truckLabel per shop/item)
     var allItems = [];
     var _shopsToProcess = [];
-    plan.shops.forEach(function(s) { _shopsToProcess.push({ shop: s, truckLabel: 'mother' }); });
-    if (childPlan) {
-      childPlan.shops.forEach(function(s) { _shopsToProcess.push({ shop: s, truckLabel: 'child' }); });
-    }
+    plan.shops.forEach(function(s) { _shopsToProcess.push({ shop: s, shopTruckLabel: s.truckLabel || 'mother' }); });
     _shopsToProcess.forEach(function(entry) {
       var shop = entry.shop;
-      var truckLabel = entry.truckLabel;
+      var shopTruckLabel = entry.shopTruckLabel;
       (shop.items || []).forEach(function(it) {
+        // ใช้ truckLabel ระดับ item (บันทึกจาก -M/-C suffix) เป็นหลัก → fallback shop-level
+        var truckLabel = it.truckLabel || shopTruckLabel;
         var pInfo        = prodMap[it.sku] || { name: it.productName || '', linesPerBundle: 1, bundlesPerLift: 1, weightRange: '' };
         var totalLines   = parseFloat(it.qty) || 0;
         var linesPerBnd  = pInfo.linesPerBundle || 1;
@@ -5443,7 +5521,7 @@ function getPreShipmentData(planId) {
           totalWeight:    it.weight        || 0,
           linesPerBundle: linesPerBnd,
           bundlesPerLift: bndPerLift,
-          weightRange:    pInfo.weightRange || '', // ← ดึงจาก TST QC Standard Col F
+          weightRange:    pInfo.weightRange || '',
           liftRows:       liftRows,
           truckLabel:     truckLabel        // 'mother' | 'child'
         });
@@ -5458,12 +5536,12 @@ function getPreShipmentData(planId) {
     }
 
     return {
-      success:       true,
-      mode:          'doc',
-      planId:        plan.id,
-      truckPlate:    plan.truckPlate        || '—',
-      childTruckPlate: childPlan ? (childPlan.truckPlate || '') : '',
-      isTrailerPlan: !!childPlan,
+      success:         true,
+      mode:            'doc',
+      planId:          plan.id,
+      truckPlate:      plan.truckPlate     || '—',
+      childTruckPlate: childTruckPlate     || '',
+      isTrailerPlan:   isTrailerPlan,
       loadingDate:   loadingDate,
       driverName:    plan.driverTransport   || '—',
       totalWeight:   plan.totalWeight  || 0,
