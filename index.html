@@ -17329,15 +17329,18 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
         var savedTruck = it.truckLabel || 'mother';
         var ovMode     = (ov && ov.mode) ? ov.mode : null;
 
+        // user กด Up จริง = mode='child' แต่ autoMode='mother' (ไม่ใช่ auto-init จากแผน)
+        var isUserUp = (ovMode === 'child') && ((ov.autoMode || 'mother') === 'mother');
+
         if (savedTruck === 'child') {
             var ci = _psdPlanBuildItem(it, useQty, likelyW, 'รถลูก');
-            if (ovMode === 'cut')   ci.cutMode = 'Cut';  // label only
-            if (ovMode === 'child') ci.cutMode = 'Up';   // label only (user กด Up)
+            if (ovMode === 'cut') ci.cutMode = 'Cut';  // label only
+            if (isUserUp)         ci.cutMode = 'Up';   // label only (user กด Up จริงๆ)
             childItems.push(ci); childWt += ci.totalWeight || 0;
         } else {
             var mi = _psdPlanBuildItem(it, useQty, likelyW, 'รถแม่');
-            if (ovMode === 'cut')   mi.cutMode = 'Cut';  // label only
-            if (ovMode === 'child') mi.cutMode = 'Up';   // label only (user กด Up)
+            if (ovMode === 'cut') mi.cutMode = 'Cut';  // label only
+            if (isUserUp)         mi.cutMode = 'Up';   // label only (user กด Up จริงๆ)
             motherItems.push(mi); motherWt += mi.totalWeight || 0;
         }
     });
