@@ -2765,9 +2765,9 @@ function importInventoryData(rows, dataType) {
         const qc    = qcMap[sku] || {};
         const minW  = parseNum(qc.minW); // col U
         const maxW  = parseNum(qc.maxW); // col V
-        const cwQty = parseNum(row[7]);  // col H = CW quantity
-        const qty   = parseNum(row[9]);  // col J = Quantity
-        const ratio = (cwQty !== 0) ? (qty / cwQty) : ''; // col W = J÷H
+        const cwQty = parseNum(row[7]);        // col H = CW quantity
+        const qty   = Math.abs(parseNum(row[9])); // col J = Quantity (ใช้ค่าสัมบูรณ์ — J มีได้ทั้ง + และ -)
+        const ratio = (cwQty !== 0) ? (qty / Math.abs(cwQty)) : ''; // col W = |J|÷|H|
         let status  = ''; // col X
         if (ratio !== '' && minW > 0 && maxW > 0) {
           if (ratio < minW) status = 'Under';
