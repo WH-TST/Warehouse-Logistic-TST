@@ -4865,25 +4865,34 @@ function getLogisticPlans(date) {
         var shopName = String(irow[7] || '');
         if (!shopName) continue;  // ข้ามแถวที่ไม่มีชื่อร้าน (ข้อมูลเสีย)
 
-        var _lgShopId = String(irow[17] || '');  // Col R: shopId ของ item แถวนี้
+        var _lgShopSeq = (irow[15] !== undefined && irow[15] !== '') ? parseInt(irow[15]) : -1;  // Col P: shopSeq
+        var _lgShopId  = String(irow[17] || '');  // Col R: shopId
         var shop = null;
-        // ✅ จับคู่ด้วย shopId + shopName ก่อน — ป้องกันร้านชื่อเดียวกันถูกรวมกัน
-        for (var k = 0; k < plan.shops.length; k++) {
-          var _s = plan.shops[k];
-          if (_lgShopId && _s.shopId) {
-            if (_s.shopId === _lgShopId && _s.shopName === shopName) { shop = _s; break; }
-          } else {
-            if (_s.shopName === shopName) { shop = _s; break; }
+        // ✅ Primary: จับคู่ด้วย shopSeq (unique ต่อร้านในแผน) — รองรับร้านชื่อเดียวกันที่กดเพิ่มแยกกัน
+        if (_lgShopSeq >= 0) {
+          for (var k = 0; k < plan.shops.length; k++) {
+            if (plan.shops[k].shopSeq === _lgShopSeq) { shop = plan.shops[k]; break; }
+          }
+        }
+        // Fallback: shopId + shopName (ข้อมูลเก่าที่ไม่มี shopSeq)
+        if (!shop) {
+          for (var k = 0; k < plan.shops.length; k++) {
+            var _s = plan.shops[k];
+            if (_lgShopId && _s.shopId) {
+              if (_s.shopId === _lgShopId && _s.shopName === shopName) { shop = _s; break; }
+            } else {
+              if (_s.shopName === shopName) { shop = _s; break; }
+            }
           }
         }
         if (!shop) {
           shop = {
-            shopId:        _lgShopId,                    // Col R: รหัสร้านค้า
+            shopId:        _lgShopId,
             shopName:      shopName,
             loadWarehouse: String(irow[12] || ''),
             distance:      parseFloat(irow[13]) || 0,    // Col N: ระยะทาง per-shop
             remark:        String(irow[14] || ''),        // Col O: หมายเหตุ/ความด่วน
-            shopSeq:       irow[15] !== undefined && irow[15] !== '' ? parseInt(irow[15]) : 9999, // Col P
+            shopSeq:       _lgShopSeq >= 0 ? _lgShopSeq : 9999,  // Col P
             freeDistance:  parseFloat(irow[16]) || 0,    // Col Q: ระยะทางฟรี per-shop
             items:         []
           };
@@ -5180,27 +5189,34 @@ function getLogisticPlanById(planId) {
         var shopName = String(irow[7] || '');  // Col H
         if (!shopName) continue;  // ข้ามแถวที่ไม่มีชื่อร้าน
 
-        var _iShopId = String(irow[17] || '');  // Col R: shopId ของ item แถวนี้
+        var _iShopSeq = (irow[15] !== undefined && irow[15] !== '') ? parseInt(irow[15]) : -1;  // Col P: shopSeq
+        var _iShopId  = String(irow[17] || '');  // Col R: shopId
         var shop = null;
-        // ✅ จับคู่ด้วย shopId + shopName ก่อน — ป้องกันร้านชื่อเดียวกันถูกรวมกัน
-        for (var k = 0; k < plan.shops.length; k++) {
-          var _s = plan.shops[k];
-          if (_iShopId && _s.shopId) {
-            // มี shopId ทั้งสองฝั่ง → ต้องตรงกันทั้งคู่
-            if (_s.shopId === _iShopId && _s.shopName === shopName) { shop = _s; break; }
-          } else {
-            // fallback: ข้อมูลเก่าที่ไม่มี shopId → ใช้ shopName อย่างเดียว
-            if (_s.shopName === shopName) { shop = _s; break; }
+        // ✅ Primary: จับคู่ด้วย shopSeq (unique ต่อร้านในแผน) — รองรับร้านชื่อเดียวกันที่กดเพิ่มแยกกัน
+        if (_iShopSeq >= 0) {
+          for (var k = 0; k < plan.shops.length; k++) {
+            if (plan.shops[k].shopSeq === _iShopSeq) { shop = plan.shops[k]; break; }
+          }
+        }
+        // Fallback: shopId + shopName (ข้อมูลเก่าที่ไม่มี shopSeq)
+        if (!shop) {
+          for (var k = 0; k < plan.shops.length; k++) {
+            var _s = plan.shops[k];
+            if (_iShopId && _s.shopId) {
+              if (_s.shopId === _iShopId && _s.shopName === shopName) { shop = _s; break; }
+            } else {
+              if (_s.shopName === shopName) { shop = _s; break; }
+            }
           }
         }
         if (!shop) {
           shop = {
-            shopId:        _iShopId,                   // Col R: รหัสร้านค้า
+            shopId:        _iShopId,
             shopName:      shopName,
             loadWarehouse: String(irow[12] || ''),     // Col M
             distance:      parseFloat(irow[13]) || 0,  // Col N: ระยะทาง per-shop
             remark:        String(irow[14] || ''),      // Col O: หมายเหตุ/ความด่วน
-            shopSeq:       irow[15] !== undefined && irow[15] !== '' ? parseInt(irow[15]) : 9999, // Col P
+            shopSeq:       _iShopSeq >= 0 ? _iShopSeq : 9999,  // Col P
             freeDistance:  parseFloat(irow[16]) || 0,  // Col Q: ระยะทางฟรี per-shop
             items:         []
           };
