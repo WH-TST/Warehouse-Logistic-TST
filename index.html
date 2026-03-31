@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbytDS7iRxxnvHzHlRVYKRffqlk6Gryhgz_ojM0YdiQ6Mzkk8nHKGokNUBaFqdrVDCoS/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbwXTS8Ei7KnKx8GaW_DHN5PYSLpRUxnK3R2eValy1PkJn6G4gy5AJzy7IHOA7QFpBVO/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -7304,7 +7304,7 @@ let blockingChartInstance = null;
             if (cell instanceof Date) {
                 const d = cell;
                 const p = n => String(n).padStart(2,'0');
-                return (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+                return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
             }
             if (cell === null || cell === undefined) return '';
             if (typeof cell === 'number' && !isFinite(cell)) return 0;
@@ -7704,6 +7704,45 @@ let blockingChartInstance = null;
     };
 
     window.invPrintCycleForm = function() {
+        // ถ้ายังไม่มีข้อมูล ให้ดึงวันที่ล่าสุดจาก sheet แล้ว load ก่อนพิมพ์
+        if (!invCycleData || invCycleData.length === 0) {
+            const mode = invCycleCurrentMode;
+            showToast('กำลังดึงวันที่ล่าสุด...');
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    if (!res.success) return showToast('❌ ' + res.message, true);
+                    const dateEl = document.getElementById('inv-cyc-date');
+                    if (dateEl) dateEl.value = res.date;
+                    // โหลดข้อมูลแล้วพิมพ์
+                    const loading = document.getElementById('inv-cyc-loading');
+                    const wrap    = document.getElementById('inv-cyc-table-wrap');
+                    const empty   = document.getElementById('inv-cyc-empty');
+                    if (loading) loading.classList.remove('hidden');
+                    if (wrap)    wrap.classList.add('hidden');
+                    if (empty)   empty.classList.add('hidden');
+                    google.script.run
+                        .withSuccessHandler(function(r2) {
+                            if (loading) loading.classList.add('hidden');
+                            if (r2.success && r2.items && r2.items.length > 0) {
+                                invCycleData = r2.items;
+                                if (wrap) wrap.classList.remove('hidden');
+                                invRenderCycleTable(invCycleData);
+                                invPrintCycleForm(); // เรียกซ้ำเพื่อพิมพ์
+                            } else {
+                                if (empty) empty.classList.remove('hidden');
+                                showToast('❌ ไม่พบข้อมูลในวันที่ ' + res.date, true);
+                            }
+                        })
+                        .withFailureHandler(function(err) {
+                            if (loading) loading.classList.add('hidden');
+                            showToast('Error: ' + err.message, true);
+                        })
+                        .getCycleCountItems(res.date, mode);
+                })
+                .withFailureHandler(function(err) { showToast('Error: ' + err.message, true); })
+                .getLatestCycleDate(mode);
+            return;
+        }
         const dateEl = document.getElementById('inv-cyc-date');
         const dateStr = dateEl ? dateEl.value : '';
         const mode = invCycleCurrentMode;
