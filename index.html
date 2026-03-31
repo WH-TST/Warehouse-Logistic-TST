@@ -17315,7 +17315,6 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
     // ══════════════════════════════════════════════════════════════════════
     var motherItems = [], childItems = [];
     var motherWt = 0, childWt = 0;
-    var cutEntries = [];
 
     items.forEach(function(it, i) {
         var ov      = _psdPlanOverrides[i] || {};
@@ -17343,60 +17342,16 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
             if (isUserUp) ci.cutMode = 'Up';
             childItems.push(ci); childWt += ci.totalWeight || 0;
         } else if (mode === 'cut') {
-            cutEntries.push({ it: it, likelyW: likelyW, useQty: useQty });
+            // Cut = แสดงสัญลักษณ์ // Cut ในเอกสารเฉยๆ ไม่แบ่งสินค้าข้ามรถ
+            // อยู่กับรถแม่ตามปกติ แค่ติด cutMode เพื่อแสดง label
+            var mi = _psdPlanBuildItem(it, useQty, likelyW, 'รถแม่');
+            mi.cutMode = 'Cut';
+            motherItems.push(mi); motherWt += mi.totalWeight || 0;
         } else {
             var mi = _psdPlanBuildItem(it, useQty, likelyW, 'รถแม่');
             motherItems.push(mi); motherWt += mi.totalWeight || 0;
         }
     });
-
-    // ── Cut items — แบ่งตาม remChild จริง (floor ลงมัดเต็ม) ───────────────
-    // ลูก: floor(floor(remChild / likelyW) / lpb) * lpb
-    // แม่: ที่เหลือ (อาจเกิน Cap แม่ได้ — ปรับหน้างานได้)
-    var remChild = capChild - childWt;
-
-    cutEntries.forEach(function(entry) {
-        var it       = entry.it;
-        var likelyW  = entry.likelyW;
-        var lpb      = it.linesPerBundle || 1;
-        var totalPcs = entry.useQty !== undefined ? entry.useQty : (it.totalQtyPcs || 0);
-
-        if (likelyW <= 0 || remChild <= 0) {
-            var mi = _psdPlanBuildItem(it, totalPcs, likelyW, 'รถแม่');
-            mi.cutMode = 'Cut';
-            motherItems.push(mi); motherWt += mi.totalWeight || 0;
-            return;
-        }
-        var fitPcs = Math.floor(Math.floor(remChild / likelyW) / lpb) * lpb;
-        fitPcs = Math.max(0, Math.min(fitPcs, totalPcs));
-        var motherPcs = totalPcs - fitPcs;
-
-        if (fitPcs > 0) {
-            var ci = _psdPlanBuildItem(it, fitPcs, likelyW, 'รถลูก');
-            ci.cutMode = 'Cut';
-            childItems.push(ci); childWt += ci.totalWeight || 0;
-            remChild -= ci.totalWeight || 0;
-        }
-        if (motherPcs > 0) {
-            var mi = _psdPlanBuildItem(it, motherPcs, likelyW, 'รถแม่');
-            mi.cutMode = 'Cut';
-            motherItems.push(mi); motherWt += mi.totalWeight || 0;
-        }
-    });
-
-    // ── รวม cut child items กลับเข้า motherItems ─────────────────────────────
-    // Cut items ควรอยู่ในใบเดียวกับสินค้าอื่นของร้านเดิม (ไม่สร้างใบใหม่แยก)
-    // childItems ที่ cutMode='Cut' → ย้ายเข้า motherItems (อยู่ด้วยกัน)
-    // childItems ที่ cutMode ไม่ใช่ Cut (pure "Up" items) → คงไว้ใน childItems
-    var finalChildItems = [];
-    childItems.forEach(function(ci) {
-        if (ci.cutMode === 'Cut') {
-            motherItems.push(ci);   // อยู่ด้วยกันกับสินค้าอื่นของร้าน
-        } else {
-            finalChildItems.push(ci);
-        }
-    });
-    childItems = finalChildItems;
 
     // ── Render Document (Multi-shop × Truck aware) ─────────────────────────
     // แยกใบตาม ร้าน: แม่-Shop1, แม่-Shop2, ลูก-Shop2 (ถ้า shop ถูก assign ลูก)
