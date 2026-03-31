@@ -2705,10 +2705,17 @@ function importInventoryData(rows, dataType) {
 
     // ── โหมดการบันทึก ─────────────────────────────────────────────────────
     // transection_fg  → Append ต่อท้ายข้อมูลเดิม (สะสมประวัติ)
-    // ทุกประเภทอื่น   → Clear แล้วเขียนใหม่ทั้งหมด
+    // ทุกประเภทอื่น (counting, onhand_fg, onhand_semi, transection_semi)
+    //               → ลบข้อมูลเก่าออกทั้งหมด แล้วเขียนใหม่
     const isAppendMode = (dataType === 'transection_fg');
 
     if (!isAppendMode) {
+      // ลบแถวข้อมูลทั้งหมด (แถว 2 เป็นต้นไป) ให้ชีตสะอาดจริงๆ
+      const lastExisting = targetSheet.getLastRow();
+      if (lastExisting >= 2) {
+        targetSheet.deleteRows(2, lastExisting - 1);
+      }
+      // clear แถว 1 (header เดิม) ด้วย เพื่อเขียน header ใหม่
       targetSheet.clearContents();
     }
 
