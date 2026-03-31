@@ -5173,13 +5173,22 @@ function getLogisticPlanById(planId) {
         var shopName = String(irow[7] || '');  // Col H
         if (!shopName) continue;  // ข้ามแถวที่ไม่มีชื่อร้าน
 
+        var _iShopId = String(irow[17] || '');  // Col R: shopId ของ item แถวนี้
         var shop = null;
+        // ✅ จับคู่ด้วย shopId + shopName ก่อน — ป้องกันร้านชื่อเดียวกันถูกรวมกัน
         for (var k = 0; k < plan.shops.length; k++) {
-          if (plan.shops[k].shopName === shopName) { shop = plan.shops[k]; break; }
+          var _s = plan.shops[k];
+          if (_iShopId && _s.shopId) {
+            // มี shopId ทั้งสองฝั่ง → ต้องตรงกันทั้งคู่
+            if (_s.shopId === _iShopId && _s.shopName === shopName) { shop = _s; break; }
+          } else {
+            // fallback: ข้อมูลเก่าที่ไม่มี shopId → ใช้ shopName อย่างเดียว
+            if (_s.shopName === shopName) { shop = _s; break; }
+          }
         }
         if (!shop) {
           shop = {
-            shopId:        String(irow[17] || ''),     // Col R: รหัสร้านค้า
+            shopId:        _iShopId,                   // Col R: รหัสร้านค้า
             shopName:      shopName,
             loadWarehouse: String(irow[12] || ''),     // Col M
             distance:      parseFloat(irow[13]) || 0,  // Col N: ระยะทาง per-shop
