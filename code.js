@@ -2671,6 +2671,20 @@ function importInventoryData(rows, dataType) {
         if (sku) lpbMap[sku] = lpb;
       }
     }
+
+    // ดึง MinWeight / MaxWeight จากชีต TST QC Standard
+    // Col A=SKU, Col C=MinWeight(index 2), Col D=MaxWeight(index 3)
+    const qcMap = {}; // sku → { minW, maxW }
+    if (dataType === 'transection_fg') {
+      const qcSheet = ss.getSheetByName('TST QC Standard');
+      if (qcSheet && qcSheet.getLastRow() >= 2) {
+        const qcData = qcSheet.getRange(2, 1, qcSheet.getLastRow()-1, 4).getValues();
+        qcData.forEach(function(r) {
+          const s = String(r[0]||'').trim();
+          if (s) qcMap[s] = { minW: r[2], maxW: r[3] };
+        });
+      }
+    }
     
     let targetSheet = ss.getSheetByName(targetSheetName);
 
@@ -2710,6 +2724,14 @@ function importInventoryData(rows, dataType) {
       if (!headerRow[COL_T_IDX] || String(headerRow[COL_T_IDX]).trim() === '') {
         headerRow[COL_T_IDX] = 'วันที่นำเข้า';
       }
+      // สำหรับ transection_fg: เพิ่ม header col U/V/W/X
+      if (dataType === 'transection_fg') {
+        while (headerRow.length <= 23) headerRow.push('');
+        headerRow[20] = 'MinWeight';
+        headerRow[21] = 'MaxWeight';
+        headerRow[22] = 'น้ำหนัก/เส้น (J÷H)';
+        headerRow[23] = 'สถานะน้ำหนัก';
+      }
       targetSheet.getRange(1, 1, 1, headerRow.length)
         .setValues([headerRow])
         .setFontWeight('bold')
@@ -2717,8 +2739,16 @@ function importInventoryData(rows, dataType) {
         .setFontColor('#ffffff');
     }
 
+    // helper: parse ตัวเลขที่มีทั้ง comma และทศนิยม เช่น "1,234.56" หรือ "1234,56"
+    function parseNum(v) {
+      if (v === null || v === undefined || v === '') return 0;
+      if (typeof v === 'number') return v;
+      return parseFloat(String(v).replace(/,/g, '')) || 0;
+    }
+
     // เพิ่ม linesPerBundle ให้แต่ละแถว (สำหรับ counting / onhand_fg)
     // และเขียนวันที่นำเข้าลง col T ทุกแถว ทุกประเภทไฟล์
+    // สำหรับ transection_fg เพิ่ม col U/V/W/X (QC weight check)
     const processedRows = dataRows.map(row => {
       const newRow = [...row];
       if (dataType === 'counting' || dataType === 'onhand_fg') {
@@ -2728,6 +2758,30 @@ function importInventoryData(rows, dataType) {
       // Pad ถึง col T แล้วเขียนวันที่นำเข้า (ไม่แตะ col A/B)
       while (newRow.length <= COL_T_IDX) newRow.push('');
       newRow[COL_T_IDX] = importDateStr;
+
+      // ── Transection FG เพิ่ม col U/V/W/X ───────────────────────────────
+      if (dataType === 'transection_fg') {
+        const sku   = String(row[4] || '').trim(); // Col E = Item number
+        const qc    = qcMap[sku] || {};
+        const minW  = parseNum(qc.minW); // col U
+        const maxW  = parseNum(qc.maxW); // col V
+        const cwQty = parseNum(row[7]);  // col H = CW quantity
+        const qty   = parseNum(row[9]);  // col J = Quantity
+        const ratio = (cwQty !== 0) ? (qty / cwQty) : ''; // col W = J÷H
+        let status  = ''; // col X
+        if (ratio !== '' && minW > 0 && maxW > 0) {
+          if (ratio < minW) status = 'Under';
+          else if (ratio > maxW) status = 'Over';
+          else status = 'OK';
+        }
+        // เขียนลง index 20-23 (col U-X)
+        while (newRow.length <= 23) newRow.push('');
+        newRow[20] = (minW > 0) ? minW : '';  // col U
+        newRow[21] = (maxW > 0) ? maxW : '';  // col V
+        newRow[22] = (ratio !== '') ? Math.round(ratio * 10000) / 10000 : ''; // col W (4 ทศนิยม)
+        newRow[23] = status;                   // col X
+      }
+
       return newRow;
     });
 
