@@ -17318,21 +17318,32 @@ window.psdPlanBuildDoc = function psdPlanBuildDoc() {
 
     items.forEach(function(it, i) {
         var ov      = _psdPlanOverrides[i] || {};
-        var mode    = ov.mode || 'mother';
         var useQty  = (ov.qty    !== undefined) ? ov.qty    : (parseFloat(it.totalQtyPcs) || 0);
         var useWt   = (ov.weight !== undefined) ? ov.weight : (parseFloat(it.totalWeight) || 0);
         var likelyW = useQty > 0 ? useWt / useQty : 0;
 
+        // ✅ mode: ใช้ truckLabel จากแผนที่บันทึกไว้เป็น default
+        // override ด้วย Cut (user mark) หรือ Up (user กดย้ายไปลูก)
+        // กรณี truckLabel='child' (บันทึกใน -C plan) → child เสมอ เว้นแต่ user กด Cut
+        var savedTruck = it.truckLabel || 'mother';
+        var ovMode     = (ov && ov.mode) ? ov.mode : null;
+        var mode;
+        if (ovMode === 'cut') {
+            mode = 'cut';                                           // user mark Cut → ตัดแบ่ง
+        } else if (savedTruck === 'child' || ovMode === 'child') {
+            mode = 'child';                                         // บันทึกเป็น -C หรือ user กด Up
+        } else {
+            mode = 'mother';                                        // default: แม่
+        }
+
         if (mode === 'child') {
-            // ลูก: auto-assign หรือ user กด Up — แสดง // Up เฉพาะ user กดเอง
             var ci = _psdPlanBuildItem(it, useQty, likelyW, 'รถลูก');
-            var isUserUp = (ov.autoMode || 'mother') === 'mother'; // user กด Up (override auto)
+            var isUserUp = savedTruck !== 'child'; // user กด Up เอง (ไม่ใช่จากแผน)
             if (isUserUp) ci.cutMode = 'Up';
             childItems.push(ci); childWt += ci.totalWeight || 0;
         } else if (mode === 'cut') {
             cutEntries.push({ it: it, likelyW: likelyW, useQty: useQty });
         } else {
-            // ไม่ mark → แม่เต็มจำนวน
             var mi = _psdPlanBuildItem(it, useQty, likelyW, 'รถแม่');
             motherItems.push(mi); motherWt += mi.totalWeight || 0;
         }
