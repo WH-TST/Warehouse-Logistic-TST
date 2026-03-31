@@ -7757,7 +7757,8 @@ let blockingChartInstance = null;
             if (tbody) {
                 tbody.innerHTML = filtered.map((r, i) => {
                     const ri = invCycleData.indexOf(r);
-                    const get = f => { const el = document.querySelector('[data-row="'+ri+'"][data-field="'+f+'"]'); return el ? (el.value||'') : ''; };
+                    // ✅ get: แสดงค่าจริง, ถ้าเป็น 0 หรือว่าง → แสดงว่าง
+                    const get = f => { const el = document.querySelector('[data-row="'+ri+'"][data-field="'+f+'"]'); const v = el ? el.value : ''; return (v === '' || v === '0' || Number(v) === 0) ? '' : v; };
                     return '<tr style="border-bottom:1px solid #eee;' + (i%2===0?'':'background:#f8fafc;') + '">'
                         + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + (i+1) + '</td>'
                         + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (r.wh||'') + '</td>'
@@ -7775,7 +7776,7 @@ let blockingChartInstance = null;
             if (!printArea) return;
             const printWin = window.open('', '_blank', 'width=900,height=700');
             printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;900&display=swap" rel="stylesheet">'
-                + '<style>@page{size:A4 portrait;margin:12mm}body{font-family:"Sarabun",sans-serif;font-size:10pt;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #bbb;padding:4px 6px;font-size:9pt;}th{background:#1e293b;color:#fff;}</style>'
+                + '<style>@page{size:auto;margin:12mm}body{font-family:"Sarabun",sans-serif;font-size:10pt;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #bbb;padding:4px 6px;font-size:9pt;}th{background:#1e293b;color:#fff;}</style>'
                 + '</head><body onload="window.print();">' + printArea.innerHTML + '</body></html>');
             printWin.document.close();
 

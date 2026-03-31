@@ -2935,15 +2935,22 @@ function getCycleCountItems(dateStr, type) {
     const targetDate = parseDateValue(dateStr);
     if (!targetDate) return { success: false, message: 'วันที่ไม่ถูกต้อง: ' + dateStr };
 
-    // ดึง lpb จาก Product Sheet
-    const lpbMap = {};
+    // ── helper: ตัดอักษรไทยออก เหลือแต่ภาษาอังกฤษ ──────────────────────────
+    function stripThai(str) {
+      return String(str||'').replace(/[\u0E00-\u0E7F]+/g, '').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    // ดึง lpb + ชื่อภาษาอังกฤษ (col B) จาก Product Sheet
+    const lpbMap  = {}; // sku → linesPerBundle
+    const nameMap = {}; // sku → ชื่อ English-only จาก col B
     const productSheet = ss.getSheetByName('Product');
     if (productSheet && productSheet.getLastRow() >= 2) {
       const pData = productSheet.getRange(2, 1, productSheet.getLastRow()-1, 3).getValues();
       pData.forEach(function(row) {
         const sku = String(row[0]||'').trim();
-        const lpb = Number(row[2]) || 0;
-        if (sku) lpbMap[sku] = lpb;
+        if (!sku) return;
+        lpbMap[sku]  = Number(row[2]) || 0;
+        nameMap[sku] = stripThai(row[1]); // col B = Product name → ตัด Thai
       });
     }
 
@@ -2963,7 +2970,8 @@ function getCycleCountItems(dateStr, type) {
         if (rowDate.toDateString() !== targetDate.toDateString()) return;
         const wh    = String(row[3] || '').trim();
         const sku   = String(row[4] || '').trim();
-        const name  = String(row[5] || '').trim();
+        // ✅ ใช้ชื่อจาก Product sheet col B (English-only) แทน col F ของ Transection
+        const name  = nameMap[sku] || stripThai(row[5]);
         const cwQty = Number(row[7]) || 0;
         const receipt = String(row[11]||'').trim().toLowerCase();
         const issue   = String(row[12]||'').trim().toLowerCase();
@@ -3023,7 +3031,7 @@ function getCycleCountItems(dateStr, type) {
         if (rowDate.toDateString() !== targetDate.toDateString()) return;
         const wh    = String(row[3]  || '').trim();
         const sku   = String(row[6]  || '').trim();
-        const name  = String(row[7]  || '').trim();
+        const name  = nameMap[sku] || stripThai(row[7]); // ✅ ชื่อ English-only จาก Product col B
         const issue  = Number(row[8])  || 0;
         const qty    = Number(row[9])  || 0;
         const receipt= Number(row[20]) || 0;
