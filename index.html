@@ -4055,6 +4055,37 @@ thead.sticky {
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: Import Data Check Gate (ตรวจสอบข้อมูลก่อนเข้าแท็บ)         -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="inv-check-modal" class="fixed inset-0 bg-slate-900/70 hidden z-[520] flex items-center justify-center backdrop-blur-sm p-4">
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 flex items-center gap-4">
+      <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white text-xl flex-shrink-0">
+        <i class="fas fa-exclamation-triangle"></i>
+      </div>
+      <div>
+        <h3 class="text-lg font-black text-white">ข้อมูลยังไม่ครบสำหรับวันนี้</h3>
+        <p id="inv-check-modal-subtitle" class="text-amber-100 text-xs font-bold mt-0.5">กรุณานำเข้าข้อมูลให้ครบก่อนดำเนินการ</p>
+      </div>
+    </div>
+    <!-- Checklist -->
+    <div class="p-6 space-y-2 max-h-[50vh] overflow-y-auto" id="inv-check-modal-list"></div>
+    <!-- Footer buttons -->
+    <div class="px-6 pb-6 flex gap-3">
+      <button onclick="_invCheckGoImport()"
+              class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-black py-3.5 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-200">
+        <i class="fas fa-file-import"></i> ไปนำเข้าข้อมูล
+      </button>
+      <button id="inv-check-proceed-btn"
+              class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3.5 rounded-2xl transition-all flex items-center justify-center gap-2">
+        <i class="fas fa-forward"></i> ดำเนินการต่อ
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
 <!-- MODAL: FG Bulk Re-Check                                            -->
 <!-- ═══════════════════════════════════════════════════════════════════ -->
 <div id="bulk-recheck-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[510] flex items-center justify-center backdrop-blur-sm p-4">
@@ -4509,6 +4540,11 @@ const _safeStorage = {
 
     document.addEventListener("DOMContentLoaded", function() {
         console.log("✅ DOM Ready - Warehouse & Logistic Management System Initialized");
+
+        // ── Restore import status badges จาก localStorage ──────────────────────
+        setTimeout(function() {
+            if (typeof _invUpdateCardBadges === 'function') _invUpdateCardBadges();
+        }, 300);
 
         // ── Preload logistics master data in background (เร็วขึ้นตอนเปิด tab) ──────
         if (typeof google !== 'undefined' && google.script && google.script.run) {
@@ -7337,7 +7373,8 @@ let blockingChartInstance = null;
 
     /** Switch Inventory sub-tabs */
     /** Switch Inventory sub-tabs (3 tabs: import, compare, cyclecount) */
-    window.switchInvSubTab = function switchInvSubTab(tab) {
+    // ── ฟังก์ชันภายใน: สวิตช์แท็บจริงๆ (ไม่มี gate) ─────────────────────
+    function _doSwitchInvSubTab(tab) {
         ['import', 'compare', 'cyclecount'].forEach(t => {
             const sub = document.getElementById('inv-sub-' + t);
             if (sub) sub.classList.add('hidden');
@@ -7356,7 +7393,6 @@ let blockingChartInstance = null;
         }
         // Auto-actions when switching tabs
         if (tab === 'cyclecount') {
-            // Set default date to yesterday
             const yest = new Date();
             yest.setDate(yest.getDate() - 1);
             const yestStr = yest.toISOString().split('T')[0];
@@ -7364,6 +7400,142 @@ let blockingChartInstance = null;
             if (dateEl && !dateEl.value) dateEl.value = yestStr;
         }
     }
+
+    // ── Gate: ตรวจสอบข้อมูลก่อนเข้าแท็บ เทียบสต๊อก / ตรวจนับ ─────────────
+    window.switchInvSubTab = function switchInvSubTab(tab) {
+        if (tab === 'compare' || tab === 'cyclecount') {
+            const status = _invCheckImportStatus();
+            const missing = Object.keys(INV_IMPORT_CONFIG).filter(type => !status[type]);
+            if (missing.length > 0) {
+                _invShowDataCheckModal(tab, status);
+                return; // หยุดก่อน — รอ user ตัดสินใจ
+            }
+        }
+        _doSwitchInvSubTab(tab);
+    };
+
+    // ── Helper: ได้วันนี้ (yyyy-MM-dd) ───────────────────────────────────────
+    function _invGetTodayStr() {
+        const d = new Date();
+        const p = n => String(n).padStart(2,'0');
+        return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+    }
+
+    // ── Helper: บันทึกวันที่ import ลง localStorage ──────────────────────────
+    function _invSaveImportDate(type) {
+        try {
+            const today = _invGetTodayStr();
+            const stored = JSON.parse(localStorage.getItem('inv_import_dates') || '{}');
+            stored[type] = today;
+            localStorage.setItem('inv_import_dates', JSON.stringify(stored));
+            _invUpdateCardBadges();
+        } catch(e) {}
+    }
+
+    // ── Helper: ตรวจสอบสถานะ import แต่ละประเภท ──────────────────────────────
+    function _invCheckImportStatus() {
+        const today = _invGetTodayStr();
+        try {
+            const stored = JSON.parse(localStorage.getItem('inv_import_dates') || '{}');
+            const result = {};
+            Object.keys(INV_IMPORT_CONFIG).forEach(function(type) {
+                result[type] = stored[type] === today;
+            });
+            return result;
+        } catch(e) {
+            const result = {};
+            Object.keys(INV_IMPORT_CONFIG).forEach(function(type) { result[type] = false; });
+            return result;
+        }
+    }
+
+    // ── Helper: อัปเดต badge สถานะบนการ์ด ────────────────────────────────────
+    function _invUpdateCardBadges() {
+        const today = _invGetTodayStr();
+        let stored = {};
+        try { stored = JSON.parse(localStorage.getItem('inv_import_dates') || '{}'); } catch(e) {}
+
+        Object.keys(INV_IMPORT_CONFIG).forEach(function(type) {
+            const cfg  = INV_IMPORT_CONFIG[type];
+            const isOk = stored[type] === today;
+            // อัปเดตข้อความ lastdate บนการ์ด
+            const ldEl = document.getElementById('inv-import-lastdate-' + type);
+            if (ldEl) {
+                if (stored[type]) {
+                    ldEl.innerHTML = isOk
+                        ? '<span class="text-emerald-600 font-black">✅ นำเข้าแล้ววันนี้</span>'
+                        : '<span class="text-slate-400">นำเข้าล่าสุด: ' + stored[type] + '</span>';
+                } else {
+                    ldEl.innerHTML = '<span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span>';
+                }
+            }
+            // อัปเดต border ของการ์ด (เฉพาะตอนไม่ได้เลือก)
+            const card = document.getElementById('inv-import-card-' + type);
+            if (card && !card.classList.contains('border-teal-400') && !card.classList.contains('border-blue-400')
+                && !card.classList.contains('border-orange-400') && !card.classList.contains('border-purple-400')
+                && !card.classList.contains('border-rose-400') && !card.classList.contains('border-red-400')) {
+                // ไม่ได้ถูกเลือกอยู่ → แสดงสี status
+                if (isOk) {
+                    card.classList.remove('border-slate-200');
+                    card.classList.add('border-emerald-300');
+                } else {
+                    card.classList.remove('border-emerald-300');
+                    card.classList.add('border-slate-200');
+                }
+            }
+        });
+    }
+
+    // ── แสดง Modal ตรวจสอบข้อมูล ────────────────────────────────────────────
+    function _invShowDataCheckModal(targetTab, status) {
+        const listEl = document.getElementById('inv-check-modal-list');
+        if (!listEl) return;
+
+        const tabLabel = { compare: 'เทียบสต๊อก', cyclecount: 'ตรวจนับ' }[targetTab] || targetTab;
+        const subtitle = document.getElementById('inv-check-modal-subtitle');
+        if (subtitle) subtitle.textContent = 'ต้องการเข้าหน้า "' + tabLabel + '" — กรุณาตรวจสอบข้อมูล';
+
+        const colorIconMap = {
+            teal:'text-teal-700 bg-teal-100', blue:'text-blue-700 bg-blue-100',
+            purple:'text-purple-700 bg-purple-100', orange:'text-orange-700 bg-orange-100',
+            rose:'text-rose-700 bg-rose-100', red:'text-red-700 bg-red-100'
+        };
+
+        listEl.innerHTML = Object.keys(INV_IMPORT_CONFIG).map(function(type) {
+            const cfg = INV_IMPORT_CONFIG[type];
+            const ok  = status[type];
+            const iconCls = colorIconMap[cfg.color] || 'text-slate-700 bg-slate-100';
+            return '<div class="flex items-center gap-3 p-3 rounded-2xl border-2 transition-all '
+                + (ok ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50') + '">'
+                + '<div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ' + iconCls + '">'
+                + '<i class="fas ' + cfg.icon + ' text-sm"></i></div>'
+                + '<div class="flex-1 min-w-0">'
+                + '<p class="font-black text-sm ' + (ok ? 'text-emerald-800' : 'text-amber-800') + '">' + cfg.label + '</p>'
+                + '<p class="text-xs text-slate-500 font-bold truncate">' + cfg.sheet + '</p>'
+                + '</div>'
+                + '<span class="text-xs font-black px-2.5 py-1 rounded-full flex-shrink-0 '
+                + (ok ? 'text-emerald-700 bg-emerald-200' : 'text-amber-700 bg-amber-200') + '">'
+                + (ok ? '✅ วันนี้' : '⚠️ ยังไม่ได้นำเข้า') + '</span>'
+                + '</div>';
+        }).join('');
+
+        // ปุ่ม "ดำเนินการต่อ" → ข้ามการตรวจสอบ
+        const proceedBtn = document.getElementById('inv-check-proceed-btn');
+        if (proceedBtn) {
+            const missingCount = Object.values(status).filter(v => !v).length;
+            proceedBtn.innerHTML = '<i class="fas fa-forward mr-2"></i>ดำเนินการต่อ <span class="text-[10px] opacity-70 ml-1">(ขาด ' + missingCount + ' รายการ)</span>';
+            proceedBtn.onclick = function() {
+                document.getElementById('inv-check-modal').classList.add('hidden');
+                _doSwitchInvSubTab(targetTab);
+            };
+        }
+        document.getElementById('inv-check-modal').classList.remove('hidden');
+    }
+
+    window._invCheckGoImport = function() {
+        document.getElementById('inv-check-modal').classList.add('hidden');
+        _doSwitchInvSubTab('import');
+    };
 
     // ============================================================
     // INVENTORY CONTROL — NEW 3-TAB SYSTEM
@@ -7526,9 +7698,8 @@ let blockingChartInstance = null;
                             // Add log entry
                             invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: cfg.sheet, message: res.message });
                             invRenderImportLog();
-                            // Update last import date on card
-                            const ldEl = document.getElementById('inv-import-lastdate-' + invCurrentImportType);
-                            if (ldEl) ldEl.textContent = 'นำเข้าล่าสุด: ' + new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'});
+                            // บันทึกวันที่ import ลง localStorage + อัปเดต badge
+                            _invSaveImportDate(invCurrentImportType);
                             invClearImportFile();
                         } else {
                             showToast('❌ ' + res.message, true);
@@ -7548,7 +7719,7 @@ let blockingChartInstance = null;
             el.innerHTML = '<div class="text-center text-slate-300 py-10"><i class="fas fa-database text-4xl mb-3 block opacity-20"></i><p class="font-bold">ยังไม่มีประวัติการนำเข้า</p></div>';
             return;
         }
-        const colorMap = { 'COUNTING':'teal', 'ON-HAND FG':'blue', 'ON-HAND SEMI':'purple', 'TRANSACTION FG':'orange', 'TRANSACTION SEMI':'rose' };
+        const colorMap = { 'COUNTING':'teal', 'ON-HAND FG':'blue', 'ON-HAND SEMI':'purple', 'TRANSACTION FG':'orange', 'TRANSACTION SEMI':'rose', 'INV BLOCKING':'red' };
         el.innerHTML = invImportLogs.map((log, i) => {
             const c = colorMap[log.label] || 'slate';
             return '<div class="flex items-center gap-4 p-4 ' + (i%2===0?'bg-slate-50':'bg-white') + ' rounded-xl border border-slate-100 mb-2">'
