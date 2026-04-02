@@ -42,7 +42,8 @@ function _handleApiPost(e) {
       'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
       'saveWHActivityRows','getWHActivityLog',
       'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
-      'saveAuditLog','getAuditLog'
+      'saveAuditLog','getAuditLog',
+      'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk'
     ];
 
     if (allowedActions.indexOf(action) === -1) {
@@ -201,7 +202,8 @@ function doGet(e) {
           'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
           'saveWHActivityRows','getWHActivityLog',
           'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
-          'saveAuditLog','getAuditLog'
+          'saveAuditLog','getAuditLog',
+          'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -7640,12 +7642,18 @@ function getSKUCountHistory(sku) {
           source:    'CYCLE',
           timestamp: tsStr,
           cycleDate: dateStr,
+          lpb:       parseFloat(row[4])  || 0,
+          pile1:     parseFloat(row[5])  || 0,
+          pile2:     parseFloat(row[6])  || 0,
+          scrap1:    parseFloat(row[7])  || 0,
+          scrap2:    parseFloat(row[8])  || 0,
+          hold:      parseFloat(row[9])  || 0,
           systemQty: parseFloat(row[11]) || 0,
           actualQty: parseFloat(row[10]) || 0,
           diff:      parseFloat(row[12]) || 0,
           newQty:    null,
-          action:    '',
-          note:      '',
+          action:    String(row[13] || ''),
+          note:      String(row[14] || ''),
           countTime: ''
         });
       }

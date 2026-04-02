@@ -1185,7 +1185,7 @@ thead.sticky {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm">
         <div id="inv-cyc-empty" class="py-20 text-center text-slate-300">
           <i class="fas fa-clipboard-list text-6xl mb-4 opacity-20 block"></i>
           <p class="font-bold text-slate-400">เลือกวันที่และกดปุ่ม <strong>โหลด</strong> เพื่อดึงรายการเคลื่อนไหว</p>
@@ -1195,9 +1195,10 @@ thead.sticky {
           <p class="text-slate-500 font-bold">กำลังโหลดข้อมูล...</p>
         </div>
         <div id="inv-cyc-table-wrap" class="hidden overflow-x-auto">
-          <table id="inv-cyc-table-fg" class="w-full text-sm">
+          <table id="inv-cyc-table-fg" class="w-full text-sm" style="min-width:1100px;">
             <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
               <tr>
+                <th class="px-2 py-3 text-center w-8">▼</th>
                 <th class="px-3 py-3 text-center w-8">No.</th>
                 <th class="px-3 py-3 text-left min-w-[70px]">WH</th>
                 <th class="px-4 py-3 text-left min-w-[110px]">Item number</th>
@@ -7977,10 +7978,22 @@ let blockingChartInstance = null;
             const tbody = document.getElementById('inv-cyc-tbody-fg');
             if (!tbody) return;
             const rows = filtered.map((r, i) => {
-                const lpb   = Number(r.lpb||0);
-                const sysQty= Number(r.systemQty||0);
-                const rowId = 'cyc-row-' + i;
-                return '<tr id="' + rowId + '" class="hover:bg-teal-50 border-b border-slate-100">'
+                const lpb    = Number(r.lpb||0);
+                const sysQty = Number(r.systemQty||0);
+                const rowId  = 'cyc-row-' + i;
+                const skuSafe = (r.sku||'').replace(/"/g,'&quot;');
+                const rowBg  = i % 2 === 0 ? '' : 'bg-slate-50/40';
+
+                // ปุ่มลูกศร expand/collapse
+                const expandBtn = '<button onclick="invToggleCycleHistory(\'' + skuSafe + '\',' + i + ')"'
+                    + ' id="cyc-hist-btn-' + i + '"'
+                    + ' class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-600 flex items-center justify-center transition-all mx-auto"'
+                    + ' title="ดูประวัติการนับย้อนหลัง">'
+                    + '<i class="fas fa-chevron-down text-[10px]" id="cyc-hist-icon-' + i + '"></i>'
+                    + '</button>';
+
+                const mainRow = '<tr id="' + rowId + '" class="hover:bg-teal-50/50 transition-colors ' + rowBg + '">'
+                    + '<td class="px-2 py-2 text-center">' + expandBtn + '</td>'
                     + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
                     + '<td class="px-3 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
                     + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
@@ -7996,6 +8009,23 @@ let blockingChartInstance = null;
                     + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-amber-700">' + sysQty.toLocaleString() + '</td>'
                     + '<td class="px-3 py-2 text-right font-mono text-xs font-black" id="inv-diff-' + i + '">—</td>'
                     + '</tr>';
+
+                // History sub-row (hidden by default)
+                const histRow = '<tr id="cyc-hist-' + i + '" class="hidden">'
+                    + '<td colspan="15" class="px-4 pb-3 pt-0 bg-indigo-50/40">'
+                    + '<div class="rounded-xl border border-indigo-100 bg-white overflow-hidden">'
+                    + '<div class="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100">'
+                    + '<i class="fas fa-history text-indigo-400 text-xs"></i>'
+                    + '<span class="text-xs font-black text-indigo-600 uppercase tracking-wider">ประวัติการนับ — ' + (r.sku||'') + '</span>'
+                    + '</div>'
+                    + '<div id="cyc-hist-body-' + i + '" class="p-3 text-center text-slate-300 text-xs">'
+                    + '<i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลด...'
+                    + '</div>'
+                    + '</div>'
+                    + '</td>'
+                    + '</tr>';
+
+                return mainRow + histRow;
             });
             tbody.innerHTML = rows.join('');
         } else {
@@ -8077,6 +8107,113 @@ let blockingChartInstance = null;
     window.invSemiMarkFilled = function(rowIdx) {
         invUpdateCycleKPI();
     };
+
+    // ── Toggle history sub-row ────────────────────────────────────────────────
+    window.invToggleCycleHistory = function(sku, idx) {
+        const histRow  = document.getElementById('cyc-hist-' + idx);
+        const histBody = document.getElementById('cyc-hist-body-' + idx);
+        const icon     = document.getElementById('cyc-hist-icon-' + idx);
+        if (!histRow) return;
+
+        const isOpen = !histRow.classList.contains('hidden');
+        if (isOpen) {
+            // ปิด
+            histRow.classList.add('hidden');
+            if (icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
+            return;
+        }
+
+        // เปิด
+        histRow.classList.remove('hidden');
+        if (icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
+
+        // โหลดข้อมูลเฉพาะครั้งแรก (ถ้ายังไม่ได้โหลด)
+        if (histBody && histBody.dataset.loaded !== 'true') {
+            histBody.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลด...';
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    if (!histBody) return;
+                    if (!res.success) {
+                        histBody.innerHTML = '<span class="text-red-400">❌ ' + (res.message||'เกิดข้อผิดพลาด') + '</span>';
+                        return;
+                    }
+                    histBody.dataset.loaded = 'true';
+                    histBody.innerHTML = _invBuildCycleHistoryTable(res.history || []);
+                })
+                .withFailureHandler(function(err) {
+                    if (histBody) histBody.innerHTML = '<span class="text-red-400">❌ ' + err.message + '</span>';
+                })
+                .getSKUCountHistory(sku);
+        }
+    };
+
+    // ── สร้าง HTML ตารางประวัติการนับ ────────────────────────────────────────
+    function _invBuildCycleHistoryTable(history) {
+        if (!history || history.length === 0) {
+            return '<div class="py-4 text-slate-300 text-center text-xs font-bold">ยังไม่มีประวัติการนับ</div>';
+        }
+        // เรียงจากใหม่ไปเก่า
+        const sorted = [...history].sort((a, b) => (b.cycleDate||'') > (a.cycleDate||'') ? 1 : -1);
+        const rows = sorted.map(function(h) {
+            const isCycle   = h.source === 'CYCLE';
+            const isRecheck = h.source === 'RECHECK';
+            const diff = h.diff || 0;
+            const diffHtml = diff === 0
+                ? '<span class="text-emerald-600 font-black">0</span>'
+                : diff > 0
+                    ? '<span class="text-blue-600 font-black">+' + diff + '</span>'
+                    : '<span class="text-red-600 font-black">' + diff + '</span>';
+            const srcBadge = isCycle
+                ? '<span class="px-1.5 py-0.5 text-[9px] font-black bg-teal-100 text-teal-700 rounded-md">นับ</span>'
+                : '<span class="px-1.5 py-0.5 text-[9px] font-black bg-blue-100 text-blue-700 rounded-md">RC</span>';
+            const actionBadge = isRecheck && h.action
+                ? (h.action === 'ACCEPTED'
+                    ? '<span class="px-1.5 py-0.5 text-[9px] font-black bg-emerald-100 text-emerald-700 rounded-md">Accept</span>'
+                    : '<span class="px-1.5 py-0.5 text-[9px] font-black bg-amber-100 text-amber-700 rounded-md">นับใหม่</span>')
+                : '';
+            // pile/scrap/hold (เฉพาะ CYCLE)
+            const p1html = isCycle ? (h.pile1||0) : '-';
+            const p2html = isCycle ? (h.pile2||0) : '-';
+            const s1html = isCycle ? (h.scrap1||0) : '-';
+            const s2html = isCycle ? (h.scrap2||0) : '-';
+            const hldHtml = isCycle ? (h.hold||0) : '-';
+            return '<tr class="border-b border-slate-100 hover:bg-indigo-50/30">'
+                + '<td class="px-3 py-2 text-center">' + srcBadge + '</td>'
+                + '<td class="px-3 py-2 text-xs font-bold text-slate-600 whitespace-nowrap">' + (h.cycleDate||'-') + '</td>'
+                + '<td class="px-2 py-2 text-xs text-center font-bold text-slate-500">' + p1html + '</td>'
+                + '<td class="px-2 py-2 text-xs text-center font-bold text-slate-500">' + p2html + '</td>'
+                + '<td class="px-2 py-2 text-xs text-center font-bold text-purple-600">' + s1html + '</td>'
+                + '<td class="px-2 py-2 text-xs text-center font-bold text-purple-600">' + s2html + '</td>'
+                + '<td class="px-2 py-2 text-xs text-center font-bold text-rose-600">' + hldHtml + '</td>'
+                + '<td class="px-3 py-2 text-xs text-right font-black text-teal-700">' + (h.actualQty||0).toLocaleString() + '</td>'
+                + '<td class="px-3 py-2 text-xs text-right font-bold text-amber-700">' + (h.systemQty||0).toLocaleString() + '</td>'
+                + '<td class="px-3 py-2 text-right">' + diffHtml + '</td>'
+                + '<td class="px-3 py-2 text-center">' + actionBadge + '</td>'
+                + '<td class="px-3 py-2 text-xs text-slate-400 max-w-[120px] truncate">' + (h.note||'') + '</td>'
+                + '</tr>';
+        });
+        return '<div class="overflow-x-auto">'
+            + '<table class="w-full text-xs" style="min-width:700px;">'
+            + '<thead class="bg-slate-800 text-slate-300 text-[9px] font-black uppercase tracking-wider">'
+            + '<tr>'
+            + '<th class="px-3 py-2 text-center w-10">ที่มา</th>'
+            + '<th class="px-3 py-2 text-left">วันที่นับ</th>'
+            + '<th class="px-2 py-2 text-center bg-blue-900 w-14">มัดนับ1</th>'
+            + '<th class="px-2 py-2 text-center bg-blue-800 w-14">มัดนับ2</th>'
+            + '<th class="px-2 py-2 text-center bg-purple-900 w-14">Pcs.1</th>'
+            + '<th class="px-2 py-2 text-center bg-purple-800 w-14">Pcs.2</th>'
+            + '<th class="px-2 py-2 text-center bg-rose-900 w-14">Hold</th>'
+            + '<th class="px-3 py-2 text-right bg-teal-900 w-20">นับจริง</th>'
+            + '<th class="px-3 py-2 text-right bg-amber-900 w-20">ระบบ</th>'
+            + '<th class="px-3 py-2 text-right w-16">Diff</th>'
+            + '<th class="px-3 py-2 text-center w-16">Action</th>'
+            + '<th class="px-3 py-2 text-left">หมายเหตุ</th>'
+            + '</tr>'
+            + '</thead>'
+            + '<tbody class="divide-y divide-slate-50">' + rows.join('') + '</tbody>'
+            + '</table>'
+            + '</div>';
+    }
 
     window.invPrintCycleForm = function() {
         // ถ้ายังไม่มีข้อมูล ให้ดึงวันที่ล่าสุดจาก sheet แล้ว load ก่อนพิมพ์
