@@ -2649,11 +2649,12 @@ function importInventoryData(rows, dataType) {
     
     // Map dataType → ชื่อชีตปลายทาง
     const sheetMap = {
-      'counting':        'Counting',
-      'onhand_fg':       'ON-HAND FG',
-      'onhand_semi':     'ON-HAND SEMI',
-      'transection_fg':  'Transection FG',
-      'transection_semi':'Transection SEMI'
+      'counting':             'Counting',
+      'onhand_fg':            'ON-HAND FG',
+      'onhand_semi':          'ON-HAND SEMI',
+      'transection_fg':       'Transection FG',
+      'transection_semi':     'Transection SEMI',
+      'inventory_blocking':   'Overdue Reservations'
     };
 
     const targetSheetName = sheetMap[dataType];
@@ -3217,6 +3218,37 @@ function getFGDashboardSummary() {
       }
     }
 
+    // ─── 4c. Transection FG: Production / Sales order / Transfer per SKU ────────
+    // อ่าน Transection FG → group by SKU ตาม import date ล่าสุด (col T, index 19)
+    // Col E(4)=SKU, Col G(6)=Reference, Col H(7)=CW quantity
+    const movMap = {}; // sku → { production, salesOrder, transfer }
+    const txFgSheet = ss.getSheetByName('Transection FG');
+    if (txFgSheet && txFgSheet.getLastRow() >= 2) {
+      const txData = txFgSheet.getRange(2, 1, txFgSheet.getLastRow()-1, 20).getValues();
+      // หา latest import date (col T = index 19)
+      let latestImportDate = '';
+      for (let i = 0; i < txData.length; i++) {
+        const d = String(txData[i][19] || '').trim();
+        if (d && d > latestImportDate) latestImportDate = d;
+      }
+      // sum movement per SKU ตาม import date ล่าสุด
+      if (latestImportDate) {
+        for (let i = 0; i < txData.length; i++) {
+          const row = txData[i];
+          if (String(row[19]||'').trim() !== latestImportDate) continue;
+          const sku   = String(row[4]||'').trim(); // col E = Item number
+          const ref   = String(row[6]||'').trim(); // col G = Reference
+          const cwQty = parseFloat(row[7]) || 0;   // col H = CW quantity
+          if (!sku) continue;
+          if (!movMap[sku]) movMap[sku] = { production: 0, salesOrder: 0, transfer: 0 };
+          const refL = ref.toLowerCase();
+          if      (refL === 'production')              movMap[sku].production += cwQty;
+          else if (refL === 'sales order')             movMap[sku].salesOrder += cwQty;
+          else if (refL.includes('transfer'))          movMap[sku].transfer   += cwQty;
+        }
+      }
+    }
+
     // ─── 5. รวม SKU ทั้งหมด: Counting + Daily Cycle (ของมีจริงแต่ระบบไม่มี) ──
     // union ของ SKU จากทั้งสองแหล่ง
     const allSkus = new Set([
@@ -3275,6 +3307,7 @@ function getFGDashboardSummary() {
       else                              kpiNoCycleCount++;
 
       const rc = recheckMap[sku] || null;
+      const mv = movMap[sku]    || null;
       rows.push({
         sku, name, systemQty, totalWeightKg, wPerLine,
         cycleDateStr, actualQty, diffQty, matchStatus,
@@ -3282,7 +3315,10 @@ function getFGDashboardSummary() {
         noSystem:     !sm,
         recheckAction: rc ? rc.action    : '',
         recheckNote:   rc ? rc.note      : '',
-        recheckTs:     rc ? rc.timestamp : ''
+        recheckTs:     rc ? rc.timestamp : '',
+        production: mv ? Math.round(mv.production) : 0,
+        salesOrder: mv ? Math.round(mv.salesOrder) : 0,
+        transfer:   mv ? Math.round(mv.transfer)   : 0
       });
     });
 

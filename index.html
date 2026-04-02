@@ -821,8 +821,8 @@ thead.sticky {
     <!-- ====== SUB-TAB: นำเข้าข้อมูล (Import) ====== -->
     <div id="inv-sub-import" class="space-y-6">
 
-      <!-- 5 Import Type Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <!-- 6 Import Type Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
 
         <div id="inv-import-card-counting"
              class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-teal-400 hover:bg-teal-50"
@@ -902,6 +902,22 @@ thead.sticky {
           </div>
           <p class="text-xs text-slate-600 font-bold leading-relaxed">การเคลื่อนไหว SEMI • ใช้สร้างใบตรวจนับ SEMI</p>
           <p id="inv-import-lastdate-transection_semi" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
+        </div>
+
+        <div id="inv-import-card-inventory_blocking"
+             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-red-400 hover:bg-red-50"
+             onclick="invSelectImport('inventory_blocking')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-red-700 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
+              <i class="fas fa-ban"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="font-black text-red-700 text-xs uppercase tracking-wider truncate">INV BLOCKING</p>
+              <p class="text-[10px] text-red-500 font-bold">ชีต: Overdue Reservations</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 font-bold leading-relaxed">รายการ Inventory Blocking จาก D365 • Lock stock</p>
+          <p id="inv-import-lastdate-inventory_blocking" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
         </div>
 
       </div>
@@ -1357,6 +1373,9 @@ thead.sticky {
             <th class="px-4 py-4 text-left">SKU / ชื่อสินค้า</th>
             <th class="px-4 py-4 text-right bg-blue-900">ยอดระบบ<br><span class="text-blue-300 text-[9px] normal-case font-normal">(เส้น)</span></th>
             <th class="px-4 py-4 text-right bg-blue-900">น้ำหนักรวม<br><span class="text-blue-300 text-[9px] normal-case font-normal">(kg)</span></th>
+            <th class="px-4 py-4 text-right bg-green-900">ผลิต<br><span class="text-green-300 text-[9px] normal-case font-normal">+Production</span></th>
+            <th class="px-4 py-4 text-right bg-orange-900">จำหน่าย<br><span class="text-orange-300 text-[9px] normal-case font-normal">Sales order</span></th>
+            <th class="px-4 py-4 text-right bg-violet-900">โอน<br><span class="text-violet-300 text-[9px] normal-case font-normal">Transfer</span></th>
             <th class="px-4 py-4 text-center bg-teal-900">นับล่าสุด</th>
             <th class="px-4 py-4 text-right bg-teal-900">นับจริง<br><span class="text-teal-300 text-[9px] normal-case font-normal">(เส้น)</span></th>
             <th class="px-4 py-4 text-right bg-teal-900">Diff<br><span class="text-teal-300 text-[9px] normal-case font-normal">(นับจริง−ระบบ)</span></th>
@@ -4068,7 +4087,7 @@ thead.sticky {
         <i class="fas fa-eraser"></i> ล้างทั้งหมด
       </button>
       <div class="text-xs text-slate-400 font-bold flex-1">
-        💡 ถ้าไม่กรอกยอดใหม่ = Accept Diff เดิม &nbsp;|&nbsp; กรอกยอดใหม่ = นับใหม่ (Re-Count)
+        💡 ไม่กรอก = Accept Diff &nbsp;|&nbsp; กรอกตัวเลข หรือ <span class="font-mono text-indigo-500">57+43</span> = นับใหม่ (ระบบคำนวณให้)
       </div>
     </div>
 
@@ -4082,7 +4101,7 @@ thead.sticky {
             <th class="px-4 py-3 text-right text-[11px] font-black text-blue-500 uppercase">System</th>
             <th class="px-4 py-3 text-right text-[11px] font-black text-teal-500 uppercase">นับเดิม</th>
             <th class="px-4 py-3 text-right text-[11px] font-black text-amber-600 uppercase">Diff</th>
-            <th class="px-4 py-3 text-center text-[11px] font-black text-indigo-500 uppercase w-32">ยอดนับใหม่</th>
+            <th class="px-4 py-3 text-center text-[11px] font-black text-indigo-500 uppercase w-44">ยอดนับใหม่ <span class="text-indigo-300 normal-case font-bold">(57+43 ได้)</span></th>
             <th class="px-4 py-3 text-left text-[11px] font-black text-slate-500 uppercase">หมายเหตุ</th>
           </tr>
         </thead>
@@ -4167,9 +4186,13 @@ thead.sticky {
       <div id="rcm-recount-fields" class="hidden mb-4">
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs font-black text-slate-500 uppercase tracking-wide">ยอดนับใหม่ (เส้น)</label>
-            <input type="number" id="rcm-new-qty" min="0" placeholder="0"
-              class="mt-1 w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 font-black text-xl text-center focus:border-amber-400 focus:outline-none transition-colors">
+            <label class="text-xs font-black text-slate-500 uppercase tracking-wide">
+              ยอดนับใหม่ <span class="text-indigo-400 font-bold normal-case">(พิมพ์ 57+43 ได้)</span>
+            </label>
+            <input type="text" id="rcm-new-qty" placeholder="เช่น 57+43 หรือ 100"
+              oninput="_rcmUpdateExpr()"
+              class="mt-1 w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 font-black text-lg text-center focus:border-amber-400 focus:outline-none transition-colors font-mono">
+            <div id="rcm-expr-result" class="mt-1 text-center text-xs font-black text-amber-600 min-h-[16px]"></div>
           </div>
           <div>
             <label class="text-xs font-black text-slate-500 uppercase tracking-wide">เวลาที่นับ</label>
@@ -7347,11 +7370,12 @@ let blockingChartInstance = null;
     // ============================================================
 
     var INV_IMPORT_CONFIG = {
-        counting:        { label: 'COUNTING',         sheet: 'Counting',       color: 'teal',   icon: 'fa-database',     desc: 'ยอดสต๊อกจาก D365 • เทียบสต๊อก + Dashboard' },
-        onhand_fg:       { label: 'ON-HAND FG',       sheet: 'ON-HAND FG',     color: 'blue',   icon: 'fa-boxes',        desc: 'สต๊อก FG • จอง + คงเหลือ' },
-        onhand_semi:     { label: 'ON-HAND SEMI',     sheet: 'ON-HAND SEMI',   color: 'purple', icon: 'fa-film',         desc: 'สต๊อก SEMI • ระดับ Batch + Serial' },
-        transection_fg:  { label: 'TRANSACTION FG',   sheet: 'Transection FG', color: 'orange', icon: 'fa-exchange-alt', desc: 'การเคลื่อนไหว FG • ใช้สร้างใบตรวจนับ' },
-        transection_semi:{ label: 'TRANSACTION SEMI', sheet: 'Transection SEMI',color: 'rose',  icon: 'fa-retweet',      desc: 'การเคลื่อนไหว SEMI • ใช้สร้างใบตรวจนับ SEMI' }
+        counting:           { label: 'COUNTING',         sheet: 'Counting',             color: 'teal',   icon: 'fa-database',     desc: 'ยอดสต๊อกจาก D365 • เทียบสต๊อก + Dashboard' },
+        onhand_fg:          { label: 'ON-HAND FG',       sheet: 'ON-HAND FG',           color: 'blue',   icon: 'fa-boxes',        desc: 'สต๊อก FG • จอง + คงเหลือ' },
+        onhand_semi:        { label: 'ON-HAND SEMI',     sheet: 'ON-HAND SEMI',         color: 'purple', icon: 'fa-film',         desc: 'สต๊อก SEMI • ระดับ Batch + Serial' },
+        transection_fg:     { label: 'TRANSACTION FG',   sheet: 'Transection FG',       color: 'orange', icon: 'fa-exchange-alt', desc: 'การเคลื่อนไหว FG • ใช้สร้างใบตรวจนับ' },
+        transection_semi:   { label: 'TRANSACTION SEMI', sheet: 'Transection SEMI',     color: 'rose',   icon: 'fa-retweet',      desc: 'การเคลื่อนไหว SEMI • ใช้สร้างใบตรวจนับ SEMI' },
+        inventory_blocking: { label: 'INV BLOCKING',     sheet: 'Overdue Reservations', color: 'red',    icon: 'fa-ban',          desc: 'รายการ Inventory Blocking จาก D365' }
     };
     var invCurrentImportType = null;
     var invImportBuffer = null;
@@ -7373,18 +7397,19 @@ let blockingChartInstance = null;
             const card = document.getElementById('inv-import-card-' + k);
             if (!card) return;
             card.classList.remove('border-teal-400','bg-teal-50','border-blue-400','bg-blue-50',
-                'border-purple-400','bg-purple-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50');
+                'border-purple-400','bg-purple-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50',
+                'border-red-400','bg-red-50');
             card.classList.add('border-slate-200','bg-white');
         });
         const selCard = document.getElementById('inv-import-card-' + type);
-        const colorBorder = { teal:'border-teal-400', blue:'border-blue-400', purple:'border-purple-400', orange:'border-orange-400', rose:'border-rose-400' }[cfg.color] || 'border-teal-400';
-        const colorBg    = { teal:'bg-teal-50',    blue:'bg-blue-50',    purple:'bg-purple-50',    orange:'bg-orange-50',    rose:'bg-rose-50'    }[cfg.color] || 'bg-teal-50';
+        const colorBorder = { teal:'border-teal-400', blue:'border-blue-400', purple:'border-purple-400', orange:'border-orange-400', rose:'border-rose-400', red:'border-red-400' }[cfg.color] || 'border-teal-400';
+        const colorBg    = { teal:'bg-teal-50',    blue:'bg-blue-50',    purple:'bg-purple-50',    orange:'bg-orange-50',    rose:'bg-rose-50',    red:'bg-red-50'    }[cfg.color] || 'bg-teal-50';
         if (selCard) { selCard.classList.remove('border-slate-200','bg-white'); selCard.classList.add(colorBorder, colorBg); }
         // Show upload panel
         const panel = document.getElementById('inv-upload-panel');
         if (panel) panel.classList.remove('hidden');
         const icon = document.getElementById('inv-upload-icon');
-        const colorBgSolid = { teal:'bg-teal-600', blue:'bg-blue-600', purple:'bg-purple-600', orange:'bg-orange-600', rose:'bg-rose-600' }[cfg.color] || 'bg-teal-600';
+        const colorBgSolid = { teal:'bg-teal-600', blue:'bg-blue-600', purple:'bg-purple-600', orange:'bg-orange-600', rose:'bg-rose-600', red:'bg-red-700' }[cfg.color] || 'bg-teal-600';
         if (icon) { icon.className = 'w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg ' + colorBgSolid; icon.innerHTML = '<i class="fas ' + cfg.icon + '"></i>'; }
         const titleEl = document.getElementById('inv-upload-title');
         const descEl  = document.getElementById('inv-upload-desc');
@@ -7410,7 +7435,7 @@ let blockingChartInstance = null;
         // Deselect all cards
         Object.keys(INV_IMPORT_CONFIG).forEach(k => {
             const card = document.getElementById('inv-import-card-' + k);
-            if (card) { card.classList.remove('border-teal-400','bg-teal-50','border-blue-400','bg-blue-50','border-purple-400','bg-purple-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50'); card.classList.add('border-slate-200','bg-white'); }
+            if (card) { card.classList.remove('border-teal-400','bg-teal-50','border-blue-400','bg-blue-50','border-purple-400','bg-purple-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50','border-red-400','bg-red-50'); card.classList.add('border-slate-200','bg-white'); }
         });
     };
 
@@ -9844,7 +9869,7 @@ window.submitEditSemi = function submitEditSemi() {
         const tbody = document.getElementById('fg-dash-tbody');
         if (!tbody) return;
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="12" class="text-center py-16 text-slate-300 font-bold text-lg">ไม่พบข้อมูล</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="15" class="text-center py-16 text-slate-300 font-bold text-lg">ไม่พบข้อมูล</td></tr>`;
             return;
         }
         const badgeMap = {
@@ -9911,6 +9936,20 @@ window.submitEditSemi = function submitEditSemi() {
             // row highlight
             const rowBg = r.noSystem ? 'bg-red-50' : (blockLines > 0 ? 'bg-rose-50/20' : (i % 2 === 0 ? '' : 'bg-slate-50/40'));
 
+            // Movement cells (Production / Sales order / Transfer)
+            const prodQty = r.production || 0;
+            const soQty   = r.salesOrder  || 0;
+            const trQty   = r.transfer    || 0;
+            const prodCell = prodQty !== 0
+                ? `<span class="text-green-600 font-black">+${fmtN(prodQty)}</span>`
+                : `<span class="text-slate-200 text-xs">-</span>`;
+            const soCell = soQty !== 0
+                ? `<span class="text-orange-600 font-black">${fmtN(soQty)}</span>`
+                : `<span class="text-slate-200 text-xs">-</span>`;
+            const trCell = trQty !== 0
+                ? `<span class="text-violet-600 font-black">${fmtN(trQty)}</span>`
+                : `<span class="text-slate-200 text-xs">-</span>`;
+
             const mainRow = `
             <tr class="hover:bg-slate-50 transition-colors ${rowBg}" id="fgr-${skuAttr}">
                 <td class="px-2 py-3 text-center text-slate-400 text-xs font-bold">${expandBtn}</td>
@@ -9924,6 +9963,9 @@ window.submitEditSemi = function submitEditSemi() {
                 </td>
                 <td class="px-4 py-3 text-right font-black text-blue-700 bg-blue-50/40">${r.noSystem ? '<span class="text-red-400 font-black">-</span>' : fmtN(r.systemQty)}</td>
                 <td class="px-4 py-3 text-right font-bold text-indigo-600 bg-blue-50/40">${r.noSystem ? '<span class="text-slate-300">-</span>' : fmtN(r.totalWeightKg)}</td>
+                <td class="px-4 py-3 text-right bg-green-50/40">${prodCell}</td>
+                <td class="px-4 py-3 text-right bg-orange-50/40">${soCell}</td>
+                <td class="px-4 py-3 text-right bg-violet-50/40">${trCell}</td>
                 <td class="px-4 py-3 text-center text-slate-500 text-xs font-bold bg-teal-50/30">${r.cycleDateStr||'-'}</td>
                 <td class="px-4 py-3 text-right font-bold text-teal-700 bg-teal-50/30">${(r.actualQty !== null && r.actualQty !== undefined) ? fmtN(r.actualQty) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-4 py-3 text-right bg-teal-50/30">${diffCell}</td>
@@ -9936,7 +9978,7 @@ window.submitEditSemi = function submitEditSemi() {
             // Expandable history row (hidden by default)
             const histRow = `
             <tr id="fgh-${skuAttr}" class="hidden">
-                <td colspan="11" class="px-6 pb-4 pt-0 bg-indigo-50/50">
+                <td colspan="14" class="px-6 pb-4 pt-0 bg-indigo-50/50">
                     <div class="rounded-2xl border border-indigo-100 bg-white overflow-hidden">
                         <div class="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100">
                             <i class="fas fa-history text-indigo-400 text-xs"></i>
