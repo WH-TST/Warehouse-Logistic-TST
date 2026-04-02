@@ -1342,6 +1342,11 @@ thead.sticky {
       <option value="no_block">ไม่มีงานกักกัน</option>
     </select>
     <div class="text-sm font-black text-slate-400">แสดง <span id="fg-dash-count" class="text-slate-700">0</span> รายการ</div>
+    <button onclick="openBulkRecheck()" id="btn-bulk-recheck"
+      class="bg-rose-500 hover:bg-rose-400 text-white font-black text-sm px-5 py-3 rounded-xl transition-all flex items-center gap-2 shadow">
+      <i class="fas fa-redo-alt"></i> Re-Check ทั้งหมดที่ DIFF
+      <span id="btn-bulk-recheck-count" class="bg-white/30 text-white text-xs font-black px-2 py-0.5 rounded-full"></span>
+    </button>
   </div>
   <div id="fg-dash-table-wrap" class="hidden bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
     <div class="overflow-x-auto">
@@ -4026,6 +4031,80 @@ thead.sticky {
         class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold transition-colors">
         ยืนยัน
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: FG Bulk Re-Check                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="bulk-recheck-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[510] flex items-center justify-center backdrop-blur-sm p-4">
+  <div class="bg-white rounded-3xl shadow-2xl w-full flex flex-col" style="max-width:900px; max-height:92vh;">
+
+    <!-- Header -->
+    <div class="bg-rose-500 rounded-t-3xl px-6 py-4 flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-redo-alt text-white text-xl"></i>
+        <div>
+          <div class="text-white font-black text-lg">Re-Check ทั้งหมด</div>
+          <div class="text-rose-100 text-xs font-bold mt-0.5">
+            รายการที่มี DIFF — <span id="brm-count" class="font-black text-white">0</span> รายการ
+          </div>
+        </div>
+      </div>
+      <button onclick="closeBulkRecheck()" class="w-9 h-9 bg-rose-600 hover:bg-rose-700 rounded-xl text-white flex items-center justify-center transition-colors flex-shrink-0">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="px-6 py-3 border-b border-slate-100 flex items-center gap-3 flex-shrink-0 flex-wrap bg-slate-50/80">
+      <button onclick="bulkAcceptAll()"
+        class="bg-emerald-500 hover:bg-emerald-400 text-white font-black text-sm px-5 py-2.5 rounded-xl transition-all flex items-center gap-2">
+        <i class="fas fa-check-double"></i> Accept ทั้งหมด
+      </button>
+      <button onclick="bulkClearAll()"
+        class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-black text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-2">
+        <i class="fas fa-eraser"></i> ล้างทั้งหมด
+      </button>
+      <div class="text-xs text-slate-400 font-bold flex-1">
+        💡 ถ้าไม่กรอกยอดใหม่ = Accept Diff เดิม &nbsp;|&nbsp; กรอกยอดใหม่ = นับใหม่ (Re-Count)
+      </div>
+    </div>
+
+    <!-- Table (scrollable) -->
+    <div class="overflow-y-auto flex-1">
+      <table class="w-full text-sm">
+        <thead class="sticky top-0 z-10">
+          <tr class="bg-slate-100 border-b-2 border-slate-200">
+            <th class="px-3 py-3 text-left text-[11px] font-black text-slate-500 uppercase w-8">#</th>
+            <th class="px-4 py-3 text-left text-[11px] font-black text-slate-500 uppercase">SKU / ชื่อสินค้า</th>
+            <th class="px-4 py-3 text-right text-[11px] font-black text-blue-500 uppercase">System</th>
+            <th class="px-4 py-3 text-right text-[11px] font-black text-teal-500 uppercase">นับเดิม</th>
+            <th class="px-4 py-3 text-right text-[11px] font-black text-amber-600 uppercase">Diff</th>
+            <th class="px-4 py-3 text-center text-[11px] font-black text-indigo-500 uppercase w-32">ยอดนับใหม่</th>
+            <th class="px-4 py-3 text-left text-[11px] font-black text-slate-500 uppercase">หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody id="brm-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between flex-shrink-0 bg-slate-50/60 rounded-b-3xl">
+      <div class="text-xs text-slate-400 font-bold">
+        <span id="brm-summary-text">—</span>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="closeBulkRecheck()"
+          class="px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-600 font-black text-sm transition-all">
+          ยกเลิก
+        </button>
+        <button id="brm-submit-btn" onclick="bulkSubmit()"
+          class="px-8 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-black text-sm transition-all flex items-center gap-2 shadow">
+          <i class="fas fa-save"></i> บันทึกทั้งหมด
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -9752,6 +9831,13 @@ window.submitEditSemi = function submitEditSemi() {
         const countEl = document.getElementById('fg-dash-count');
         if (countEl) countEl.textContent = filtered.length;
         renderFGTable(filtered);
+        // อัปเดต badge DIFF บนปุ่ม Bulk Re-Check
+        const diffCount = (fgDashData||[]).filter(r => {
+            const s = r.noSystem ? 'NO_SYSTEM' : (r.matchStatus||'NO_CYCLE');
+            return s === 'DIFF';
+        }).length;
+        const badge = document.getElementById('btn-bulk-recheck-count');
+        if (badge) badge.textContent = diffCount || '';
     }
 
     function renderFGTable(rows) {
@@ -9866,6 +9952,142 @@ window.submitEditSemi = function submitEditSemi() {
             return mainRow + histRow;
         }).join('');
     }
+
+// ════════════════════════════════════════════════════════════════════════════
+// BULK RE-CHECK
+// ════════════════════════════════════════════════════════════════════════════
+
+window.openBulkRecheck = function openBulkRecheck() {
+    const diffRows = (fgDashData || []).filter(r => {
+        const s = r.noSystem ? 'NO_SYSTEM' : (r.matchStatus || 'NO_CYCLE');
+        return s === 'DIFF';
+    });
+    if (!diffRows.length) { showToast('ไม่มีรายการที่ DIFF ในขณะนี้', true); return; }
+
+    safeSetText('brm-count', diffRows.length);
+    _updateBulkSummary();
+
+    // render ตาราง
+    const tbody = document.getElementById('brm-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = diffRows.map((r, i) => {
+        const diff  = r.diffQty;
+        const diffHtml = diff === null || diff === undefined ? '-'
+            : diff > 0 ? `<span class="text-blue-600 font-black">+${Number(diff).toLocaleString()}</span>`
+            : diff < 0 ? `<span class="text-red-600 font-black">${Number(diff).toLocaleString()}</span>`
+            : `<span class="text-emerald-600 font-black">0</span>`;
+        const rowBg = i % 2 === 0 ? '' : 'bg-slate-50/60';
+        const skuSafe = (r.sku||'').replace(/[^a-zA-Z0-9\-]/g,'_');
+        return `
+        <tr class="${rowBg} border-b border-slate-50" id="brm-row-${skuSafe}">
+            <td class="px-3 py-3 text-slate-400 text-xs font-bold text-center">${i+1}</td>
+            <td class="px-4 py-3">
+                <div class="font-black text-slate-800 text-sm">${r.name||'-'}</div>
+                <div class="font-mono text-xs text-indigo-500 font-bold mt-0.5">SKU: ${r.sku||'-'}</div>
+                <input type="hidden" class="brm-sku"      value="${(r.sku||'').replace(/"/g,'&quot;')}">
+                <input type="hidden" class="brm-name"     value="${(r.name||'').replace(/"/g,'&quot;')}">
+                <input type="hidden" class="brm-system"   value="${r.systemQty||0}">
+                <input type="hidden" class="brm-actual"   value="${r.actualQty!==null&&r.actualQty!==undefined?r.actualQty:''}">
+                <input type="hidden" class="brm-cycledate" value="${r.cycleDateStr||''}">
+            </td>
+            <td class="px-4 py-3 text-right font-black text-blue-700">${Number(r.systemQty||0).toLocaleString()}</td>
+            <td class="px-4 py-3 text-right font-bold text-teal-700">${r.actualQty!==null&&r.actualQty!==undefined ? Number(r.actualQty).toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
+            <td class="px-4 py-3 text-right">${diffHtml}</td>
+            <td class="px-4 py-3 text-center">
+                <input type="number" min="0" placeholder="ไม่กรอก = Accept"
+                    class="brm-newqty w-28 border-2 border-slate-200 rounded-xl px-2 py-1.5 text-sm font-black text-center focus:border-amber-400 focus:outline-none transition-colors"
+                    oninput="_updateBulkSummary()">
+            </td>
+            <td class="px-4 py-3">
+                <input type="text" placeholder="หมายเหตุ (ไม่บังคับ)"
+                    class="brm-note w-full border-2 border-slate-100 rounded-xl px-3 py-1.5 text-xs text-slate-600 focus:border-amber-400 focus:outline-none transition-colors bg-slate-50">
+            </td>
+        </tr>`;
+    }).join('');
+
+    _updateBulkSummary();
+    const modal = document.getElementById('bulk-recheck-modal');
+    if (modal) modal.classList.remove('hidden');
+};
+
+window.closeBulkRecheck = function closeBulkRecheck() {
+    const modal = document.getElementById('bulk-recheck-modal');
+    if (modal) modal.classList.add('hidden');
+};
+
+window.bulkAcceptAll = function bulkAcceptAll() {
+    // ล้างทุก input ยอดใหม่ → ทุกรายการจะเป็น ACCEPTED
+    document.querySelectorAll('#brm-tbody .brm-newqty').forEach(el => { el.value = ''; });
+    _updateBulkSummary();
+    showToast('ตั้งค่าทุกรายการเป็น Accept Diff แล้ว — กด "บันทึกทั้งหมด" เพื่อยืนยัน');
+};
+
+window.bulkClearAll = function bulkClearAll() {
+    document.querySelectorAll('#brm-tbody .brm-newqty').forEach(el => { el.value = ''; });
+    document.querySelectorAll('#brm-tbody .brm-note').forEach(el => { el.value = ''; });
+    _updateBulkSummary();
+};
+
+function _updateBulkSummary() {
+    const rows     = document.querySelectorAll('#brm-tbody tr[id^="brm-row-"]');
+    const total    = rows.length;
+    const recount  = document.querySelectorAll('#brm-tbody .brm-newqty').length
+                     ? [...document.querySelectorAll('#brm-tbody .brm-newqty')].filter(el => el.value.trim() !== '').length : 0;
+    const accept   = total - recount;
+    const summaryEl = document.getElementById('brm-summary-text');
+    if (summaryEl) summaryEl.innerHTML =
+        `รวม <b>${total}</b> รายการ &nbsp;|&nbsp; `+
+        `<span class="text-emerald-600 font-black">✅ Accept ${accept} รายการ</span> &nbsp;|&nbsp; `+
+        `<span class="text-blue-600 font-black">🔢 นับใหม่ ${recount} รายการ</span>`;
+
+    // อัปเดต badge ปุ่มหลัก
+    const countBadge = document.getElementById('btn-bulk-recheck-count');
+    const diffCount  = (fgDashData||[]).filter(r => {
+        const s = r.noSystem ? 'NO_SYSTEM' : (r.matchStatus||'NO_CYCLE');
+        return s === 'DIFF';
+    }).length;
+    if (countBadge) countBadge.textContent = diffCount || '';
+}
+
+window.bulkSubmit = function bulkSubmit() {
+    const submitBtn = document.getElementById('brm-submit-btn');
+    const rows = [...document.querySelectorAll('#brm-tbody tr[id^="brm-row-"]')];
+    if (!rows.length) { showToast('ไม่มีข้อมูล', true); return; }
+
+    const paramsArray = rows.map(tr => {
+        const sku       = tr.querySelector('.brm-sku')?.value       || '';
+        const name      = tr.querySelector('.brm-name')?.value      || '';
+        const systemQty = tr.querySelector('.brm-system')?.value    || 0;
+        const actualQty = tr.querySelector('.brm-actual')?.value;
+        const cycleDate = tr.querySelector('.brm-cycledate')?.value  || '';
+        const newQtyRaw = tr.querySelector('.brm-newqty')?.value?.trim() || '';
+        const note      = tr.querySelector('.brm-note')?.value?.trim()   || '';
+        const hasNew    = newQtyRaw !== '';
+        return {
+            sku, name, systemQty, actualQty, cycleDate,
+            action:   hasNew ? 'RECOUNTED' : 'ACCEPTED',
+            newQty:   hasNew ? newQtyRaw   : '',
+            note,
+            countTime: ''
+        };
+    });
+
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...'; }
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกทั้งหมด'; }
+            if (!res || !res.success) { showToast('บันทึกไม่สำเร็จ: ' + (res?.message||''), true); return; }
+            showToast('✅ ' + res.message);
+            closeBulkRecheck();
+            loadFGDashboard();
+        })
+        .withFailureHandler(err => {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกทั้งหมด'; }
+            showToast('เกิดข้อผิดพลาด: ' + err.message, true);
+        })
+        .saveReCheckLogBulk(paramsArray);
+};
 
 // ─── state ของ Re-Check Modal ──────────────────────────────────────────────
 let _rcmState = { sku:'', name:'', systemQty:0, actualQty:null, cycleDateStr:'', tab:'accept' };

@@ -7527,6 +7527,47 @@ function saveReCheckLog(params) {
   }
 }
 
+function saveReCheckLogBulk(paramsArray) {
+  try {
+    if (!paramsArray || !paramsArray.length) return { success: false, message: 'ไม่มีข้อมูล' };
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = _getOrCreateRecheckSheet(ss);
+    var now   = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm:ss');
+
+    var rowsToAppend = paramsArray.map(function(params) {
+      var systemQty = parseFloat(params.systemQty) || 0;
+      var actualQty = parseFloat(params.actualQty) || 0;
+      var newQty    = (params.action === 'RECOUNTED' &&
+                      params.newQty !== '' && params.newQty !== null && params.newQty !== undefined)
+                      ? parseFloat(params.newQty) : '';
+      var diff      = (newQty !== '') ? (newQty - systemQty) : (actualQty - systemQty);
+      return [
+        now,
+        params.cycleDate || '',
+        params.sku       || '',
+        params.name      || '',
+        systemQty,
+        actualQty,
+        newQty,
+        diff,
+        params.action    || '',
+        params.note      || '',
+        params.countTime || ''
+      ];
+    });
+
+    // append ทีเดียว
+    if (rowsToAppend.length) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, 11).setValues(rowsToAppend);
+    }
+
+    _clearCache('fgDashboard');
+    return { success: true, message: 'บันทึกสำเร็จ ' + rowsToAppend.length + ' รายการ' };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
 function getSKUCountHistory(sku) {
   try {
     var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
