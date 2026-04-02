@@ -4031,6 +4031,106 @@ thead.sticky {
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: FG Re-Check                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="recheck-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[500] flex items-center justify-center backdrop-blur-sm p-4">
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col" style="max-height:90vh;">
+
+    <!-- Header -->
+    <div class="bg-amber-500 rounded-t-3xl px-6 py-4 flex items-center justify-between flex-shrink-0">
+      <div>
+        <div class="text-slate-900 font-black text-lg flex items-center gap-2">
+          <i class="fas fa-redo-alt"></i>
+          <span>Re-Check: <span id="rcm-sku" class="font-mono"></span></span>
+        </div>
+        <div class="text-slate-800 text-xs font-bold mt-0.5 truncate max-w-xs" id="rcm-name"></div>
+      </div>
+      <button onclick="closeRecheckModal()" class="w-9 h-9 bg-amber-600 hover:bg-amber-700 rounded-xl text-white flex items-center justify-center transition-colors flex-shrink-0">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Info bar: System / นับล่าสุด / Diff -->
+    <div class="grid grid-cols-3 gap-px bg-slate-100 border-b border-slate-200 flex-shrink-0">
+      <div class="bg-white px-4 py-3 text-center">
+        <div class="text-[10px] text-slate-400 font-black uppercase tracking-wider">System (8 โมง)</div>
+        <div class="text-2xl font-black text-blue-700 mt-1" id="rcm-system">-</div>
+        <div class="text-[10px] text-slate-400">เส้น</div>
+      </div>
+      <div class="bg-white px-4 py-3 text-center">
+        <div class="text-[10px] text-slate-400 font-black uppercase tracking-wider">นับล่าสุด</div>
+        <div class="text-2xl font-black text-teal-700 mt-1" id="rcm-actual">-</div>
+        <div class="text-[10px] text-slate-400">เส้น</div>
+      </div>
+      <div class="bg-white px-4 py-3 text-center">
+        <div class="text-[10px] text-slate-400 font-black uppercase tracking-wider">Diff</div>
+        <div class="text-2xl font-black mt-1" id="rcm-diff">-</div>
+        <div class="text-[10px] text-slate-400">เส้น</div>
+      </div>
+    </div>
+
+    <!-- Body (scrollable) -->
+    <div class="overflow-y-auto flex-1 px-6 pt-5 pb-3">
+
+      <!-- Action tabs -->
+      <div class="flex gap-2 mb-5">
+        <button id="rcm-tab-accept" onclick="rcmSetTab('accept')"
+          class="flex-1 py-2.5 rounded-xl font-black text-sm transition-all">
+          ✅ Accept Diff
+        </button>
+        <button id="rcm-tab-recount" onclick="rcmSetTab('recount')"
+          class="flex-1 py-2.5 rounded-xl font-black text-sm transition-all">
+          🔢 นับใหม่
+        </button>
+      </div>
+
+      <!-- Re-count fields (toggle) -->
+      <div id="rcm-recount-fields" class="hidden mb-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase tracking-wide">ยอดนับใหม่ (เส้น)</label>
+            <input type="number" id="rcm-new-qty" min="0" placeholder="0"
+              class="mt-1 w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 font-black text-xl text-center focus:border-amber-400 focus:outline-none transition-colors">
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase tracking-wide">เวลาที่นับ</label>
+            <input type="time" id="rcm-count-time"
+              class="mt-1 w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 font-bold focus:border-amber-400 focus:outline-none transition-colors">
+          </div>
+        </div>
+      </div>
+
+      <!-- หมายเหตุ -->
+      <div class="mb-4">
+        <label class="text-xs font-black text-slate-500 uppercase tracking-wide">
+          หมายเหตุ <span class="text-slate-300 font-normal normal-case">(ไม่บังคับ)</span>
+        </label>
+        <input type="text" id="rcm-note"
+          placeholder="เช่น ผลิตระหว่างนับ, ส่งมอบระหว่างนับ ..."
+          class="mt-1 w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:border-amber-400 focus:outline-none transition-colors">
+      </div>
+
+      <!-- Submit -->
+      <button id="rcm-submit-btn" onclick="submitRecheck()"
+        class="w-full bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-900 font-black py-3 rounded-xl transition-all mb-6 flex items-center justify-center gap-2 text-sm">
+        <i class="fas fa-save"></i> บันทึก
+      </button>
+
+      <!-- History divider -->
+      <div class="border-t border-slate-100 pt-4 mb-3">
+        <div class="flex items-center gap-2 text-slate-500 font-black text-xs uppercase tracking-wider mb-3">
+          <i class="fas fa-history"></i> ประวัติการนับ (วันนี้)
+        </div>
+        <div id="rcm-history-list">
+          <div class="text-center text-slate-300 text-sm py-4">ไม่มีประวัติ</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
 <!-- MODAL: Audit Log Viewer                                            -->
 <!-- ═══════════════════════════════════════════════════════════════════ -->
 <div id="audit-log-modal" class="fixed inset-0 bg-black/70 hidden z-[9998] flex items-center justify-center p-4">
@@ -9658,7 +9758,7 @@ window.submitEditSemi = function submitEditSemi() {
         const tbody = document.getElementById('fg-dash-tbody');
         if (!tbody) return;
         if (!rows || !rows.length) {
-            tbody.innerHTML = `<tr><td colspan="11" class="text-center py-16 text-slate-300 font-bold text-lg">ไม่พบข้อมูล</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center py-16 text-slate-300 font-bold text-lg">ไม่พบข้อมูล</td></tr>`;
             return;
         }
         const badgeMap = {
@@ -9671,13 +9771,21 @@ window.submitEditSemi = function submitEditSemi() {
             MATCH: '✅ ตรง', DIFF: '⚠️ ไม่ตรง',
             NO_CYCLE: '❓ ยังไม่นับ', NO_SYSTEM: '🚨 ไม่มีในระบบ'
         };
+        const recheckBadgeMap = {
+            ACCEPTED:  'bg-emerald-500 text-white',
+            RECOUNTED: 'bg-blue-500 text-white'
+        };
+        const recheckBadgeLbl = {
+            ACCEPTED:  '✅ Accept',
+            RECOUNTED: '🔢 นับใหม่'
+        };
 
         tbody.innerHTML = rows.map((r, i) => {
             if (!r) return '';
-            const statusKey   = r.noSystem ? 'NO_SYSTEM' : (r.matchStatus || 'NO_CYCLE');
+            const statusKey = r.noSystem ? 'NO_SYSTEM' : (r.matchStatus || 'NO_CYCLE');
             const badge = `<span class="px-3 py-1 rounded-full text-[11px] font-black ${badgeMap[statusKey]||badgeMap.NO_CYCLE}">${badgeLbl[statusKey]||'❓'}</span>`;
 
-            // Diff cell: แสดงสี + เครื่องหมาย
+            // Diff cell
             const diffQty  = r.diffQty;
             const diffCell = (diffQty === null || diffQty === undefined)
                 ? `<span class="text-slate-300">-</span>`
@@ -9687,41 +9795,50 @@ window.submitEditSemi = function submitEditSemi() {
                         ? `<span class="text-blue-600 font-black">+${fmtN(diffQty)}</span>`
                         : `<span class="text-red-600 font-black">${fmtN(diffQty)}</span>`;
 
-            const blockLines  = r.blockLines  || 0;
-            const blockWeight = r.blockWeight || 0;
-            const blockLinesEl = blockLines > 0 ? `<span class="text-rose-600 font-black">${fmtN(blockLines)}</span>` : `<span class="text-slate-300">-</span>`;
+            const blockLines   = r.blockLines  || 0;
+            const blockWeight  = r.blockWeight || 0;
+            const blockLinesEl = blockLines  > 0 ? `<span class="text-rose-600 font-black">${fmtN(blockLines)}</span>` : `<span class="text-slate-300">-</span>`;
             const blockWtEl    = blockWeight > 0 ? `<span class="text-rose-500 font-bold">${fmtN(blockWeight)}</span>` : `<span class="text-slate-300">-</span>`;
 
-            // ✅ ใช้ data-attribute: ป้องกัน SyntaxError จากชื่อสินค้าพิเศษ
-            const needRecheck = r.noSystem || statusKey === 'DIFF' || statusKey === 'NO_CYCLE';
-            const recheckBtn  = needRecheck
-                ? `<button data-recheck-sku="${(r.sku||'').replace(/"/g,'&quot;')}"
-                           data-recheck-name="${(r.name||'').replace(/"/g,'&quot;')}"
-                           class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-black text-[11px] px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 mx-auto">
-                       <i class="fas fa-redo-alt"></i> รีเช็ค
-                   </button>`
-                : `<span class="text-slate-200 text-xs">-</span>`;
+            // Re-Check badge (action ล่าสุด)
+            const rcAction = r.recheckAction || '';
+            const rcBadge  = rcAction
+                ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black ${recheckBadgeMap[rcAction]||'bg-slate-200 text-slate-600'}">${recheckBadgeLbl[rcAction]||rcAction}</span>`
+                : '';
 
-            // row highlight: ไม่มีในระบบ = แดง, มีของกักกัน = ชมพู
+            // Re-Check button
+            const skuAttr  = (r.sku  ||'').replace(/"/g,'&quot;');
+            const nameAttr = (r.name ||'').replace(/"/g,'&quot;');
+            const recheckBtn = `<button data-recheck-sku="${skuAttr}" data-recheck-name="${nameAttr}"
+                class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-black text-[11px] px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 mx-auto">
+                <i class="fas fa-redo-alt"></i> รีเช็ค
+            </button>`;
+
+            // Expand button (ดูประวัติวันก่อน)
+            const expandBtn = `<button onclick="toggleFGHistory('${skuAttr}')"
+                id="fgh-btn-${skuAttr}"
+                class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-600 flex items-center justify-center transition-all mx-auto"
+                title="ดูประวัติการนับ">
+                <i class="fas fa-chevron-down text-[10px]" id="fgh-icon-${skuAttr}"></i>
+            </button>`;
+
+            // row highlight
             const rowBg = r.noSystem ? 'bg-red-50' : (blockLines > 0 ? 'bg-rose-50/20' : (i % 2 === 0 ? '' : 'bg-slate-50/40'));
 
-            return `
-            <tr class="hover:bg-slate-50 transition-colors ${rowBg}">
-                <td class="px-4 py-3 text-center text-slate-400 text-xs font-bold">${i + 1}</td>
+            const mainRow = `
+            <tr class="hover:bg-slate-50 transition-colors ${rowBg}" id="fgr-${skuAttr}">
+                <td class="px-2 py-3 text-center text-slate-400 text-xs font-bold">${expandBtn}</td>
                 <td class="px-4 py-3">
-                    <div class="font-black text-slate-900 text-base leading-tight">
-                      ${r.name || '-'}
-                    </div>
-                    <div class="flex items-center gap-2 mt-1">
-                      <span class="font-mono text-xs font-bold text-indigo-500 uppercase tracking-wide">
-                        SKU: ${r.sku || '-'}
-                      </span>
+                    <div class="font-black text-slate-900 text-sm leading-tight">${r.name || '-'}</div>
+                    <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span class="font-mono text-xs font-bold text-indigo-500 uppercase">SKU: ${r.sku||'-'}</span>
                         ${r.noSystem ? '<span class="text-[9px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-black">UNREGISTERED</span>' : ''}
+                        ${rcBadge}
                     </div>
                 </td>
                 <td class="px-4 py-3 text-right font-black text-blue-700 bg-blue-50/40">${r.noSystem ? '<span class="text-red-400 font-black">-</span>' : fmtN(r.systemQty)}</td>
                 <td class="px-4 py-3 text-right font-bold text-indigo-600 bg-blue-50/40">${r.noSystem ? '<span class="text-slate-300">-</span>' : fmtN(r.totalWeightKg)}</td>
-                <td class="px-4 py-3 text-center text-slate-500 text-xs font-bold bg-teal-50/30">${r.cycleDateStr || '-'}</td>
+                <td class="px-4 py-3 text-center text-slate-500 text-xs font-bold bg-teal-50/30">${r.cycleDateStr||'-'}</td>
                 <td class="px-4 py-3 text-right font-bold text-teal-700 bg-teal-50/30">${(r.actualQty !== null && r.actualQty !== undefined) ? fmtN(r.actualQty) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-4 py-3 text-right bg-teal-50/30">${diffCell}</td>
                 <td class="px-4 py-3 text-center">${badge}</td>
@@ -9729,52 +9846,264 @@ window.submitEditSemi = function submitEditSemi() {
                 <td class="px-4 py-3 text-right bg-rose-50/30">${blockWtEl}</td>
                 <td class="px-4 py-3 text-center bg-amber-50/30">${recheckBtn}</td>
             </tr>`;
+
+            // Expandable history row (hidden by default)
+            const histRow = `
+            <tr id="fgh-${skuAttr}" class="hidden">
+                <td colspan="11" class="px-6 pb-4 pt-0 bg-indigo-50/50">
+                    <div class="rounded-2xl border border-indigo-100 bg-white overflow-hidden">
+                        <div class="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100">
+                            <i class="fas fa-history text-indigo-400 text-xs"></i>
+                            <span class="text-xs font-black text-indigo-600 uppercase tracking-wider">ประวัติการนับ — ${r.sku||''}</span>
+                        </div>
+                        <div id="fgh-body-${skuAttr}" class="p-3 text-center text-slate-300 text-xs">
+                            <i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลด...
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+
+            return mainRow + histRow;
         }).join('');
     }
 
-/**
- * ✅ แก้ไขฟังก์ชันรีเช็ค SKU จาก Dashboard
- */
+// ─── state ของ Re-Check Modal ──────────────────────────────────────────────
+let _rcmState = { sku:'', name:'', systemQty:0, actualQty:null, cycleDateStr:'', tab:'accept' };
+
 function goRecheckSKU(sku, name) {
-    switchView('inventory-control');
-    switchInvSubTab('fg');
-    
-    showToast(`กำลังเตรียมตารางรีเช็คสำหรับ: ${sku}`);
-    const cycleDate = document.getElementById('fg-cycle-date').value;
-    
+    // หาข้อมูลของ SKU นี้จาก fgDashData
+    const row = (fgDashData || []).find(r => r.sku === sku);
+    openRecheckModal(
+        sku,
+        name,
+        row ? row.systemQty   : 0,
+        row ? row.actualQty   : null,
+        row ? row.diffQty     : null,
+        row ? row.cycleDateStr: '-'
+    );
+}
+
+function openRecheckModal(sku, name, systemQty, actualQty, diffQty, cycleDateStr) {
+    _rcmState = { sku, name, systemQty: systemQty||0, actualQty, cycleDateStr: cycleDateStr||'-', tab:'accept' };
+
+    safeSetText('rcm-sku',    sku);
+    safeSetText('rcm-name',   name);
+    safeSetText('rcm-system', systemQty !== null && systemQty !== undefined ? Number(systemQty).toLocaleString() : '-');
+    safeSetText('rcm-actual', actualQty !== null && actualQty !== undefined ? Number(actualQty).toLocaleString() : '-');
+
+    const diffEl = safeGet('rcm-diff');
+    if (diffEl) {
+        if (diffQty === null || diffQty === undefined) {
+            diffEl.textContent = '-';
+            diffEl.className = 'text-2xl font-black mt-1 text-slate-400';
+        } else if (diffQty === 0) {
+            diffEl.textContent = '0';
+            diffEl.className = 'text-2xl font-black mt-1 text-emerald-600';
+        } else if (diffQty > 0) {
+            diffEl.textContent = '+' + Number(diffQty).toLocaleString();
+            diffEl.className = 'text-2xl font-black mt-1 text-blue-600';
+        } else {
+            diffEl.textContent = Number(diffQty).toLocaleString();
+            diffEl.className = 'text-2xl font-black mt-1 text-red-600';
+        }
+    }
+
+    // reset inputs
+    const nq = safeGet('rcm-new-qty');   if (nq) nq.value = '';
+    const ct = safeGet('rcm-count-time'); if (ct) ct.value = '';
+    const nt = safeGet('rcm-note');       if (nt) nt.value = '';
+
+    rcmSetTab('accept');
+    _rcmLoadTodayHistory(sku);
+
+    const modal = safeGet('recheck-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeRecheckModal() {
+    const modal = safeGet('recheck-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function rcmSetTab(tab) {
+    _rcmState.tab = tab;
+    const tabAccept  = safeGet('rcm-tab-accept');
+    const tabRecount = safeGet('rcm-tab-recount');
+    const fields     = safeGet('rcm-recount-fields');
+    const submitBtn  = safeGet('rcm-submit-btn');
+
+    if (tab === 'accept') {
+        if (tabAccept)  { tabAccept.className  = 'flex-1 py-2.5 rounded-xl font-black text-sm transition-all bg-emerald-500 text-white shadow'; }
+        if (tabRecount) { tabRecount.className = 'flex-1 py-2.5 rounded-xl font-black text-sm transition-all bg-slate-100 text-slate-500'; }
+        if (fields)  fields.classList.add('hidden');
+        if (submitBtn) { submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> ยืนยัน Accept Diff'; submitBtn.className = 'w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black py-3 rounded-xl transition-all mb-6 flex items-center justify-center gap-2 text-sm'; }
+    } else {
+        if (tabAccept)  { tabAccept.className  = 'flex-1 py-2.5 rounded-xl font-black text-sm transition-all bg-slate-100 text-slate-500'; }
+        if (tabRecount) { tabRecount.className = 'flex-1 py-2.5 rounded-xl font-black text-sm transition-all bg-blue-500 text-white shadow'; }
+        if (fields)  fields.classList.remove('hidden');
+        if (submitBtn) { submitBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกยอดนับใหม่'; submitBtn.className = 'w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-black py-3 rounded-xl transition-all mb-6 flex items-center justify-center gap-2 text-sm'; }
+    }
+}
+
+window.rcmSetTab       = rcmSetTab;
+window.closeRecheckModal = closeRecheckModal;
+
+function submitRecheck() {
+    const btn = safeGet('rcm-submit-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...'; }
+
+    const params = {
+        sku:        _rcmState.sku,
+        name:       _rcmState.name,
+        systemQty:  _rcmState.systemQty,
+        actualQty:  _rcmState.actualQty,
+        cycleDate:  _rcmState.cycleDateStr,
+        action:     _rcmState.tab === 'accept' ? 'ACCEPTED' : 'RECOUNTED',
+        newQty:     _rcmState.tab === 'recount' ? (safeGet('rcm-new-qty')?.value || '') : '',
+        countTime:  safeGet('rcm-count-time')?.value || '',
+        note:       safeGet('rcm-note')?.value || ''
+    };
+
     google.script.run
         .withSuccessHandler(res => {
-            if (!res.success) return showToast('Error: ' + res.message, true);
-            
-            // สร้างตารางเฉพาะ SKU ที่ต้องการ
-            const excelSkuSet = new Set([sku]);
-            fgTableData = buildFGMergedData(res.products, res.systemStock, excelSkuSet);
-            window.fgTableData = fgTableData;
-            
-            // ✅ บังคับให้ช่องกรอกเป็นค่าว่างทั้งหมด
-            if (fgTableData.length > 0) {
-                const item = fgTableData[0];
-                item.pile1 = ''; item.pile2 = ''; 
-                item.scrap1 = ''; item.scrap2 = ''; 
-                item.hold = '';
-            }
-
-            renderFGCycleTable();
-            
-            // แสดงแบนเนอร์แจ้งสถานะ
-            _showFGRecheckBanner(
-                `🔄 โหมดรีเช็คด่วน: ${sku}`,
-                `กรุณากรอกข้อมูลนับจริงของ ${name}`,
-                'bg-amber-50 border-amber-400', 'bg-amber-500', '🔍'
-            );
-
-            // เลื่อนจอไปที่ตาราง
-            setTimeout(() => {
-                document.getElementById('fg-table-wrapper')?.scrollIntoView({ behavior: 'smooth' });
-            }, 300);
+            if (btn) { btn.disabled = false; rcmSetTab(_rcmState.tab); }
+            if (!res || !res.success) { showToast('บันทึกไม่สำเร็จ: ' + (res?.message||''), true); return; }
+            showToast('✅ บันทึกสำเร็จ');
+            closeRecheckModal();
+            // refresh dashboard row
+            loadFGDashboard();
         })
-        .withFailureHandler(err => showToast('เกิดข้อผิดพลาด: ' + err.message, true))
-        .getFGCycleData(cycleDate);
+        .withFailureHandler(err => {
+            if (btn) { btn.disabled = false; rcmSetTab(_rcmState.tab); }
+            showToast('เกิดข้อผิดพลาด: ' + err.message, true);
+        })
+        .saveReCheckLog(params);
+}
+window.submitRecheck = submitRecheck;
+
+// ── โหลดประวัติวันนี้ใน Modal ────────────────────────────────────────────
+function _rcmLoadTodayHistory(sku) {
+    const el = safeGet('rcm-history-list');
+    if (!el) return;
+    el.innerHTML = '<div class="text-center text-slate-300 text-xs py-3"><i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลด...</div>';
+    google.script.run
+        .withSuccessHandler(res => {
+            if (!res || !res.success || !res.history || !res.history.length) {
+                el.innerHTML = '<div class="text-center text-slate-300 text-sm py-3">ไม่มีประวัติ</div>';
+                return;
+            }
+            // กรองเฉพาะวันนี้ (วันที่ cycleDate ตรงกับ cycleDateStr ปัจจุบัน หรือ timestamp วันนี้)
+            const today = new Date();
+            const todayStr = String(today.getDate()).padStart(2,'0') + '/' +
+                             String(today.getMonth()+1).padStart(2,'0') + '/' + today.getFullYear();
+            const todayItems = res.history.filter(h =>
+                (h.cycleDate && h.cycleDate.startsWith(todayStr.substring(0,5))) ||
+                (h.timestamp && h.timestamp.startsWith(todayStr.substring(0,5)))
+            );
+            const items = todayItems.length ? todayItems : res.history.slice(0, 5);
+            el.innerHTML = items.map(h => _rcmHistoryRowHtml(h)).join('');
+        })
+        .withFailureHandler(() => {
+            if (el) el.innerHTML = '<div class="text-center text-rose-300 text-xs py-3">โหลดประวัติไม่สำเร็จ</div>';
+        })
+        .getSKUCountHistory(sku);
+}
+
+function _rcmHistoryRowHtml(h) {
+    const actionBadge = h.action
+        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black ${h.action==='ACCEPTED'?'bg-emerald-100 text-emerald-700':'bg-blue-100 text-blue-700'}">${h.action==='ACCEPTED'?'✅ Accept':'🔢 นับใหม่'}</span>`
+        : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-600">🔍 นับครั้งแรก</span>`;
+    const qtyDisplay = h.newQty !== null && h.newQty !== undefined
+        ? `<span class="font-black text-blue-700">${Number(h.newQty).toLocaleString()}</span> <span class="text-slate-300 text-[10px]">(ใหม่)</span>`
+        : `<span class="font-black text-teal-700">${Number(h.actualQty||0).toLocaleString()}</span>`;
+    const diffDisp = h.diff > 0 ? `<span class="text-blue-600 font-black">+${Number(h.diff).toLocaleString()}</span>`
+                   : h.diff < 0 ? `<span class="text-red-500 font-black">${Number(h.diff).toLocaleString()}</span>`
+                   : `<span class="text-emerald-600 font-black">0</span>`;
+    return `
+    <div class="flex items-center gap-2 py-2 border-b border-slate-50 last:border-0 text-xs">
+        <div class="text-slate-400 font-mono w-32 flex-shrink-0">${h.timestamp||'-'}</div>
+        <div class="flex-1 flex items-center gap-2 flex-wrap">
+            ${actionBadge}
+            <span class="text-slate-500">นับ: ${qtyDisplay}</span>
+            <span class="text-slate-400">Diff: ${diffDisp}</span>
+            ${h.note ? `<span class="text-slate-400 italic">"${h.note}"</span>` : ''}
+        </div>
+    </div>`;
+}
+
+// ── Toggle Expandable History Row ────────────────────────────────────────
+window.toggleFGHistory = function toggleFGHistory(sku) {
+    const histRow  = document.getElementById('fgh-' + sku);
+    const iconEl   = document.getElementById('fgh-icon-' + sku);
+    if (!histRow) return;
+
+    const isHidden = histRow.classList.contains('hidden');
+    if (isHidden) {
+        histRow.classList.remove('hidden');
+        if (iconEl) iconEl.className = 'fas fa-chevron-up text-[10px]';
+        _loadFGHistoryTable(sku);
+    } else {
+        histRow.classList.add('hidden');
+        if (iconEl) iconEl.className = 'fas fa-chevron-down text-[10px]';
+    }
+};
+
+function _loadFGHistoryTable(sku) {
+    const bodyEl = document.getElementById('fgh-body-' + sku);
+    if (!bodyEl) return;
+    bodyEl.innerHTML = '<div class="text-center text-slate-300 text-xs py-4"><i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลดประวัติ...</div>';
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if (!res || !res.success || !res.history || !res.history.length) {
+                bodyEl.innerHTML = '<div class="text-center text-slate-300 text-xs py-4">ไม่มีประวัติการนับ</div>';
+                return;
+            }
+            bodyEl.innerHTML = `
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="bg-indigo-50/80">
+                        <th class="px-3 py-2 text-left font-black text-indigo-500 uppercase text-[10px]">เวลา / วันที่</th>
+                        <th class="px-3 py-2 text-center font-black text-indigo-500 uppercase text-[10px]">ประเภท</th>
+                        <th class="px-3 py-2 text-right font-black text-indigo-500 uppercase text-[10px]">System</th>
+                        <th class="px-3 py-2 text-right font-black text-indigo-500 uppercase text-[10px]">นับจริง</th>
+                        <th class="px-3 py-2 text-right font-black text-indigo-500 uppercase text-[10px]">Diff</th>
+                        <th class="px-3 py-2 text-center font-black text-indigo-500 uppercase text-[10px]">สถานะ</th>
+                        <th class="px-3 py-2 text-left font-black text-indigo-500 uppercase text-[10px]">หมายเหตุ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${res.history.map((h, idx) => {
+                        const isRC   = h.source === 'RECHECK';
+                        const rowBg  = idx % 2 === 0 ? '' : 'bg-slate-50/60';
+                        const srcBadge = isRC
+                            ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-black ${h.action==='ACCEPTED'?'bg-emerald-100 text-emerald-700':'bg-blue-100 text-blue-700'}">${h.action==='ACCEPTED'?'✅ Accept':'🔢 นับใหม่'}</span>`
+                            : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-600">🔍 นับ</span>`;
+                        const displayQty = (h.newQty !== null && h.newQty !== undefined)
+                            ? `<b class="text-blue-700">${Number(h.newQty).toLocaleString()}</b>`
+                            : `<b class="text-teal-700">${Number(h.actualQty||0).toLocaleString()}</b>`;
+                        const diffDisp = h.diff > 0 ? `<span class="text-blue-600 font-black">+${Number(h.diff).toLocaleString()}</span>`
+                                        : h.diff < 0 ? `<span class="text-red-500 font-black">${Number(h.diff).toLocaleString()}</span>`
+                                        : `<span class="text-emerald-600 font-black">0</span>`;
+                        return `<tr class="${rowBg}">
+                            <td class="px-3 py-2 text-slate-500 font-mono whitespace-nowrap">${h.timestamp||'-'}</td>
+                            <td class="px-3 py-2 text-center">${srcBadge}</td>
+                            <td class="px-3 py-2 text-right text-slate-500">${Number(h.systemQty||0).toLocaleString()}</td>
+                            <td class="px-3 py-2 text-right">${displayQty}</td>
+                            <td class="px-3 py-2 text-right">${diffDisp}</td>
+                            <td class="px-3 py-2 text-center">
+                                ${h.countTime ? `<span class="text-slate-400">🕐 ${h.countTime}</span>` : '<span class="text-slate-200">-</span>'}
+                            </td>
+                            <td class="px-3 py-2 text-slate-400 italic">${h.note||'-'}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>`;
+        })
+        .withFailureHandler(() => {
+            if (bodyEl) bodyEl.innerHTML = '<div class="text-center text-rose-300 text-xs py-4">โหลดประวัติไม่สำเร็จ</div>';
+        })
+        .getSKUCountHistory(sku);
 }
     // ============================================================
     // FG INVENTORY CONTROL — Re-Check functions

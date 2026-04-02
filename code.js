@@ -82,6 +82,7 @@ const PRINT_TAG_LOG_SHEET = 'Print Tag Log';
 const FG_REPORT_SHEET     = 'FG report';      // ยอดผลิตจริงสะสม (ใช้ใน Print Tag FG)
 const INVENTORY_BLOCKING_LOG_SHEET = 'Inventory_Blocking_Log';
 const DAILY_CYCLE_COUNT_FG_SHEET_NAME = 'Daily Cycle Count FG';
+const RECHECK_LOG_SHEET = 'ReCheck_Log';
 const AUDIT_LOG_SHEET   = 'Audit_Log';
 const AUDIT_LOG_HEADERS = ['Timestamp','User','Module','Action','Detail','Status'];
 
@@ -3199,6 +3200,23 @@ function getFGDashboardSummary() {
       }
     }
 
+    // ─── 4b. ReCheck_Log: latest action per SKU ──────────────────────────────
+    const recheckMap = {};
+    const recheckSheet = ss.getSheetByName(RECHECK_LOG_SHEET);
+    if (recheckSheet && recheckSheet.getLastRow() >= 2) {
+      const rData = recheckSheet.getDataRange().getValues();
+      for (let i = 1; i < rData.length; i++) {
+        const rRow = rData[i];
+        const rSku = String(rRow[2] || '').trim();
+        if (!rSku) continue;
+        recheckMap[rSku] = {
+          action:    String(rRow[8] || ''),
+          note:      String(rRow[9] || ''),
+          timestamp: String(rRow[0] || '')
+        };
+      }
+    }
+
     // ─── 5. รวม SKU ทั้งหมด: Counting + Daily Cycle (ของมีจริงแต่ระบบไม่มี) ──
     // union ของ SKU จากทั้งสองแหล่ง
     const allSkus = new Set([
@@ -3256,11 +3274,15 @@ function getFGDashboardSummary() {
       else if (matchStatus === 'DIFF')  kpiDiffCount++;
       else                              kpiNoCycleCount++;
 
+      const rc = recheckMap[sku] || null;
       rows.push({
         sku, name, systemQty, totalWeightKg, wPerLine,
         cycleDateStr, actualQty, diffQty, matchStatus,
         blockLines, blockWeight,
-        noSystem: !sm  // ✅ flag: มีของจริงแต่ระบบไม่มี
+        noSystem:     !sm,
+        recheckAction: rc ? rc.action    : '',
+        recheckNote:   rc ? rc.note      : '',
+        recheckTs:     rc ? rc.timestamp : ''
       });
     });
 
@@ -7449,6 +7471,140 @@ function getReadyToShipOrders(shipDateStr) {
 
     return { success: true, items: items, message: 'โหลดสำเร็จ ' + items.length + ' รายการ' };
   } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// RE-CHECK LOG — บันทึก + ดึงประวัติ Re-Check FG Dashboard
+// ════════════════════════════════════════════════════════════════════════════
+
+function _getOrCreateRecheckSheet(ss) {
+  var sheet = ss.getSheetByName(RECHECK_LOG_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(RECHECK_LOG_SHEET);
+    sheet.getRange(1, 1, 1, 11).setValues([[
+      'บันทึกเมื่อ', 'วันที่ Cycle', 'SKU', 'ชื่อสินค้า',
+      'ยอด System', 'ยอดนับเดิม', 'ยอดนับใหม่', 'Diff',
+      'Action', 'หมายเหตุ', 'เวลาที่นับ'
+    ]]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function saveReCheckLog(params) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = _getOrCreateRecheckSheet(ss);
+    var now   = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm:ss');
+
+    var systemQty = parseFloat(params.systemQty) || 0;
+    var actualQty = parseFloat(params.actualQty) || 0;
+    var newQty    = (params.action === 'RECOUNTED' &&
+                    params.newQty !== '' && params.newQty !== null && params.newQty !== undefined)
+                    ? parseFloat(params.newQty) : '';
+    var diff      = (newQty !== '') ? (newQty - systemQty) : (actualQty - systemQty);
+
+    sheet.appendRow([
+      now,
+      params.cycleDate || '',
+      params.sku       || '',
+      params.name      || '',
+      systemQty,
+      actualQty,
+      newQty,
+      diff,
+      params.action    || '',
+      params.note      || '',
+      params.countTime || ''
+    ]);
+
+    _clearCache('fgDashboard');
+    return { success: true, message: 'บันทึกสำเร็จ' };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function getSKUCountHistory(sku) {
+  try {
+    var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var history = [];
+
+    // 1. Daily Cycle Count FG — ทุก row ของ SKU นี้
+    // Header: [บันทึกเมื่อ(0), วันที่Cycle(1), SKU(2), ชื่อ(3), เส้น/มัด(4),
+    //          กอง1(5), กอง2(6), เศษ1(7), เศษ2(8), hold(9), นับจริง(10), ระบบ(11), ส่วนต่าง(12)]
+    var cycleSheet = ss.getSheetByName(DAILY_CYCLE_COUNT_FG_SHEET_NAME);
+    if (cycleSheet && cycleSheet.getLastRow() >= 2) {
+      var cyData = cycleSheet.getDataRange().getValues();
+      for (var i = 1; i < cyData.length; i++) {
+        var row    = cyData[i];
+        var rowSku = String(row[2] || '').trim();
+        if (rowSku !== sku) continue;
+
+        var cd = row[1];
+        var dateStr = '';
+        if (cd instanceof Date && !isNaN(cd)) {
+          dateStr = Utilities.formatDate(cd, 'GMT+7', 'dd/MM/yyyy');
+        } else if (cd) {
+          dateStr = String(cd).substring(0, 10);
+        }
+
+        var ts = row[0];
+        var tsStr = '';
+        if (ts instanceof Date && !isNaN(ts)) {
+          tsStr = Utilities.formatDate(ts, 'Asia/Bangkok', 'dd/MM/yyyy HH:mm');
+        } else if (ts) {
+          tsStr = String(ts);
+        }
+
+        history.push({
+          source:    'CYCLE',
+          timestamp: tsStr,
+          cycleDate: dateStr,
+          systemQty: parseFloat(row[11]) || 0,
+          actualQty: parseFloat(row[10]) || 0,
+          diff:      parseFloat(row[12]) || 0,
+          newQty:    null,
+          action:    '',
+          note:      '',
+          countTime: ''
+        });
+      }
+    }
+
+    // 2. ReCheck_Log — ทุก row ของ SKU นี้
+    var recheckSheet = ss.getSheetByName(RECHECK_LOG_SHEET);
+    if (recheckSheet && recheckSheet.getLastRow() >= 2) {
+      var rData = recheckSheet.getDataRange().getValues();
+      for (var j = 1; j < rData.length; j++) {
+        var rRow   = rData[j];
+        var rSku   = String(rRow[2] || '').trim();
+        if (rSku !== sku) continue;
+        var nq = rRow[6];
+        history.push({
+          source:    'RECHECK',
+          timestamp: String(rRow[0] || ''),
+          cycleDate: String(rRow[1] || ''),
+          systemQty: parseFloat(rRow[4]) || 0,
+          actualQty: parseFloat(rRow[5]) || 0,
+          newQty:    (nq !== '' && nq !== null && nq !== undefined) ? parseFloat(nq) : null,
+          diff:      parseFloat(rRow[7]) || 0,
+          action:    String(rRow[8] || ''),
+          note:      String(rRow[9] || ''),
+          countTime: String(rRow[10] || '')
+        });
+      }
+    }
+
+    // เรียงจากใหม่ → เก่า
+    history.sort(function(a, b) {
+      return b.timestamp.localeCompare(a.timestamp);
+    });
+
+    return { success: true, history: history };
+  } catch (e) {
     return { success: false, message: e.toString() };
   }
 }
