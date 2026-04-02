@@ -20086,9 +20086,20 @@ function gpsDecimalToTime(val) {
     // date+time  -> serial > 1   e.g. 46150.2684
     // fallback: Date object or string
     if (val === '' || val === null || val === undefined) return '';
+    // ถ้าเป็น string ที่มี ':' → เป็น HH:MM หรือ HH:MM:SS อยู่แล้ว อย่า parseFloat เพราะจะได้แค่ตัวหน้า ':'
+    if (typeof val === 'string') {
+        var s = val.trim();
+        if (!s) return '';
+        if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) return s.substring(0, 5);
+        // 'Sat Dec 30 1899 06:26:32 GMT+...' - use regex
+        var m2 = s.match(/(\d{1,2}):(\d{2}):\d{2}\s+GMT/);
+        if (m2) return String(m2[1]).padStart(2,'0') + ':' + m2[2];
+    }
     // numeric (primary path after cellDates:false)
     var num = (typeof val === 'number') ? val : parseFloat(String(val));
     if (!isNaN(num)) {
+        // เซลล์ว่างใน Excel ที่มี format "Time" จะถูก SheetJS ส่งมาเป็น 0 → ถือว่าไม่มีข้อมูล
+        if (num === 0) return '';
         var frac = (num >= 1) ? (num - Math.floor(num)) : num;
         if (frac < 0) frac += 1;
         var tot = Math.round(frac * 1440);
