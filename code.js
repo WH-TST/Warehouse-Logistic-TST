@@ -1043,10 +1043,15 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     if (transSheet) {
       const transData = transSheet.getDataRange().getValues();
       for (let i = 1; i < transData.length; i++) {
-        let rowDateObj = parseDateValue(transData[i][0]); //
+        const type = String(transData[i][3] || "").trim();
+
+        // ขาเข้า (Production) → ใช้วันที่ col A (index 0)
+        // ขาออก (Sales order) → ใช้วันที่ col I (index 8) = Physical date
+        const dateColIdx = (type === "Production") ? 0 : 8;
+        let rowDateObj = parseDateValue(transData[i][dateColIdx]);
+
         if (rowDateObj >= start && rowDateObj <= end) {
           const dStr = Utilities.formatDate(rowDateObj, "GMT+7", "yyyy-MM-dd");
-          const type = String(transData[i][3] || "").trim();
           const weight = parseFloat(transData[i][6]) || 0;
           const lines = parseFloat(transData[i][4]) || 0;
 
@@ -1142,6 +1147,69 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     return { success: false, message: e.toString() };
   }
   }); // end _withCache
+}
+
+// ── Debug: เช็คชื่อลูกค้าระหว่าง Logistic_Plan กับ Transection ต่อวัน ──
+function getDeliveryNameDebug(dateStr) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const targetDate = dateStr; // 'yyyy-MM-dd'
+
+    // ดึงชื่อร้านค้าจาก Logistic_Plan (status=success)
+    const logiNames = [];
+    const logiSheet = ss.getSheetByName('Logistic_Plan');
+    if (logiSheet && logiSheet.getLastRow() >= 2) {
+      const logiData = logiSheet.getDataRange().getValues();
+      for (let i = 1; i < logiData.length; i++) {
+        const d = parseDateValue(logiData[i][1]);
+        if (!d) continue;
+        const dStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+        if (dStr !== targetDate) continue;
+        const status = String(logiData[i][11] || '').trim().toLowerCase();
+        const shopName = String(logiData[i][6] || '').trim();
+        logiNames.push({ shopName: shopName, status: status });
+      }
+    }
+
+    // ดึงชื่อลูกค้าจาก Transection (Sales order เท่านั้น)
+    const transNames = [];
+    const transSheet = ss.getSheetByName('Transection');
+    if (transSheet && transSheet.getLastRow() >= 2) {
+      const transData = transSheet.getDataRange().getValues();
+      for (let i = 1; i < transData.length; i++) {
+        const d = parseDateValue(transData[i][8]); // col I = Physical date
+        if (!d) continue;
+        const dStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+        if (dStr !== targetDate) continue;
+        const type = String(transData[i][3] || '').trim();
+        if (type !== 'Sales order') continue;
+        const custName = String(transData[i][7] || '').trim();
+        const weight = Math.abs(parseFloat(transData[i][6]) || 0);
+        if (!transNames.find(x => x.custName === custName)) {
+          transNames.push({ custName: custName, totalWeight: weight });
+        } else {
+          transNames.find(x => x.custName === custName).totalWeight += weight;
+        }
+      }
+    }
+
+    // เทียบว่า match กันไหม
+    const successLogiNames = logiNames.filter(x => x.status === 'success').map(x => x.shopName.toLowerCase());
+    const matchResult = transNames.map(t => ({
+      custName: t.custName,
+      totalWeight: t.totalWeight,
+      matched: successLogiNames.indexOf(t.custName.toLowerCase()) >= 0
+    }));
+
+    return {
+      success: true,
+      date: targetDate,
+      logiPlanNames: logiNames,
+      transactionCustomers: matchResult
+    };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
 }
 /**
  * ✅ ฟังก์ชันใหม่: ดึงสินค้า 20 อันดับแรกที่มีน้ำหนักสุทธิคงเหลือมากที่สุด
