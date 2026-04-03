@@ -1003,17 +1003,43 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     // --- 1. ดึงข้อมูล Warehouse Flow (Inbound / Outbound) ---
     const transSheet = ss.getSheetByName("Transection");
     const dailyData = {};
-    
+    const dailyOwnDelivery = {}; // จัดส่งเอง (อยู่ใน Logistic_Plan)
+    const dailyPickup = {};      // รถต่างจังหวัดมารับ (ไม่อยู่ใน Logistic_Plan)
+
     // สร้างโครงสร้างข้อมูลรายวันตามช่วงวันที่เลือก
     let tempDate = new Date(start);
     while (tempDate <= end) {
       const dStr = Utilities.formatDate(tempDate, "GMT+7", "yyyy-MM-dd");
       dailyData[dStr] = { in: 0, out: 0 };
+      dailyOwnDelivery[dStr] = 0;
+      dailyPickup[dStr] = 0;
       tempDate.setDate(tempDate.getDate() + 1);
     }
-    
+
+    // --- อ่าน Logistic_Plan เพื่อดึงชื่อลูกค้าที่จัดส่งเอง (ต่อวัน) ---
+    // Col B (index 1) = วันที่, Col G (index 6) = ชื่อร้านค้า
+    const logiCustomersByDate = {}; // { 'yyyy-MM-dd': [shopName_lowercase, ...] }
+    const logiPlanSheet = ss.getSheetByName('Logistic_Plan');
+    if (logiPlanSheet && logiPlanSheet.getLastRow() >= 2) {
+      const logiData = logiPlanSheet.getDataRange().getValues();
+      for (let i = 1; i < logiData.length; i++) {
+        const logiDateObj = parseDateValue(logiData[i][1]);
+        if (!logiDateObj || logiDateObj < start || logiDateObj > end) continue;
+        const logiStatus = String(logiData[i][11] || '').trim().toLowerCase(); // col L = สถานะ
+        if (logiStatus !== 'success') continue;
+        const shopName = String(logiData[i][6] || '').trim();
+        if (!shopName) continue;
+        const dStr = Utilities.formatDate(logiDateObj, 'GMT+7', 'yyyy-MM-dd');
+        if (!logiCustomersByDate[dStr]) logiCustomersByDate[dStr] = [];
+        const lc = shopName.toLowerCase();
+        if (logiCustomersByDate[dStr].indexOf(lc) < 0) logiCustomersByDate[dStr].push(lc);
+      }
+    }
+
     let inWeight = 0, outWeight = 0, inLines = 0, outLines = 0;
-    
+    let ownDeliveryWeight = 0, ownDeliveryLines = 0;
+    let pickupWeight = 0, pickupLines = 0;
+
     if (transSheet) {
       const transData = transSheet.getDataRange().getValues();
       for (let i = 1; i < transData.length; i++) {
@@ -1023,7 +1049,7 @@ function getWarehouseAnalyticsData(startDate, endDate) {
           const type = String(transData[i][3] || "").trim();
           const weight = parseFloat(transData[i][6]) || 0;
           const lines = parseFloat(transData[i][4]) || 0;
-          
+
           if (type === "Production") {
             const colF = String(transData[i][5] || "").trim(); // กรองแถวที่ไม่ได้จอง
             if (colF === "") {
@@ -1037,6 +1063,20 @@ function getWarehouseAnalyticsData(startDate, endDate) {
             outWeight += absWeight;
             outLines += absLines;
             if (dailyData[dStr]) dailyData[dStr].out += absWeight;
+
+            // จำแนก: จัดส่งเอง vs รถต่างจังหวัดมารับ
+            // เทียบชื่อลูกค้า col H (index 7) กับ Logistic_Plan ของวันเดียวกัน
+            const custName = String(transData[i][7] || '').trim().toLowerCase();
+            const logiSet = logiCustomersByDate[dStr] || [];
+            if (custName && logiSet.indexOf(custName) >= 0) {
+              ownDeliveryWeight += absWeight;
+              ownDeliveryLines += absLines;
+              if (dailyOwnDelivery[dStr] !== undefined) dailyOwnDelivery[dStr] += absWeight;
+            } else {
+              pickupWeight += absWeight;
+              pickupLines += absLines;
+              if (dailyPickup[dStr] !== undefined) dailyPickup[dStr] += absWeight;
+            }
           }
         }
       }
@@ -1045,6 +1085,8 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     const sortedDates = Object.keys(dailyData).sort();
     const dailyIn = sortedDates.map(d => dailyData[d].in);
     const dailyOut = sortedDates.map(d => dailyData[d].out);
+    const dailyOwnArr = sortedDates.map(d => dailyOwnDelivery[d] || 0);
+    const dailyPickupArr = sortedDates.map(d => dailyPickup[d] || 0);
     
     // --- 2. ดึงข้อมูล Inventory ปัจจุบัน ---
     const invSheet = ss.getSheetByName("Inventory FG");
@@ -1083,7 +1125,15 @@ function getWarehouseAnalyticsData(startDate, endDate) {
       
       blockingTrendDates: blockingTrend.dates,
       blockingTrendWeights: blockingTrend.weights,
-      blockingTrendLines: blockingTrend.lines // <--- **ต้องมีบรรทัดนี้เพิ่มเข้าไป**
+      blockingTrendLines: blockingTrend.lines,
+
+      // ── ข้อมูลกราฟเปรียบเทียบ จัดส่งเอง vs รถต่างจังหวัดมารับ ──
+      ownDeliveryWeight: ownDeliveryWeight,
+      ownDeliveryLines: ownDeliveryLines,
+      pickupWeight: pickupWeight,
+      pickupLines: pickupLines,
+      dailyOwnDelivery: dailyOwnArr,
+      dailyPickup: dailyPickupArr
 
     };
     
