@@ -7435,15 +7435,6 @@ window.switchView = function switchView(view) {
         whaInit();
         loadLogiMaster(function() {
             whaPrepareStaffList();
-            // populate truck dropdown ในฟอร์มโหลด (optional)
-            var whaLoadTruck = safeGet('wha-f-load-truck');
-            if (whaLoadTruck && LOGI_MASTER_CACHE.trucks.length > 0) {
-                whaLoadTruck.innerHTML = '<option value="">— ไม่ระบุ —</option>' +
-                    LOGI_MASTER_CACHE.trucks.map(function(t) {
-                        return '<option value="' + t.plate + '">' + t.plate
-                            + (t.isTrailer ? ' [พ่วง]' : '') + '</option>';
-                    }).join('');
-            }
         });
     }
 }
@@ -25093,7 +25084,7 @@ window.whaSubmitTeam = function whaSubmitTeam(type) {
     if (type === 'บันทึกการโหลด') {
         formData = { timeStart: g('wha-f-load-timeStart'), timeEnd: g('wha-f-load-timeEnd'),
                      qty: g('wha-f-load-qty'), weight: g('wha-f-load-weight'), remarkQ: g('wha-f-load-remarkQ'),
-                     truckPlate: g('wha-f-load-truck') };
+                     truckPlate: '' };
     } else if (type === 'เคลมสินค้า') {
         formData = { skuA: g('wha-f-claim-skuA').toUpperCase(), nameA: g('wha-f-claim-nameA'),
                      damageQty: g('wha-f-claim-damageQty'), causeP: g('wha-f-claim-causeP'), remarkQ: g('wha-f-claim-remarkQ') };
@@ -25168,7 +25159,7 @@ window.whaSubmitIndiv = function whaSubmitIndiv(type) {
 function _whaFormClear(type) {
     const clr = id => { const el = safeGet(id); if (el) el.value = ''; };
     if (type === 'บันทึกการโหลด') {
-        ['wha-f-load-timeStart','wha-f-load-timeEnd','wha-f-load-qty','wha-f-load-weight','wha-f-load-remarkQ','wha-f-load-truck'].forEach(clr);
+        ['wha-f-load-timeStart','wha-f-load-timeEnd','wha-f-load-qty','wha-f-load-weight','wha-f-load-remarkQ'].forEach(clr);
     } else if (type === 'เคลมสินค้า') {
         ['wha-f-claim-skuA','wha-f-claim-nameA','wha-f-claim-damageQty','wha-f-claim-remarkQ'].forEach(clr);
         clr('wha-f-claim-causeP');
