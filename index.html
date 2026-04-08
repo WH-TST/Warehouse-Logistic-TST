@@ -1559,6 +1559,11 @@ thead.sticky {
                     class="bg-emerald-500 hover:bg-emerald-400 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
               <i class="fas fa-save"></i> บันทึก
             </button>
+            <button onclick="invToggleRecheckPanel()" id="inv-cyc-recheck-btn"
+                    class="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
+              <i class="fas fa-exclamation-triangle"></i> รีเช็ค
+              <span id="inv-cyc-recheck-badge" class="hidden bg-white text-rose-600 text-[10px] font-black rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none">0</span>
+            </button>
           </div>
 
         </div>
@@ -1588,6 +1593,41 @@ thead.sticky {
         <div class="bg-slate-700 text-white p-4 rounded-2xl shadow-lg text-center">
           <p class="text-[10px] font-black text-slate-300 uppercase">กรอกแล้ว</p>
           <p id="inv-cyc-kpi-filled" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+      </div>
+
+      <!-- Recheck Panel — รายการที่ต้องรีเช็ค (FG + SEMI รวมกัน) -->
+      <div id="inv-cyc-recheck-panel" class="hidden rounded-2xl border-2 border-rose-300 shadow-md overflow-hidden">
+        <div class="bg-gradient-to-r from-rose-700 to-orange-600 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-white">
+            <i class="fas fa-exclamation-triangle text-base"></i>
+            <span class="font-black text-sm">รายการที่ต้องรีเช็ค</span>
+            <span id="inv-cyc-recheck-count-badge" class="bg-white/25 text-white text-xs font-black px-2.5 py-0.5 rounded-full">0 รายการ</span>
+          </div>
+          <button onclick="invToggleRecheckPanel()" class="text-white/70 hover:text-white text-xs font-black flex items-center gap-1 px-2 py-1 rounded hover:bg-white/10 transition-all">
+            <i class="fas fa-times"></i> ปิด
+          </button>
+        </div>
+        <div class="overflow-x-auto bg-white">
+          <table class="w-full text-xs" style="min-width:700px;">
+            <thead class="bg-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-wider">
+              <tr>
+                <th class="px-3 py-2.5 text-center w-8">No.</th>
+                <th class="px-3 py-2.5 text-center w-14">Mode</th>
+                <th class="px-3 py-2.5 text-left">SKU</th>
+                <th class="px-3 py-2.5 text-left">ชื่อสินค้า</th>
+                <th class="px-3 py-2.5 text-right w-20">Diff</th>
+                <th class="px-3 py-2.5 text-center w-32">สถานะ</th>
+                <th class="px-3 py-2.5 text-left min-w-[160px]">สาเหตุ</th>
+              </tr>
+            </thead>
+            <tbody id="inv-cyc-recheck-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+          <div id="inv-cyc-recheck-empty" class="hidden py-12 text-center text-slate-400">
+            <i class="fas fa-check-circle text-4xl text-emerald-400 mb-3 block"></i>
+            <p class="font-black text-emerald-600">ไม่มีรายการที่ต้องรีเช็ค</p>
+            <p class="text-xs text-slate-400 mt-1">สต็อกทุกรายการตรงหรือได้รับทราบแล้ว</p>
+          </div>
         </div>
       </div>
 
@@ -8930,6 +8970,125 @@ let blockingChartInstance = null;
         safeSetText('inv-cyc-kpi-accepted',   accepted);
         safeSetText('inv-cyc-kpi-unresolved', unresolved);
         safeSetText('inv-cyc-kpi-filled',     filled);
+        // อัปเดต badge ปุ่มรีเช็คอัตโนมัติ
+        _invUpdateRecheckBadge();
+    };
+
+    // ── อัปเดต badge จำนวนรายการรีเช็ค ─────────────────────────────────────
+    function _invUpdateRecheckBadge() {
+        const count = _invCountRecheckItems();
+        const badge = document.getElementById('inv-cyc-recheck-badge');
+        if (!badge) return;
+        badge.textContent = count;
+        if (count > 0) badge.classList.remove('hidden');
+        else badge.classList.add('hidden');
+    }
+
+    // ── นับรายการรีเช็คทั้ง FG และ SEMI ─────────────────────────────────────
+    function _invCountRecheckItems() {
+        var count = 0;
+        // FG
+        (_invCycleStore.fg || []).forEach(function(r) {
+            const diff = r._diff;
+            if (diff === null || diff === undefined || diff === 0) return;
+            const rtype = _invReasonType(r._reason);
+            if (rtype !== 'accepted') count++;
+        });
+        // SEMI
+        (_invCycleStore.semi || []).forEach(function(r) {
+            const c1 = parseFloat(r._input_check1 || '');
+            const c2 = parseFloat(r._input_check2 || '');
+            if (isNaN(c1) && isNaN(c2)) return;
+            const total = (isNaN(c1) ? 0 : c1) + (isNaN(c2) ? 0 : c2);
+            const diff  = total - Number(r.systemQty || 0);
+            if (diff === 0) return;
+            const rtype = _invReasonType(r._reason);
+            if (rtype !== 'accepted') count++;
+        });
+        return count;
+    }
+
+    // ── Toggle panel รายการรีเช็ค ─────────────────────────────────────────────
+    window.invToggleRecheckPanel = function() {
+        _invCycleSaveInputs(invCycleCurrentMode);
+        const panel = document.getElementById('inv-cyc-recheck-panel');
+        if (!panel) return;
+        if (panel.classList.contains('hidden')) {
+            invBuildRecheckPanel();
+            panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            panel.classList.add('hidden');
+        }
+    };
+
+    // ── สร้างตารางรายการรีเช็ค (FG + SEMI รวม) ──────────────────────────────
+    window.invBuildRecheckPanel = function() {
+        const tbody      = document.getElementById('inv-cyc-recheck-tbody');
+        const emptyDiv   = document.getElementById('inv-cyc-recheck-empty');
+        const countBadge = document.getElementById('inv-cyc-recheck-count-badge');
+        if (!tbody) return;
+
+        const rows = [];
+
+        // ── รวมรายการ FG ──
+        (_invCycleStore.fg || []).forEach(function(r) {
+            const diff = r._diff;
+            if (diff === null || diff === undefined || diff === 0) return;
+            const rtype = _invReasonType(r._reason);
+            if (rtype === 'accepted') return;
+            rows.push({ mode: 'FG', sku: r.sku, name: r.name, diff: diff, reason: r._reason || '', rtype: rtype });
+        });
+
+        // ── รวมรายการ SEMI ──
+        (_invCycleStore.semi || []).forEach(function(r) {
+            const c1 = parseFloat(r._input_check1 || '');
+            const c2 = parseFloat(r._input_check2 || '');
+            if (isNaN(c1) && isNaN(c2)) return;
+            const totalFg = (isNaN(c1) ? 0 : c1) + (isNaN(c2) ? 0 : c2);
+            const diff    = totalFg - Number(r.systemQty || 0);
+            if (diff === 0) return;
+            const rtype = _invReasonType(r._reason);
+            if (rtype === 'accepted') return;
+            rows.push({ mode: 'SEMI', sku: r.itemSemi || r.sku, name: r.nameSemi || r.name, diff: diff, reason: r._reason || '', rtype: rtype });
+        });
+
+        // อัปเดต count badge
+        const badge = document.getElementById('inv-cyc-recheck-badge');
+        if (badge) {
+            badge.textContent = rows.length;
+            rows.length > 0 ? badge.classList.remove('hidden') : badge.classList.add('hidden');
+        }
+        if (countBadge) countBadge.textContent = rows.length + ' รายการ';
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '';
+            if (emptyDiv) emptyDiv.classList.remove('hidden');
+            return;
+        }
+        if (emptyDiv) emptyDiv.classList.add('hidden');
+
+        tbody.innerHTML = rows.map(function(row, idx) {
+            const modeBadge = row.mode === 'FG'
+                ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-100 text-teal-700">FG</span>'
+                : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-700">SEMI</span>';
+            const diffSign  = row.diff > 0 ? '+' : '';
+            const diffColor = row.diff > 0 ? 'text-rose-600' : 'text-blue-600';
+            const statusHtml = _invDiffStatusHtml(row.diff, row.reason);
+            const bgClass   = idx % 2 === 0 ? 'bg-white' : 'bg-rose-50/30';
+            const reasonTxt = row.reason
+                ? '<span class="text-slate-700">' + row.reason + '</span>'
+                : '<span class="text-slate-300 italic text-[10px]">ยังไม่ระบุ</span>';
+            return '<tr class="' + bgClass + ' hover:bg-amber-50 transition-colors">'
+                + '<td class="px-3 py-2 text-center text-slate-400 font-mono text-[10px]">' + (idx + 1) + '</td>'
+                + '<td class="px-3 py-2 text-center">' + modeBadge + '</td>'
+                + '<td class="px-3 py-2 font-mono font-black text-slate-800">' + (row.sku || '—') + '</td>'
+                + '<td class="px-3 py-2 text-slate-700">' + (row.name || '—') + '</td>'
+                + '<td class="px-3 py-2 text-right font-mono font-black ' + diffColor + '">' + diffSign + row.diff + '</td>'
+                + '<td class="px-3 py-2 text-center">' + statusHtml + '</td>'
+                + '<td class="px-3 py-2">' + reasonTxt + '</td>'
+                + '</tr>';
+        }).join('');
     };
 
     window.invSemiMarkFilled = function(rowIdx) {
