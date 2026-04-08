@@ -1615,6 +1615,7 @@ thead.sticky {
                 <th class="px-3 py-3 text-right bg-teal-900 w-24">นับจริง<br><span class="text-[8px] font-normal opacity-70">(คำนวณ)</span></th>
                 <th class="px-3 py-3 text-right bg-amber-900 w-24">ระบบ<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
                 <th class="px-3 py-3 text-right bg-slate-700 w-24">ผลต่าง</th>
+                <th class="px-3 py-3 text-left bg-slate-800 min-w-[180px]">สาเหตุส่วนต่าง</th>
               </tr>
             </thead>
             <tbody id="inv-cyc-tbody-fg" class="divide-y divide-slate-100"></tbody>
@@ -1635,6 +1636,7 @@ thead.sticky {
                 <th class="px-2 py-3 text-right bg-emerald-900 w-20">รวม FG<br><span class="text-[8px] opacity-70 normal-case font-normal">(คำนวณ)</span></th>
                 <th class="px-2 py-3 text-right bg-slate-600 w-16">Diff</th>
                 <th class="px-2 py-3 text-center bg-slate-700 w-28">สถานะ</th>
+                <th class="px-2 py-3 text-left bg-slate-800 min-w-[180px]">สาเหตุส่วนต่าง</th>
               </tr>
             </thead>
             <tbody id="inv-cyc-tbody-semi" class="divide-y divide-slate-100"></tbody>
@@ -8699,6 +8701,9 @@ let blockingChartInstance = null;
                     + '<td class="px-3 py-2 text-right font-mono text-xs font-black text-teal-700" id="inv-actual-' + i + '">—</td>'
                     + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-amber-700">' + sysQty.toLocaleString() + '</td>'
                     + '<td class="px-3 py-2 text-right font-mono text-xs font-black" id="inv-diff-' + i + '">—</td>'
+                    + '<td class="px-2 py-2" id="inv-fg-reason-cell-' + i + '">'
+                    +   '<span class="text-slate-300 text-[10px]">—</span>'
+                    + '</td>'
                     + '</tr>';
 
                 // History sub-row (hidden by default)
@@ -8749,11 +8754,40 @@ let blockingChartInstance = null;
                     + '<td id="inv-semi-total-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-slate-400 text-xs">—</td>'
                     + '<td id="inv-semi-diff-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-slate-400 text-xs">—</td>'
                     + '<td id="inv-semi-status-' + ri + '" class="px-2 py-2 text-center text-xs"><span class="text-amber-400 font-black">❓</span></td>'
+                    + '<td class="px-2 py-2" id="inv-semi-reason-cell-' + ri + '">'
+                    +   '<span class="text-slate-300 text-[10px]">—</span>'
+                    + '</td>'
                     + '</tr>';
             });
             tbody.innerHTML = rows.join('');
         }
         invUpdateCycleKPI();
+    };
+
+    // ── Dropdown สาเหตุส่วนต่าง ──────────────────────────────────────────────
+    var DIFF_REASONS = [
+        { value: '',                          label: '— เลือกสาเหตุ —' },
+        { value: 'กำลังผลิต',                label: '🏭 กำลังผลิต' },
+        { value: 'กำลังโหลดสินค้า',          label: '🚚 กำลังโหลดสินค้า' },
+        { value: 'ฝ่ายผลิตคีย์ยอดผิด',       label: '⌨️ ฝ่ายผลิตคีย์ยอดผิด' },
+        { value: 'ฝ่ายจัดซื้อเปิดบิลผิด',    label: '📄 ฝ่ายจัดซื้อเปิดบิลผิด' },
+        { value: 'ลืมเปิดบิล',               label: '📄 ลืมเปิดบิล' },
+        { value: 'เช็คเกอร์นับผิด',          label: '🔢 เช็คเกอร์นับผิด' },
+        { value: 'อื่นๆ',                    label: '💬 อื่นๆ' },
+    ];
+
+    function _invReasonDropdown(mode, rowIdx, currentVal) {
+        const opts = DIFF_REASONS.map(function(r) {
+            return '<option value="' + r.value + '"' + (r.value === currentVal ? ' selected' : '') + '>' + r.label + '</option>';
+        }).join('');
+        return '<select onchange="invSetReason(\'' + mode + '\',' + rowIdx + ',this.value)" '
+            + 'class="w-full text-[10px] font-bold rounded-lg px-2 py-1 border border-slate-300 bg-white text-slate-700 outline-none focus:border-rose-400 cursor-pointer">'
+            + opts + '</select>';
+    }
+
+    window.invSetReason = function(mode, rowIdx, val) {
+        const r = invCycleData[rowIdx];
+        if (r) r._reason = val;
     };
 
     window.invCalcActual = function(rowIdx) {
@@ -8772,6 +8806,16 @@ let blockingChartInstance = null;
             diffEl.className = 'px-3 py-2 text-right font-mono text-xs font-black ' + (diff === 0 ? 'text-emerald-700' : 'text-rose-700');
         }
         if (r) { r._b1=b1; r._b2=b2; r._p1=p1; r._p2=p2; r._hold=hold; r._actual=actual; r._diff=diff; }
+        // ── แสดง/ซ่อน dropdown สาเหตุส่วนต่าง ────────────────────────────
+        const reasonCell = document.getElementById('inv-fg-reason-cell-' + rowIdx);
+        if (reasonCell) {
+            if (actual > 0 && diff !== 0) {
+                const cur = r._reason || '';
+                reasonCell.innerHTML = _invReasonDropdown('fg', rowIdx, cur);
+            } else {
+                reasonCell.innerHTML = '<span class="text-slate-300 text-[10px]">—</span>';
+            }
+        }
         invUpdateCycleKPI();
     };
 
@@ -8851,6 +8895,16 @@ let blockingChartInstance = null;
                 statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">✅ ตรง</span>';
             } else {
                 statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">⚠️ ต่าง ' + (diff > 0 ? '+' : '') + diff + '</span>';
+            }
+        }
+        // ── แสดง/ซ่อน dropdown สาเหตุส่วนต่าง ────────────────────────────
+        const reasonCellSemi = document.getElementById('inv-semi-reason-cell-' + rowIdx);
+        if (reasonCellSemi) {
+            if (diff !== null && diff !== 0) {
+                const cur = rowData ? (rowData._reason || '') : '';
+                reasonCellSemi.innerHTML = _invReasonDropdown('semi', rowIdx, cur);
+            } else {
+                reasonCellSemi.innerHTML = '<span class="text-slate-300 text-[10px]">—</span>';
             }
         }
         invUpdateCycleKPI();
@@ -9113,7 +9167,7 @@ let blockingChartInstance = null;
                     qtyFg2:    qty2,
                     total:     total,
                     diff:      total !== null ? total - sysQty : null,
-                    remark:    ''
+                    remark:    r._reason || ''
                 };
             });
             showConfirmModal(
@@ -9148,7 +9202,8 @@ let blockingChartInstance = null;
             hold: Number(r._hold||0),
             actual: Number(r._actual||0),
             systemQty: Number(r.systemQty||0),
-            diff: Number(r._diff||0)
+            diff: Number(r._diff||0),
+            remark: r._reason || ''
         }));
         showConfirmModal(
             'ยืนยันบันทึก Cycle Count FG',
