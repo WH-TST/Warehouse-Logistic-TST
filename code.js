@@ -43,7 +43,8 @@ function _handleApiPost(e) {
       'saveWHActivityRows','getWHActivityLog',
       'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
       'saveAuditLog','getAuditLog',
-      'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk'
+      'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
+      'setupInventorySheets'
     ];
 
     if (allowedActions.indexOf(action) === -1) {
@@ -83,7 +84,8 @@ const PRINT_TAG_LOG_SHEET = 'Print Tag Log';
 const FG_REPORT_SHEET     = 'FG report';      // ยอดผลิตจริงสะสม (ใช้ใน Print Tag FG)
 const INVENTORY_BLOCKING_LOG_SHEET = 'Inventory_Blocking_Log';
 const DAILY_CYCLE_COUNT_FG_SHEET_NAME = 'Daily Cycle Count FG';
-const RECHECK_LOG_SHEET = 'ReCheck_Log';
+const RECHECK_LOG_SHEET  = 'ReCheck_Log';
+const ROOT_CAUSE_SHEET   = 'RootCause_Log';
 const AUDIT_LOG_SHEET   = 'Audit_Log';
 const AUDIT_LOG_HEADERS = ['Timestamp','User','Module','Action','Detail','Status'];
 
@@ -203,7 +205,8 @@ function doGet(e) {
           'saveWHActivityRows','getWHActivityLog',
           'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
           'saveAuditLog','getAuditLog',
-          'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk'
+          'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
+          'setupInventorySheets'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -456,24 +459,29 @@ function parseDateValue(dateVal) {
   if (!dateVal) return new Date(0);
 
   const strDate = String(dateVal).trim();
-  
-  // รูปแบบ 1: dd/MM/yyyy หรือ M/d/yyyy HH:mm (US format จาก frontend เดิม)
+
+  // รูปแบบ 1: มี '/'
   if (strDate.includes('/')) {
-    const datePart = strDate.split(' ')[0]; // ตัด time portion ถ้ามี เช่น "3/31/2026 00:00" → "3/31/2026"
+    const datePart = strDate.split(' ')[0]; // ตัด time portion เช่น "3/31/2026 00:00" → "3/31/2026"
     const parts = datePart.split('/');
     if (parts.length === 3) {
       const p0 = parseInt(parts[0]);
       const p1 = parseInt(parts[1]);
       const p2 = parseInt(parts[2]);
-      // ตรวจ M/d/yyyy (US): p0≤12 และ p1>12 แสดงว่า p0=เดือน, p1=วัน
+      // กรณีชัดเจน M/D/YYYY: p0≤12 และ p1>12 → เดือน/วัน/ปี
       if (p0 <= 12 && p1 > 12) {
         return new Date(p2, p0 - 1, p1);
       }
-      // dd/MM/yyyy (Thai): p0=วัน, p1=เดือน
+      // กรณีชัดเจน D/M/YYYY: p0>12 และ p1≤12 → วัน/เดือน/ปี
+      if (p0 > 12 && p1 <= 12) {
+        return new Date(p2, p1 - 1, p0);
+      }
+      // กรณีกำกวม (ทั้ง p0≤12 และ p1≤12) → default เป็น D/M/YYYY (Thai format)
+      // เช่น "01/05/2025" → วันที่ 1 เดือน 5 (พฤษภาคม) ไม่ใช่ 5 มกราคม
       return new Date(p2, p1 - 1, p0);
     }
   }
-  
+
   // รูปแบบ 2: yyyy-MM-dd หรือ dd-MM-yyyy (GPS sheet ใช้ขีดกลาง)
   if (strDate.includes('-') && strDate.length === 10) {
     var dashParts = strDate.split('-');
@@ -487,7 +495,7 @@ function parseDateValue(dateVal) {
       }
     }
   }
-  
+
   // รูปแบบ 3: yyyyMMdd
   if (!strDate.includes('/') && !strDate.includes('-') && strDate.length === 8) {
     const y = strDate.substring(0, 4);
@@ -495,11 +503,47 @@ function parseDateValue(dateVal) {
     const d = strDate.substring(6, 8);
     return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
   }
-  
+
   // รูปแบบ 4: Timestamp
   const timestamp = Date.parse(strDate);
   return isNaN(timestamp) ? new Date(0) : new Date(timestamp);
 }
+
+// บังคับ parse M/D/YYYY เสมอ — ไม่ขึ้นกับ format ของ Google Sheet
+// ใช้สำหรับ col I (Physical date) ใน Transection
+function parseMDYDate(val) {
+  if (val instanceof Date) return val; // GAS ส่ง Date object มาตรง → ใช้เลย
+  const str = String(val || '').trim();
+  if (!str) return new Date(0);
+  if (str.includes('/')) {
+    const parts = str.split(' ')[0].split('/'); // ตัด time portion ถ้ามี
+    if (parts.length === 3) {
+      const m = parseInt(parts[0]); // เดือน
+      const d = parseInt(parts[1]); // วัน
+      const y = parseInt(parts[2]); // ปี
+      if (!isNaN(m) && !isNaN(d) && !isNaN(y)) return new Date(y, m - 1, d);
+    }
+  }
+  return parseDateValue(val); // fallback กรณีรูปแบบอื่น
+}
+
+// บังคับ parse D/M/YYYY เสมอ — สำหรับคอลัมน์ที่รู้แน่ว่าเป็น Thai format (วัน/เดือน/ปี)
+function parseDMYDate(val) {
+  if (val instanceof Date) return val;
+  const str = String(val || '').trim();
+  if (!str) return new Date(0);
+  if (str.includes('/')) {
+    const parts = str.split(' ')[0].split('/');
+    if (parts.length === 3) {
+      const d = parseInt(parts[0]); // วัน
+      const m = parseInt(parts[1]); // เดือน
+      const y = parseInt(parts[2]); // ปี
+      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) return new Date(y, m - 1, d);
+    }
+  }
+  return parseDateValue(val); // fallback
+}
+
 function getProductMap() {
   return _withCache('productMap', 600, function() {
     try {
@@ -1048,7 +1092,9 @@ function getWarehouseAnalyticsData(startDate, endDate) {
         // ขาเข้า (Production) → ใช้วันที่ col A (index 0)
         // ขาออก (Sales order) → ใช้วันที่ col I (index 8) = Physical date
         const dateColIdx = (type === "Production") ? 0 : 8;
-        let rowDateObj = parseDateValue(transData[i][dateColIdx]);
+        let rowDateObj = (dateColIdx === 8)
+          ? parseMDYDate(transData[i][8])    // Col I = Physical date = M/D/YYYY เสมอ
+          : parseDateValue(transData[i][0]); // Col A = Date object จาก GAS
 
         if (rowDateObj >= start && rowDateObj <= end) {
           const dStr = Utilities.formatDate(rowDateObj, "GMT+7", "yyyy-MM-dd");
@@ -3180,6 +3226,33 @@ function getCycleCountItems(dateStr, type) {
           r.physKg = physMap[r.sku+'|'+r.wh] || 0;
         });
       }
+      // ── Join SEMI SOON FG master → ได้ FG1/FG2 info ──────────────────────
+      const semiMasterSheet2 = ss.getSheetByName('SEMI SOON FG');
+      const semiMasterMap = {};
+      if (semiMasterSheet2 && semiMasterSheet2.getLastRow() >= 2) {
+        const mData = semiMasterSheet2.getRange(2, 1, semiMasterSheet2.getLastRow()-1, 6).getValues();
+        mData.forEach(function(row) {
+          const sk = String(row[0]||'').trim();
+          if (!sk) return;
+          semiMasterMap[sk] = {
+            fg1Sku:  String(row[2]||'').trim(),
+            fg1Name: String(row[3]||'').trim(),
+            fg2Sku:  String(row[4]||'').trim(),
+            fg2Name: String(row[5]||'').trim()
+          };
+        });
+      }
+      // ── นับ systemQty จาก ON-HAND SEMI (จำนวนแถวต่อ SEMI SKU = จำนวนแถบ) ──
+      const semiSysQtyMap = {};
+      if (onhandSemiSheet && onhandSemiSheet.getLastRow() >= 2) {
+        const sysData = onhandSemiSheet.getRange(2, 1, onhandSemiSheet.getLastRow()-1, 1).getValues();
+        sysData.forEach(function(row) {
+          const sk = String(row[0]||'').trim();
+          if (!sk) return;
+          semiSysQtyMap[sk] = (semiSysQtyMap[sk]||0) + 1;
+        });
+      }
+
       // Sort SEMI items by Product sheet order
       const semiOrderMap = {};
       const productSheet3 = ss.getSheetByName('Product');
@@ -3192,6 +3265,18 @@ function getCycleCountItems(dateStr, type) {
         const ob = (semiOrderMap[b.sku] !== undefined) ? semiOrderMap[b.sku] : 99999;
         return oa - ob;
       });
+
+      // ── Restructure: ใส่ itemSemi, FG1/FG2 info, systemQty ──────────────
+      semiItems.forEach(function(r) {
+        const master    = semiMasterMap[r.sku] || {};
+        r.itemSemi      = r.sku;                           // SEMI SKU (รหัสฟิล์ม)
+        r.sku           = master.fg1Sku  || '';            // FG1 SKU → คอลัมน์ Item number Product 1
+        r.name          = master.fg1Name || r.name;        // FG1 Name
+        r.sku2          = master.fg2Sku  || '';            // FG2 SKU
+        r.name2         = master.fg2Name || '';            // FG2 Name
+        r.systemQty     = semiSysQtyMap[r.itemSemi] || 0; // ยอดระบบ (นับแถบ)
+      });
+
       return { success: true, items: semiItems, date: dateStr };
     }
     return { success: false, message: 'ไม่รู้จัก type: ' + type };
@@ -3321,6 +3406,9 @@ function getFGDashboardSummary() {
       }
     }
 
+    // ─── 4a. RootCause_Log: latest rootCause per SKU ─────────────────────────
+    const rootCauseMap = _getRootCauseMap(ss, 'fg');
+
     // ─── 4b. ReCheck_Log: latest action per SKU ──────────────────────────────
     const recheckMap = {};
     const recheckSheet = ss.getSheetByName(RECHECK_LOG_SHEET);
@@ -3438,7 +3526,9 @@ function getFGDashboardSummary() {
         recheckTs:     rc ? rc.timestamp : '',
         production: mv ? Math.round(mv.production) : 0,
         salesOrder: mv ? Math.round(mv.salesOrder) : 0,
-        transfer:   mv ? Math.round(mv.transfer)   : 0
+        transfer:   mv ? Math.round(mv.transfer)   : 0,
+        rootCause:     rootCauseMap[sku] ? rootCauseMap[sku].rootCause : '',
+        rootCauseNote: rootCauseMap[sku] ? rootCauseMap[sku].note      : ''
       });
     });
 
@@ -3923,6 +4013,7 @@ function getSemiDashboardSummary() {
     const semiMaster     = _getSemiMaster(ss);
     const systemQtyMap   = _getSemiSystemQty(ss);
     const latestCycleMap = _getLatestSemiCycle(ss);
+    const rootCauseMap   = _getRootCauseMap(ss, 'semi');
 
     let kpiTotalRows  = 0;
     let kpiDualFg     = 0;
@@ -3969,9 +4060,11 @@ function getSemiDashboardSummary() {
         qtyFg2:       qtyFg2,
         totalQty:     totalQty,
         diffQty:      diffQty,
-        matchStatus:  matchStatus,
-        cycleDateStr: cycleDateStr,
-        isDual:       isDual
+        matchStatus:   matchStatus,
+        cycleDateStr:  cycleDateStr,
+        isDual:        isDual,
+        rootCause:     rootCauseMap[s.semiSku] ? rootCauseMap[s.semiSku].rootCause : '',
+        rootCauseNote: rootCauseMap[s.semiSku] ? rootCauseMap[s.semiSku].note      : ''
       };
     });
 
@@ -7724,6 +7817,67 @@ function saveReCheckLogBulk(paramsArray) {
   }
 }
 
+// ============================================================
+// ROOT CAUSE LOG
+// ============================================================
+
+/**
+ * _getRootCauseMap(ss, type)
+ * คืน Map: sku → { rootCause, note } (แถวล่าสุดต่อ SKU)
+ * type = 'fg' | 'semi'
+ */
+function _getRootCauseMap(ss, type) {
+  var map   = {};
+  var sheet = ss.getSheetByName(ROOT_CAUSE_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return map;
+  var data = sheet.getDataRange().getValues();
+  // Header: [บันทึกเมื่อ(0), วันที่Cycle(1), ประเภท(2), SKU(3), ชื่อ(4), สาเหตุ(5), หมายเหตุ(6)]
+  for (var i = 1; i < data.length; i++) {
+    var row     = data[i];
+    var rowType = String(row[2] || '').trim().toLowerCase();
+    if (rowType !== type) continue;
+    var sku = String(row[3] || '').trim();
+    if (!sku) continue;
+    map[sku] = { rootCause: String(row[5] || ''), note: String(row[6] || '') };
+  }
+  return map;
+}
+
+/**
+ * saveRootCause(params)
+ * บันทึกสาเหตุ DIFF ลงชีต RootCause_Log
+ * params: { sku, name, type ('fg'/'semi'), rootCause, note, cycleDate }
+ */
+function saveRootCause(params) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(ROOT_CAUSE_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(ROOT_CAUSE_SHEET);
+      sheet.getRange(1, 1, 1, 7).setValues([[
+        'บันทึกเมื่อ', 'วันที่ Cycle', 'ประเภท', 'SKU', 'ชื่อสินค้า', 'สาเหตุ', 'หมายเหตุ'
+      ]]);
+      sheet.getRange(1, 1, 1, 7).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
+      sheet.setFrozenRows(1);
+    }
+    var now = Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm:ss');
+    sheet.appendRow([
+      now,
+      params.cycleDate  || '',
+      params.type       || '',
+      params.sku        || '',
+      params.name       || '',
+      params.rootCause  || '',
+      params.note       || ''
+    ]);
+    // clear cache ของ dashboard ที่เกี่ยวข้อง
+    _clearCache(params.type === 'semi' ? 'semiDashboard' : 'fgDashboard');
+    return { success: true, message: 'บันทึกสาเหตุสำเร็จ' };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
 function getSKUCountHistory(sku) {
   try {
     var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -7807,6 +7961,157 @@ function getSKUCountHistory(sku) {
     });
 
     return { success: true, history: history };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SETUP — สร้าง Sheet ที่เกี่ยวข้องกับ Inventory อัตโนมัติ (ถ้ายังไม่มี)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * setupInventorySheets()
+ * สร้างทุก Sheet ที่ระบบ Inventory ต้องการ
+ * - ถ้ามีอยู่แล้ว → ข้ามไป (ไม่ overwrite)
+ * - ถ้ายังไม่มี → สร้างพร้อม Header และ Freeze row 1
+ * คืนค่า { success, created: [...], skipped: [...] }
+ */
+function setupInventorySheets() {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var created = [];
+    var skipped = [];
+
+    function _make(name, headers, bgColor, fontColor) {
+      var sheet = ss.getSheetByName(name);
+      if (sheet) { skipped.push(name); return; }
+      sheet = ss.insertSheet(name);
+      if (headers && headers.length) {
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+        sheet.getRange(1, 1, 1, headers.length)
+             .setFontWeight('bold')
+             .setBackground(bgColor  || '#0f172a')
+             .setFontColor(fontColor || '#ffffff');
+        sheet.setFrozenRows(1);
+      }
+      created.push(name);
+    }
+
+    // ── FG: ชีต Log / Tracking ────────────────────────────────────────────
+    _make('Inventory_Log_Daily', [
+      'วันที่บันทึก','เวลา','จำนวน SKU',
+      'สินค้าคงคลัง(เส้น)','น้ำหนักคงคลัง(กก.)',
+      'รอส่งมอบ(เส้น)','น้ำหนักรอส่งมอบ(กก.)',
+      'คงคลังสุทธิ(เส้น)','น้ำหนักสุทธิ(กก.)'
+    ], '#0d9488');
+
+    _make('Print Tag Log', [
+      'Timestamp','PrintDate','SKU','Bundles','User','TotalPcs'
+    ], '#0f172a');
+
+    _make('Inventory_Blocking_Log', [
+      'วันที่','จำนวน SKU','จำนวนเส้น (Lines)','น้ำหนักคำนวณ (kg)'
+    ], '#7c3aed');
+
+    _make('Daily Cycle Count FG', [
+      'บันทึกเมื่อ','วันที่ Cycle','รหัสสินค้า','ชื่อสินค้า',
+      'เส้นต่อมัด','กองที่1(มัด)','กองที่2(มัด)',
+      'เศษที่1(เส้น)','เศษที่2(เส้น)','Hold(เส้น)',
+      'นับจริง(เส้น)','ระบบ(เส้น)','ส่วนต่าง(เส้น)',
+      'สถานะ','หมายเหตุ','กอง1_แหล่ง','กอง2_แหล่ง','เศษ1_แหล่ง','เศษ2_แหล่ง'
+    ], '#0d9488');
+
+    _make('ReCheck_Log', [
+      'บันทึกเมื่อ','วันที่ Cycle','SKU','ชื่อสินค้า',
+      'ยอด System','ยอดนับเดิม','ยอดนับใหม่','Diff',
+      'Action','หมายเหตุ','เวลาที่นับ'
+    ], '#b45309');
+
+    _make('RootCause_Log', [
+      'บันทึกเมื่อ','วันที่ Cycle','ประเภท','SKU','ชื่อสินค้า','สาเหตุ','หมายเหตุ'
+    ], '#1e293b');
+
+    _make('KPI Log', [
+      'บันทึกเมื่อ','วันที่ Cycle','ประเภท',
+      'SKU ทั้งหมด','เส้น/แถบ ทั้งหมด',
+      'Production SKU','Production เส้น/แถบ',
+      'Checker Error SKU','Checker Error เส้น/แถบ',
+      'PRD Error SKU','PRD Error เส้น/แถบ',
+      'Diff SKU','Diff เส้น/แถบ',
+      'KPI Checker (%)','KPI PRD (%)'
+    ], '#1e1b4b');
+
+    _make('Audit_Log', [
+      'Timestamp','User','Module','Action','Detail','Status'
+    ], '#0f172a');
+
+    _make('History_Log', [
+      'บันทึกเมื่อ','วันที่ผลิต','เครื่อง','กะ','รหัสสินค้า','ชื่อสินค้า',
+      'มัดตามแผน','มัดอื่นๆ','รวมพื้นที่(เส้น)','เวลาพื้นที่(ชม.)','สถานะ','เวลาเสร็จ'
+    ], '#0f172a');
+
+    // ── FG: ชีต Data (import จากภายนอก / ERP) ───────────────────────────
+    _make('Inventory FG', [
+      'รหัสสินค้า','สต็อค(เส้น)','น้ำหนัก(kg)','จอง(เส้น)','น้ำหนักจอง(kg)'
+    ], '#065f46');
+
+    _make('Production FG', [
+      'วันที่ผลิต','รอบ/กะ','รหัสสินค้า','จำนวนเส้น'
+    ], '#065f46');
+
+    _make('Transection', [
+      'วันที่','ประเภท','รหัสสินค้า','ชื่อสินค้า','จำนวน(เส้น)','น้ำหนัก(kg)',
+      'Type','เลขที่เอกสาร','ลูกค้า/supplier'
+    ], '#1e3a5f');
+
+    _make('Transection FG', [
+      'วันที่','ประเภท','รหัสสินค้า','ชื่อสินค้า','จำนวน(เส้น)','น้ำหนัก(kg)'
+    ], '#1e3a5f');
+
+    _make('FG report', [
+      'วันที่ผลิต(yyyyMMdd)','รหัสสินค้า','ชื่อสินค้า','จำนวนเส้น'
+    ], '#065f46');
+
+    _make('Overdue Reservations', [
+      'รหัสสินค้า','ชื่อสินค้า','จำนวนจอง(เส้น)','วันที่จอง','ลูกค้า','หมายเหตุ'
+    ], '#7f1d1d');
+
+    // ── FG: Master ────────────────────────────────────────────────────────
+    _make('Product', [
+      'รหัสสินค้า','ชื่อสินค้า','เส้นต่อมัด','น้ำหนักต่อเส้น(kg)'
+    ], '#1e293b');
+
+    _make('QC-Standard', [
+      'รหัสสินค้า','ขนาด','W-Std(kg)','W-Min(kg)','W-Max(kg)'
+    ], '#1e293b');
+
+    // ── SEMI: ชีต Log / Tracking ─────────────────────────────────────────
+    _make('Daily Cycle Count SEMI', [
+      'บันทึกเมื่อ','วันที่Cycle','SEMI Code','ชื่อ SEMI',
+      'FG1 Code','FG1 Name','FG2 Code','FG2 Name',
+      'SYSTEM(แถว)','QTY FG1','QTY FG2','TOTAL','DIFF','สถานะ','หมายเหตุ'
+    ], '#1e1b4b');
+
+    _make('Transection SEMI', [
+      'วันที่','ประเภท','SEMI SKU','ชื่อ SEMI','จำนวน(แถบ)'
+    ], '#1e3a5f');
+
+    // ── SEMI: Master / Data ───────────────────────────────────────────────
+    _make('SEMI SOON FG', [
+      'SEMI SKU','ชื่อ SEMI','FG1 SKU','FG1 Name','FG2 SKU','FG2 Name'
+    ], '#4c1d95');
+
+    _make('ON-HAND SEMI', [
+      'SEMI SKU','ชื่อ SEMI','วันที่รับ','หมายเหตุ'
+    ], '#4c1d95');
+
+    var msg = '';
+    if (created.length)  msg += 'สร้างใหม่ ' + created.length + ' ชีต: ' + created.join(', ') + '.  ';
+    if (skipped.length)  msg += 'มีอยู่แล้ว (ข้าม) ' + skipped.length + ' ชีต.';
+    if (!msg) msg = 'ไม่มีการเปลี่ยนแปลง';
+
+    return { success: true, created: created, skipped: skipped, message: msg };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

@@ -1282,6 +1282,11 @@ thead.sticky {
                 <p class="text-teal-300 text-sm font-bold mt-1 uppercase tracking-widest">ระบบตรวจนับและเทียบสต๊อกสินค้า</p>
             </div>
         </div>
+        <button onclick="invSetupSheets()"
+                id="inv-setup-btn"
+                class="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-md ml-auto">
+            <i class="fas fa-cog"></i> Settings
+        </button>
     </div>
 
     <!-- Sub-Tab Navigation (2 tabs) -->
@@ -1776,6 +1781,29 @@ thead.sticky {
       </div>
 
     </div><!-- end inv-sub-cyclecount -->
+
+    <!-- Modal: ผลการสร้าง Sheet (Settings) -->
+    <div id="inv-setup-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div class="bg-gradient-to-r from-teal-700 to-slate-800 px-6 py-4 flex items-center justify-between">
+          <div class="flex items-center gap-3 text-white">
+            <i class="fas fa-cog text-lg"></i>
+            <span class="font-black text-base">ผลการสร้าง Sheet อัตโนมัติ</span>
+          </div>
+          <button onclick="document.getElementById('inv-setup-modal').classList.add('hidden')"
+                  class="text-white/70 hover:text-white text-lg transition-colors">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div id="inv-setup-modal-body" class="p-6 max-h-[60vh] overflow-y-auto text-sm"></div>
+        <div class="px-6 pb-5 flex justify-end">
+          <button onclick="document.getElementById('inv-setup-modal').classList.add('hidden')"
+                  class="bg-teal-600 hover:bg-teal-500 text-white font-black px-6 py-2.5 rounded-xl transition-all text-sm">
+            ตกลง
+          </button>
+        </div>
+      </div>
+    </div>
 
 </div><!-- end view-inventory-control-content -->
   </div><!-- end inv-sub-control -->
@@ -7978,6 +8006,56 @@ let blockingChartInstance = null;
             if (dateEl && !dateEl.value) dateEl.value = yestStr;
         }
     }
+
+    // ── Settings: สร้าง Sheet ที่เกี่ยวข้องกับ Inventory อัตโนมัติ ─────────────
+    window.invSetupSheets = function() {
+        const btn = document.getElementById('inv-setup-btn');
+        if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังสร้าง...'; btn.disabled = true; }
+        showToast('⏳ กำลังตรวจสอบและสร้าง Sheet...');
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (btn) { btn.innerHTML = '<i class="fas fa-cog"></i> Settings'; btn.disabled = false; }
+                if (!res || !res.success) {
+                    showToast('❌ เกิดข้อผิดพลาด: ' + (res && res.message || ''), true);
+                    return;
+                }
+                // แสดง modal สรุปผล
+                var created  = res.created  || [];
+                var skipped  = res.skipped  || [];
+                var html = '<div class="space-y-4">';
+                if (created.length) {
+                    html += '<div>'
+                        + '<p class="text-xs font-black text-emerald-600 uppercase mb-2">✅ สร้างใหม่ ' + created.length + ' ชีต</p>'
+                        + '<div class="flex flex-wrap gap-1.5">'
+                        + created.map(function(n){ return '<span class="bg-emerald-100 text-emerald-800 text-[11px] font-black px-2 py-0.5 rounded-lg">' + n + '</span>'; }).join('')
+                        + '</div></div>';
+                }
+                if (skipped.length) {
+                    html += '<div>'
+                        + '<p class="text-xs font-black text-slate-500 uppercase mb-2">⏩ มีอยู่แล้ว (ข้าม) ' + skipped.length + ' ชีต</p>'
+                        + '<div class="flex flex-wrap gap-1.5">'
+                        + skipped.map(function(n){ return '<span class="bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded-lg">' + n + '</span>'; }).join('')
+                        + '</div></div>';
+                }
+                html += '</div>';
+
+                // ใช้ modal สำเร็จรูป (หรือ alert ถ้าไม่มี)
+                var modal = document.getElementById('inv-setup-modal');
+                if (modal) {
+                    var body = document.getElementById('inv-setup-modal-body');
+                    if (body) body.innerHTML = html;
+                    modal.classList.remove('hidden');
+                } else {
+                    // fallback: แสดง toast
+                    showToast(created.length ? '✅ สร้างสำเร็จ ' + created.length + ' ชีต' : '✅ ทุกชีตมีอยู่แล้ว');
+                }
+            })
+            .withFailureHandler(function(err) {
+                if (btn) { btn.innerHTML = '<i class="fas fa-cog"></i> Settings'; btn.disabled = false; }
+                showToast('❌ ' + (err && err.message || err), true);
+            })
+            .setupInventorySheets();
+    };
 
     // ── Switch Tab (ไม่มี gate — เข้าได้เลย) ────────────────────────────────
     window.switchInvSubTab = function switchInvSubTab(tab) {
