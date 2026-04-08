@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbzXPmu0mo-oUlM7iigOK-hCxGBHy1IIVgMiwGvTNHKyRHIcjaAkIkue8_6u3JBX0J9t/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbyn6L98W-i6bFCoz2CjJYXf1yeawasYdAFun7l88JISrxMh3-fGgYqLlAJB4osglvqI/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -1284,19 +1284,15 @@ thead.sticky {
         </div>
     </div>
 
-    <!-- Sub-Tab Navigation (3 tabs) -->
+    <!-- Sub-Tab Navigation (2 tabs) -->
     <div class="flex gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
         <button onclick="switchInvSubTab('import')" id="inv-tab-import"
             class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all bg-teal-600 text-white shadow-lg">
             <i class="fas fa-file-import mr-2"></i> นำเข้าข้อมูล
         </button>
-        <button onclick="switchInvSubTab('compare')" id="inv-tab-compare"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-slate-50">
-            <i class="fas fa-balance-scale mr-2"></i> เทียบสต๊อก
-        </button>
         <button onclick="switchInvSubTab('cyclecount')" id="inv-tab-cyclecount"
             class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-slate-50">
-            <i class="fas fa-clipboard-list mr-2"></i> ตรวจนับ
+            <i class="fas fa-clipboard-check mr-2"></i> นับ &amp; เทียบ
         </button>
     </div>
 
@@ -1509,193 +1505,76 @@ thead.sticky {
 
     </div><!-- end inv-sub-import -->
 
-    <!-- ====== SUB-TAB: เทียบสต๊อก (Compare) ====== -->
-    <div id="inv-sub-compare" class="hidden space-y-6">
 
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-wrap items-center gap-4">
-        <div class="flex gap-2">
-          <button onclick="invCompareMode('fg')" id="inv-cmp-btn-fg"
-                  class="inv-cmp-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-teal-600 text-white shadow transition-all">
-            <i class="fas fa-boxes mr-1"></i> FG
-          </button>
-          <button onclick="invCompareMode('semi')" id="inv-cmp-btn-semi"
-                  class="inv-cmp-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 transition-all">
-            <i class="fas fa-film mr-1"></i> SEMI
-          </button>
-        </div>
-        <div id="inv-cmp-wh-filter" class="flex gap-2">
-          <button onclick="invCmpSetWH('all')" id="inv-cmp-wh-all"
-                  class="inv-cmp-wh-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-700 text-white shadow transition-all">
-            ทั้งหมด
-          </button>
-          <button onclick="invCmpSetWH('FG-BP')" id="inv-cmp-wh-fg-bp"
-                  class="inv-cmp-wh-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-100 text-slate-600 hover:bg-teal-100 hover:text-teal-700 transition-all">
-            FG-BP
-          </button>
-          <button onclick="invCmpSetWH('FG-A-')" id="inv-cmp-wh-fg-a"
-                  class="inv-cmp-wh-btn px-4 py-2 rounded-xl font-black text-xs bg-slate-100 text-slate-600 hover:bg-teal-100 hover:text-teal-700 transition-all">
-            FG-A-
-          </button>
-        </div>
-        <input type="text" id="inv-cmp-search" placeholder="ค้นหารหัส / ชื่อสินค้า..."
-               oninput="invFilterCompare()"
-               class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400 w-56 transition-all">
-        <div class="ml-auto flex gap-2">
-          <button onclick="invLoadCompare()"
-                  class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
-            <i class="fas fa-sync-alt"></i> โหลดข้อมูล
-          </button>
-          <button onclick="invExportCompare()"
-                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
-            <i class="fas fa-file-excel"></i> Export
-          </button>
-        </div>
-      </div>
-
-      <div id="inv-cmp-kpi-fg" class="hidden grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div class="bg-teal-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-teal-100 uppercase">Total SKU</p>
-          <p id="inv-cmp-kpi-total" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-blue-400">
-          <p class="text-[10px] font-black text-slate-400 uppercase">ยอดระบบ (เส้น)</p>
-          <p id="inv-cmp-kpi-sys-line" class="text-2xl font-black mt-1 font-mono text-blue-300">0</p>
-        </div>
-        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-indigo-400">
-          <p class="text-[10px] font-black text-slate-400 uppercase">ยอดระบบ (KG)</p>
-          <p id="inv-cmp-kpi-sys-kg" class="text-2xl font-black mt-1 font-mono text-indigo-300">0</p>
-        </div>
-        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-amber-400">
-          <p class="text-[10px] font-black text-slate-400 uppercase">จอง (เส้น)</p>
-          <p id="inv-cmp-kpi-reserved" class="text-2xl font-black mt-1 font-mono text-amber-300">0</p>
-        </div>
-        <div class="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-emerald-100 uppercase">✓ ตรงกัน</p>
-          <p id="inv-cmp-kpi-match" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-rose-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-rose-100 uppercase">⚠ ผลต่าง</p>
-          <p id="inv-cmp-kpi-diff" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-      </div>
-
-      <div id="inv-cmp-kpi-semi" class="hidden grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="bg-purple-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-purple-100 uppercase">Total SKU</p>
-          <p id="inv-cmp-kpi-semi-total" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-purple-400">
-          <p class="text-[10px] font-black text-slate-400 uppercase">ม้วนทั้งหมด</p>
-          <p id="inv-cmp-kpi-semi-rolls" class="text-2xl font-black mt-1 font-mono text-purple-300">0</p>
-        </div>
-        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-indigo-400">
-          <p class="text-[10px] font-black text-slate-400 uppercase">น้ำหนักรวม (KG)</p>
-          <p id="inv-cmp-kpi-semi-kg" class="text-2xl font-black mt-1 font-mono text-indigo-300">0</p>
-        </div>
-        <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-lg text-center border-t-4 border-teal-400">
-          <p class="text-[10px] font-black text-slate-400 uppercase">คงเหลือ (KG)</p>
-          <p id="inv-cmp-kpi-semi-avail" class="text-2xl font-black mt-1 font-mono text-teal-300">0</p>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div id="inv-cmp-empty" class="py-20 text-center text-slate-300">
-          <i class="fas fa-balance-scale text-6xl mb-4 opacity-20 block"></i>
-          <p class="font-bold text-slate-400">กดปุ่ม <strong>โหลดข้อมูล</strong> เพื่อดึงข้อมูลจาก Google Sheet</p>
-        </div>
-        <div id="inv-cmp-loading" class="hidden py-20 text-center">
-          <i class="fas fa-spinner fa-spin text-4xl text-teal-400 mb-4 block"></i>
-          <p class="text-slate-500 font-bold">กำลังโหลดข้อมูล...</p>
-        </div>
-        <div id="inv-cmp-table-wrap" class="hidden overflow-x-auto">
-          <table id="inv-cmp-table-fg" class="w-full text-sm hidden">
-            <thead class="bg-slate-900 text-slate-300 text-[11px] font-black uppercase tracking-wider sticky top-0 z-10">
-              <tr>
-                <th class="px-3 py-3 text-center w-10">No.</th>
-                <th class="px-4 py-3 text-left min-w-[80px]">WH</th>
-                <th class="px-4 py-3 text-left min-w-[120px]">Item number</th>
-                <th class="px-4 py-3 text-left min-w-[160px]">Product name</th>
-                <th class="px-3 py-3 text-right bg-blue-900 min-w-[90px]">ยอดระบบ<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-right bg-indigo-900 min-w-[90px]">ยอดระบบ<br><span class="text-[9px] font-normal opacity-70">(KG)</span></th>
-                <th class="px-3 py-3 text-right bg-amber-900 min-w-[80px]">จอง<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-right bg-teal-900 min-w-[80px]">คงเหลือ<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-right bg-green-900 min-w-[90px]">Counting<br><span class="text-[9px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-right bg-slate-700 min-w-[80px]">ผลต่าง</th>
-                <th class="px-3 py-3 text-center min-w-[80px]">สถานะ</th>
-              </tr>
-            </thead>
-            <tbody id="inv-cmp-tbody-fg" class="divide-y divide-slate-100"></tbody>
-          </table>
-          <table id="inv-cmp-table-semi" class="w-full text-sm hidden">
-            <thead class="bg-slate-900 text-slate-300 text-[11px] font-black uppercase tracking-wider sticky top-0 z-10">
-              <tr>
-                <th class="px-3 py-3 text-center w-10">No.</th>
-                <th class="px-4 py-3 text-left min-w-[80px]">WH</th>
-                <th class="px-4 py-3 text-left min-w-[120px]">Item number</th>
-                <th class="px-4 py-3 text-left min-w-[160px]">Product name</th>
-                <th class="px-4 py-3 text-left min-w-[100px]">Batch</th>
-                <th class="px-4 py-3 text-left min-w-[100px]">Serial</th>
-                <th class="px-3 py-3 text-right bg-purple-900 min-w-[90px]">น้ำหนัก<br><span class="text-[9px] font-normal opacity-70">(KG)</span></th>
-                <th class="px-3 py-3 text-right bg-teal-900 min-w-[90px]">คงเหลือ<br><span class="text-[9px] font-normal opacity-70">(KG)</span></th>
-                <th class="px-3 py-3 text-center min-w-[80px]">สถานะ</th>
-              </tr>
-            </thead>
-            <tbody id="inv-cmp-tbody-semi" class="divide-y divide-slate-100"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div><!-- end inv-sub-compare -->
-
-    <!-- ====== SUB-TAB: ตรวจนับ (Cycle Count) ====== -->
+    <!-- ====== SUB-TAB: นับ & เทียบ (Cycle Count) ====== -->
     <div id="inv-sub-cyclecount" class="hidden space-y-6">
 
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-wrap items-center gap-4">
-        <div class="flex gap-2">
+      <!-- Mode Toggle Bar — FG vs SEMI (prominent) -->
+      <div id="inv-cyc-mode-bar" class="rounded-2xl overflow-hidden shadow-md border-2 border-teal-200 transition-all duration-300">
+        <div id="inv-cyc-mode-header" class="bg-gradient-to-r from-teal-700 to-teal-500 px-5 py-4 flex flex-wrap items-center gap-3">
+
+          <!-- FG / SEMI Toggle Buttons -->
           <button onclick="invCycleMode('fg')" id="inv-cyc-btn-fg"
-                  class="inv-cyc-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-teal-600 text-white shadow transition-all">
-            <i class="fas fa-boxes mr-1"></i> FG
+                  class="inv-cyc-mode-btn flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-sm transition-all bg-white text-teal-700 shadow-lg ring-2 ring-white/80">
+            <i class="fas fa-boxes text-base"></i>
+            <div class="text-left leading-tight">
+              <div class="text-sm font-black">FG</div>
+              <div class="text-[10px] font-bold opacity-60">สินค้าสำเร็จรูป</div>
+            </div>
           </button>
           <button onclick="invCycleMode('semi')" id="inv-cyc-btn-semi"
-                  class="inv-cyc-mode-btn px-5 py-2.5 rounded-xl font-black text-sm bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 transition-all">
-            <i class="fas fa-film mr-1"></i> SEMI
+                  class="inv-cyc-mode-btn flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-sm transition-all text-white/60 hover:bg-white/10">
+            <i class="fas fa-film text-base"></i>
+            <div class="text-left leading-tight">
+              <div class="text-sm font-black">SEMI</div>
+              <div class="text-[10px] font-bold opacity-60">Film / กึ่งสำเร็จรูป</div>
+            </div>
           </button>
-        </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs font-black text-slate-400 uppercase tracking-wider"><i class="fas fa-calendar-alt mr-1"></i> วันที่</label>
-          <input type="date" id="inv-cyc-date"
-                 class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400 transition-all">
-        </div>
-        <input type="text" id="inv-cyc-search" placeholder="ค้นหารหัส / ชื่อสินค้า..."
-               oninput="invFilterCycle()"
-               class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-teal-400 w-52 transition-all">
-        <div class="ml-auto flex gap-2">
-          <button onclick="invLoadCycleCount()"
-                  class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
-            <i class="fas fa-sync-alt"></i> โหลด
-          </button>
-          <button onclick="invPrintCycleForm()"
-                  class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
-            <i class="fas fa-print"></i> พิมพ์
-          </button>
-          <button onclick="invSaveCycleCount()"
-                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
-            <i class="fas fa-save"></i> บันทึก
-          </button>
+
+          <!-- Active Mode Badge -->
+          <div id="inv-cyc-active-badge" class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-black">
+            <i id="inv-cyc-badge-icon" class="fas fa-boxes"></i>
+            <span id="inv-cyc-badge-label">FG MODE — สินค้าสำเร็จรูป</span>
+          </div>
+
+          <!-- Date + Search + Actions -->
+          <div class="ml-auto flex items-center gap-2 flex-wrap justify-end">
+            <div class="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
+              <i class="fas fa-calendar-alt text-white/70 text-xs"></i>
+              <input type="date" id="inv-cyc-date"
+                     class="bg-transparent text-white font-black text-sm outline-none w-32">
+            </div>
+            <input type="text" id="inv-cyc-search" placeholder="ค้นหารหัส / ชื่อ..."
+                   oninput="invFilterCycle()"
+                   class="bg-white/20 rounded-xl px-3 py-2 text-sm font-bold text-white placeholder-white/50 outline-none focus:bg-white/30 w-40 transition-all border border-white/20">
+            <button onclick="invLoadCycleCount()"
+                    class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all border border-white/30">
+              <i class="fas fa-sync-alt"></i> โหลด
+            </button>
+            <button onclick="invPrintCycleForm()"
+                    class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all border border-white/30">
+              <i class="fas fa-print"></i> พิมพ์
+            </button>
+            <button onclick="invSaveCycleCount()"
+                    class="bg-emerald-500 hover:bg-emerald-400 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
+              <i class="fas fa-save"></i> บันทึก
+            </button>
+          </div>
+
         </div>
       </div>
 
       <div id="inv-cyc-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div class="bg-teal-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-teal-100 uppercase">รายการทั้งหมด</p>
+        <div id="inv-cyc-kpi-card-total" class="bg-teal-600 text-white p-4 rounded-2xl shadow-lg text-center transition-all duration-300">
+          <p id="inv-cyc-kpi-total-label" class="text-[10px] font-black text-teal-100 uppercase">รายการทั้งหมด</p>
           <p id="inv-cyc-kpi-total" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
         <div class="bg-blue-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-blue-100 uppercase">รับเข้า (SKU)</p>
+          <p id="inv-cyc-kpi-in-label" class="text-[10px] font-black text-blue-100 uppercase">รับเข้า (SKU)</p>
           <p id="inv-cyc-kpi-in" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
         <div class="bg-rose-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-rose-100 uppercase">เบิกออก (SKU)</p>
+          <p id="inv-cyc-kpi-out-label" class="text-[10px] font-black text-rose-100 uppercase">เบิกออก (SKU)</p>
           <p id="inv-cyc-kpi-out" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
         <div class="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg text-center">
@@ -1752,6 +1631,10 @@ thead.sticky {
                 <th class="px-2 py-3 text-left min-w-[140px] bg-slate-800">Product name 2</th>
                 <th class="px-2 py-3 text-center bg-teal-900 w-28">Check 2<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span></th>
                 <th class="px-2 py-3 text-left bg-purple-900 min-w-[100px]">Item Semi<br><span class="text-[8px] opacity-70 normal-case font-normal">รหัสฟิล์ม</span></th>
+                <th class="px-2 py-3 text-right bg-amber-900 w-20">ระบบ<br><span class="text-[8px] opacity-70 normal-case font-normal">(แถบ)</span></th>
+                <th class="px-2 py-3 text-right bg-emerald-900 w-20">รวม FG<br><span class="text-[8px] opacity-70 normal-case font-normal">(คำนวณ)</span></th>
+                <th class="px-2 py-3 text-right bg-slate-600 w-16">Diff</th>
+                <th class="px-2 py-3 text-center bg-slate-700 w-28">สถานะ</th>
               </tr>
             </thead>
             <tbody id="inv-cyc-tbody-semi" class="divide-y divide-slate-100"></tbody>
@@ -8021,11 +7904,10 @@ let blockingChartInstance = null;
     var fgTableData = window.fgTableData; // alias ใช้ใน closure เดิมได้เลย
     let fgExcelRows = [];        // Raw rows from uploaded Excel (movement data)
 
-    /** Switch Inventory sub-tabs */
-    /** Switch Inventory sub-tabs (3 tabs: import, compare, cyclecount) */
+    /** Switch Inventory sub-tabs (2 tabs: import, cyclecount) */
     // ── ฟังก์ชันภายใน: สวิตช์แท็บจริงๆ (ไม่มี gate) ─────────────────────
     function _doSwitchInvSubTab(tab) {
-        ['import', 'compare', 'cyclecount'].forEach(t => {
+        ['import', 'cyclecount'].forEach(t => {
             const sub = document.getElementById('inv-sub-' + t);
             if (sub) sub.classList.add('hidden');
             const btn = document.getElementById('inv-tab-' + t);
@@ -8051,16 +7933,8 @@ let blockingChartInstance = null;
         }
     }
 
-    // ── Gate: ตรวจสอบข้อมูลก่อนเข้าแท็บ เทียบสต๊อก / ตรวจนับ ─────────────
+    // ── Switch Tab (ไม่มี gate — เข้าได้เลย) ────────────────────────────────
     window.switchInvSubTab = function switchInvSubTab(tab) {
-        if (tab === 'compare' || tab === 'cyclecount') {
-            const status = _invCheckImportStatus();
-            const missing = Object.keys(INV_IMPORT_CONFIG).filter(type => !status[type]);
-            if (missing.length > 0) {
-                _invShowDataCheckModal(tab, status);
-                return; // หยุดก่อน — รอ user ตัดสินใจ
-            }
-        }
         _doSwitchInvSubTab(tab);
     };
 
@@ -8654,19 +8528,53 @@ let blockingChartInstance = null;
     // ── TAB 3: CYCLE COUNT ────────────────────────────────────────
 
     window.invCycleMode = function(mode) {
+        const prevMode = invCycleCurrentMode;
         invCycleCurrentMode = mode;
-        ['fg','semi'].forEach(m => {
-            const btn = document.getElementById('inv-cyc-btn-' + m);
-            if (btn) {
-                if (m === mode) { btn.classList.remove('bg-slate-100','text-slate-600'); btn.classList.add(m==='fg'?'bg-teal-600':'bg-purple-600','text-white','shadow'); }
-                else { btn.classList.add('bg-slate-100','text-slate-600'); btn.classList.remove('bg-teal-600','bg-purple-600','text-white','shadow'); }
-            }
-        });
+        const isFg = (mode === 'fg');
+
+        // ── อัปเดต visual theme ตาม mode ─────────────────────────────────
+        const header  = document.getElementById('inv-cyc-mode-header');
+        const modeBar = document.getElementById('inv-cyc-mode-bar');
+        const badgeIcon  = document.getElementById('inv-cyc-badge-icon');
+        const badgeLabel = document.getElementById('inv-cyc-badge-label');
+        const kpiCard    = document.getElementById('inv-cyc-kpi-card-total');
+        const kpiLabel   = document.getElementById('inv-cyc-kpi-total-label');
+        const btnFg   = document.getElementById('inv-cyc-btn-fg');
+        const btnSemi = document.getElementById('inv-cyc-btn-semi');
+
+        if (header) header.className = 'px-5 py-4 flex flex-wrap items-center gap-3 transition-all duration-300 ' +
+            (isFg ? 'bg-gradient-to-r from-teal-700 to-teal-500'
+                  : 'bg-gradient-to-r from-purple-800 to-purple-600');
+        if (modeBar) modeBar.className = 'rounded-2xl overflow-hidden shadow-md border-2 transition-all duration-300 ' +
+            (isFg ? 'border-teal-200' : 'border-purple-300');
+        if (badgeIcon) badgeIcon.className = 'fas ' + (isFg ? 'fa-boxes' : 'fa-film');
+        if (badgeLabel) badgeLabel.textContent = isFg
+            ? 'FG MODE — สินค้าสำเร็จรูป'
+            : 'SEMI MODE — Film / กึ่งสำเร็จรูป';
+        if (kpiCard) kpiCard.className = 'text-white p-4 rounded-2xl shadow-lg text-center transition-all duration-300 ' +
+            (isFg ? 'bg-teal-600' : 'bg-purple-600');
+        if (kpiLabel) kpiLabel.className = 'text-[10px] font-black uppercase ' +
+            (isFg ? 'text-teal-100' : 'text-purple-100');
+
+        // ── toggle button style ───────────────────────────────────────────
+        const activeClass   = 'inv-cyc-mode-btn flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-sm transition-all bg-white shadow-lg ring-2 ring-white/80 ';
+        const inactiveClass = 'inv-cyc-mode-btn flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-sm transition-all text-white/60 hover:bg-white/10';
+        if (btnFg)   btnFg.className   = isFg  ? activeClass + 'text-teal-700'   : inactiveClass;
+        if (btnSemi) btnSemi.className = !isFg ? activeClass + 'text-purple-700' : inactiveClass;
+
+        // ── toggle ตาราง ──────────────────────────────────────────────────
         const tblFg   = document.getElementById('inv-cyc-table-fg');
         const tblSemi = document.getElementById('inv-cyc-table-semi');
-        if (tblFg)   tblFg.classList.toggle('hidden', mode !== 'fg');
-        if (tblSemi) tblSemi.classList.toggle('hidden', mode !== 'semi');
-        invRenderCycleTable(invCycleData);
+        if (tblFg)   tblFg.classList.toggle('hidden', !isFg);
+        if (tblSemi) tblSemi.classList.toggle('hidden', isFg);
+
+        // ── ถ้า mode เปลี่ยนและมีข้อมูลอยู่แล้ว → โหลดใหม่อัตโนมัติ ───────
+        if (prevMode !== mode && invCycleData && invCycleData.length > 0) {
+            invCycleData = [];
+            invLoadCycleCount();
+        } else {
+            invRenderCycleTable(invCycleData);
+        }
     };
 
     window.invLoadCycleCount = function() {
@@ -8788,6 +8696,10 @@ let blockingChartInstance = null;
                     +   '<input type="text" placeholder="เช่น 7+2" data-row="' + ri + '" data-field="check2" oninput="invSemiMarkFilled(' + ri + ')" class="' + inpCls2 + '">'
                     + '</td>'
                     + '<td class="px-2 py-2 text-[10px] font-mono font-black text-purple-700 bg-purple-50">' + itemSemi + '</td>'
+                    + '<td class="px-2 py-2 text-right font-mono font-black text-amber-700 text-xs bg-amber-50">' + (r.systemQty || 0) + '</td>'
+                    + '<td id="inv-semi-total-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-slate-400 text-xs">—</td>'
+                    + '<td id="inv-semi-diff-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-slate-400 text-xs">—</td>'
+                    + '<td id="inv-semi-status-' + ri + '" class="px-2 py-2 text-center text-xs"><span class="text-amber-400 font-black">❓</span></td>'
                     + '</tr>';
             });
             tbody.innerHTML = rows.join('');
@@ -8839,6 +8751,59 @@ let blockingChartInstance = null;
     };
 
     window.invSemiMarkFilled = function(rowIdx) {
+        function parseExpr(v) {
+            if (!v || !v.trim()) return null;
+            const n = Number(v.trim());
+            if (!isNaN(n)) return n;
+            // รองรับ format "9+1" หรือ "7+2"
+            const parts = String(v).split('+').map(p => Number(p.trim()));
+            if (parts.length > 0 && parts.every(p => !isNaN(p))) return parts.reduce((a,b)=>a+b, 0);
+            return null;
+        }
+        const el1 = document.querySelector('[data-row="' + rowIdx + '"][data-field="check1"]');
+        const el2 = document.querySelector('[data-row="' + rowIdx + '"][data-field="check2"]');
+        const v1 = el1 ? (el1.value||'').trim() : '';
+        const v2 = el2 ? (el2.value||'').trim() : '';
+        const q1 = parseExpr(v1);
+        const q2 = parseExpr(v2);
+        // ตรวจสอบว่า SEMI นี้ผลิต FG ได้ 2 SKU หรือ 1 SKU
+        const rowData = invCycleData[rowIdx];
+        const hasFg2  = !!(rowData && rowData.sku2);
+        const total = (q1 !== null || q2 !== null) ? ((q1||0) + (q2||0)) : null;
+
+        const sysQty   = rowData ? Number(rowData.systemQty || 0) : 0;
+        const diff     = total !== null ? (total - sysQty) : null;
+
+        const totalEl  = document.getElementById('inv-semi-total-'  + rowIdx);
+        const diffEl   = document.getElementById('inv-semi-diff-'   + rowIdx);
+        const statusEl = document.getElementById('inv-semi-status-' + rowIdx);
+
+        if (totalEl) {
+            totalEl.textContent = total !== null ? total.toLocaleString() : '—';
+            totalEl.className = 'px-2 py-2 text-right font-mono font-black text-xs ' +
+                (total !== null ? 'text-emerald-700' : 'text-slate-400');
+        }
+        if (diffEl) {
+            if (diff === null) {
+                diffEl.textContent = '—';
+                diffEl.className = 'px-2 py-2 text-right font-mono font-black text-xs text-slate-400';
+            } else {
+                diffEl.textContent = (diff >= 0 ? '+' : '') + diff;
+                diffEl.className = 'px-2 py-2 text-right font-mono font-black text-xs ' +
+                    (diff === 0 ? 'text-emerald-700' : 'text-rose-600');
+            }
+        }
+        if (statusEl) {
+            if (!v1 && !v2) {
+                statusEl.innerHTML = '<span class="text-amber-400 font-black">❓</span>';
+            } else if (diff === null) {
+                statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">⏳ กรอกบางส่วน</span>';
+            } else if (diff === 0) {
+                statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">✅ ตรง</span>';
+            } else {
+                statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">⚠️ ต่าง ' + (diff > 0 ? '+' : '') + diff + '</span>';
+            }
+        }
         invUpdateCycleKPI();
     };
 
