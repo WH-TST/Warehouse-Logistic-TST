@@ -1564,26 +1564,30 @@ thead.sticky {
         </div>
       </div>
 
-      <div id="inv-cyc-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div id="inv-cyc-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-6 gap-3">
         <div id="inv-cyc-kpi-card-total" class="bg-teal-600 text-white p-4 rounded-2xl shadow-lg text-center transition-all duration-300">
           <p id="inv-cyc-kpi-total-label" class="text-[10px] font-black text-teal-100 uppercase">รายการทั้งหมด</p>
           <p id="inv-cyc-kpi-total" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
-        <div class="bg-blue-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p id="inv-cyc-kpi-in-label" class="text-[10px] font-black text-blue-100 uppercase">รับเข้า (SKU)</p>
-          <p id="inv-cyc-kpi-in" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-rose-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p id="inv-cyc-kpi-out-label" class="text-[10px] font-black text-rose-100 uppercase">เบิกออก (SKU)</p>
-          <p id="inv-cyc-kpi-out" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-emerald-100 uppercase">กรอกแล้ว</p>
-          <p id="inv-cyc-kpi-filled" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
         <div class="bg-amber-500 text-white p-4 rounded-2xl shadow-lg text-center">
           <p class="text-[10px] font-black text-amber-100 uppercase">รอกรอก</p>
           <p id="inv-cyc-kpi-pending" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+        <div class="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-emerald-100 uppercase">✅ ตรง</p>
+          <p id="inv-cyc-kpi-match" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+        <div class="bg-blue-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-blue-100 uppercase">✅ รับทราบ</p>
+          <p id="inv-cyc-kpi-accepted" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+        <div class="bg-rose-600 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-rose-100 uppercase">⚠️ รอชี้แจง</p>
+          <p id="inv-cyc-kpi-unresolved" class="text-3xl font-black mt-1 font-mono">0</p>
+        </div>
+        <div class="bg-slate-700 text-white p-4 rounded-2xl shadow-lg text-center">
+          <p class="text-[10px] font-black text-slate-300 uppercase">กรอกแล้ว</p>
+          <p id="inv-cyc-kpi-filled" class="text-3xl font-black mt-1 font-mono">0</p>
         </div>
       </div>
 
@@ -8685,7 +8689,7 @@ let blockingChartInstance = null;
                     + '<i class="fas fa-chevron-down text-[10px]" id="cyc-hist-icon-' + i + '"></i>'
                     + '</button>';
 
-                const mainRow = '<tr id="' + rowId + '" class="hover:bg-teal-50/50 transition-colors ' + rowBg + '">'
+                const mainRow = '<tr id="cyc-row-' + i + '" class="hover:bg-teal-50/50 transition-colors ' + rowBg + '">'
                     + '<td class="px-2 py-2 text-center">' + expandBtn + '</td>'
                     + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
                     + '<td class="px-3 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
@@ -8787,7 +8791,37 @@ let blockingChartInstance = null;
 
     window.invSetReason = function(mode, rowIdx, val) {
         const r = invCycleData[rowIdx];
-        if (r) r._reason = val;
+        if (!r) return;
+        r._reason = val;
+        // อัปเดตสถานะทันที
+        if (mode === 'fg') {
+            const diff = r._diff;
+            if (diff === undefined || diff === null) return;
+            const statusEl = document.getElementById('inv-diff-' + rowIdx); // ใช้ diff cell เป็น ref
+            // แก้ row background
+            const rowEl = document.getElementById('cyc-row-' + rowIdx);
+            if (rowEl) {
+                rowEl.className = rowEl.className.replace(/bg-\S+/g, '').trim();
+                if (diff === 0) rowEl.classList.add('bg-emerald-50');
+                else if (val)  rowEl.classList.add('bg-blue-50');
+                else           rowEl.classList.add('bg-rose-50');
+            }
+        } else {
+            // SEMI — อัปเดต status cell
+            const statusEl = document.getElementById('inv-semi-status-' + rowIdx);
+            const totalEl  = document.getElementById('inv-semi-total-' + rowIdx);
+            const total    = totalEl ? Number(totalEl.textContent) : null;
+            const sysQty   = r.systemQty || 0;
+            const diff     = total !== null && !isNaN(total) ? total - sysQty : null;
+            if (statusEl && diff !== null && diff !== 0) {
+                if (val) {
+                    statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700">✅ รับทราบ</span>';
+                } else {
+                    statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">⚠️ รอชี้แจง</span>';
+                }
+            }
+        }
+        invUpdateCycleKPI();
     };
 
     window.invCalcActual = function(rowIdx) {
@@ -8803,14 +8837,26 @@ let blockingChartInstance = null;
         if (actualEl) actualEl.textContent = actual.toLocaleString();
         if (diffEl) {
             diffEl.textContent = (diff >= 0 ? '+' : '') + diff;
-            diffEl.className = 'px-3 py-2 text-right font-mono text-xs font-black ' + (diff === 0 ? 'text-emerald-700' : 'text-rose-700');
+            diffEl.className = 'px-3 py-2 text-right font-mono text-xs font-black '
+                + (diff === 0 ? 'text-emerald-700' : (r && r._reason ? 'text-blue-600' : 'text-rose-700'));
         }
         if (r) { r._b1=b1; r._b2=b2; r._p1=p1; r._p2=p2; r._hold=hold; r._actual=actual; r._diff=diff; }
+
+        // ── แสดง row color ────────────────────────────────────────────────
+        const rowEl = document.getElementById('cyc-row-' + rowIdx);
+        if (rowEl) {
+            rowEl.classList.remove('bg-white','bg-slate-50','bg-emerald-50','bg-rose-50','bg-blue-50');
+            if (actual === 0) rowEl.classList.add('bg-white');
+            else if (diff === 0)        rowEl.classList.add('bg-emerald-50');
+            else if (r && r._reason)    rowEl.classList.add('bg-blue-50');
+            else                        rowEl.classList.add('bg-rose-50');
+        }
+
         // ── แสดง/ซ่อน dropdown สาเหตุส่วนต่าง ────────────────────────────
         const reasonCell = document.getElementById('inv-fg-reason-cell-' + rowIdx);
         if (reasonCell) {
             if (actual > 0 && diff !== 0) {
-                const cur = r._reason || '';
+                const cur = r ? (r._reason || '') : '';
                 reasonCell.innerHTML = _invReasonDropdown('fg', rowIdx, cur);
             } else {
                 reasonCell.innerHTML = '<span class="text-slate-300 text-[10px]">—</span>';
@@ -8826,21 +8872,42 @@ let blockingChartInstance = null;
         const q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
         const filtered = invCycleData.filter(r => !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q));
         const total = filtered.length;
-        const inSku  = filtered.filter(r => (r.receiptQty||0) > 0).length;
-        const outSku = filtered.filter(r => (r.issueQty||0)  > 0).length;
-        let filled = 0, pending = 0;
-        filtered.forEach((r) => {
+        let filled = 0, pending = 0, match = 0, accepted = 0, unresolved = 0;
+        filtered.forEach(function(r) {
             const ri = invCycleData.indexOf(r);
             const field = mode === 'fg' ? 'b1' : 'check1';
             const el = document.querySelector('[data-row="' + ri + '"][data-field="' + field + '"]');
             const hasValue = el && ((el.value||'').trim() !== '' && (el.value||'') !== '0');
-            if (hasValue) filled++; else pending++;
+            if (hasValue) {
+                filled++;
+                if (mode === 'fg') {
+                    const diff = r._diff;
+                    if (diff === undefined || diff === null) { pending++; return; }
+                    if (diff === 0)       match++;
+                    else if (r._reason)  accepted++;
+                    else                 unresolved++;
+                } else {
+                    // SEMI
+                    const el2 = document.querySelector('[data-row="' + ri + '"][data-field="check2"]');
+                    const totalEl = document.getElementById('inv-semi-total-' + ri);
+                    const totalVal = totalEl ? Number(totalEl.textContent) : NaN;
+                    const sysQty  = Number(r.systemQty || 0);
+                    const diff = !isNaN(totalVal) ? totalVal - sysQty : null;
+                    if (diff === null)    { pending++; return; }
+                    if (diff === 0)       match++;
+                    else if (r._reason)  accepted++;
+                    else                 unresolved++;
+                }
+            } else {
+                pending++;
+            }
         });
-        safeSetText('inv-cyc-kpi-total', total);
-        safeSetText('inv-cyc-kpi-in',    inSku);
-        safeSetText('inv-cyc-kpi-out',   outSku);
-        safeSetText('inv-cyc-kpi-filled', filled);
-        safeSetText('inv-cyc-kpi-pending', pending || (total - filled));
+        safeSetText('inv-cyc-kpi-total',      total);
+        safeSetText('inv-cyc-kpi-pending',    pending);
+        safeSetText('inv-cyc-kpi-match',      match);
+        safeSetText('inv-cyc-kpi-accepted',   accepted);
+        safeSetText('inv-cyc-kpi-unresolved', unresolved);
+        safeSetText('inv-cyc-kpi-filled',     filled);
     };
 
     window.invSemiMarkFilled = function(rowIdx) {
@@ -8894,7 +8961,12 @@ let blockingChartInstance = null;
             } else if (diff === 0) {
                 statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">✅ ตรง</span>';
             } else {
-                statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">⚠️ ต่าง ' + (diff > 0 ? '+' : '') + diff + '</span>';
+                const reason = rowData ? (rowData._reason || '') : '';
+                if (reason) {
+                    statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700">✅ รับทราบ</span>';
+                } else {
+                    statusEl.innerHTML = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700">⚠️ รอชี้แจง</span>';
+                }
             }
         }
         // ── แสดง/ซ่อน dropdown สาเหตุส่วนต่าง ────────────────────────────
