@@ -8081,6 +8081,7 @@ let blockingChartInstance = null;
     var invCompareData = [];
     var invCycleCurrentMode = 'fg';
     var invCycleData = [];
+    var _invCycleStore = { fg: [], semi: [] };  // เก็บข้อมูลแยกต่างหากแต่ละ mode
 
     // ── TAB 1: IMPORT ─────────────────────────────────────────────
 
@@ -8568,19 +8569,66 @@ let blockingChartInstance = null;
         if (tblFg)   tblFg.classList.toggle('hidden', !isFg);
         if (tblSemi) tblSemi.classList.toggle('hidden', isFg);
 
-        // ── ถ้า mode เปลี่ยนและมีข้อมูลอยู่แล้ว → โหลดใหม่อัตโนมัติ ───────
-        if (prevMode !== mode && invCycleData && invCycleData.length > 0) {
-            invCycleData = [];
-            invLoadCycleCount();
+        if (prevMode !== mode) {
+            // ── บันทึกค่าที่กรอกไว้ของ mode เก่า ──────────────────────────
+            _invCycleSaveInputs(prevMode);
+
+            // ── restore ข้อมูล mode ใหม่จาก cache ──────────────────────────
+            invCycleData = _invCycleStore[mode] || [];
+            if (invCycleData.length > 0) {
+                const wrap = document.getElementById('inv-cyc-table-wrap');
+                if (wrap) wrap.classList.remove('hidden');
+                invRenderCycleTable(invCycleData);
+                // restore ค่าที่เคยกรอกไว้
+                _invCycleRestoreInputs(mode);
+            } else {
+                // ยังไม่เคยโหลด → โหลดอัตโนมัติ
+                invLoadCycleCount();
+            }
         } else {
             invRenderCycleTable(invCycleData);
         }
     };
 
+    // ── Save/Restore input values แยกต่างหากต่อ mode ─────────────────────────
+    function _invCycleSaveInputs(mode) {
+        const store = _invCycleStore[mode] || [];
+        if (!store.length) return;
+        store.forEach(function(r, ri) {
+            const fields = (mode === 'fg')
+                ? ['b1','b2','p1','p2','hold']
+                : ['check1','check2'];
+            fields.forEach(function(f) {
+                const el = document.querySelector('[data-row="' + ri + '"][data-field="' + f + '"]');
+                if (el) r['_input_' + f] = el.value;
+            });
+        });
+    }
+
+    function _invCycleRestoreInputs(mode) {
+        const store = _invCycleStore[mode] || [];
+        store.forEach(function(r, ri) {
+            const fields = (mode === 'fg')
+                ? ['b1','b2','p1','p2','hold']
+                : ['check1','check2'];
+            fields.forEach(function(f) {
+                if (r['_input_' + f] === undefined) return;
+                const el = document.querySelector('[data-row="' + ri + '"][data-field="' + f + '"]');
+                if (el) {
+                    el.value = r['_input_' + f];
+                    // trigger คำนวณ
+                    if (mode === 'fg') invCalcActual(ri);
+                    else invSemiMarkFilled(ri);
+                }
+            });
+        });
+    }
+
     window.invLoadCycleCount = function() {
         const dateEl = document.getElementById('inv-cyc-date');
         const dateStr = dateEl ? dateEl.value : '';
         if (!dateStr) return showToast('กรุณาเลือกวันที่', true);
+        const mode    = invCycleCurrentMode;
         const empty   = document.getElementById('inv-cyc-empty');
         const loading = document.getElementById('inv-cyc-loading');
         const wrap    = document.getElementById('inv-cyc-table-wrap');
@@ -8592,6 +8640,7 @@ let blockingChartInstance = null;
                 if (loading) loading.classList.add('hidden');
                 if (res.success) {
                     invCycleData = res.items || [];
+                    _invCycleStore[mode] = invCycleData; // บันทึกลง store
                     if (wrap) wrap.classList.remove('hidden');
                     invRenderCycleTable(invCycleData);
                 } else {
@@ -8604,7 +8653,7 @@ let blockingChartInstance = null;
                 if (empty) empty.classList.remove('hidden');
                 showToast('Error: ' + err.message, true);
             })
-            .getCycleCountItems(dateStr, invCycleCurrentMode);
+            .getCycleCountItems(dateStr, mode);
     };
 
     window.invFilterCycle = function() {
