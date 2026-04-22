@@ -1098,9 +1098,13 @@ function getWarehouseAnalyticsData(startDate, endDate) {
           const tRaw = transData[i][19];
           const tStr = (tRaw instanceof Date)
             ? Utilities.formatDate(tRaw, "GMT+7", "dd/MM/yyyy")
-            : String(tRaw || '').trim();
+            : String(tRaw || '').trim().split(' ')[0]; // ตัด time portion
           const tp = tStr.split('/');
-          if (tp.length === 3) rowDateObj = new Date(+tp[2], +tp[1] - 1, +tp[0]);
+          if (tp.length === 3) {
+            const d = parseInt(tp[0]), m = parseInt(tp[1]), y = parseInt(tp[2]);
+            if (!isNaN(d) && !isNaN(m) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
+          }
+          if (!rowDateObj) rowDateObj = parseDateValue(tRaw); // fallback
         } else if (type === "Sales order") {
           const issue = String(transData[i][12] || "").trim(); // Col M = Issue
           if (issue !== "Sold") continue;
@@ -1108,9 +1112,13 @@ function getWarehouseAnalyticsData(startDate, endDate) {
           const bRaw = transData[i][1];
           const bStr = (bRaw instanceof Date)
             ? Utilities.formatDate(bRaw, "GMT+7", "M/d/yyyy")
-            : String(bRaw || '').trim();
+            : String(bRaw || '').trim().split(' ')[0]; // ตัด time portion
           const bp = bStr.split('/');
-          if (bp.length === 3) rowDateObj = new Date(+bp[2], +bp[0] - 1, +bp[1]);
+          if (bp.length === 3) {
+            const m = parseInt(bp[0]), d = parseInt(bp[1]), y = parseInt(bp[2]);
+            if (!isNaN(m) && !isNaN(d) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
+          }
+          if (!rowDateObj) rowDateObj = parseDateValue(bRaw); // fallback
         } else {
           continue;
         }
