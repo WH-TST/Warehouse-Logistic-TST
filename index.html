@@ -16122,42 +16122,44 @@ window.saveLogisticPlan = function saveLogisticPlan() {
         console.log('🚚 Transfer payload shops[0].items:', JSON.stringify(transferItems));
     }
 
-    if (truckType === 'company') {
-        const truckSel2 = document.getElementById('logi-truck-plate');
-        const truckOpt2 = truckSel2?.options[truckSel2.selectedIndex];
-        payload.truckPlate  = truckOpt2?.value || '';
-        const rawChildPlate = truckOpt2?.dataset?.childPlate || '';
-        // trailerMode validation
-        if (rawChildPlate) {
-            if (!logiTrailerMode) return showToast('กรุณาเลือกรูปแบบการวิ่ง (เฉพาะแม่ / ทั้งพ่วง)', true);
-            if (logiTrailerMode === 'full_trailer') {
-                const anyChildShop = Object.values(logiChildAssignments).some(v => v);
-                // single-shop: ตรวจ item-level labels แทน shop-level
-                const anyChildItem = !anyChildShop && !!(
-                    document.querySelector('[id^="logi-item-truck-label-"][value="child"]') ||
-                    document.querySelector('[id^="logi-item-truck-label-"][value="split"]')
-                );
-                if (!anyChildShop && !anyChildItem) return showToast('กรุณากำหนดร้านอย่างน้อย 1 ร้านให้รถลูก', true);
+    if (jobType !== 'maintenance_pm') {
+        if (truckType === 'company') {
+            const truckSel2 = document.getElementById('logi-truck-plate');
+            const truckOpt2 = truckSel2?.options[truckSel2.selectedIndex];
+            payload.truckPlate  = truckOpt2?.value || '';
+            const rawChildPlate = truckOpt2?.dataset?.childPlate || '';
+            // trailerMode validation
+            if (rawChildPlate) {
+                if (!logiTrailerMode) return showToast('กรุณาเลือกรูปแบบการวิ่ง (เฉพาะแม่ / ทั้งพ่วง)', true);
+                if (logiTrailerMode === 'full_trailer') {
+                    const anyChildShop = Object.values(logiChildAssignments).some(v => v);
+                    // single-shop: ตรวจ item-level labels แทน shop-level
+                    const anyChildItem = !anyChildShop && !!(
+                        document.querySelector('[id^="logi-item-truck-label-"][value="child"]') ||
+                        document.querySelector('[id^="logi-item-truck-label-"][value="split"]')
+                    );
+                    if (!anyChildShop && !anyChildItem) return showToast('กรุณากำหนดร้านอย่างน้อย 1 ร้านให้รถลูก', true);
+                }
             }
+            payload.childPlate   = logiTrailerMode === 'mother_only' ? '' : rawChildPlate;
+            payload.trailerMode  = rawChildPlate ? (logiTrailerMode || '') : '';
+            // ดึง driverId + driverName จาก option ที่เลือก
+            const driverSel = document.getElementById('logi-driver');
+            const driverOpt = driverSel?.options[driverSel.selectedIndex];
+            payload.driverId   = driverOpt?.value               || '';
+            payload.driverName = driverOpt?.dataset?.name       || driverOpt?.text || '';
+            payload.tripNo     = document.getElementById('logi-trip-no')?.value;
+            if (!payload.truckPlate) return showToast('กรุณาเลือกทะเบียนรถ', true);
+            if (!payload.driverId)   return showToast('กรุณาเลือกคนขับ', true);
+            if (!payload.tripNo)     return showToast('กรุณาใส่หมายเลขเที่ยว', true);
+        } else {
+            // ดึง transportId + transportName จาก option ที่เลือก
+            const transSel = document.getElementById('logi-transport-co');
+            const transOpt = transSel?.options[transSel.selectedIndex];
+            payload.transportId   = transOpt?.value         || '';
+            payload.transportName = transOpt?.dataset?.name || transOpt?.text || '';
+            if (!payload.transportId) return showToast('กรุณาเลือกบริษัทขนส่ง', true);
         }
-        payload.childPlate   = logiTrailerMode === 'mother_only' ? '' : rawChildPlate;
-        payload.trailerMode  = rawChildPlate ? (logiTrailerMode || '') : '';
-        // ดึง driverId + driverName จาก option ที่เลือก
-        const driverSel = document.getElementById('logi-driver');
-        const driverOpt = driverSel?.options[driverSel.selectedIndex];
-        payload.driverId   = driverOpt?.value               || '';
-        payload.driverName = driverOpt?.dataset?.name       || driverOpt?.text || '';
-        payload.tripNo     = document.getElementById('logi-trip-no')?.value;
-        if (!payload.truckPlate) return showToast('กรุณาเลือกทะเบียนรถ', true);
-        if (!payload.driverId)   return showToast('กรุณาเลือกคนขับ', true);
-        if (!payload.tripNo)     return showToast('กรุณาใส่หมายเลขเที่ยว', true);
-    } else {
-        // ดึง transportId + transportName จาก option ที่เลือก
-        const transSel = document.getElementById('logi-transport-co');
-        const transOpt = transSel?.options[transSel.selectedIndex];
-        payload.transportId   = transOpt?.value         || '';
-        payload.transportName = transOpt?.dataset?.name || transOpt?.text || '';
-        if (!payload.transportId) return showToast('กรุณาเลือกบริษัทขนส่ง', true);
     }
 
     // Maintenance PM
