@@ -1094,11 +1094,11 @@ function getWarehouseAnalyticsData(startDate, endDate) {
         // Sales order → Col T (index 19) = ST PD Date, กรองเฉพาะ Issue = "Sold"
         let rowDateObj;
         if (type === "Production") {
-          rowDateObj = parseDateValue(transData[i][1]); // Col B
+          rowDateObj = parseDateValue(transData[i][19]); // Col T = ST PD Date (dd/MM/yyyy)
         } else if (type === "Sales order") {
           const issue = String(transData[i][12] || "").trim(); // Col M = Issue
           if (issue !== "Sold") continue;
-          rowDateObj = parseDateValue(transData[i][19]); // Col T = ST PD Date
+          rowDateObj = parseMDYDate(transData[i][1]); // Col B = Physical date (M/D/YYYY)
         } else {
           continue;
         }
