@@ -1094,15 +1094,23 @@ function getWarehouseAnalyticsData(startDate, endDate) {
         // Sales order → Col T (index 19) = ST PD Date, กรองเฉพาะ Issue = "Sold"
         let rowDateObj;
         if (type === "Production") {
-          rowDateObj = parseDateValue(transData[i][19]); // Col T = ST PD Date (dd/MM/yyyy)
+          // Col T = D/M/YYYY — บังคับ parse เป็น text ก่อน ไม่สนใจ format ของ Sheet
+          const tRaw = transData[i][19];
+          const tStr = (tRaw instanceof Date)
+            ? Utilities.formatDate(tRaw, "GMT+7", "dd/MM/yyyy")
+            : String(tRaw || '').trim();
+          const tp = tStr.split('/');
+          if (tp.length === 3) rowDateObj = new Date(+tp[2], +tp[1] - 1, +tp[0]);
         } else if (type === "Sales order") {
           const issue = String(transData[i][12] || "").trim(); // Col M = Issue
           if (issue !== "Sold") continue;
-          const rawColB = parseDateValue(transData[i][1]); // Col B = Physical date (M/D/YYYY จาก ERP)
-          if (rawColB) {
-            // GAS อ่าน M/D เป็น D/M → swap กลับ
-            rowDateObj = new Date(rawColB.getFullYear(), rawColB.getDate() - 1, rawColB.getMonth() + 1);
-          }
+          // Col B = M/D/YYYY — บังคับ parse เป็น text ก่อน ไม่สนใจ format ของ Sheet
+          const bRaw = transData[i][1];
+          const bStr = (bRaw instanceof Date)
+            ? Utilities.formatDate(bRaw, "GMT+7", "M/d/yyyy")
+            : String(bRaw || '').trim();
+          const bp = bStr.split('/');
+          if (bp.length === 3) rowDateObj = new Date(+bp[2], +bp[0] - 1, +bp[1]);
         } else {
           continue;
         }
