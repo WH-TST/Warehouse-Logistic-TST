@@ -1044,8 +1044,9 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
     
-    // --- 1. ดึงข้อมูล Warehouse Flow (Inbound / Outbound) ---
-    const transSheet = ss.getSheetByName("Transection");
+    // --- 1. ดึงข้อมูล Warehouse Flow (Inbound / Outbound) จาก DynamicTransaction ---
+    const dynamicSS = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
+    const transSheet = dynamicSS.getSheetByName('DynamicTransaction');
     const dailyData = {};
     const dailyOwnDelivery = {}; // จัดส่งเอง (อยู่ใน Logistic_Plan)
     const dailyPickup = {};      // รถต่างจังหวัดมารับ (ไม่อยู่ใน Logistic_Plan)
@@ -1087,47 +1088,50 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     if (transSheet) {
       const transData = transSheet.getDataRange().getValues();
       for (let i = 1; i < transData.length; i++) {
-        const type = String(transData[i][3] || "").trim();
+        const type = String(transData[i][6] || "").trim(); // Col G = Reference
 
-        // ขาเข้า (Production) → ใช้วันที่ col A (index 0)
-        // ขาออก (Sales order) → ใช้วันที่ col I (index 8) = Physical date
-        const dateColIdx = (type === "Production") ? 0 : 8;
-        let rowDateObj = (dateColIdx === 8)
-          ? parseMDYDate(transData[i][8])    // Col I = Physical date = M/D/YYYY เสมอ
-          : parseDateValue(transData[i][0]); // Col A = Date object จาก GAS
+        // Production → Col B (index 1) = Physical date
+        // Sales order → Col T (index 19) = ST PD Date, กรองเฉพาะ Issue = "Sold"
+        let rowDateObj;
+        if (type === "Production") {
+          rowDateObj = parseDateValue(transData[i][1]); // Col B
+        } else if (type === "Sales order") {
+          const issue = String(transData[i][12] || "").trim(); // Col M = Issue
+          if (issue !== "Sold") continue;
+          rowDateObj = parseDateValue(transData[i][19]); // Col T = ST PD Date
+        } else {
+          continue;
+        }
 
-        if (rowDateObj >= start && rowDateObj <= end) {
-          const dStr = Utilities.formatDate(rowDateObj, "GMT+7", "yyyy-MM-dd");
-          const weight = parseFloat(transData[i][6]) || 0;
-          const lines = parseFloat(transData[i][4]) || 0;
+        if (!rowDateObj || rowDateObj < start || rowDateObj > end) continue;
 
-          if (type === "Production") {
-            const colF = String(transData[i][5] || "").trim(); // กรองแถวที่ไม่ได้จอง
-            if (colF === "") {
-              inWeight += weight;
-              inLines += lines;
-              if (dailyData[dStr]) dailyData[dStr].in += weight;
-            }
-          } else if (type === "Sales order") {
-            const absWeight = Math.abs(weight);
-            const absLines = Math.abs(lines);
-            outWeight += absWeight;
-            outLines += absLines;
-            if (dailyData[dStr]) dailyData[dStr].out += absWeight;
+        const dStr = Utilities.formatDate(rowDateObj, "GMT+7", "yyyy-MM-dd");
+        const weight = parseFloat(transData[i][9]) || 0;  // Col J = Quantity (KG)
+        const lines  = parseFloat(transData[i][7]) || 0;  // Col H = CW quantity (เส้น)
 
-            // จำแนก: จัดส่งเอง vs รถต่างจังหวัดมารับ
-            // เทียบชื่อลูกค้า col H (index 7) กับ Logistic_Plan ของวันเดียวกัน
-            const custName = String(transData[i][7] || '').trim().toLowerCase();
-            const logiSet = logiCustomersByDate[dStr] || [];
-            if (custName && logiSet.indexOf(custName) >= 0) {
-              ownDeliveryWeight += absWeight;
-              ownDeliveryLines += absLines;
-              if (dailyOwnDelivery[dStr] !== undefined) dailyOwnDelivery[dStr] += absWeight;
-            } else {
-              pickupWeight += absWeight;
-              pickupLines += absLines;
-              if (dailyPickup[dStr] !== undefined) dailyPickup[dStr] += absWeight;
-            }
+        if (type === "Production") {
+          inWeight += weight;
+          inLines  += lines;
+          if (dailyData[dStr]) dailyData[dStr].in += weight;
+        } else if (type === "Sales order") {
+          const absWeight = Math.abs(weight);
+          const absLines  = Math.abs(lines);
+          outWeight += absWeight;
+          outLines  += absLines;
+          if (dailyData[dStr]) dailyData[dStr].out += absWeight;
+
+          // จำแนก: จัดส่งเอง vs รถต่างจังหวัดมารับ
+          // เทียบชื่อลูกค้า Col O (index 14) กับ Logistic_Plan ของวันเดียวกัน
+          const custName = String(transData[i][14] || '').trim().toLowerCase(); // Col O
+          const logiSet  = logiCustomersByDate[dStr] || [];
+          if (custName && logiSet.indexOf(custName) >= 0) {
+            ownDeliveryWeight += absWeight;
+            ownDeliveryLines  += absLines;
+            if (dailyOwnDelivery[dStr] !== undefined) dailyOwnDelivery[dStr] += absWeight;
+          } else {
+            pickupWeight += absWeight;
+            pickupLines  += absLines;
+            if (dailyPickup[dStr] !== undefined) dailyPickup[dStr] += absWeight;
           }
         }
       }
