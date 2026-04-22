@@ -1086,7 +1086,9 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     let pickupWeight = 0, pickupLines = 0;
 
     if (transSheet) {
-      const transData = transSheet.getDataRange().getValues();
+      const lastRow = transSheet.getLastRow();
+      const readFrom = Math.max(2, lastRow - 15000); // อ่านแค่ 15,000 แถวล่าสุด ป้องกัน Timeout
+      const transData = transSheet.getRange(readFrom, 1, lastRow - readFrom + 1, 20).getValues();
       for (let i = 1; i < transData.length; i++) {
         const type = String(transData[i][6] || "").trim(); // Col G = Reference
 
@@ -1108,11 +1110,11 @@ function getWarehouseAnalyticsData(startDate, endDate) {
         } else if (type === "Sales order") {
           const issue = String(transData[i][12] || "").trim(); // Col M = Issue
           if (issue !== "Sold") continue;
-          // Col B = M/D/YYYY — บังคับ parse เป็น text ก่อน ไม่สนใจ format ของ Sheet
+          // Col B = M/D/YYYY — force parse เป็น text ไม่สนใจ format ของ Sheet
           const bRaw = transData[i][1];
           const bStr = (bRaw instanceof Date)
             ? Utilities.formatDate(bRaw, "GMT+7", "M/d/yyyy")
-            : String(bRaw || '').trim().split(' ')[0]; // ตัด time portion
+            : String(bRaw || '').trim().split(' ')[0];
           const bp = bStr.split('/');
           if (bp.length === 3) {
             const m = parseInt(bp[0]), d = parseInt(bp[1]), y = parseInt(bp[2]);
