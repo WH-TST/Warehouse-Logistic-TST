@@ -1098,7 +1098,11 @@ function getWarehouseAnalyticsData(startDate, endDate) {
         } else if (type === "Sales order") {
           const issue = String(transData[i][12] || "").trim(); // Col M = Issue
           if (issue !== "Sold") continue;
-          rowDateObj = parseMDYDate(transData[i][1]); // Col B = Physical date (M/D/YYYY)
+          const rawColB = parseDateValue(transData[i][1]); // Col B = Physical date (M/D/YYYY จาก ERP)
+          if (rawColB) {
+            // GAS อ่าน M/D เป็น D/M → swap กลับ
+            rowDateObj = new Date(rawColB.getFullYear(), rawColB.getDate() - 1, rawColB.getMonth() + 1);
+          }
         } else {
           continue;
         }
