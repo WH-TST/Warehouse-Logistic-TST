@@ -22234,7 +22234,6 @@ window.exportLogisticImage = async function exportLogisticImage() {
 
     list.forEach((p, pi) => {
         const rowBg      = pi % 2 === 0 ? '#ffffff' : '#f8fafc';
-        const truckLabel = p.truckType === 'hire' ? (p.driverTransport || '—') : (p.truckPlate || '—');
         const driver     = p.truckType === 'hire' ? '—' : (p.driverTransport || '—');
         const trip       = p.truckType === 'hire' ? '—' : (p.tripNo || '—');
         const wt         = p.totalWeight ? parseFloat(p.totalWeight).toLocaleString('th-TH', {minimumFractionDigits:2}) : '—';
@@ -22243,6 +22242,30 @@ window.exportLogisticImage = async function exportLogisticImage() {
         const jbLabel    = JOB_LABELS[p.jobType]   || p.jobType || '—';
         const jbColor    = JOB_COLORS[p.jobType]   || '#f1f5f9:#64748b';
         const isMaint    = p.jobType === 'maintenance_pm';
+
+        // resolve truck label (รองรับ PM + รถพ่วง)
+        const _expTruck = (LOGI_MASTER_CACHE?.trucks || []).find(tk => tk.plate === p.truckPlate);
+        const _expChild = _expTruck?.childPlate || '';
+        const _expFR    = p.failReason || '';
+        let truckLabel, pmTruckLine;
+        if (p.truckType === 'hire') {
+            truckLabel   = p.driverTransport || '—';
+            pmTruckLine  = '';
+        } else if (isMaint && _expChild) {
+            if (_expFR.includes('[ซ่อมรถลูก]')) {
+                truckLabel  = _expChild;
+                pmTruckLine = `<div style="font-size:10px;color:#7c3aed;margin-top:2px">🔗 ซ่อมรถลูก</div>`;
+            } else if (_expFR.includes('[ซ่อมทั้งคู่]')) {
+                truckLabel  = `${p.truckPlate} + ${_expChild}`;
+                pmTruckLine = `<div style="font-size:10px;color:#dc2626;margin-top:2px">🔧 ซ่อมทั้งคู่</div>`;
+            } else {
+                truckLabel  = p.truckPlate || '—';
+                pmTruckLine = `<div style="font-size:10px;color:#b45309;margin-top:2px">🚛 ซ่อมรถแม่</div>`;
+            }
+        } else {
+            truckLabel  = p.truckPlate || '—';
+            pmTruckLine = p.truckPlate ? `<div style="font-size:11px;color:#b45309;margin-top:3px">🚚 ${p.truckPlate}</div>` : '';
+        }
 
         if (isMaint) {
             tbodyHtml += `<tr style="background:${rowBg};border-top:2px solid #cbd5e1">
@@ -22256,7 +22279,7 @@ window.exportLogisticImage = async function exportLogisticImage() {
                         <div>
                             <div style="font-size:10px;font-weight:900;color:#b45309;text-transform:uppercase;letter-spacing:.05em">Maintenance PM</div>
                             <div style="font-size:13px;font-weight:700;color:#78350f;margin-top:2px">${p.failReason||'—'}</div>
-                            ${p.truckPlate ? `<div style="font-size:11px;color:#b45309;margin-top:3px">🚚 ${p.truckPlate}</div>` : ''}
+                            ${pmTruckLine}
                         </div>
                     </div>
                 </td>
