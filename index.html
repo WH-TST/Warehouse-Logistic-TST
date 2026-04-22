@@ -4183,6 +4183,39 @@ thead.sticky {
         </div>
       </div>
 
+      <!-- SECTION: PM Target (แสดงเมื่อ maintenance_pm + รถพ่วง) -->
+      <div id="logi-pm-target-section" class="hidden bg-orange-50 border-2 border-orange-300 rounded-2xl p-5 space-y-4">
+        <h4 class="font-black text-orange-700 text-sm uppercase tracking-wider flex items-center gap-2">
+          <i class="fas fa-tools text-orange-500"></i> ซ่อมรถคันไหน? <span class="text-rose-500">*</span>
+        </h4>
+        <div class="flex gap-3">
+          <label class="flex-1 flex items-start gap-3 cursor-pointer bg-white border-2 border-slate-200 px-4 py-4 rounded-xl font-black text-slate-700 has-[:checked]:border-rose-500 has-[:checked]:bg-rose-50 has-[:checked]:text-rose-700 transition-all">
+            <input type="radio" name="logi-pm-target" value="mother" onchange="onLogiPMTargetChange()" class="mt-0.5">
+            <div>
+              <div class="text-sm">🚛 ซ่อมรถแม่</div>
+              <div id="logi-pm-target-mother-label" class="text-xs font-bold text-slate-400 mt-0.5"></div>
+              <div class="text-[11px] font-normal text-rose-400 mt-1">รถลูกวิ่งไม่ได้ (ต้องอาศัยแม่)</div>
+            </div>
+          </label>
+          <label class="flex-1 flex items-start gap-3 cursor-pointer bg-white border-2 border-slate-200 px-4 py-4 rounded-xl font-black text-slate-700 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 has-[:checked]:text-emerald-700 transition-all">
+            <input type="radio" name="logi-pm-target" value="child" onchange="onLogiPMTargetChange()" class="mt-0.5">
+            <div>
+              <div class="text-sm">🔗 ซ่อมรถลูก</div>
+              <div id="logi-pm-target-child-label" class="text-xs font-bold text-slate-400 mt-0.5"></div>
+              <div class="text-[11px] font-normal text-emerald-500 mt-1">รถแม่ยังวิ่งได้</div>
+            </div>
+          </label>
+          <label class="flex-1 flex items-start gap-3 cursor-pointer bg-white border-2 border-slate-200 px-4 py-4 rounded-xl font-black text-slate-700 has-[:checked]:border-rose-700 has-[:checked]:bg-rose-100 has-[:checked]:text-rose-800 transition-all">
+            <input type="radio" name="logi-pm-target" value="both" onchange="onLogiPMTargetChange()" class="mt-0.5">
+            <div>
+              <div class="text-sm">🔧 ซ่อมทั้งคู่</div>
+              <div class="text-[11px] font-normal text-rose-500 mt-1">หยุดทั้งแม่และลูก</div>
+            </div>
+          </label>
+        </div>
+        <div id="logi-pm-target-note" class="hidden text-xs font-semibold px-4 py-2 rounded-xl"></div>
+      </div>
+
       <!-- SECTION: Maintenance PM (แสดงเมื่อเลือก Maintenance) -->
       <div id="logi-pm-section" class="hidden bg-amber-50 rounded-2xl p-6 space-y-4 border border-amber-200">
         <h4 class="font-black text-amber-700 text-sm uppercase tracking-wider flex items-center gap-2">
@@ -14616,12 +14649,29 @@ window.onLogiJobTypeChange = function onLogiJobTypeChange() {
     // ซ่อน Trailer Mode section เมื่อเป็น PM (ไม่ต้องเลือกรูปแบบวิ่ง)
     const trailerModeSec = document.getElementById('logi-trailer-mode-section');
     const trailerPlanner = document.getElementById('logi-trailer-planner');
+    const pmTargetSec    = document.getElementById('logi-pm-target-section');
     if (isPM) {
         if (trailerModeSec) trailerModeSec.classList.add('hidden');
         if (trailerPlanner) trailerPlanner.classList.add('hidden');
         logiTrailerMode = null;
         logiChildAssignments = {};
         document.querySelectorAll('input[name="logi-trailer-mode"]').forEach(r => r.checked = false);
+        // แสดง pm-target section ถ้าเลือกรถพ่วงอยู่
+        const truckSel = document.getElementById('logi-truck-plate');
+        const truckOpt = truckSel?.options[truckSel.selectedIndex];
+        const hasChild  = !!(truckOpt?.dataset?.childPlate);
+        if (hasChild && pmTargetSec) {
+            pmTargetSec.classList.remove('hidden');
+            const mLbl = document.getElementById('logi-pm-target-mother-label');
+            const cLbl = document.getElementById('logi-pm-target-child-label');
+            if (mLbl) mLbl.textContent = truckOpt.value;
+            if (cLbl) cLbl.textContent = truckOpt.dataset.childPlate;
+        }
+    } else {
+        if (pmTargetSec) pmTargetSec.classList.add('hidden');
+        document.querySelectorAll('input[name="logi-pm-target"]').forEach(r => r.checked = false);
+        const noteEl = document.getElementById('logi-pm-target-note');
+        if (noteEl) noteEl.classList.add('hidden');
     }
 }
 
@@ -15017,6 +15067,12 @@ window.closeLogisticForm = function closeLogisticForm() {
     if (trailerModeSec) trailerModeSec.classList.add('hidden');
     const plannerEl = document.getElementById('logi-trailer-planner');
     if (plannerEl) plannerEl.classList.add('hidden');
+    // reset pm-target state
+    document.querySelectorAll('input[name="logi-pm-target"]').forEach(r => r.checked = false);
+    const pmTargetSec = document.getElementById('logi-pm-target-section');
+    if (pmTargetSec) pmTargetSec.classList.add('hidden');
+    const pmTargetNote = document.getElementById('logi-pm-target-note');
+    if (pmTargetNote) pmTargetNote.classList.add('hidden');
     const modalTitle = document.querySelector('#logistic-form-modal h3');
     if (modalTitle) modalTitle.textContent = 'บันทึกแผนการส่งมอบ';
     const saveBtn = document.querySelector('#logistic-form-modal button[onclick="saveLogisticPlan()"]');
@@ -15072,8 +15128,11 @@ window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
     var trailerModeSec = document.getElementById('logi-trailer-mode-section');
     var plannerEl = document.getElementById('logi-trailer-planner');
 
-    if (isTrailer) {
-        // แสดง trailer mode section + info badge
+    const isPM = document.getElementById('logi-job-type')?.value === 'maintenance_pm';
+    const pmTargetSec = document.getElementById('logi-pm-target-section');
+    if (isTrailer && !isPM) {
+        // แสดง trailer mode section + info badge (ซ่อนถ้าเป็น PM)
+        if (pmTargetSec) pmTargetSec.classList.add('hidden');
         if (trailerModeSec) trailerModeSec.classList.remove('hidden');
         var badge = document.getElementById('logi-trailer-info-badge');
         if (badge) {
@@ -15084,9 +15143,23 @@ window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
                 + '<span class="mx-3 text-sky-300">|</span>'
                 + '<span class="text-purple-700">ลูก: <strong>' + opt.dataset.childPlate + '</strong> — ' + cCap + ' t</span>';
         }
+    } else if (isTrailer && isPM) {
+        // รถพ่วง + PM → แสดง pm-target section แทน
+        if (trailerModeSec) trailerModeSec.classList.add('hidden');
+        if (plannerEl) plannerEl.classList.add('hidden');
+        if (pmTargetSec) pmTargetSec.classList.remove('hidden');
+        const mLbl = document.getElementById('logi-pm-target-mother-label');
+        const cLbl = document.getElementById('logi-pm-target-child-label');
+        if (mLbl) mLbl.textContent = opt.value;
+        if (cLbl) cLbl.textContent = opt.dataset.childPlate || '';
+        // reset pm-target เมื่อเปลี่ยนรถ
+        document.querySelectorAll('input[name="logi-pm-target"]').forEach(function(r) { r.checked = false; });
+        const noteEl = document.getElementById('logi-pm-target-note');
+        if (noteEl) noteEl.classList.add('hidden');
     } else {
         if (trailerModeSec) trailerModeSec.classList.add('hidden');
         if (plannerEl) plannerEl.classList.add('hidden');
+        if (pmTargetSec) pmTargetSec.classList.add('hidden');
     }
 
     // reset trailer state เมื่อเปลี่ยนรถ
@@ -15096,6 +15169,26 @@ window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
     if (plannerEl) plannerEl.classList.add('hidden');
 
     autoCalcFreeStop();
+};
+
+// ── เมื่อเลือกว่าจะซ่อมรถคันไหน (PM + รถพ่วง) ──
+window.onLogiPMTargetChange = function onLogiPMTargetChange() {
+    const target = document.querySelector('input[name="logi-pm-target"]:checked')?.value;
+    const noteEl = document.getElementById('logi-pm-target-note');
+    if (!noteEl) return;
+    const MAP = {
+        mother: { cls: 'bg-rose-100 text-rose-700',    msg: '⚠️ รถแม่เข้าซ่อม → รถลูกไม่สามารถวิ่งได้ในช่วงนี้' },
+        child:  { cls: 'bg-emerald-100 text-emerald-700', msg: '✅ รถลูกเข้าซ่อม → รถแม่ยังสามารถวิ่งได้ตามปกติ' },
+        both:   { cls: 'bg-rose-100 text-rose-700',    msg: '⚠️ ซ่อมทั้งแม่และลูก → หยุดทั้งคู่ในช่วงนี้' },
+    };
+    const cfg = MAP[target];
+    if (cfg) {
+        noteEl.className = 'text-xs font-semibold px-4 py-2 rounded-xl ' + cfg.cls;
+        noteEl.textContent = cfg.msg;
+        noteEl.classList.remove('hidden');
+    } else {
+        noteEl.classList.add('hidden');
+    }
 };
 
 // ── เมื่อเลือกโหมดรถพ่วง ──
@@ -16179,7 +16272,18 @@ window.saveLogisticPlan = function saveLogisticPlan() {
         payload.pmEnd      = document.getElementById('logi-pm-end')?.value;
         payload.pmDetail   = document.getElementById('logi-pm-detail')?.value;
         payload.pmLocation = document.getElementById('logi-pm-location')?.value;
-        payload.failReason = payload.pmDetail || '';
+        // PM Target: บังคับเลือกถ้าเป็นรถพ่วง
+        const truckOpt2    = document.getElementById('logi-truck-plate')?.options[document.getElementById('logi-truck-plate')?.selectedIndex];
+        const hasChild     = !!(truckOpt2?.dataset?.childPlate);
+        if (hasChild) {
+            const pmTarget = document.querySelector('input[name="logi-pm-target"]:checked')?.value;
+            if (!pmTarget) return showToast('กรุณาเลือกว่าซ่อมรถคันไหน (แม่ / ลูก / ทั้งคู่)', true);
+            payload.pmTarget     = pmTarget;
+            payload.pmChildPlate = truckOpt2.dataset.childPlate;
+        }
+        const pmTargetMap  = { mother: 'ซ่อมรถแม่', child: 'ซ่อมรถลูก', both: 'ซ่อมทั้งคู่' };
+        const pmTargetTxt  = payload.pmTarget ? '[' + (pmTargetMap[payload.pmTarget] || payload.pmTarget) + '] ' : '';
+        payload.failReason = pmTargetTxt + (payload.pmDetail || '');
         payload.stopFee    = 0;
         payload.shops      = [];
         payload.totalWeight = 0;
