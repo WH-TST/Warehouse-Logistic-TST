@@ -1110,17 +1110,20 @@ function getWarehouseAnalyticsData(startDate, endDate) {
         } else if (type === "Sales order") {
           const issue = String(transData[i][12] || "").trim(); // Col M = Issue
           if (issue !== "Sold") continue;
-          // Col B = M/D/YYYY — force parse เป็น text ไม่สนใจ format ของ Sheet
+          // Col B = M/D/YYYY จาก ERP
+          // เลขกลาง ≤ 12 → Sheet auto-convert เป็น Date object (D/M) → ต้อง swap
+          // เลขกลาง > 12 → Sheet เก็บเป็น String → parse M/D ตรง
           const bRaw = transData[i][1];
-          const bStr = (bRaw instanceof Date)
-            ? Utilities.formatDate(bRaw, "GMT+7", "M/d/yyyy")
-            : String(bRaw || '').trim().split(' ')[0];
-          const bp = bStr.split('/');
-          if (bp.length === 3) {
-            const m = parseInt(bp[0]), d = parseInt(bp[1]), y = parseInt(bp[2]);
-            if (!isNaN(m) && !isNaN(d) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
+          if (bRaw instanceof Date) {
+            rowDateObj = new Date(bRaw.getFullYear(), bRaw.getDate() - 1, bRaw.getMonth() + 1);
+          } else {
+            const bStr = String(bRaw || '').trim().split(' ')[0];
+            const bp = bStr.split('/');
+            if (bp.length === 3) {
+              const m = parseInt(bp[0]), d = parseInt(bp[1]), y = parseInt(bp[2]);
+              if (!isNaN(m) && !isNaN(d) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
+            }
           }
-          if (!rowDateObj) rowDateObj = parseDateValue(bRaw); // fallback
         } else {
           continue;
         }
