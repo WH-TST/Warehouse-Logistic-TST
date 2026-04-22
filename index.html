@@ -7373,16 +7373,15 @@ window.switchView = function switchView(view) {
         refreshSpaceAnalysis();
     }
 
-    // Analytics: auto-set date range (30 วันย้อนหลัง) และ auto-load เมื่อเปิดครั้งแรก
+    // Analytics: auto-set date range (ต้นเดือน - วันนี้) และ auto-load เมื่อเปิดครั้งแรก
     if (view === 'analytics') {
         const startEl = document.getElementById('analytics-start');
         const endEl   = document.getElementById('analytics-end');
         if (startEl && endEl && !startEl.value) {
-            const today = new Date();
-            const d30   = new Date();
-            d30.setDate(today.getDate() - 30);
+            const today    = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
             endEl.value   = today.toISOString().split('T')[0];
-            startEl.value = d30.toISOString().split('T')[0];
+            startEl.value = firstDay.toISOString().split('T')[0];
             loadAnalytics();
         }
     }
