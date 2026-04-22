@@ -16599,6 +16599,25 @@ window.renderLogisticList = function renderLogisticList() {
                 : p.trailerMode === 'full_trailer'
                 ? '<div class="inline-block text-[10px] bg-purple-100 text-purple-700 font-black px-2 py-0.5 rounded-full mt-0.5">ทั้งพ่วง</div>'
                 : '';
+            // PM + รถพ่วง: แสดงตาม pmTarget ที่บันทึกใน failReason
+            if (p.jobType === 'maintenance_pm') {
+                const truck = (LOGI_MASTER_CACHE?.trucks || []).find(tk => tk.plate === p.truckPlate);
+                const cp = truck?.childPlate;
+                if (cp) {
+                    const fr = p.failReason || '';
+                    if (fr.includes('[ซ่อมรถลูก]'))
+                        return `<span class="font-mono text-purple-700">${cp}</span>`
+                             + `<div class="text-[10px] text-purple-500 mt-0.5">🔗 ซ่อมรถลูก</div>`;
+                    if (fr.includes('[ซ่อมทั้งคู่]'))
+                        return `<span class="font-mono">${plate}</span>`
+                             + `<div class="text-[10px] text-rose-500 font-bold mt-0.5">+ ${cp}</div>`
+                             + `<div class="inline-block text-[10px] bg-rose-100 text-rose-600 font-black px-2 py-0.5 rounded-full mt-0.5">ซ่อมทั้งคู่</div>`;
+                    // [ซ่อมรถแม่] หรือไม่มี prefix
+                    return `<span class="font-mono">${plate}</span>`
+                         + `<div class="text-[10px] text-amber-500 mt-0.5">🚛 ซ่อมรถแม่</div>`;
+                }
+                return `<span class="font-mono">${plate}</span>`;
+            }
             if (p.isMother) {
                 const t = (LOGI_MASTER_CACHE?.trucks || []).find(tk => tk.plate === p.truckPlate);
                 const cp = t?.childPlate;
