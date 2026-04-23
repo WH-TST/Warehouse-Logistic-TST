@@ -5256,18 +5256,37 @@ function _renderDeliverySection(data) {
         const avgTotalArr  = dates.map(() => Math.round(avgTotal));
 
         const ctxD = ctxDelivery.getContext('2d');
-        const gOwn = ctxD.createLinearGradient(0, 0, 0, 320);
-        gOwn.addColorStop(0, 'rgba(59,130,246,0.40)');
+        const gOwn = ctxD.createLinearGradient(0, 0, 0, 300);
+        gOwn.addColorStop(0, 'rgba(59,130,246,0.30)');
         gOwn.addColorStop(1, 'rgba(59,130,246,0.02)');
-        const gPickup = ctxD.createLinearGradient(0, 0, 0, 320);
-        gPickup.addColorStop(0, 'rgba(251,146,60,0.40)');
+        const gPickup = ctxD.createLinearGradient(0, 0, 0, 300);
+        gPickup.addColorStop(0, 'rgba(251,146,60,0.30)');
         gPickup.addColorStop(1, 'rgba(251,146,60,0.02)');
+        const gTotal = ctxD.createLinearGradient(0, 0, 0, 300);
+        gTotal.addColorStop(0, 'rgba(16,185,129,0.18)');
+        gTotal.addColorStop(1, 'rgba(16,185,129,0.01)');
 
         window.deliveryCompareChartInstance = new Chart(ctxD, {
             type: 'line',
             data: {
                 labels: dates,
                 datasets: [
+                    // ── เส้นข้อมูลจริง 3 เส้น ──
+                    {
+                        label: 'รวมทั้งหมด (kg)',
+                        data: totalArr,
+                        borderColor: '#10b981',
+                        backgroundColor: gTotal,
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2.5,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#10b981',
+                        pointBorderWidth: 2,
+                        order: 1
+                    },
                     {
                         label: 'จัดส่งเอง (kg)',
                         data: ownArr,
@@ -5275,12 +5294,13 @@ function _renderDeliverySection(data) {
                         backgroundColor: gOwn,
                         fill: true,
                         tension: 0.4,
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointHoverRadius: 7,
+                        borderWidth: 2.5,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
                         pointBackgroundColor: '#fff',
                         pointBorderColor: '#3b82f6',
-                        pointBorderWidth: 2
+                        pointBorderWidth: 2,
+                        order: 2
                     },
                     {
                         label: 'รถต่างจังหวัดมารับ (kg)',
@@ -5289,49 +5309,41 @@ function _renderDeliverySection(data) {
                         backgroundColor: gPickup,
                         fill: true,
                         tension: 0.4,
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointHoverRadius: 7,
+                        borderWidth: 2.5,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
                         pointBackgroundColor: '#fff',
                         pointBorderColor: '#f97316',
-                        pointBorderWidth: 2
+                        pointBorderWidth: 2,
+                        order: 3
                     },
-                    // ── เส้นค่าเฉลี่ย (dashed) ──
+                    // ── เส้นค่าเฉลี่ย (dashed) — แต่ละเส้นคู่กับข้อมูลสีเดียวกัน ──
+                    {
+                        label: 'เฉลี่ยรวม: ' + Math.round(avgTotal).toLocaleString('th-TH') + ' kg/วัน',
+                        data: avgTotalArr,
+                        borderColor: '#10b981',
+                        borderWidth: 1.5,
+                        borderDash: [7, 4],
+                        pointRadius: 0, pointHoverRadius: 0,
+                        fill: false, tension: 0, order: 0
+                    },
                     {
                         label: 'เฉลี่ยจัดส่งเอง: ' + Math.round(avgOwn).toLocaleString('th-TH') + ' kg/วัน',
                         data: avgOwnArr,
                         borderColor: '#3b82f6',
-                        borderWidth: 2,
-                        borderDash: [8, 5],
-                        pointRadius: 0,
-                        pointHoverRadius: 0,
-                        fill: false,
-                        tension: 0,
-                        order: 0
+                        borderWidth: 1.5,
+                        borderDash: [7, 4],
+                        pointRadius: 0, pointHoverRadius: 0,
+                        fill: false, tension: 0, order: 0
                     },
                     {
                         label: 'เฉลี่ยรถมารับ: ' + Math.round(avgPickup).toLocaleString('th-TH') + ' kg/วัน',
                         data: avgPickupArr,
                         borderColor: '#f97316',
-                        borderWidth: 2,
-                        borderDash: [8, 5],
-                        pointRadius: 0,
-                        pointHoverRadius: 0,
-                        fill: false,
-                        tension: 0,
-                        order: 0
-                    },
-                    {
-                        label: 'เฉลี่ยรวม: ' + Math.round(avgTotal).toLocaleString('th-TH') + ' kg/วัน',
-                        data: avgTotalArr,
-                        borderColor: '#a855f7',
-                        borderWidth: 2.5,
-                        borderDash: [5, 3],
-                        pointRadius: 0,
-                        pointHoverRadius: 0,
-                        fill: false,
-                        tension: 0,
-                        order: 0
+                        borderWidth: 1.5,
+                        borderDash: [7, 4],
+                        pointRadius: 0, pointHoverRadius: 0,
+                        fill: false, tension: 0, order: 0
                     }
                 ]
             },
@@ -5345,13 +5357,11 @@ function _renderDeliverySection(data) {
                         labels: {
                             usePointStyle: true,
                             pointStyleWidth: 14,
-                            padding: 18,
+                            padding: 16,
                             font: { family: 'Sarabun', size: 12, weight: 'bold' },
                             color: '#334155',
-                            filter: function(item) {
-                                // แสดง legend ทุกตัว แต่ใช้ dash icon สำหรับเส้นเฉลี่ย
-                                return true;
-                            }
+                            // แสดงเฉพาะ 3 เส้นข้อมูลจริงใน legend
+                            filter: function(item) { return item.datasetIndex < 3; }
                         }
                     },
                     tooltip: {
@@ -5364,23 +5374,17 @@ function _renderDeliverySection(data) {
                         cornerRadius: 12,
                         titleFont: { family: 'Sarabun', size: 12 },
                         bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
-                        filter: function(item) {
-                            // ซ่อนเส้นเฉลี่ยออกจาก tooltip (แสดงแค่ข้อมูลจริง)
-                            return item.datasetIndex < 2;
-                        },
+                        // แสดงแค่ข้อมูลจริง 3 เส้น (ซ่อนเฉลี่ย)
+                        filter: function(item) { return item.datasetIndex < 3; },
                         callbacks: {
                             label: function(ctx) {
                                 const val = ctx.parsed.y || 0;
                                 const tot = totalArr[ctx.dataIndex] || 0;
-                                const pct = tot > 0 ? ' (' + ((val / tot) * 100).toFixed(1) + '%)' : '';
+                                const pct = (ctx.datasetIndex > 0 && tot > 0)
+                                    ? ' (' + ((val / tot) * 100).toFixed(1) + '%)'
+                                    : '';
                                 return '  ' + ctx.dataset.label + ': ' +
-                                    val.toLocaleString('th-TH', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' kg' + pct;
-                            },
-                            afterBody: function(items) {
-                                const tot = totalArr[items[0].dataIndex] || 0;
-                                return tot > 0
-                                    ? ['', '  รวม: ' + tot.toLocaleString('th-TH', {minimumFractionDigits:0}) + ' kg']
-                                    : [];
+                                    val.toLocaleString('th-TH', {minimumFractionDigits:0}) + ' kg' + pct;
                             }
                         }
                     }
@@ -5403,42 +5407,38 @@ function _renderDeliverySection(data) {
                     }
                 }
             },
-            // ── Inline Plugin: วาด label ติดท้ายเส้นเฉลี่ยแต่ละเส้น ──
+            // ── Inline Plugin: label ติดท้ายเส้นเฉลี่ยแต่ละเส้น ──
             plugins: [{
                 id: 'avgLineLabels',
                 afterDraw: function(chart) {
-                    const ctx2  = chart.ctx;
-                    const area  = chart.chartArea;
+                    const ctx2 = chart.ctx;
+                    const area = chart.chartArea;
+                    // dsIdx 3=เฉลี่ยรวม(เขียว), 4=เฉลี่ยจัดส่งเอง(น้ำเงิน), 5=เฉลี่ยรถมารับ(ส้ม)
                     const avgMeta = [
-                        { dsIdx: 2, text: '── เฉลี่ยจัดส่งเอง',  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  offset: -2 },
-                        { dsIdx: 3, text: '── เฉลี่ยรถมารับ',     color: '#f97316', bg: 'rgba(249,115,22,0.12)', offset: 0  },
-                        { dsIdx: 4, text: '── เฉลี่ยรวม',          color: '#a855f7', bg: 'rgba(168,85,247,0.12)', offset: 2  }
+                        { dsIdx: 3, text: 'เฉลี่ยรวม',         color: '#10b981', bg: 'rgba(16,185,129,0.13)'  },
+                        { dsIdx: 4, text: 'เฉลี่ยจัดส่งเอง',   color: '#3b82f6', bg: 'rgba(59,130,246,0.13)'  },
+                        { dsIdx: 5, text: 'เฉลี่ยรถมารับ',     color: '#f97316', bg: 'rgba(249,115,22,0.13)'  }
                     ];
                     ctx2.save();
                     ctx2.font = 'bold 10.5px Sarabun, sans-serif';
                     avgMeta.forEach(function(m) {
                         const meta = chart.getDatasetMeta(m.dsIdx);
                         if (!meta || !meta.data || meta.data.length === 0 || meta.hidden) return;
-                        // ใช้จุดสุดท้ายของเส้น (ขอบขวา)
                         const lastPt = meta.data[meta.data.length - 1];
                         if (!lastPt) return;
-                        const y   = lastPt.y + m.offset;
+                        const y   = lastPt.y;
                         const tw  = ctx2.measureText(m.text).width;
-                        const pad = 5;
+                        const pad = 6;
                         const bw  = tw + pad * 2;
-                        const bh  = 17;
-                        // วาง label ชิดขอบขวา ข้างในพื้นที่กราฟ
-                        const x = area.right - bw - 6;
-                        // กล่องพื้นหลัง
+                        const bh  = 18;
+                        const x   = area.right - bw - 8;
                         ctx2.fillStyle = m.bg;
                         ctx2.beginPath();
                         ctx2.rect(x, y - bh / 2, bw, bh);
                         ctx2.fill();
-                        // ขอบ
                         ctx2.strokeStyle = m.color;
                         ctx2.lineWidth = 1;
                         ctx2.stroke();
-                        // ข้อความ
                         ctx2.fillStyle = m.color;
                         ctx2.textAlign = 'left';
                         ctx2.textBaseline = 'middle';
