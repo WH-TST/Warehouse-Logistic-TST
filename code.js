@@ -1147,7 +1147,7 @@ function getWarehouseAnalyticsData(startDate, endDate) {
       tempDate.setDate(tempDate.getDate() + 1);
     }
 
-    let inWeight = 0, outWeight = 0, inLines = 0, outLines = 0;
+    let inWeight = 0, inLines = 0;
 
     if (transSheet) {
       const lastRow = transSheet.getLastRow();
@@ -1155,66 +1155,35 @@ function getWarehouseAnalyticsData(startDate, endDate) {
       const transData = transSheet.getRange(readFrom, 1, lastRow - readFrom + 1, 20).getValues();
       for (let i = 1; i < transData.length; i++) {
         const type = String(transData[i][6] || "").trim(); // Col G = Reference
+        // Inbound = Production เท่านั้น
+        // Outbound ย้ายไปอ่านจาก All SI LINE ใน getDeliveryTypeData แล้ว
+        if (type !== "Production") continue;
 
-        // Production → Col B (index 1) = Physical date
-        // Sales order → Col T (index 19) = ST PD Date, กรองเฉพาะ Issue = "Sold"
+        // Col T (19) = D/M/YYYY
+        const tRaw = transData[i][19];
+        const tStr = (tRaw instanceof Date)
+          ? Utilities.formatDate(tRaw, "GMT+7", "dd/MM/yyyy")
+          : String(tRaw || '').trim().split(' ')[0];
+        const tp = tStr.split('/');
         let rowDateObj;
-        if (type === "Production") {
-          // Col T = D/M/YYYY — บังคับ parse เป็น text ก่อน ไม่สนใจ format ของ Sheet
-          const tRaw = transData[i][19];
-          const tStr = (tRaw instanceof Date)
-            ? Utilities.formatDate(tRaw, "GMT+7", "dd/MM/yyyy")
-            : String(tRaw || '').trim().split(' ')[0]; // ตัด time portion
-          const tp = tStr.split('/');
-          if (tp.length === 3) {
-            const d = parseInt(tp[0]), m = parseInt(tp[1]), y = parseInt(tp[2]);
-            if (!isNaN(d) && !isNaN(m) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
-          }
-          if (!rowDateObj) rowDateObj = parseDateValue(tRaw); // fallback
-        } else if (type === "Sales order") {
-          const issue = String(transData[i][12] || "").trim(); // Col M = Issue
-          if (issue !== "Sold") continue;
-          // Col B = M/D/YYYY จาก ERP
-          // เลขกลาง ≤ 12 → Sheet auto-convert เป็น Date object (D/M) → ต้อง swap
-          // เลขกลาง > 12 → Sheet เก็บเป็น String → parse M/D ตรง
-          const bRaw = transData[i][1];
-          if (bRaw instanceof Date) {
-            rowDateObj = new Date(bRaw.getFullYear(), bRaw.getDate() - 1, bRaw.getMonth() + 1);
-          } else {
-            const bStr = String(bRaw || '').trim().split(' ')[0];
-            const bp = bStr.split('/');
-            if (bp.length === 3) {
-              const m = parseInt(bp[0]), d = parseInt(bp[1]), y = parseInt(bp[2]);
-              if (!isNaN(m) && !isNaN(d) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
-            }
-          }
-        } else {
-          continue;
+        if (tp.length === 3) {
+          const d = parseInt(tp[0]), m = parseInt(tp[1]), y = parseInt(tp[2]);
+          if (!isNaN(d) && !isNaN(m) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
         }
-
+        if (!rowDateObj) rowDateObj = parseDateValue(tRaw);
         if (!rowDateObj || rowDateObj < start || rowDateObj > end) continue;
 
-        const dStr = Utilities.formatDate(rowDateObj, "GMT+7", "yyyy-MM-dd");
-        const weight = parseFloat(transData[i][9]) || 0;  // Col J = Quantity (KG)
-        const lines  = parseFloat(transData[i][7]) || 0;  // Col H = CW quantity (เส้น)
-
-        if (type === "Production") {
-          inWeight += weight;
-          inLines  += lines;
-          if (dailyData[dStr]) dailyData[dStr].in += weight;
-        } else if (type === "Sales order") {
-          const absWeight = Math.abs(weight);
-          const absLines  = Math.abs(lines);
-          outWeight += absWeight;
-          outLines  += absLines;
-          if (dailyData[dStr]) dailyData[dStr].out += absWeight;
-        }
+        const dStr  = Utilities.formatDate(rowDateObj, "GMT+7", "yyyy-MM-dd");
+        const weight = parseFloat(transData[i][9]) || 0; // Col J = KG
+        const lines  = parseFloat(transData[i][7]) || 0; // Col H = เส้น
+        inWeight += weight;
+        inLines  += lines;
+        if (dailyData[dStr]) dailyData[dStr].in += weight;
       }
     }
 
     const sortedDates = Object.keys(dailyData).sort();
-    const dailyIn  = sortedDates.map(d => dailyData[d].in);
-    const dailyOut = sortedDates.map(d => dailyData[d].out);
+    const dailyIn = sortedDates.map(d => dailyData[d].in);
     
     // --- 2. ดึงข้อมูล Inventory ปัจจุบัน ---
     const invSheet = ss.getSheetByName("Inventory FG");
@@ -1234,17 +1203,15 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     const blockingTrend = getInventoryBlockingTrend(startDate, endDate); // ส่วนที่คุณต้องการเพิ่ม
 
     // ส่งข้อมูลทั้งหมดกลับไปยังหน้าเว็บ
+    // หมายเหตุ: outWeight/outLines ไม่มีแล้ว — ดึงจาก getDeliveryTypeData (All SI LINE)
     return {
       success: true,
       inWeight: inWeight,
       inLines: inLines,
-      outWeight: outWeight,
-      outLines: outLines,
       invWeight: invWeight,
       invLines: invLines,
       dates: sortedDates.map(d => d.split('-').slice(1).join('/')),
       dailyInbound: dailyIn,
-      dailyOutbound: dailyOut,
 
       // ข้อมูลกราฟ Trend ปกติ
       inventoryTrendDates: trendData.dates,
@@ -1280,16 +1247,19 @@ function getDeliveryTypeData(startDate, endDate) {
     // สร้างโครงสร้างรายวัน
     const dailyOwnDelivery = {};
     const dailyPickup      = {};
+    const dailyOutbound    = {}; // Outbound รวมทุกประเภท
     let tempDate = new Date(start);
     while (tempDate <= end) {
       const dStr = Utilities.formatDate(tempDate, 'GMT+7', 'yyyy-MM-dd');
       dailyOwnDelivery[dStr] = 0;
       dailyPickup[dStr]      = 0;
+      dailyOutbound[dStr]    = 0;
       tempDate.setDate(tempDate.getDate() + 1);
     }
 
     let ownDeliveryWeight = 0, ownDeliveryLines = 0;
     let pickupWeight = 0, pickupLines = 0;
+    let outWeight = 0, outLines = 0;
 
     const siSS    = SpreadsheetApp.openById('1C5vSbpFMvTrmCnQR27kcNdhuj8xM3jp3WaZdOJGP4BY');
     const siSheet = siSS.getSheetByName('All SI LINE');
@@ -1302,12 +1272,6 @@ function getDeliveryTypeData(startDate, endDate) {
       const siValues   = siRange.getValues();        // ตัวเลขสำหรับ Col I, J
 
       for (let i = 0; i < siDisplay.length; i++) {
-        // Col E (4) = ประเภทการจัดส่ง
-        const delivType = String(siDisplay[i][4] || '').trim();
-        const isOwn     = delivType.indexOf('จัดส่งภายในประเทศ') >= 0;
-        const isPickup  = delivType.indexOf('รับเองภายในประเทศ') >= 0;
-        if (!isOwn && !isPickup) continue;
-
         // Col A (0) = วันที่ M/D/YYYY — อ่านจาก display text เสมอ (ไม่สนใจ locale/auto-convert)
         const aStr = String(siDisplay[i][0] || '').trim().split(' ')[0];
         const ap   = aStr.split('/');
@@ -1319,14 +1283,23 @@ function getDeliveryTypeData(startDate, endDate) {
         if (!siDateObj || siDateObj < start || siDateObj > end) continue;
 
         const dStr    = Utilities.formatDate(siDateObj, 'GMT+7', 'yyyy-MM-dd');
-        const siLines = parseFloat(siValues[i][8]) || 0; // Col I
-        const siWt    = parseFloat(siValues[i][9]) || 0; // Col J
+        const siLines = parseFloat(siValues[i][8]) || 0; // Col I = เส้น
+        const siWt    = parseFloat(siValues[i][9]) || 0; // Col J = น้ำหนัก
 
+        // Outbound รวมทุกแถวในช่วงวันที่
+        outWeight += siWt;
+        outLines  += siLines;
+        if (dailyOutbound[dStr] !== undefined) dailyOutbound[dStr] += siWt;
+
+        // แยกประเภทการจัดส่ง
+        const delivType = String(siDisplay[i][4] || '').trim();
+        const isOwn     = delivType.indexOf('จัดส่งภายในประเทศ') >= 0;
+        const isPickup  = delivType.indexOf('รับเองภายในประเทศ') >= 0;
         if (isOwn) {
           ownDeliveryWeight += siWt;
           ownDeliveryLines  += siLines;
           if (dailyOwnDelivery[dStr] !== undefined) dailyOwnDelivery[dStr] += siWt;
-        } else {
+        } else if (isPickup) {
           pickupWeight += siWt;
           pickupLines  += siLines;
           if (dailyPickup[dStr] !== undefined) dailyPickup[dStr] += siWt;
@@ -1337,10 +1310,16 @@ function getDeliveryTypeData(startDate, endDate) {
     const sortedDates    = Object.keys(dailyOwnDelivery).sort();
     const dailyOwnArr    = sortedDates.map(d => dailyOwnDelivery[d] || 0);
     const dailyPickupArr = sortedDates.map(d => dailyPickup[d]      || 0);
+    const dailyOutArr    = sortedDates.map(d => dailyOutbound[d]    || 0);
 
     return {
       success: true,
       dates:             sortedDates.map(d => d.split('-').slice(1).join('/')),
+      // Outbound รวม (สำหรับ KPI + Daily Flow Chart)
+      outWeight:         outWeight,
+      outLines:          outLines,
+      dailyOutbound:     dailyOutArr,
+      // Delivery Type Breakdown
       ownDeliveryWeight: ownDeliveryWeight,
       ownDeliveryLines:  ownDeliveryLines,
       pickupWeight:      pickupWeight,

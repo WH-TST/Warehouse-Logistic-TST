@@ -5183,13 +5183,48 @@ window.loadAnalytics = function loadAnalytics() {
         .getDeliveryTypeData(start.value, end.value);
 }
 
-// ── อัพเดต KPI + กราฟ Delivery Type จากข้อมูลที่ได้จาก getDeliveryTypeData ──
+// ── อัพเดต KPI Outbound + Net Flow + Flow Chart + Delivery Type จากข้อมูล getDeliveryTypeData ──
 function _renderDeliverySection(data) {
+    const outWt  = data.outWeight         || 0;
+    const outLn  = data.outLines          || 0;
     const ownWt  = data.ownDeliveryWeight || 0;
     const ownLn  = data.ownDeliveryLines  || 0;
     const pickWt = data.pickupWeight      || 0;
     const pickLn = data.pickupLines       || 0;
 
+    // ── อัปเดต KPI: Total Outbound ──
+    const kpiOutWtEl = document.getElementById('kpi-outbound-weight');
+    const kpiOutLnEl = document.getElementById('kpi-outbound-lines');
+    if (kpiOutWtEl) kpiOutWtEl.innerHTML = outWt.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2}) + ' <small style="font-size:0.85rem;font-family:\'Sarabun\',sans-serif;opacity:0.75;">kg</small>';
+    if (kpiOutLnEl) kpiOutLnEl.innerText = outLn.toLocaleString() + ' lines';
+
+    // ── อัปเดต KPI: Net Flow (ใช้ inbound จากการ call แรก) ──
+    const inWt = window._analyticsInWeight || 0;
+    const inLn = window._analyticsInLines  || 0;
+    const netWt = inWt - outWt;
+    const netLn = inLn - outLn;
+    const kpiNetWtEl = document.getElementById('kpi-netflow-weight');
+    const kpiNetLnEl = document.getElementById('kpi-netflow-lines');
+    if (kpiNetWtEl) {
+        kpiNetWtEl.innerHTML = (netWt >= 0 ? '+' : '') +
+            netWt.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2}) +
+            ' <small style="font-size:0.85rem;font-family:\'Sarabun\',sans-serif;opacity:0.75;">kg</small>';
+        kpiNetWtEl.className = netWt >= 0
+            ? 'text-white mt-3 font-black'
+            : 'text-red-200 mt-3 font-black';
+        kpiNetWtEl.style.fontFamily = "'Orbitron',sans-serif";
+        kpiNetWtEl.style.fontSize   = '1.9rem';
+        kpiNetWtEl.style.lineHeight = '1.1';
+    }
+    if (kpiNetLnEl) kpiNetLnEl.innerText = (netLn >= 0 ? '+' : '') + netLn.toLocaleString() + ' lines';
+
+    // ── อัปเดต Daily Warehouse Flow Chart: dataset Outbound ──
+    if (window.flowChartInstance) {
+        window.flowChartInstance.data.datasets[1].data = data.dailyOutbound || [];
+        window.flowChartInstance.update();
+    }
+
+    // ── Delivery Type KPI ──
     const kpiOwnWtEl  = document.getElementById('kpi-own-delivery-weight');
     const kpiOwnLnEl  = document.getElementById('kpi-own-delivery-lines');
     const kpiPickWtEl = document.getElementById('kpi-pickup-weight');
@@ -6491,12 +6526,15 @@ function generatePreview(item) {
  */
 function renderAnalyticsDashboard(data) {
     console.log("🎯 renderAnalyticsDashboard called with data:", data);
-    
+
     // ============================================
     // 1. อัปเดตกล่อง KPI: Total Inbound
     // ============================================
     const inWeight = data.totalInWeight || 0;
     const inLines = data.totalInLines || 0;
+    // เก็บ inbound ไว้ให้ _renderDeliverySection คำนวณ Net Flow ได้
+    window._analyticsInWeight = inWeight;
+    window._analyticsInLines  = inLines;
     
     const kpiInWeightEl = document.getElementById('kpi-inbound-weight');
     const kpiInLinesEl = document.getElementById('kpi-inbound-lines');
