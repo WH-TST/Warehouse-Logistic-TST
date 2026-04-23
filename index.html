@@ -5220,8 +5220,14 @@ function _renderDeliverySection(data) {
 
     // ── อัปเดต Daily Warehouse Flow Chart: dataset Outbound ──
     if (window.flowChartInstance) {
+        // Chart พร้อมแล้ว — patch ทันที
         window.flowChartInstance.data.datasets[1].data = data.dailyOutbound || [];
         window.flowChartInstance.update();
+        window._pendingOutbound = null;
+    } else {
+        // Chart ยังไม่ render เสร็จ (race condition) — เก็บ cache ไว้
+        // renderAnalyticsDashboard จะดึงไปใช้เองหลัง chart สร้างเสร็จ
+        window._pendingOutbound = data.dailyOutbound || [];
     }
 
     // ── Delivery Type KPI ──
@@ -5415,12 +5421,12 @@ function _renderDeliverySection(data) {
                     const area = chart.chartArea;
                     // dsIdx 3=เฉลี่ยรวม(เขียว), 4=เฉลี่ยจัดส่งเอง(น้ำเงิน), 5=เฉลี่ยรถมารับ(ส้ม)
                     const avgMeta = [
-                        { dsIdx: 3, text: 'เฉลี่ยรวม  ' + Math.round(avgTotal).toLocaleString('th-TH') + ' kg/วัน',        color: '#10b981', bg: 'rgba(16,185,129,0.13)'  },
-                        { dsIdx: 4, text: 'เฉลี่ยจัดส่งเอง  ' + Math.round(avgOwn).toLocaleString('th-TH') + ' kg/วัน',    color: '#3b82f6', bg: 'rgba(59,130,246,0.13)'  },
-                        { dsIdx: 5, text: 'เฉลี่ยรถมารับ  ' + Math.round(avgPickup).toLocaleString('th-TH') + ' kg/วัน',   color: '#f97316', bg: 'rgba(249,115,22,0.13)'  }
+                        { dsIdx: 3, text: 'เฉลี่ยรวม  ' + Math.round(avgTotal).toLocaleString('th-TH') + ' kg/วัน',        color: '#10b981', border: '#047857' },
+                        { dsIdx: 4, text: 'เฉลี่ยจัดส่งเอง  ' + Math.round(avgOwn).toLocaleString('th-TH') + ' kg/วัน',    color: '#3b82f6', border: '#1d4ed8' },
+                        { dsIdx: 5, text: 'เฉลี่ยรถมารับ  ' + Math.round(avgPickup).toLocaleString('th-TH') + ' kg/วัน',   color: '#f97316', border: '#c2410c' }
                     ];
                     ctx2.save();
-                    ctx2.font = 'bold 10.5px Sarabun, sans-serif';
+                    ctx2.font = 'bold 12px Sarabun, sans-serif';
                     avgMeta.forEach(function(m) {
                         const meta = chart.getDatasetMeta(m.dsIdx);
                         if (!meta || !meta.data || meta.data.length === 0 || meta.hidden) return;
@@ -5428,21 +5434,24 @@ function _renderDeliverySection(data) {
                         if (!lastPt) return;
                         const y   = lastPt.y;
                         const tw  = ctx2.measureText(m.text).width;
-                        const pad = 6;
-                        const bw  = tw + pad * 2;
-                        const bh  = 18;
-                        const x   = area.right - bw - 8;
-                        ctx2.fillStyle = m.bg;
+                        const padX = 10, padY = 5;
+                        const bw  = tw + padX * 2;
+                        const bh  = 22;
+                        const x   = area.right - bw - 10;
+                        // พื้นหลังทึบ (ไม่ใส backdrop ใส ที่ทำให้อ่านยาก)
+                        ctx2.fillStyle = '#ffffff';
                         ctx2.beginPath();
                         ctx2.rect(x, y - bh / 2, bw, bh);
                         ctx2.fill();
-                        ctx2.strokeStyle = m.color;
-                        ctx2.lineWidth = 1;
+                        // ขอบสี
+                        ctx2.strokeStyle = m.border;
+                        ctx2.lineWidth = 1.5;
                         ctx2.stroke();
+                        // ข้อความสี
                         ctx2.fillStyle = m.color;
                         ctx2.textAlign = 'left';
                         ctx2.textBaseline = 'middle';
-                        ctx2.fillText(m.text, x + pad, y);
+                        ctx2.fillText(m.text, x + padX, y);
                     });
                     ctx2.restore();
                 }
@@ -6789,6 +6798,8 @@ function renderAnalyticsDashboard(data) {
         const gOut = ctx.createLinearGradient(0, 0, 0, 340);
         gOut.addColorStop(0, 'rgba(239,68,68,0.45)');
         gOut.addColorStop(1, 'rgba(239,68,68,0)');
+        // ล้าง cache pending ก่อนสร้าง chart ใหม่
+        window._pendingOutbound = null;
         window.flowChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -6840,6 +6851,12 @@ function renderAnalyticsDashboard(data) {
                 }
             }
         });
+        // ── ถ้า Delivery data มาถึงก่อน (race condition) ให้ apply ทันที ──
+        if (window._pendingOutbound) {
+            window.flowChartInstance.data.datasets[1].data = window._pendingOutbound;
+            window.flowChartInstance.update();
+            window._pendingOutbound = null;
+        }
     }
 
     // ============================================
