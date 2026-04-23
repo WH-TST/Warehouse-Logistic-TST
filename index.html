@@ -5959,12 +5959,15 @@ function renderManagerReport() {
         }
 // ── Tag Start Date: load + save ───────────────────────────────────────────────
 window.loadTagStartDate = function loadTagStartDate() {
-    callGAS('getTagSystemStartDate', {}, function(res) {
-        if (res && res.success) {
-            const el = document.getElementById('tag-start-date');
-            if (el) el.value = res.date || '2026-04-20';
-        }
-    });
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (res && res.success) {
+                const el = document.getElementById('tag-start-date');
+                if (el) el.value = res.date || '2026-04-20';
+            }
+        })
+        .withFailureHandler(function() {})
+        .getTagSystemStartDate();
 };
 
 window.saveTagStartDate = function saveTagStartDate() {
@@ -5972,14 +5975,17 @@ window.saveTagStartDate = function saveTagStartDate() {
     const msg = document.getElementById('tag-start-date-msg');
     const dateVal = el?.value;
     if (!dateVal) return showToast('กรุณาเลือกวันที่', true);
-    callGAS('setTagSystemStartDate', { date: dateVal }, function(res) {
-        if (msg) {
-            msg.textContent = res && res.success ? '✅ ' + res.message : '❌ ' + (res?.message || 'ผิดพลาด');
-            msg.classList.remove('hidden');
-            setTimeout(() => msg.classList.add('hidden'), 3000);
-        }
-        if (res && res.success) showToast('บันทึกวันเริ่มต้นสำเร็จ: ' + dateVal);
-    });
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (msg) {
+                msg.textContent = res && res.success ? '✅ ' + res.message : '❌ ' + (res?.message || 'ผิดพลาด');
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 3000);
+            }
+            if (res && res.success) showToast('บันทึกวันเริ่มต้นสำเร็จ: ' + dateVal);
+        })
+        .withFailureHandler(function(e) { showToast('ผิดพลาด: ' + e.message, true); })
+        .setTagSystemStartDate({ date: dateVal });
 };
 
 /** ✅ แก้ไข loadPrintTagData() - เพิ่ม Console Log */
