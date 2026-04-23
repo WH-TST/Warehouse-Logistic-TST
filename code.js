@@ -1136,8 +1136,8 @@ function getWarehouseAnalyticsData(startDate, endDate) {
     const dynamicSS = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
     const transSheet = dynamicSS.getSheetByName('DynamicTransaction');
     const dailyData = {};
-    const dailyOwnDelivery = {}; // จัดส่งเอง (อยู่ใน Logistic_Plan)
-    const dailyPickup = {};      // รถต่างจังหวัดมารับ (ไม่อยู่ใน Logistic_Plan)
+    const dailyOwnDelivery = {};
+    const dailyPickup = {};
 
     // สร้างโครงสร้างข้อมูลรายวันตามช่วงวันที่เลือก
     let tempDate = new Date(start);
@@ -1147,26 +1147,6 @@ function getWarehouseAnalyticsData(startDate, endDate) {
       dailyOwnDelivery[dStr] = 0;
       dailyPickup[dStr] = 0;
       tempDate.setDate(tempDate.getDate() + 1);
-    }
-
-    // --- อ่าน Logistic_Plan เพื่อดึงชื่อลูกค้าที่จัดส่งเอง (ต่อวัน) ---
-    // Col B (index 1) = วันที่, Col G (index 6) = ชื่อร้านค้า
-    const logiCustomersByDate = {}; // { 'yyyy-MM-dd': [shopName_lowercase, ...] }
-    const logiPlanSheet = ss.getSheetByName('Logistic_Plan');
-    if (logiPlanSheet && logiPlanSheet.getLastRow() >= 2) {
-      const logiData = logiPlanSheet.getDataRange().getValues();
-      for (let i = 1; i < logiData.length; i++) {
-        const logiDateObj = parseDateValue(logiData[i][1]);
-        if (!logiDateObj || logiDateObj < start || logiDateObj > end) continue;
-        const logiStatus = String(logiData[i][11] || '').trim().toLowerCase(); // col L = สถานะ
-        if (logiStatus !== 'success') continue;
-        const shopName = String(logiData[i][6] || '').trim();
-        if (!shopName) continue;
-        const dStr = Utilities.formatDate(logiDateObj, 'GMT+7', 'yyyy-MM-dd');
-        if (!logiCustomersByDate[dStr]) logiCustomersByDate[dStr] = [];
-        const lc = shopName.toLowerCase();
-        if (logiCustomersByDate[dStr].indexOf(lc) < 0) logiCustomersByDate[dStr].push(lc);
-      }
     }
 
     let inWeight = 0, outWeight = 0, inLines = 0, outLines = 0;
@@ -1232,24 +1212,62 @@ function getWarehouseAnalyticsData(startDate, endDate) {
           outWeight += absWeight;
           outLines  += absLines;
           if (dailyData[dStr]) dailyData[dStr].out += absWeight;
-
-          // จำแนก: จัดส่งเอง vs รถต่างจังหวัดมารับ
-          // เทียบชื่อลูกค้า Col O (index 14) กับ Logistic_Plan ของวันเดียวกัน
-          const custName = String(transData[i][14] || '').trim().toLowerCase(); // Col O
-          const logiSet  = logiCustomersByDate[dStr] || [];
-          if (custName && logiSet.indexOf(custName) >= 0) {
-            ownDeliveryWeight += absWeight;
-            ownDeliveryLines  += absLines;
-            if (dailyOwnDelivery[dStr] !== undefined) dailyOwnDelivery[dStr] += absWeight;
-          } else {
-            pickupWeight += absWeight;
-            pickupLines  += absLines;
-            if (dailyPickup[dStr] !== undefined) dailyPickup[dStr] += absWeight;
-          }
         }
       }
     }
     
+    // --- 1.5 ดึงข้อมูล จัดส่งเอง / ตจว.มารับ จากชีต All SI LINE ---
+    // Col A (0) = วันที่ M/D/YYYY, Col E (4) = ประเภท, Col I (8) = เส้น, Col J (9) = น้ำหนัก
+    try {
+      const siSS    = SpreadsheetApp.openById('1C5vSbpFMvTrmCnQR27kcNdhuj8xM3jp3WaZdOJGP4BY');
+      const siSheet = siSS.getSheetByName('All SI LINE');
+      if (siSheet && siSheet.getLastRow() >= 2) {
+        const siLastRow  = siSheet.getLastRow();
+        const siReadFrom = Math.max(2, siLastRow - 15000);
+        const siData     = siSheet.getRange(siReadFrom, 1, siLastRow - siReadFrom + 1, 10).getValues();
+        for (let i = 0; i < siData.length; i++) {
+          // Col E (4) = ประเภทการจัดส่ง
+          const delivType = String(siData[i][4] || '').trim();
+          const isOwn     = delivType.indexOf('จัดส่งภายในประเทศ') >= 0;
+          const isPickup  = delivType.indexOf('รับเองภายในประเทศ') >= 0;
+          if (!isOwn && !isPickup) continue;
+
+          // Col A (0) = วันที่ M/D/YYYY (เหมือน Col B DynamicTransaction)
+          const aRaw = siData[i][0];
+          let siDateObj;
+          if (aRaw instanceof Date) {
+            // Google Sheet auto-convert D/M → swap กลับเป็น M/D
+            siDateObj = new Date(aRaw.getFullYear(), aRaw.getDate() - 1, aRaw.getMonth() + 1);
+          } else {
+            const aStr = String(aRaw || '').trim().split(' ')[0];
+            const ap   = aStr.split('/');
+            if (ap.length === 3) {
+              const m = parseInt(ap[0]), d = parseInt(ap[1]), y = parseInt(ap[2]);
+              if (!isNaN(m) && !isNaN(d) && !isNaN(y)) siDateObj = new Date(y, m - 1, d);
+            }
+          }
+          if (!siDateObj) siDateObj = parseDateValue(aRaw);
+          if (!siDateObj || siDateObj < start || siDateObj > end) continue;
+
+          const dStr    = Utilities.formatDate(siDateObj, 'GMT+7', 'yyyy-MM-dd');
+          const siLines = parseFloat(siData[i][8]) || 0;  // Col I
+          const siWt    = parseFloat(siData[i][9]) || 0;  // Col J
+
+          if (isOwn) {
+            ownDeliveryWeight += siWt;
+            ownDeliveryLines  += siLines;
+            if (dailyOwnDelivery[dStr] !== undefined) dailyOwnDelivery[dStr] += siWt;
+          } else {
+            pickupWeight += siWt;
+            pickupLines  += siLines;
+            if (dailyPickup[dStr] !== undefined) dailyPickup[dStr] += siWt;
+          }
+        }
+      }
+    } catch(eSI) {
+      Logger.log('⚠️ All SI LINE error: ' + eSI.message);
+    }
+
     const sortedDates = Object.keys(dailyData).sort();
     const dailyIn = sortedDates.map(d => dailyData[d].in);
     const dailyOut = sortedDates.map(d => dailyData[d].out);
