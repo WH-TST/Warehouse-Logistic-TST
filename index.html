@@ -5130,19 +5130,18 @@ const _safeStorage = {
 window.loadAnalytics = function loadAnalytics() {
     const start = document.getElementById('analytics-start');
     const end = document.getElementById('analytics-end');
-    
-    if(!start || !end || !start.value || !end.value) 
+
+    if(!start || !end || !start.value || !end.value)
         return showToast("กรุณาระบุช่วงวันที่", true);
-    
+
     showToast("กำลังวิเคราะห์ข้อมูล Warehouse Flow...");
-    
     console.log("📤 Requesting analytics data from " + start.value + " to " + end.value);
-    
+
+    // ── Call 1: Warehouse Flow + Inventory (DynamicTransaction only) ──
     google.script.run
-        .withSuccessHandler(data => {
-            console.log("📥 Received RAW data from server:", JSON.stringify(data, null, 2));
-            
-            if(data.success) {
+        .withSuccessHandler(function(data) {
+            console.log("📥 Received flow data from server:", data);
+            if (data.success) {
                 renderAnalyticsDashboard({
                     ...data,
                     totalInWeight: data.inWeight || 0,
@@ -5154,18 +5153,107 @@ window.loadAnalytics = function loadAnalytics() {
                     inventoryTrendDates: data.inventoryTrendDates || [],
                     inventoryTrendLines: data.inventoryTrendLines || [],
                     inventoryTrendWeight: data.inventoryTrendWeight || [],
-                    urgentStockList: data.urgentStockList || [] // ✅ รับข้อมูลตาราง
+                    urgentStockList: data.urgentStockList || []
                 });
-                showToast("โหลดข้อมูล Analytics สำเร็จ");
+                showToast("โหลดข้อมูล Analytics สำเร็จ — กำลังโหลดกราฟ Delivery Type...");
             } else {
                 showToast("Error: " + data.message, true);
             }
         })
-        .withFailureHandler(err => {
+        .withFailureHandler(function(err) {
             console.error("❌ Failed to load analytics:", err);
-            showToast("เกิดข้อผิดพลาดในการโหลดข้อมูล", true);
+            showToast("เกิดข้อผิดพลาดในการโหลดข้อมูล Analytics", true);
         })
         .getWarehouseAnalyticsData(start.value, end.value);
+
+    // ── Call 2: Delivery Type Comparison (All SI LINE) — แยก call ป้องกัน Timeout ──
+    google.script.run
+        .withSuccessHandler(function(delivData) {
+            console.log("📥 Received delivery type data:", delivData);
+            if (delivData && delivData.success) {
+                _renderDeliverySection(delivData);
+                showToast("โหลดข้อมูล Analytics + Delivery สำเร็จ");
+            } else {
+                console.warn("⚠️ Delivery data not available:", delivData && delivData.message);
+            }
+        })
+        .withFailureHandler(function(err) {
+            console.error("❌ Failed to load delivery type data:", err);
+        })
+        .getDeliveryTypeData(start.value, end.value);
+}
+
+// ── อัพเดต KPI + กราฟ Delivery Type จากข้อมูลที่ได้จาก getDeliveryTypeData ──
+function _renderDeliverySection(data) {
+    const ownWt  = data.ownDeliveryWeight || 0;
+    const ownLn  = data.ownDeliveryLines  || 0;
+    const pickWt = data.pickupWeight      || 0;
+    const pickLn = data.pickupLines       || 0;
+
+    const kpiOwnWtEl  = document.getElementById('kpi-own-delivery-weight');
+    const kpiOwnLnEl  = document.getElementById('kpi-own-delivery-lines');
+    const kpiPickWtEl = document.getElementById('kpi-pickup-weight');
+    const kpiPickLnEl = document.getElementById('kpi-pickup-lines');
+
+    if (kpiOwnWtEl)  kpiOwnWtEl.innerHTML  = ownWt.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2}) + ' <small style="font-size:0.85rem;font-family:\'Sarabun\',sans-serif;opacity:0.75;">kg</small>';
+    if (kpiOwnLnEl)  kpiOwnLnEl.innerText  = ownLn.toLocaleString() + ' lines';
+    if (kpiPickWtEl) kpiPickWtEl.innerHTML = pickWt.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2}) + ' <small style="font-size:0.85rem;font-family:\'Sarabun\',sans-serif;opacity:0.75;">kg</small>';
+    if (kpiPickLnEl) kpiPickLnEl.innerText = pickLn.toLocaleString() + ' lines';
+
+    const ctxDelivery = document.getElementById('deliveryCompareChart');
+    if (ctxDelivery) {
+        if (window.deliveryCompareChartInstance) window.deliveryCompareChartInstance.destroy();
+        window.deliveryCompareChartInstance = new Chart(ctxDelivery.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: data.dates || [],
+                datasets: [
+                    {
+                        label: 'จัดส่งเอง (kg)',
+                        data: data.dailyOwnDelivery || [],
+                        backgroundColor: 'rgba(59,130,246,0.75)',
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        borderSkipped: false
+                    },
+                    {
+                        label: 'รถต่างจังหวัดมารับ (kg)',
+                        data: data.dailyPickup || [],
+                        backgroundColor: 'rgba(245,158,11,0.75)',
+                        borderColor: '#f59e0b',
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { usePointStyle: true, pointStyleWidth: 12, padding: 20, font: { family: 'Sarabun', size: 13, weight: 'bold' } }
+                    },
+                    tooltip: {
+                        backgroundColor: '#0f172a', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+                        borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1, padding: 14, cornerRadius: 10,
+                        titleFont: { family: 'Sarabun', size: 12 }, bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
+                        callbacks: { label: function(ctx) { return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg'; } }
+                    }
+                },
+                scales: {
+                    x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8' } },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#f1f5f9' },
+                        ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8', callback: function(v) { return v.toLocaleString() + ' kg'; } }
+                    }
+                }
+            }
+        });
+    }
 }
 // --- ฟังก์ชันสำหรับกดปุ่ม Refresh ใน Header ---
 window.refreshCurrentView = function refreshCurrentView() {
@@ -6561,90 +6649,8 @@ function renderAnalyticsDashboard(data) {
     // ============================================
     renderInventoryTrendChart(data);
 
-    // ============================================
-    // 7. KPI จัดส่งเอง vs รถต่างจังหวัดมารับ
-    // ============================================
-    const ownWt   = data.ownDeliveryWeight || 0;
-    const ownLn   = data.ownDeliveryLines  || 0;
-    const pickWt  = data.pickupWeight      || 0;
-    const pickLn  = data.pickupLines       || 0;
-
-    const kpiOwnWtEl  = document.getElementById('kpi-own-delivery-weight');
-    const kpiOwnLnEl  = document.getElementById('kpi-own-delivery-lines');
-    const kpiPickWtEl = document.getElementById('kpi-pickup-weight');
-    const kpiPickLnEl = document.getElementById('kpi-pickup-lines');
-
-    if (kpiOwnWtEl)  kpiOwnWtEl.innerHTML  = ownWt.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2}) + ' <small style="font-size:0.85rem;font-family:\'Sarabun\',sans-serif;opacity:0.75;">kg</small>';
-    if (kpiOwnLnEl)  kpiOwnLnEl.innerText  = ownLn.toLocaleString() + ' lines';
-    if (kpiPickWtEl) kpiPickWtEl.innerHTML = pickWt.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2}) + ' <small style="font-size:0.85rem;font-family:\'Sarabun\',sans-serif;opacity:0.75;">kg</small>';
-    if (kpiPickLnEl) kpiPickLnEl.innerText = pickLn.toLocaleString() + ' lines';
-
-    // ============================================
-    // 8. กราฟ Delivery Type Comparison (Bar grouped)
-    // ============================================
-    const ctxDelivery = document.getElementById('deliveryCompareChart');
-    if (ctxDelivery) {
-        if (window.deliveryCompareChartInstance) window.deliveryCompareChartInstance.destroy();
-        window.deliveryCompareChartInstance = new Chart(ctxDelivery.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: data.dates || [],
-                datasets: [
-                    {
-                        label: 'จัดส่งเอง (kg)',
-                        data: data.dailyOwnDelivery || [],
-                        backgroundColor: 'rgba(59,130,246,0.75)',
-                        borderColor: '#3b82f6',
-                        borderWidth: 2,
-                        borderRadius: 6,
-                        borderSkipped: false
-                    },
-                    {
-                        label: 'รถต่างจังหวัดมารับ (kg)',
-                        data: data.dailyPickup || [],
-                        backgroundColor: 'rgba(245,158,11,0.75)',
-                        borderColor: '#f59e0b',
-                        borderWidth: 2,
-                        borderRadius: 6,
-                        borderSkipped: false
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    title: { display: false },
-                    legend: {
-                        position: 'bottom',
-                        labels: { usePointStyle: true, pointStyleWidth: 12, padding: 20, font: { family: 'Sarabun', size: 13, weight: 'bold' } }
-                    },
-                    tooltip: {
-                        backgroundColor: '#0f172a', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
-                        borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1, padding: 14, cornerRadius: 10,
-                        titleFont: { family: 'Sarabun', size: 12 }, bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
-                        callbacks: {
-                            label: ctx2 => ' ' + ctx2.dataset.label + ': ' + ctx2.parsed.y.toLocaleString('th-TH', {minimumFractionDigits:2,maximumFractionDigits:2}) + ' kg',
-                            afterBody: tooltipItems => {
-                                const total = tooltipItems.reduce((s, t) => s + (t.parsed.y || 0), 0);
-                                return total > 0 ? [' รวม: ' + total.toLocaleString('th-TH', {minimumFractionDigits:2,maximumFractionDigits:2}) + ' kg'] : [];
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8' } },
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: '#f1f5f9' },
-                        ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8', callback: v => v.toLocaleString() + ' kg' }
-                    }
-                }
-            }
-        });
-    }
-
+    // Delivery Type KPI + Chart จะถูก render โดย _renderDeliverySection()
+    // ซึ่งเรียกจาก loadAnalytics() แบบ call แยก (ป้องกัน GAS Timeout)
 }
 // --- Global Variable สำหรับเก็บข้อมูลสินค้าทั้งหมด ---
 let allProductListCache = [];
