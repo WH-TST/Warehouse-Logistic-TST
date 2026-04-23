@@ -1296,36 +1296,31 @@ function getDeliveryTypeData(startDate, endDate) {
     if (siSheet && siSheet.getLastRow() >= 2) {
       const siLastRow  = siSheet.getLastRow();
       const siReadFrom = Math.max(2, siLastRow - 10000); // อ่านแค่ 10,000 แถวล่าสุด
-      const siData     = siSheet.getRange(siReadFrom, 1, siLastRow - siReadFrom + 1, 10).getValues();
+      const siRange    = siSheet.getRange(siReadFrom, 1, siLastRow - siReadFrom + 1, 10);
+      // ใช้ getDisplayValues() สำหรับวันที่ — ได้ text M/D/YYYY ตรงๆ ไม่ขึ้นกับ locale ของชีต
+      const siDisplay  = siRange.getDisplayValues(); // text ทุก cell
+      const siValues   = siRange.getValues();        // ตัวเลขสำหรับ Col I, J
 
-      for (let i = 0; i < siData.length; i++) {
+      for (let i = 0; i < siDisplay.length; i++) {
         // Col E (4) = ประเภทการจัดส่ง
-        const delivType = String(siData[i][4] || '').trim();
+        const delivType = String(siDisplay[i][4] || '').trim();
         const isOwn     = delivType.indexOf('จัดส่งภายในประเทศ') >= 0;
         const isPickup  = delivType.indexOf('รับเองภายในประเทศ') >= 0;
         if (!isOwn && !isPickup) continue;
 
-        // Col A (0) = วันที่ M/D/YYYY
-        // ชีต All SI LINE ใช้ format M/D/YYYY — ไม่ต้อง swap (ต่างจาก DynamicTransaction)
-        const aRaw = siData[i][0];
+        // Col A (0) = วันที่ M/D/YYYY — อ่านจาก display text เสมอ (ไม่สนใจ locale/auto-convert)
+        const aStr = String(siDisplay[i][0] || '').trim().split(' ')[0];
+        const ap   = aStr.split('/');
         let siDateObj;
-        if (aRaw instanceof Date) {
-          // Google Sheets เก็บวันที่ถูกต้องแล้ว — ใช้ getMonth() / getDate() โดยตรง ไม่ swap
-          siDateObj = new Date(aRaw.getFullYear(), aRaw.getMonth(), aRaw.getDate());
-        } else {
-          // string "M/D/YYYY" — parse เป็น M/D/Y ตรงๆ
-          const aStr = String(aRaw || '').trim().split(' ')[0];
-          const ap   = aStr.split('/');
-          if (ap.length === 3) {
-            const m = parseInt(ap[0]), d = parseInt(ap[1]), y = parseInt(ap[2]);
-            if (!isNaN(m) && !isNaN(d) && !isNaN(y)) siDateObj = new Date(y, m - 1, d);
-          }
+        if (ap.length === 3) {
+          const m = parseInt(ap[0]), d = parseInt(ap[1]), y = parseInt(ap[2]);
+          if (!isNaN(m) && !isNaN(d) && !isNaN(y)) siDateObj = new Date(y, m - 1, d);
         }
         if (!siDateObj || siDateObj < start || siDateObj > end) continue;
 
         const dStr    = Utilities.formatDate(siDateObj, 'GMT+7', 'yyyy-MM-dd');
-        const siLines = parseFloat(siData[i][8]) || 0; // Col I
-        const siWt    = parseFloat(siData[i][9]) || 0; // Col J
+        const siLines = parseFloat(siValues[i][8]) || 0; // Col I
+        const siWt    = parseFloat(siValues[i][9]) || 0; // Col J
 
         if (isOwn) {
           ownDeliveryWeight += siWt;
