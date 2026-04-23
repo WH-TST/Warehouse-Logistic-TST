@@ -5402,7 +5402,51 @@ function _renderDeliverySection(data) {
                         }
                     }
                 }
-            }
+            },
+            // ── Inline Plugin: วาด label ติดท้ายเส้นเฉลี่ยแต่ละเส้น ──
+            plugins: [{
+                id: 'avgLineLabels',
+                afterDraw: function(chart) {
+                    const ctx2  = chart.ctx;
+                    const area  = chart.chartArea;
+                    const avgMeta = [
+                        { dsIdx: 2, text: '── เฉลี่ยจัดส่งเอง',  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  offset: -2 },
+                        { dsIdx: 3, text: '── เฉลี่ยรถมารับ',     color: '#f97316', bg: 'rgba(249,115,22,0.12)', offset: 0  },
+                        { dsIdx: 4, text: '── เฉลี่ยรวม',          color: '#a855f7', bg: 'rgba(168,85,247,0.12)', offset: 2  }
+                    ];
+                    ctx2.save();
+                    ctx2.font = 'bold 10.5px Sarabun, sans-serif';
+                    avgMeta.forEach(function(m) {
+                        const meta = chart.getDatasetMeta(m.dsIdx);
+                        if (!meta || !meta.data || meta.data.length === 0 || meta.hidden) return;
+                        // ใช้จุดสุดท้ายของเส้น (ขอบขวา)
+                        const lastPt = meta.data[meta.data.length - 1];
+                        if (!lastPt) return;
+                        const y   = lastPt.y + m.offset;
+                        const tw  = ctx2.measureText(m.text).width;
+                        const pad = 5;
+                        const bw  = tw + pad * 2;
+                        const bh  = 17;
+                        // วาง label ชิดขอบขวา ข้างในพื้นที่กราฟ
+                        const x = area.right - bw - 6;
+                        // กล่องพื้นหลัง
+                        ctx2.fillStyle = m.bg;
+                        ctx2.beginPath();
+                        ctx2.rect(x, y - bh / 2, bw, bh);
+                        ctx2.fill();
+                        // ขอบ
+                        ctx2.strokeStyle = m.color;
+                        ctx2.lineWidth = 1;
+                        ctx2.stroke();
+                        // ข้อความ
+                        ctx2.fillStyle = m.color;
+                        ctx2.textAlign = 'left';
+                        ctx2.textBaseline = 'middle';
+                        ctx2.fillText(m.text, x + pad, y);
+                    });
+                    ctx2.restore();
+                }
+            }]
         });
     }
 }
