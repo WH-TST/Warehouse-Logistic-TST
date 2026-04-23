@@ -5244,11 +5244,13 @@ function _renderDeliverySection(data) {
         const pickupArr  = data.dailyPickup || [];
         const totalArr   = dates.map((_, i) => (ownArr[i] || 0) + (pickupArr[i] || 0));
 
-        // ── คำนวณค่าเฉลี่ย เฉพาะวันที่มีข้อมูล ──
-        const activeDays   = totalArr.filter(v => v > 0).length || 1;
-        const avgOwn       = ownArr.reduce((s, v) => s + v, 0) / activeDays;
-        const avgPickup    = pickupArr.reduce((s, v) => s + v, 0) / activeDays;
-        const avgTotal     = totalArr.reduce((s, v) => s + v, 0) / activeDays;
+        // ── คำนวณค่าเฉลี่ย เฉพาะวันที่มีข้อมูล (ไม่นับวัน 0 / วันหยุด) ──
+        const daysWithOwn    = ownArr.filter(v => v > 0).length || 1;
+        const daysWithPickup = pickupArr.filter(v => v > 0).length || 1;
+        const daysWithTotal  = totalArr.filter(v => v > 0).length || 1;
+        const avgOwn         = ownArr.reduce((s, v) => s + v, 0) / daysWithOwn;
+        const avgPickup      = pickupArr.reduce((s, v) => s + v, 0) / daysWithPickup;
+        const avgTotal       = totalArr.reduce((s, v) => s + v, 0) / daysWithTotal;
         const avgOwnArr    = dates.map(() => Math.round(avgOwn));
         const avgPickupArr = dates.map(() => Math.round(avgPickup));
         const avgTotalArr  = dates.map(() => Math.round(avgTotal));
