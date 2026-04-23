@@ -5398,7 +5398,7 @@ function _renderDeliverySection(data) {
                         }
                     }
                 },
-                layout: { padding: { top: 90 } },
+                layout: { padding: { right: 8 } },
                 scales: {
                     x: {
                         grid: { color: 'rgba(148,163,184,0.1)', drawBorder: false },
@@ -5430,40 +5430,49 @@ function _renderDeliverySection(data) {
                         { dsIdx: 5, text: 'เฉลี่ยรถมารับ  ' + Math.round(avgPickup).toLocaleString('th-TH') + ' kg/วัน',   color: '#f97316', border: '#c2410c' }
                     ];
                     ctx2.save();
-                    ctx2.font = 'bold 12px Sarabun, sans-serif';
-                    // วาง label เรียงแนวนอนด้านบน นอกพื้นที่กราฟ
-                    let labelX = area.left;
-                    const labelY = area.top - 56; // อยู่เหนือพื้นที่กราฟ
-                    avgMeta.forEach(function(m, idx) {
+                    ctx2.font = 'bold 11.5px Sarabun, sans-serif';
+                    const BH   = 22;
+                    const PADX = 8;
+
+                    // เก็บ y ของแต่ละเส้นจากจุดสุดท้าย (ขอบขวา chart)
+                    const positions = avgMeta.map(function(m) {
                         const meta = chart.getDatasetMeta(m.dsIdx);
-                        if (!meta || !meta.data || meta.data.length === 0 || meta.hidden) return;
-                        const tw   = ctx2.measureText(m.text).width;
-                        const padX = 10, padY = 5;
-                        const bw   = tw + padX * 2;
-                        const bh   = 24;
-                        const y    = labelY + idx * 28; // เรียงลงมา 28px ต่อเส้น
-                        // วาดเส้นสั้นๆ แสดง dash style
-                        ctx2.strokeStyle = m.color;
-                        ctx2.lineWidth = 2;
-                        ctx2.setLineDash([6, 4]);
-                        ctx2.beginPath();
-                        ctx2.moveTo(labelX, y + bh / 2);
-                        ctx2.lineTo(labelX + 20, y + bh / 2);
-                        ctx2.stroke();
-                        ctx2.setLineDash([]);
-                        // กล่องพื้นหลังขาวทึบ
+                        if (!meta || !meta.data || meta.data.length === 0 || meta.hidden) return null;
+                        const pt = meta.data[meta.data.length - 1];
+                        return pt ? pt.y : null;
+                    });
+
+                    // anti-overlap: ถ้าเส้นใกล้กัน ให้เลื่อน y ลง
+                    for (let i = 1; i < positions.length; i++) {
+                        if (positions[i] === null || positions[i - 1] === null) continue;
+                        if (positions[i] - positions[i - 1] < BH + 3) {
+                            positions[i] = positions[i - 1] + BH + 3;
+                        }
+                    }
+
+                    avgMeta.forEach(function(m, idx) {
+                        const cy = positions[idx]; // y กลางกล่อง = ตรงกับเส้น
+                        if (cy === null) return;
+                        const tw = ctx2.measureText(m.text).width;
+                        const bw = tw + PADX * 2;
+                        // ชิดขอบขวา ใน chart area
+                        const x  = area.right - bw - 6;
+                        const y  = cy - BH / 2;
+
+                        // กล่องขาวทึบ
                         ctx2.fillStyle = '#ffffff';
                         ctx2.strokeStyle = m.border;
                         ctx2.lineWidth = 1.5;
                         ctx2.beginPath();
-                        ctx2.rect(labelX + 24, y, bw, bh);
+                        ctx2.rect(x, y, bw, BH);
                         ctx2.fill();
                         ctx2.stroke();
+
                         // ข้อความ
                         ctx2.fillStyle = m.color;
                         ctx2.textAlign = 'left';
                         ctx2.textBaseline = 'middle';
-                        ctx2.fillText(m.text, labelX + 24 + padX, y + bh / 2);
+                        ctx2.fillText(m.text, x + PADX, cy);
                     });
                     ctx2.restore();
                 }
