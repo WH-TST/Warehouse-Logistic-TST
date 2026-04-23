@@ -705,7 +705,7 @@ function calculatePrintTagList(selectedDateStr) {
     
     // 1. ดึงข้อมูลประกอบ (ยอดปริ้นเก่า, ยอดใช้จริง, ยอดบันทึกวันนี้)
     const printedBundlesExcludeToday = getPrintedQtyExcludeDate(selectedDateStr);
-    const actualLinesExcludeToday = getActualLinesExcludeDate(selectedDateStr);
+    const actualLinesExcludeToday = getActualLinesFromDynamic(selectedDateStr);
     const todayPrintedLog = getPrintedQtyFromLog(selectedDateStr);
     
     // 2. ดึงแผนวันนี้ (นี่คือพระเอกหลัก)
@@ -877,6 +877,60 @@ function getActualLinesExcludeDate(excludeDateStr) {
     return {};
   }
 }
+// ── ดึงยอดใช้จริง (Production) จาก DynamicTransaction ────────────────────────
+// excludeDateStr = วันที่เลือก → รวมเฉพาะแถวที่วันที่ < excludeDate
+// Col G (6) = type, Col E (4) = SKU, Col T (19) = date (D/M/YYYY), Col H (7) = เส้น
+function getActualLinesFromDynamic(excludeDateStr) {
+  try {
+    const dynamicSS  = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
+    const transSheet = dynamicSS.getSheetByName('DynamicTransaction');
+    if (!transSheet || transSheet.getLastRow() < 2) return {};
+
+    const excludeDate = new Date(excludeDateStr);
+    excludeDate.setHours(0, 0, 0, 0);
+
+    const lastRow  = transSheet.getLastRow();
+    const readFrom = Math.max(2, lastRow - 15000);
+    const data     = transSheet.getRange(readFrom, 1, lastRow - readFrom + 1, 20).getValues();
+
+    const result = {};
+    for (let i = 0; i < data.length; i++) {
+      const type = String(data[i][6] || '').trim(); // Col G = type
+      if (type !== 'Production') continue;
+
+      const sku = String(data[i][4] || '').trim();  // Col E = Item Number
+      if (!sku) continue;
+
+      // Col T (index 19) = date D/M/YYYY — parse เหมือน Analytics
+      const tRaw = data[i][19];
+      let rowDateObj;
+      const tStr = (tRaw instanceof Date)
+        ? Utilities.formatDate(tRaw, 'GMT+7', 'dd/MM/yyyy')
+        : String(tRaw || '').trim().split(' ')[0];
+      const tp = tStr.split('/');
+      if (tp.length === 3) {
+        const d = parseInt(tp[0]), m = parseInt(tp[1]), y = parseInt(tp[2]);
+        if (!isNaN(d) && !isNaN(m) && !isNaN(y)) rowDateObj = new Date(y, m - 1, d);
+      }
+      if (!rowDateObj) rowDateObj = parseDateValue(tRaw);
+      if (!rowDateObj) continue;
+
+      rowDateObj.setHours(0, 0, 0, 0);
+      if (rowDateObj.getTime() >= excludeDate.getTime()) continue; // ไม่รวมวันที่เลือก
+
+      const lines = parseFloat(data[i][7]) || 0; // Col H = CW quantity (เส้น)
+      if (lines > 0) result[sku] = (result[sku] || 0) + lines;
+    }
+
+    Logger.log('✅ getActualLinesFromDynamic: found ' + Object.keys(result).length + ' SKUs');
+    return result;
+
+  } catch (e) {
+    Logger.log('❌ getActualLinesFromDynamic: ' + e.message);
+    return {};
+  }
+}
+
 function getPrintedQtyCumulative(untilDateStr) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
