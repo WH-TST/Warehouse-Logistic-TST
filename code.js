@@ -44,7 +44,8 @@ function _handleApiPost(e) {
       'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
-      'setupInventorySheets'
+      'setupInventorySheets',
+      'getTagSystemStartDate','setTagSystemStartDate'
     ];
 
     if (allowedActions.indexOf(action) === -1) {
@@ -206,7 +207,8 @@ function doGet(e) {
           'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
-          'setupInventorySheets'
+          'setupInventorySheets',
+          'getTagSystemStartDate','setTagSystemStartDate'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -793,15 +795,20 @@ function getPrintedQtyExcludeDate(excludeDateStr) {
     const result = {};
     const excludeDate = new Date(excludeDateStr);
     excludeDate.setHours(0, 0, 0, 0);
-    
+    const startDateStr2 = getTagSystemStartDate().date;
+    const startDate2 = new Date(startDateStr2);
+    startDate2.setHours(0, 0, 0, 0);
+
     Logger.log("🔍 Debug getPrintedQtyExcludeDate:");
+    Logger.log("  - Start Date: " + startDateStr2);
     Logger.log("  - Exclude Date: " + excludeDate.toISOString());
-    
+
     for (let i = 1; i < data.length; i++) {
       const logDate = parseDateValue(data[i][1]);
+      if (!logDate) continue;
       logDate.setHours(0, 0, 0, 0);
-      
-      if (logDate < excludeDate) {
+
+      if (logDate >= startDate2 && logDate < excludeDate) {
         const pid = String(data[i][2] || "").trim();
         const bundles = Number(data[i][3]) || 0;
         result[pid] = (result[pid] || 0) + bundles;
@@ -877,6 +884,26 @@ function getActualLinesExcludeDate(excludeDateStr) {
     return {};
   }
 }
+// ── Tag System Start Date (PropertiesService) ─────────────────────────────────
+function getTagSystemStartDate() {
+  try {
+    const stored = PropertiesService.getScriptProperties().getProperty('TAG_SYSTEM_START_DATE');
+    return { success: true, date: stored || '2026-04-20' };
+  } catch (e) {
+    return { success: true, date: '2026-04-20' };
+  }
+}
+function setTagSystemStartDate(payload) {
+  try {
+    const dateStr = String(payload.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { success: false, message: 'รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น yyyy-MM-dd)' };
+    PropertiesService.getScriptProperties().setProperty('TAG_SYSTEM_START_DATE', dateStr);
+    return { success: true, message: 'บันทึกวันเริ่มต้นสำเร็จ: ' + dateStr };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
 // ── ดึงยอดใช้จริง (Production) จาก DynamicTransaction ────────────────────────
 // excludeDateStr = วันที่เลือก → รวมเฉพาะแถวที่วันที่ < excludeDate
 // Col G (6) = type, Col E (4) = SKU, Col T (19) = date (D/M/YYYY), Col H (7) = เส้น
@@ -888,6 +915,12 @@ function getActualLinesFromDynamic(excludeDateStr) {
 
     const excludeDate = new Date(excludeDateStr);
     excludeDate.setHours(0, 0, 0, 0);
+
+    // วันเริ่มต้นจาก PropertiesService
+    const startDateStr = getTagSystemStartDate().date;
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    Logger.log('📅 getActualLinesFromDynamic startDate: ' + startDateStr);
 
     const lastRow  = transSheet.getLastRow();
     const readFrom = Math.max(2, lastRow - 15000);
@@ -916,6 +949,7 @@ function getActualLinesFromDynamic(excludeDateStr) {
       if (!rowDateObj) continue;
 
       rowDateObj.setHours(0, 0, 0, 0);
+      if (rowDateObj.getTime() <  startDate.getTime())   continue; // ก่อนวันเริ่มต้น
       if (rowDateObj.getTime() >= excludeDate.getTime()) continue; // ไม่รวมวันที่เลือก
 
       const lines = parseFloat(data[i][7]) || 0; // Col H = CW quantity (เส้น)

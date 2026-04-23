@@ -625,17 +625,30 @@ thead.sticky {
     <!-- VIEW 3: PRINT TAG FG -->
     <!-- ============================================ -->
     <div id="view-printtag-content" class="hidden space-y-8">
-        <div class="bg-indigo-900 p-10 rounded-[2.5rem] shadow-xl flex flex-col md:flex-row gap-8 items-end">
-            <div class="flex-grow w-full">
-                <label class="text-indigo-300 text-xs font-black uppercase tracking-widest block mb-3">ระบุวันที่ผลิตสำหรับพิมพ์ TAG</label>
-                <input type="date" id="tag-date" class="w-full bg-indigo-800 border-none text-white p-5 rounded-2xl text-xl font-bold outline-none">
+        <div class="bg-indigo-900 p-10 rounded-[2.5rem] shadow-xl flex flex-col gap-6">
+            <!-- Row 1: date + buttons -->
+            <div class="flex flex-col md:flex-row gap-8 items-end">
+                <div class="flex-grow w-full">
+                    <label class="text-indigo-300 text-xs font-black uppercase tracking-widest block mb-3">ระบุวันที่ผลิตสำหรับพิมพ์ TAG</label>
+                    <input type="date" id="tag-date" class="w-full bg-indigo-800 border-none text-white p-5 rounded-2xl text-xl font-bold outline-none">
+                </div>
+                <button onclick="loadPrintTagData()" class="w-full md:w-64 bg-indigo-500 hover:bg-indigo-600 text-white h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3">
+                    <i class="fas fa-tags"></i> CALCULATE TAGS
+                </button>
+                <button onclick="openExtraJobModal()" class="w-full md:w-56 bg-rose-500 hover:bg-rose-600 text-white h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-lg ml-4">
+                    <i class="fas fa-exclamation-circle"></i> งานแทรก (Extra)
+                </button>
             </div>
-            <button onclick="loadPrintTagData()" class="w-full md:w-64 bg-indigo-500 hover:bg-indigo-600 text-white h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3">
-                <i class="fas fa-tags"></i> CALCULATE TAGS
-            </button>
-            <button onclick="openExtraJobModal()" class="w-full md:w-56 bg-rose-500 hover:bg-rose-600 text-white h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-lg ml-4">
-                <i class="fas fa-exclamation-circle"></i> งานแทรก (Extra)
-            </button>
+            <!-- Row 2: ตั้งค่าวันเริ่มต้นคำนวณยอดสะสม -->
+            <div class="flex flex-col md:flex-row items-center gap-4 bg-indigo-800/60 border border-indigo-700 rounded-2xl px-6 py-4">
+                <i class="fas fa-cog text-indigo-400 text-lg"></i>
+                <span class="text-indigo-300 text-xs font-black uppercase tracking-widest whitespace-nowrap">วันเริ่มต้นคำนวณยอดสะสม</span>
+                <input type="date" id="tag-start-date" class="bg-indigo-700 border border-indigo-500 text-white px-4 py-2 rounded-xl font-bold outline-none focus:border-indigo-300 transition-all text-sm">
+                <button onclick="saveTagStartDate()" class="bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-2 rounded-xl font-black text-sm transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fas fa-save"></i> บันทึก
+                </button>
+                <span id="tag-start-date-msg" class="text-xs font-semibold text-emerald-400 hidden"></span>
+            </div>
         </div>
         <div id="tag-list-container" class="min-h-[300px]"></div>
         <div id="tag-preview-area" class="hidden mt-10 p-10 bg-white rounded-[2.5rem] border-4 border-indigo-50 shadow-2xl">
@@ -5945,6 +5958,31 @@ function renderManagerReport() {
             }
         }
 /**
+// ── Tag Start Date: load + save ───────────────────────────────────────────────
+window.loadTagStartDate = function loadTagStartDate() {
+    callGAS('getTagSystemStartDate', {}, function(res) {
+        if (res && res.success) {
+            const el = document.getElementById('tag-start-date');
+            if (el) el.value = res.date || '2026-04-20';
+        }
+    });
+};
+
+window.saveTagStartDate = function saveTagStartDate() {
+    const el  = document.getElementById('tag-start-date');
+    const msg = document.getElementById('tag-start-date-msg');
+    const dateVal = el?.value;
+    if (!dateVal) return showToast('กรุณาเลือกวันที่', true);
+    callGAS('setTagSystemStartDate', { date: dateVal }, function(res) {
+        if (msg) {
+            msg.textContent = res && res.success ? '✅ ' + res.message : '❌ ' + (res?.message || 'ผิดพลาด');
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+        }
+        if (res && res.success) showToast('บันทึกวันเริ่มต้นสำเร็จ: ' + dateVal);
+    });
+};
+
  * ✅ แก้ไข loadPrintTagData() - เพิ่ม Console Log
  */
 window.loadPrintTagData = function loadPrintTagData() {
@@ -7404,6 +7442,11 @@ window.switchView = function switchView(view) {
     // แก้ไข: ถ้าเข้าหน้า Overdue ให้โหลดข้อมูลอัตโนมัติถ้ายังไม่มี
     if (view === 'overdue' && !currentAnalysis) {
         refreshSpaceAnalysis();
+    }
+
+    // โหลดวันเริ่มต้นคำนวณเมื่อเปิด Print Tag
+    if (view === 'printtag') {
+        loadTagStartDate();
     }
 
     // Analytics: auto-set date range (ต้นเดือน - วันนี้) และ auto-load เมื่อเปิดครั้งแรก
