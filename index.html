@@ -5238,52 +5238,108 @@ function _renderDeliverySection(data) {
     const ctxDelivery = document.getElementById('deliveryCompareChart');
     if (ctxDelivery) {
         if (window.deliveryCompareChartInstance) window.deliveryCompareChartInstance.destroy();
+
+        const dates      = data.dates || [];
+        const ownArr     = data.dailyOwnDelivery || [];
+        const pickupArr  = data.dailyPickup || [];
+        // คำนวณ % สัดส่วนต่อวัน สำหรับแสดงใน tooltip
+        const totalArr   = dates.map((_, i) => (ownArr[i] || 0) + (pickupArr[i] || 0));
+
         window.deliveryCompareChartInstance = new Chart(ctxDelivery.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: data.dates || [],
+                labels: dates,
                 datasets: [
                     {
-                        label: 'จัดส่งเอง (kg)',
-                        data: data.dailyOwnDelivery || [],
-                        backgroundColor: 'rgba(59,130,246,0.75)',
-                        borderColor: '#3b82f6',
-                        borderWidth: 2,
-                        borderRadius: 6,
-                        borderSkipped: false
+                        label: '🚛 จัดส่งเอง',
+                        data: ownArr,
+                        backgroundColor: 'rgba(59,130,246,0.85)',
+                        borderColor: '#2563eb',
+                        borderWidth: 0,
+                        borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                        borderSkipped: false,
+                        stack: 'delivery'
                     },
                     {
-                        label: 'รถต่างจังหวัดมารับ (kg)',
-                        data: data.dailyPickup || [],
-                        backgroundColor: 'rgba(245,158,11,0.75)',
-                        borderColor: '#f59e0b',
-                        borderWidth: 2,
-                        borderRadius: 6,
-                        borderSkipped: false
+                        label: '📦 รถต่างจังหวัดมารับ',
+                        data: pickupArr,
+                        backgroundColor: 'rgba(251,146,60,0.85)',
+                        borderColor: '#ea580c',
+                        borderWidth: 0,
+                        borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                        borderSkipped: false,
+                        stack: 'delivery'
                     }
                 ]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true,
+                maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: { usePointStyle: true, pointStyleWidth: 12, padding: 20, font: { family: 'Sarabun', size: 13, weight: 'bold' } }
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'rectRounded',
+                            pointStyleWidth: 18,
+                            padding: 24,
+                            font: { family: 'Sarabun', size: 13, weight: 'bold' },
+                            color: '#334155'
+                        }
                     },
                     tooltip: {
-                        backgroundColor: '#0f172a', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
-                        borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1, padding: 14, cornerRadius: 10,
-                        titleFont: { family: 'Sarabun', size: 12 }, bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
-                        callbacks: { label: function(ctx) { return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg'; } }
+                        backgroundColor: '#0f172a',
+                        titleColor: '#94a3b8',
+                        bodyColor: '#f1f5f9',
+                        borderColor: 'rgba(99,102,241,0.4)',
+                        borderWidth: 1,
+                        padding: 16,
+                        cornerRadius: 12,
+                        titleFont: { family: 'Sarabun', size: 12 },
+                        bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
+                        callbacks: {
+                            title: function(items) {
+                                return '📅 ' + items[0].label;
+                            },
+                            label: function(ctx) {
+                                const val = ctx.parsed.y || 0;
+                                const tot = totalArr[ctx.dataIndex] || 0;
+                                const pct = tot > 0 ? ((val / tot) * 100).toFixed(1) : '0.0';
+                                return '  ' + ctx.dataset.label.replace(/^[^ ]+ /, '') +
+                                       ': ' + val.toLocaleString('th-TH', {minimumFractionDigits:0, maximumFractionDigits:0}) +
+                                       ' kg  (' + pct + '%)';
+                            },
+                            afterBody: function(items) {
+                                const tot = totalArr[items[0].dataIndex] || 0;
+                                return tot > 0
+                                    ? ['', '  รวมทั้งวัน: ' + tot.toLocaleString('th-TH', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' kg']
+                                    : [];
+                            }
+                        }
                     }
                 },
                 scales: {
-                    x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8' } },
+                    x: {
+                        stacked: true,
+                        grid: { display: false },
+                        ticks: {
+                            font: { family: 'Sarabun', size: 11 },
+                            color: '#64748b',
+                            maxRotation: 45
+                        }
+                    },
                     y: {
+                        stacked: true,
                         beginAtZero: true,
-                        grid: { color: '#f1f5f9' },
-                        ticks: { font: { family: 'Sarabun', size: 11 }, color: '#94a3b8', callback: function(v) { return v.toLocaleString() + ' kg'; } }
+                        grid: { color: 'rgba(148,163,184,0.15)', drawBorder: false },
+                        ticks: {
+                            font: { family: 'Sarabun', size: 11 },
+                            color: '#94a3b8',
+                            callback: function(v) {
+                                return v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v;
+                            }
+                        }
                     }
                 }
             }
