@@ -5136,6 +5136,8 @@ window.loadAnalytics = function loadAnalytics() {
 
     showToast("กำลังวิเคราะห์ข้อมูล Warehouse Flow...");
     console.log("📤 Requesting analytics data from " + start.value + " to " + end.value);
+    // reset sentinel ทุกครั้งที่ load ใหม่
+    window._pendingOutbound = undefined;
 
     // ── Call 1: Warehouse Flow + Inventory (DynamicTransaction only) ──
     google.script.run
@@ -5223,11 +5225,12 @@ function _renderDeliverySection(data) {
         // Chart พร้อมแล้ว — patch ทันที
         window.flowChartInstance.data.datasets[1].data = data.dailyOutbound || [];
         window.flowChartInstance.update();
-        window._pendingOutbound = null;
+        window._pendingOutbound = null; // null = delivery มาแล้ว + applied แล้ว
     } else {
         // Chart ยังไม่ render เสร็จ (race condition) — เก็บ cache ไว้
         // renderAnalyticsDashboard จะดึงไปใช้เองหลัง chart สร้างเสร็จ
         window._pendingOutbound = data.dailyOutbound || [];
+        // sentinel = null บอกว่า delivery มาแล้วแต่รอ apply
     }
 
     // ── Delivery Type KPI ──
@@ -5395,6 +5398,7 @@ function _renderDeliverySection(data) {
                         }
                     }
                 },
+                layout: { padding: { top: 90 } },
                 scales: {
                     x: {
                         grid: { color: 'rgba(148,163,184,0.1)', drawBorder: false },
@@ -5427,31 +5431,39 @@ function _renderDeliverySection(data) {
                     ];
                     ctx2.save();
                     ctx2.font = 'bold 12px Sarabun, sans-serif';
-                    avgMeta.forEach(function(m) {
+                    // วาง label เรียงแนวนอนด้านบน นอกพื้นที่กราฟ
+                    let labelX = area.left;
+                    const labelY = area.top - 56; // อยู่เหนือพื้นที่กราฟ
+                    avgMeta.forEach(function(m, idx) {
                         const meta = chart.getDatasetMeta(m.dsIdx);
                         if (!meta || !meta.data || meta.data.length === 0 || meta.hidden) return;
-                        const lastPt = meta.data[meta.data.length - 1];
-                        if (!lastPt) return;
-                        const y   = lastPt.y;
-                        const tw  = ctx2.measureText(m.text).width;
+                        const tw   = ctx2.measureText(m.text).width;
                         const padX = 10, padY = 5;
-                        const bw  = tw + padX * 2;
-                        const bh  = 22;
-                        const x   = area.right - bw - 10;
-                        // พื้นหลังทึบ (ไม่ใส backdrop ใส ที่ทำให้อ่านยาก)
-                        ctx2.fillStyle = '#ffffff';
+                        const bw   = tw + padX * 2;
+                        const bh   = 24;
+                        const y    = labelY + idx * 28; // เรียงลงมา 28px ต่อเส้น
+                        // วาดเส้นสั้นๆ แสดง dash style
+                        ctx2.strokeStyle = m.color;
+                        ctx2.lineWidth = 2;
+                        ctx2.setLineDash([6, 4]);
                         ctx2.beginPath();
-                        ctx2.rect(x, y - bh / 2, bw, bh);
-                        ctx2.fill();
-                        // ขอบสี
+                        ctx2.moveTo(labelX, y + bh / 2);
+                        ctx2.lineTo(labelX + 20, y + bh / 2);
+                        ctx2.stroke();
+                        ctx2.setLineDash([]);
+                        // กล่องพื้นหลังขาวทึบ
+                        ctx2.fillStyle = '#ffffff';
                         ctx2.strokeStyle = m.border;
                         ctx2.lineWidth = 1.5;
+                        ctx2.beginPath();
+                        ctx2.rect(labelX + 24, y, bw, bh);
+                        ctx2.fill();
                         ctx2.stroke();
-                        // ข้อความสี
+                        // ข้อความ
                         ctx2.fillStyle = m.color;
                         ctx2.textAlign = 'left';
                         ctx2.textBaseline = 'middle';
-                        ctx2.fillText(m.text, x + padX, y);
+                        ctx2.fillText(m.text, labelX + 24 + padX, y + bh / 2);
                     });
                     ctx2.restore();
                 }
@@ -6720,23 +6732,19 @@ function renderAnalyticsDashboard(data) {
     }
     
     // ============================================
-    // 2. อัปเดตกล่อง KPI: Total Outbound
+    // 2. KPI: Total Outbound — ข้ามถ้า delivery data มาแล้ว (_pendingOutbound = null)
     // ============================================
-    const outWeight = data.totalOutWeight || 0;
-    const outLines = data.totalOutLines || 0;
-    
-    const kpiOutWeightEl = document.getElementById('kpi-outbound-weight');
-    const kpiOutLinesEl = document.getElementById('kpi-outbound-lines');
-    
-    if (kpiOutWeightEl) {
-        kpiOutWeightEl.innerHTML = outWeight.toLocaleString(undefined, {
-            minimumFractionDigits: 2, 
-            maximumFractionDigits: 2
-        }) + ' <small class="kpi-unit">kg</small>';
-    }
-    
-    if (kpiOutLinesEl) {
-        kpiOutLinesEl.innerText = outLines.toLocaleString() + " lines";
+    // Outbound มาจาก getDeliveryTypeData (call แยก) → _renderDeliverySection จัดการ
+    // ถ้า delivery มาก่อน flow: ค่าถูกตั้งไปแล้ว ไม่ reset กลับเป็น 0
+    // ถ้า flow มาก่อน delivery: แสดง placeholder
+    if (window._pendingOutbound !== undefined && window._pendingOutbound === null) {
+        // delivery มาแล้ว และถูก apply ไปแล้ว — ไม่ต้องทำอะไร
+    } else {
+        // delivery ยังไม่มา — แสดง placeholder
+        const kpiOutWeightEl = document.getElementById('kpi-outbound-weight');
+        const kpiOutLinesEl  = document.getElementById('kpi-outbound-lines');
+        if (kpiOutWeightEl) kpiOutWeightEl.innerHTML = '— <small class="kpi-unit">กำลังโหลด...</small>';
+        if (kpiOutLinesEl)  kpiOutLinesEl.innerText  = '—';
     }
     
     // ============================================
@@ -6760,30 +6768,9 @@ function renderAnalyticsDashboard(data) {
     }
     
     // ============================================
-    // 4. อัปเดตกล่อง KPI: Diff (Net Flow)
+    // 4. KPI: Net Flow — คำนวณได้เฉพาะเมื่อ delivery data มาแล้ว
     // ============================================
-    const netWeight = inWeight - outWeight;
-    const netLines = inLines - outLines;
-    
-    const kpiNetWeightEl = document.getElementById('kpi-netflow-weight');
-    const kpiNetLinesEl = document.getElementById('kpi-netflow-lines');
-    
-    if (kpiNetWeightEl) {
-        kpiNetWeightEl.innerHTML = (netWeight >= 0 ? "+" : "") + 
-            netWeight.toLocaleString(undefined, {
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2
-            }) + ' <small class="kpi-unit">kg</small>';
-        
-        kpiNetWeightEl.className = netWeight >= 0 ? 
-            'kpi-main-val text-emerald-400' : 
-            'kpi-main-val text-rose-400';
-    }
-    
-    if (kpiNetLinesEl) {
-        kpiNetLinesEl.innerText = (netLines >= 0 ? "+" : "") + 
-            netLines.toLocaleString() + " lines";
-    }
+    // Net Flow = _renderDeliverySection จัดการ (มี inWeight จาก window._analyticsInWeight)
     
     // ============================================
     // 5. กราฟ Daily Flow (Inbound vs Outbound Weight)
@@ -6798,8 +6785,6 @@ function renderAnalyticsDashboard(data) {
         const gOut = ctx.createLinearGradient(0, 0, 0, 340);
         gOut.addColorStop(0, 'rgba(239,68,68,0.45)');
         gOut.addColorStop(1, 'rgba(239,68,68,0)');
-        // ล้าง cache pending ก่อนสร้าง chart ใหม่
-        window._pendingOutbound = null;
         window.flowChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
