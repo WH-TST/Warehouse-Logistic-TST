@@ -5242,8 +5242,16 @@ function _renderDeliverySection(data) {
         const dates      = data.dates || [];
         const ownArr     = data.dailyOwnDelivery || [];
         const pickupArr  = data.dailyPickup || [];
-        // คำนวณ % สัดส่วนต่อวัน สำหรับแสดงใน tooltip
         const totalArr   = dates.map((_, i) => (ownArr[i] || 0) + (pickupArr[i] || 0));
+
+        // ── คำนวณค่าเฉลี่ย เฉพาะวันที่มีข้อมูล ──
+        const activeDays   = totalArr.filter(v => v > 0).length || 1;
+        const avgOwn       = ownArr.reduce((s, v) => s + v, 0) / activeDays;
+        const avgPickup    = pickupArr.reduce((s, v) => s + v, 0) / activeDays;
+        const avgTotal     = totalArr.reduce((s, v) => s + v, 0) / activeDays;
+        const avgOwnArr    = dates.map(() => Math.round(avgOwn));
+        const avgPickupArr = dates.map(() => Math.round(avgPickup));
+        const avgTotalArr  = dates.map(() => Math.round(avgTotal));
 
         const ctxD = ctxDelivery.getContext('2d');
         const gOwn = ctxD.createLinearGradient(0, 0, 0, 320);
@@ -5285,6 +5293,43 @@ function _renderDeliverySection(data) {
                         pointBackgroundColor: '#fff',
                         pointBorderColor: '#f97316',
                         pointBorderWidth: 2
+                    },
+                    // ── เส้นค่าเฉลี่ย (dashed) ──
+                    {
+                        label: 'เฉลี่ยจัดส่งเอง: ' + Math.round(avgOwn).toLocaleString('th-TH') + ' kg/วัน',
+                        data: avgOwnArr,
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        borderDash: [8, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0,
+                        order: 0
+                    },
+                    {
+                        label: 'เฉลี่ยรถมารับ: ' + Math.round(avgPickup).toLocaleString('th-TH') + ' kg/วัน',
+                        data: avgPickupArr,
+                        borderColor: '#f97316',
+                        borderWidth: 2,
+                        borderDash: [8, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0,
+                        order: 0
+                    },
+                    {
+                        label: 'เฉลี่ยรวม: ' + Math.round(avgTotal).toLocaleString('th-TH') + ' kg/วัน',
+                        data: avgTotalArr,
+                        borderColor: '#a855f7',
+                        borderWidth: 2.5,
+                        borderDash: [5, 3],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0,
+                        order: 0
                     }
                 ]
             },
@@ -5298,9 +5343,13 @@ function _renderDeliverySection(data) {
                         labels: {
                             usePointStyle: true,
                             pointStyleWidth: 14,
-                            padding: 24,
-                            font: { family: 'Sarabun', size: 13, weight: 'bold' },
-                            color: '#334155'
+                            padding: 18,
+                            font: { family: 'Sarabun', size: 12, weight: 'bold' },
+                            color: '#334155',
+                            filter: function(item) {
+                                // แสดง legend ทุกตัว แต่ใช้ dash icon สำหรับเส้นเฉลี่ย
+                                return true;
+                            }
                         }
                     },
                     tooltip: {
@@ -5313,6 +5362,10 @@ function _renderDeliverySection(data) {
                         cornerRadius: 12,
                         titleFont: { family: 'Sarabun', size: 12 },
                         bodyFont: { family: 'Sarabun', size: 13, weight: 'bold' },
+                        filter: function(item) {
+                            // ซ่อนเส้นเฉลี่ยออกจาก tooltip (แสดงแค่ข้อมูลจริง)
+                            return item.datasetIndex < 2;
+                        },
                         callbacks: {
                             label: function(ctx) {
                                 const val = ctx.parsed.y || 0;
