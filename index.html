@@ -5130,8 +5130,12 @@ thead.sticky {
           </div>
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item number <span class="text-rose-500">*</span></label>
-            <input type="text" id="cyc-add-sku" placeholder="รหัสสินค้า"
-              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-800 outline-none focus:border-indigo-400 transition-all">
+            <div class="relative">
+              <input type="text" id="cyc-add-sku" placeholder="รหัสสินค้า" autocomplete="off"
+                oninput="cycSkuInput('fg',this)" onblur="setTimeout(()=>cycSkuClose('fg'),200)"
+                class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-800 outline-none focus:border-indigo-400 transition-all">
+              <div id="cyc-sku-drop-fg" class="hidden absolute z-50 left-0 w-full bg-white border-2 border-indigo-300 rounded-xl shadow-2xl max-h-44 overflow-y-auto mt-1"></div>
+            </div>
           </div>
         </div>
         <div>
@@ -5162,16 +5166,24 @@ thead.sticky {
               class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition-all">
           </div>
           <div>
-            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item Semi (รหัสฟิล์ม)</label>
-            <input type="text" id="cyc-add-semi-item" placeholder="รหัส SEMI"
-              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-purple-700 outline-none focus:border-purple-400 transition-all">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item Semi (รหัสฟิล์ม) <span class="text-rose-500">*</span></label>
+            <div class="relative">
+              <input type="text" id="cyc-add-semi-item" placeholder="รหัส SEMI" autocomplete="off"
+                oninput="cycSemiItemInput(this)" onblur="setTimeout(()=>cycSemiItemClose(),200)"
+                class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-purple-700 outline-none focus:border-purple-400 transition-all">
+              <div id="cyc-semi-item-drop" class="hidden absolute z-50 left-0 w-full bg-white border-2 border-purple-300 rounded-xl shadow-2xl max-h-44 overflow-y-auto mt-1"></div>
+            </div>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item P1 <span class="text-rose-500">*</span></label>
-            <input type="text" id="cyc-add-semi-sku1" placeholder="รหัส FG 1"
-              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-800 outline-none focus:border-purple-400 transition-all">
+            <div class="relative">
+              <input type="text" id="cyc-add-semi-sku1" placeholder="รหัส FG 1" autocomplete="off"
+                oninput="cycSkuInput('semi1',this)" onblur="setTimeout(()=>cycSkuClose('semi1'),200)"
+                class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-800 outline-none focus:border-purple-400 transition-all">
+              <div id="cyc-sku-drop-semi1" class="hidden absolute z-50 left-0 w-full bg-white border-2 border-purple-300 rounded-xl shadow-2xl max-h-44 overflow-y-auto mt-1"></div>
+            </div>
           </div>
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Product name 1 <span class="text-rose-500">*</span></label>
@@ -5182,8 +5194,12 @@ thead.sticky {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item P2 (ไม่บังคับ)</label>
-            <input type="text" id="cyc-add-semi-sku2" placeholder="รหัส FG 2"
-              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-600 outline-none focus:border-purple-400 transition-all">
+            <div class="relative">
+              <input type="text" id="cyc-add-semi-sku2" placeholder="รหัส FG 2" autocomplete="off"
+                oninput="cycSkuInput('semi2',this)" onblur="setTimeout(()=>cycSkuClose('semi2'),200)"
+                class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-600 outline-none focus:border-purple-400 transition-all">
+              <div id="cyc-sku-drop-semi2" class="hidden absolute z-50 left-0 w-full bg-white border-2 border-purple-300 rounded-xl shadow-2xl max-h-44 overflow-y-auto mt-1"></div>
+            </div>
           </div>
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Product name 2 (ไม่บังคับ)</label>
@@ -9249,6 +9265,138 @@ let blockingChartInstance = null;
                 showToast('Error: ' + err.message, true);
             })
             .getCycleCountItems(dateStr, mode);
+    };
+
+    // ── SKU Autocomplete สำหรับ Cycle Count Add Modal ────────────────
+    // fieldKey: 'fg' | 'semi1' | 'semi2'
+    var _cycSkuDropCfg = {
+        fg:    { dropId: 'cyc-sku-drop-fg',    skuId: 'cyc-add-sku',       nameId: 'cyc-add-name',       sysId: 'cyc-add-sys',       lpbId: 'cyc-add-lpb'  },
+        semi1: { dropId: 'cyc-sku-drop-semi1', skuId: 'cyc-add-semi-sku1', nameId: 'cyc-add-semi-name1', sysId: 'cyc-add-semi-sys',  lpbId: null            },
+        semi2: { dropId: 'cyc-sku-drop-semi2', skuId: 'cyc-add-semi-sku2', nameId: 'cyc-add-semi-name2', sysId: null,                lpbId: null            },
+    };
+
+    function _cycGetProducts() {
+        return (typeof LOGI_MASTER_CACHE !== 'undefined' && LOGI_MASTER_CACHE.products) ? LOGI_MASTER_CACHE.products : [];
+    }
+    function _cycGetFgRow(sku) {
+        var rows = window.fgTableData || [];
+        return rows.find(function(r){ return String(r.sku||'').toUpperCase() === sku; }) || null;
+    }
+
+    window.cycSkuInput = function(fieldKey, input) {
+        var cfg = _cycSkuDropCfg[fieldKey]; if (!cfg) return;
+        var drop = document.getElementById(cfg.dropId); if (!drop) return;
+        var q = (input.value || '').trim().toUpperCase();
+        var products = _cycGetProducts();
+        var filtered = q
+            ? products.filter(function(p){ return (p.sku||'').toUpperCase().includes(q) || (p.name||'').toUpperCase().includes(q); })
+            : products;
+        if (!filtered.length) {
+            drop.innerHTML = '<div class="px-3 py-2 text-slate-400 text-xs font-bold">ไม่พบสินค้า</div>';
+        } else {
+            var hi = function(txt) {
+                if (!q) return txt;
+                return txt.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
+                    function(m){ return '<mark class="bg-yellow-200 rounded">'+m+'</mark>'; });
+            };
+            drop.innerHTML = filtered.slice(0,40).map(function(p){
+                var sku = (p.sku||'').replace(/'/g,"\\'");
+                return '<div class="px-3 py-2 cursor-pointer hover:bg-indigo-50 border-b border-slate-100 last:border-0 transition-all"'+
+                       ' onmousedown="cycSkuSelect(\''+fieldKey+'\',\''+sku+'\')">' +
+                       '<span class="font-black text-indigo-700 text-xs">'+hi(p.sku||'')+'</span>'+
+                       '<span class="text-slate-500 text-xs ml-1">— '+hi(p.name||'')+'</span></div>';
+            }).join('');
+        }
+        drop.classList.remove('hidden');
+    };
+
+    window.cycSkuSelect = function(fieldKey, sku) {
+        var cfg = _cycSkuDropCfg[fieldKey]; if (!cfg) return;
+        var skuEl  = document.getElementById(cfg.skuId);
+        var nameEl = document.getElementById(cfg.nameId);
+        var sysEl  = cfg.sysId  ? document.getElementById(cfg.sysId)  : null;
+        var lpbEl  = cfg.lpbId  ? document.getElementById(cfg.lpbId)  : null;
+        var drop   = document.getElementById(cfg.dropId);
+        if (skuEl)  skuEl.value  = sku;
+        var prod = _cycGetProducts().find(function(p){ return (p.sku||'').toUpperCase() === sku.toUpperCase(); });
+        if (nameEl) nameEl.value = prod ? (prod.name||'') : '';
+        if (sysEl || lpbEl) {
+            var fgRow = _cycGetFgRow(sku.toUpperCase());
+            if (sysEl) sysEl.value = fgRow ? (fgRow.systemQty || 0) : 0;
+            if (lpbEl) lpbEl.value = fgRow ? (fgRow.linesPerBundle || 10) : 10;
+        }
+        if (drop) drop.classList.add('hidden');
+    };
+
+    window.cycSkuClose = function(fieldKey) {
+        var cfg = _cycSkuDropCfg[fieldKey]; if (!cfg) return;
+        var drop = document.getElementById(cfg.dropId);
+        if (drop) drop.classList.add('hidden');
+    };
+
+    // ── SEMI Item Autocomplete (รหัส SEMI → auto-fill P1/P2) ─────────
+    function _cycBuildSemiList() {
+        var items = [];
+        var seen  = {};
+        // แหล่ง 1: semiAllData (SEMI master จาก GAS — ถ้าโหลดแล้ว)
+        var master = (typeof semiAllData !== 'undefined') ? semiAllData : [];
+        master.forEach(function(r) {
+            var code = (r.semiSku || '').trim();
+            if (!code || seen[code]) return;
+            seen[code] = true;
+            items.push({ code: code, p1Sku: r.fg1Sku||'', p1Name: r.fg1Name||'', p2Sku: r.fg2Sku||'', p2Name: r.fg2Name||'', sys: r.systemQty||0 });
+        });
+        // แหล่ง 2: invCycleData (Excel ที่อัปโหลด — SEMI rows)
+        (invCycleData || []).forEach(function(r) {
+            var code = (r.itemSemi || r.serial || '').trim();
+            if (!code || seen[code]) return;
+            seen[code] = true;
+            items.push({ code: code, p1Sku: r.sku||'', p1Name: r.name||'', p2Sku: r.sku2||'', p2Name: r.name2||'', sys: r.systemQty||0 });
+        });
+        return items;
+    }
+
+    window.cycSemiItemInput = function(input) {
+        var drop = document.getElementById('cyc-semi-item-drop'); if (!drop) return;
+        var q = (input.value || '').trim().toUpperCase();
+        var items = _cycBuildSemiList();
+        var filtered = q ? items.filter(function(r){ return r.code.toUpperCase().includes(q) || (r.p1Sku||'').toUpperCase().includes(q); }) : items;
+        var hi = function(txt) {
+            if (!q) return txt;
+            return txt.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), function(m){ return '<mark class="bg-yellow-200 rounded">'+m+'</mark>'; });
+        };
+        drop.innerHTML = !filtered.length
+            ? '<div class="px-3 py-2 text-slate-400 text-xs font-bold">ไม่พบ SEMI</div>'
+            : filtered.slice(0,30).map(function(r) {
+                var code = r.code.replace(/'/g,"\\'");
+                var fgStr = r.p1Sku + (r.p2Sku ? ' / '+r.p2Sku : '');
+                return '<div class="px-3 py-2 cursor-pointer hover:bg-purple-50 border-b border-slate-100 last:border-0 transition-all" onmousedown="cycSemiItemSelect(\''+code+'\')">' +
+                    '<span class="font-black text-purple-700 text-xs">'+hi(r.code)+'</span>' +
+                    '<span class="text-slate-400 text-[10px] ml-2">FG: '+hi(fgStr)+'</span></div>';
+              }).join('');
+        drop.classList.remove('hidden');
+    };
+
+    window.cycSemiItemSelect = function(code) {
+        var drop  = document.getElementById('cyc-semi-item-drop');
+        var input = document.getElementById('cyc-add-semi-item');
+        if (input) input.value = code;
+        var items = _cycBuildSemiList();
+        var r = items.find(function(x){ return x.code.toUpperCase() === code.toUpperCase(); });
+        if (r) {
+            var s = function(id, v){ var el = document.getElementById(id); if (el) el.value = v||''; };
+            s('cyc-add-semi-sku1',  r.p1Sku);
+            s('cyc-add-semi-name1', r.p1Name);
+            s('cyc-add-semi-sku2',  r.p2Sku);
+            s('cyc-add-semi-name2', r.p2Name);
+            s('cyc-add-semi-sys',   r.sys);
+        }
+        if (drop) drop.classList.add('hidden');
+    };
+
+    window.cycSemiItemClose = function() {
+        var drop = document.getElementById('cyc-semi-item-drop');
+        if (drop) drop.classList.add('hidden');
     };
 
     // ── เพิ่มรายการ Cycle Count (FG + SEMI) ─────────────────────────
