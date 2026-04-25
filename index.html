@@ -1604,6 +1604,10 @@ thead.sticky {
                     class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all border border-white/30">
               <i class="fas fa-sync-alt"></i> โหลด
             </button>
+            <button onclick="invCycShowAddModal()"
+                    class="bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
+              <i class="fas fa-plus"></i> เพิ่มรายการ
+            </button>
             <button onclick="invPrintCycleForm()"
                     class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all border border-white/30">
               <i class="fas fa-print"></i> พิมพ์
@@ -5100,6 +5104,113 @@ thead.sticky {
   </div>
 </div>
 
+
+<!-- MODAL: เพิ่มรายการ Cycle Count (FG + SEMI) ════════════════════ -->
+<div id="cyc-add-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[600] flex items-center justify-center backdrop-blur-sm p-4">
+  <div class="bg-white w-full max-w-md rounded-[2rem] shadow-2xl border-2 border-indigo-100">
+    <div id="cyc-add-modal-header" class="bg-gradient-to-r from-indigo-600 to-indigo-500 p-5 rounded-t-[2rem] flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white text-lg"><i class="fas fa-plus"></i></div>
+        <div>
+          <h3 id="cyc-add-modal-title" class="text-lg font-black text-white">เพิ่มรายการ FG</h3>
+          <p class="text-white/70 text-xs font-bold">กรอกข้อมูลรายการที่ต้องการเพิ่ม</p>
+        </div>
+      </div>
+      <button onclick="invCycCloseAddModal()" class="text-white/70 hover:text-white transition-all"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="p-6 space-y-3">
+
+      <!-- FG fields -->
+      <div id="cyc-add-fg-fields" class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">WH</label>
+            <input type="text" id="cyc-add-wh" placeholder="เช่น WH-01"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all">
+          </div>
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item number <span class="text-rose-500">*</span></label>
+            <input type="text" id="cyc-add-sku" placeholder="รหัสสินค้า"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-800 outline-none focus:border-indigo-400 transition-all">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Product name <span class="text-rose-500">*</span></label>
+          <input type="text" id="cyc-add-name" placeholder="ชื่อสินค้า"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ยอดระบบ (เส้น)</label>
+            <input type="number" id="cyc-add-sys" min="0" value="0"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-amber-700 outline-none focus:border-amber-400 transition-all">
+          </div>
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">เส้น/มัด (lpb)</label>
+            <input type="number" id="cyc-add-lpb" min="1" value="10"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-700 outline-none focus:border-indigo-400 transition-all">
+          </div>
+        </div>
+      </div>
+
+      <!-- SEMI fields -->
+      <div id="cyc-add-semi-fields" class="hidden space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">WH</label>
+            <input type="text" id="cyc-add-semi-wh" placeholder="เช่น WH-01"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition-all">
+          </div>
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item Semi (รหัสฟิล์ม)</label>
+            <input type="text" id="cyc-add-semi-item" placeholder="รหัส SEMI"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-purple-700 outline-none focus:border-purple-400 transition-all">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item P1 <span class="text-rose-500">*</span></label>
+            <input type="text" id="cyc-add-semi-sku1" placeholder="รหัส FG 1"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-800 outline-none focus:border-purple-400 transition-all">
+          </div>
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Product name 1 <span class="text-rose-500">*</span></label>
+            <input type="text" id="cyc-add-semi-name1" placeholder="ชื่อ FG 1"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition-all">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item P2 (ไม่บังคับ)</label>
+            <input type="text" id="cyc-add-semi-sku2" placeholder="รหัส FG 2"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-slate-600 outline-none focus:border-purple-400 transition-all">
+          </div>
+          <div>
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Product name 2 (ไม่บังคับ)</label>
+            <input type="text" id="cyc-add-semi-name2" placeholder="ชื่อ FG 2"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 outline-none focus:border-purple-400 transition-all">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">ยอดระบบ (แถบ)</label>
+          <input type="number" id="cyc-add-semi-sys" min="0" value="0"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold font-mono text-amber-700 outline-none focus:border-amber-400 transition-all">
+        </div>
+      </div>
+
+      <div id="cyc-add-error" class="hidden text-xs font-black text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2"></div>
+
+      <div class="flex gap-3 pt-1">
+        <button onclick="invCycCloseAddModal()"
+          class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-black transition-all text-sm">ยกเลิก</button>
+        <button onclick="invCycConfirmAdd()" id="cyc-add-confirm-btn"
+          class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-lg text-sm">
+          <i class="fas fa-plus"></i> เพิ่มรายการ
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ======= SEMI MANUAL ADD MODAL ======= -->
 <div id="add-semi-modal" class="fixed inset-0 bg-slate-900/70 hidden z-[200] flex items-center justify-center backdrop-blur-sm">
@@ -9138,6 +9249,89 @@ let blockingChartInstance = null;
                 showToast('Error: ' + err.message, true);
             })
             .getCycleCountItems(dateStr, mode);
+    };
+
+    // ── เพิ่มรายการ Cycle Count (FG + SEMI) ─────────────────────────
+    window.invCycShowAddModal = function() {
+        var mode = invCycleCurrentMode;
+        var modal   = document.getElementById('cyc-add-modal');
+        var fgFlds  = document.getElementById('cyc-add-fg-fields');
+        var smFlds  = document.getElementById('cyc-add-semi-fields');
+        var title   = document.getElementById('cyc-add-modal-title');
+        var header  = document.getElementById('cyc-add-modal-header');
+        var btn     = document.getElementById('cyc-add-confirm-btn');
+        var err     = document.getElementById('cyc-add-error');
+        if (!modal) return;
+        if (mode === 'fg') {
+            fgFlds.classList.remove('hidden'); smFlds.classList.add('hidden');
+            title.textContent = 'เพิ่มรายการ FG';
+            header.className = 'bg-gradient-to-r from-indigo-600 to-indigo-500 p-5 rounded-t-[2rem] flex items-center justify-between';
+            btn.className    = 'flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-lg text-sm';
+            ['cyc-add-wh','cyc-add-sku','cyc-add-name'].forEach(function(id){ document.getElementById(id).value=''; });
+            document.getElementById('cyc-add-sys').value = '0';
+            document.getElementById('cyc-add-lpb').value = '10';
+        } else {
+            fgFlds.classList.add('hidden'); smFlds.classList.remove('hidden');
+            title.textContent = 'เพิ่มรายการ SEMI';
+            header.className = 'bg-gradient-to-r from-purple-700 to-purple-500 p-5 rounded-t-[2rem] flex items-center justify-between';
+            btn.className    = 'flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-lg text-sm';
+            ['cyc-add-semi-wh','cyc-add-semi-item','cyc-add-semi-sku1','cyc-add-semi-name1','cyc-add-semi-sku2','cyc-add-semi-name2'].forEach(function(id){ document.getElementById(id).value=''; });
+            document.getElementById('cyc-add-semi-sys').value = '0';
+        }
+        if (err) err.classList.add('hidden');
+        modal.classList.remove('hidden');
+        setTimeout(function(){
+            var first = document.getElementById(mode === 'fg' ? 'cyc-add-wh' : 'cyc-add-semi-wh');
+            if (first) first.focus();
+        }, 80);
+    };
+
+    window.invCycCloseAddModal = function() {
+        var modal = document.getElementById('cyc-add-modal');
+        if (modal) modal.classList.add('hidden');
+    };
+
+    window.invCycConfirmAdd = function() {
+        var mode = invCycleCurrentMode;
+        var err  = document.getElementById('cyc-add-error');
+        function showErr(msg) { if (err) { err.textContent = msg; err.classList.remove('hidden'); } }
+        var newItem;
+        if (mode === 'fg') {
+            var sku  = (document.getElementById('cyc-add-sku').value||'').trim();
+            var name = (document.getElementById('cyc-add-name').value||'').trim();
+            if (!sku)  return showErr('กรุณากรอก Item number');
+            if (!name) return showErr('กรุณากรอก Product name');
+            newItem = {
+                wh: (document.getElementById('cyc-add-wh').value||'').trim(),
+                sku: sku, name: name,
+                systemQty: Number(document.getElementById('cyc-add-sys').value)||0,
+                lpb: Number(document.getElementById('cyc-add-lpb').value)||10,
+                receiptQty: 0, issueQty: 0, _manualAdd: true
+            };
+        } else {
+            var sku1  = (document.getElementById('cyc-add-semi-sku1').value||'').trim();
+            var name1 = (document.getElementById('cyc-add-semi-name1').value||'').trim();
+            if (!sku1)  return showErr('กรุณากรอก Item P1');
+            if (!name1) return showErr('กรุณากรอก Product name 1');
+            newItem = {
+                wh: (document.getElementById('cyc-add-semi-wh').value||'').trim(),
+                sku: sku1, name: name1,
+                sku2:  (document.getElementById('cyc-add-semi-sku2').value||'').trim(),
+                name2: (document.getElementById('cyc-add-semi-name2').value||'').trim(),
+                itemSemi: (document.getElementById('cyc-add-semi-item').value||'').trim(),
+                systemQty: Number(document.getElementById('cyc-add-semi-sys').value)||0,
+                _manualAdd: true
+            };
+        }
+        invCycleData.push(newItem);
+        _invCycleStore[mode] = invCycleData;
+        var wrap  = document.getElementById('inv-cyc-table-wrap');
+        var empty = document.getElementById('inv-cyc-empty');
+        if (wrap)  wrap.classList.remove('hidden');
+        if (empty) empty.classList.add('hidden');
+        invRenderCycleTable(invCycleData);
+        invCycCloseAddModal();
+        showToast('✅ เพิ่มรายการ ' + newItem.sku + ' เรียบร้อย');
     };
 
     // ── Excel-like features: state ──────────────────────────────────
