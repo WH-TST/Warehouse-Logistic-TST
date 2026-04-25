@@ -354,6 +354,41 @@
     border-radius: 4px;
 }
 
+/* ── Cycle Count: Excel-like table features ──────────────────────── */
+.cyc-th { position: relative; user-select: none; cursor: pointer; }
+.cyc-th:hover { filter: brightness(1.18); }
+.cyc-sort-icon { display: inline-block; font-size: 9px; margin-left: 3px; opacity: 0.45; }
+.cyc-th.sort-asc  .cyc-sort-icon::after { content: ' ▲'; opacity: 1; color: #fbbf24; }
+.cyc-th.sort-desc .cyc-sort-icon::after { content: ' ▼'; opacity: 1; color: #fbbf24; }
+.cyc-th:not(.sort-asc):not(.sort-desc) .cyc-sort-icon::after { content: ' ⇅'; }
+.cyc-resize-handle {
+    position: absolute; right: 0; top: 15%; bottom: 15%;
+    width: 4px; cursor: col-resize; z-index: 5;
+    background: transparent; border-radius: 2px; transition: background .15s;
+}
+.cyc-resize-handle:hover, .cyc-resize-handle.active { background: rgba(99,102,241,.7); }
+.cyc-filter-row th {
+    padding: 4px 3px !important;
+    background: #172033 !important;
+    border-top: 1px solid rgba(100,116,139,.3) !important;
+}
+.cyc-filter-row th input {
+    width: 100%; font-size: 10px; font-family: 'Sarabun', sans-serif;
+    background: rgba(255,255,255,.07); color: #cbd5e1;
+    border: 1px solid rgba(100,116,139,.35); border-radius: 4px;
+    padding: 3px 5px; outline: none; line-height: 1.4;
+}
+.cyc-filter-row th input:focus {
+    background: rgba(255,255,255,.13); border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99,102,241,.25);
+}
+.cyc-filter-row th input::placeholder { color: rgba(148,163,184,.45); }
+.cyc-sticky { position: sticky !important; z-index: 2; background: inherit; }
+thead .cyc-sticky { z-index: 4; }
+.cyc-editable { cursor: cell; }
+.cyc-editable:hover { outline: 1px dashed rgba(99,102,241,.5); outline-offset: -2px; }
+.cyc-editable.editing { outline: 2px solid #f59e0b !important; outline-offset: -2px; background: #fffbeb !important; }
+
 /* Sticky header ของตาราง */
 thead.sticky {
     position: sticky;
@@ -1662,22 +1697,36 @@ thead.sticky {
           <table id="inv-cyc-table-fg" class="w-full text-sm" style="min-width:1100px;">
             <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
               <tr>
-                <th class="px-2 py-3 text-center w-8">▼</th>
-                <th class="px-3 py-3 text-center w-8">No.</th>
-                <th class="px-3 py-3 text-left min-w-[70px]">WH</th>
-                <th class="px-4 py-3 text-left min-w-[110px]">Item number</th>
-                <th class="px-4 py-3 text-left min-w-[150px]">Product name</th>
-                <th class="px-3 py-3 text-right bg-blue-900 w-20">รับเข้า<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-right bg-rose-900 w-20">เบิกออก<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-center bg-blue-800 w-20">bundle_1<br><span class="text-[8px] font-normal opacity-70">(มัด)</span></th>
-                <th class="px-3 py-3 text-center bg-blue-700 w-20">bundle_2<br><span class="text-[8px] font-normal opacity-70">(มัด)</span></th>
-                <th class="px-3 py-3 text-center bg-purple-800 w-20">Pcs.(1)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-center bg-purple-700 w-20">Pcs.(2)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-center bg-rose-800 w-20">Hold<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-right bg-teal-900 w-24">นับจริง<br><span class="text-[8px] font-normal opacity-70">(คำนวณ)</span></th>
-                <th class="px-3 py-3 text-right bg-amber-900 w-24">ระบบ<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span></th>
-                <th class="px-3 py-3 text-right bg-slate-700 w-24">ผลต่าง</th>
-                <th class="px-3 py-3 text-left bg-slate-800 min-w-[180px]">สาเหตุส่วนต่าง</th>
+                <th class="px-2 py-3 text-center cyc-sticky" style="left:0;min-width:36px;width:36px;background:#0f172a;">▼<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-center cyc-sticky" style="left:36px;min-width:40px;width:40px;background:#0f172a;">No.<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-left cyc-th cyc-sticky" data-col="wh" onclick="invCycSort('wh')" style="left:76px;min-width:72px;width:72px;background:#0f172a;">WH<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-4 py-3 text-left cyc-th cyc-sticky" data-col="sku" onclick="invCycSort('sku')" style="left:148px;min-width:120px;background:#0f172a;">Item number<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-4 py-3 text-left cyc-th" data-col="name" onclick="invCycSort('name')" style="min-width:150px;">Product name<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-right bg-blue-900 cyc-th" data-col="receipt" onclick="invCycSort('receipt')" style="min-width:80px;">รับเข้า<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-right bg-rose-900 cyc-th" data-col="issue" onclick="invCycSort('issue')" style="min-width:80px;">เบิกออก<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-center bg-blue-800" style="min-width:78px;">bundle_1<br><span class="text-[8px] font-normal opacity-70">(มัด)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-center bg-blue-700" style="min-width:78px;">bundle_2<br><span class="text-[8px] font-normal opacity-70">(มัด)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-center bg-purple-800" style="min-width:78px;">Pcs.(1)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-center bg-purple-700" style="min-width:78px;">Pcs.(2)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-center bg-rose-800" style="min-width:78px;">Hold<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-right bg-teal-900 cyc-th" data-col="actual" onclick="invCycSort('actual')" style="min-width:90px;">นับจริง<br><span class="text-[8px] font-normal opacity-70">(คำนวณ)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-right bg-amber-900 cyc-th" data-col="system" onclick="invCycSort('system')" style="min-width:90px;">ระบบ<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-right bg-slate-700 cyc-th" data-col="diff" onclick="invCycSort('diff')" style="min-width:90px;">ผลต่าง<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-3 py-3 text-left bg-slate-800" style="min-width:180px;">สาเหตุส่วนต่าง<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+              </tr>
+              <tr class="cyc-filter-row">
+                <th class="cyc-sticky" style="left:0;background:#172033;"></th>
+                <th class="cyc-sticky" style="left:36px;background:#172033;"></th>
+                <th class="cyc-sticky" style="left:76px;background:#172033;"><input type="text" placeholder="WH..." oninput="invCycFilter('wh',this.value)" onclick="event.stopPropagation()"></th>
+                <th class="cyc-sticky" style="left:148px;background:#172033;"><input type="text" placeholder="Item..." oninput="invCycFilter('sku',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="ชื่อ..." oninput="invCycFilter('name',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="รับ..." oninput="invCycFilter('receipt',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="เบิก..." oninput="invCycFilter('issue',this.value)" onclick="event.stopPropagation()"></th>
+                <th></th><th></th><th></th><th></th><th></th>
+                <th><input type="text" placeholder="นับ..." oninput="invCycFilter('actual',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="ระบบ..." oninput="invCycFilter('system',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="±..." oninput="invCycFilter('diff',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="สาเหตุ..." oninput="invCycFilter('reason',this.value)" onclick="event.stopPropagation()"></th>
               </tr>
             </thead>
             <tbody id="inv-cyc-tbody-fg" class="divide-y divide-slate-100"></tbody>
@@ -1685,20 +1734,36 @@ thead.sticky {
           <table id="inv-cyc-table-semi" class="w-full text-xs hidden">
             <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
               <tr>
-                <th class="px-2 py-3 text-center w-8">No.</th>
-                <th class="px-2 py-3 text-left w-16">WH</th>
-                <th class="px-2 py-3 text-left min-w-[100px]">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 1</span></th>
-                <th class="px-2 py-3 text-left min-w-[140px]">Product name 1</th>
-                <th class="px-2 py-3 text-center bg-teal-900 w-28">Check 1<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span></th>
-                <th class="px-2 py-3 text-left min-w-[100px] bg-slate-800">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 2</span></th>
-                <th class="px-2 py-3 text-left min-w-[140px] bg-slate-800">Product name 2</th>
-                <th class="px-2 py-3 text-center bg-teal-900 w-28">Check 2<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span></th>
-                <th class="px-2 py-3 text-left bg-purple-900 min-w-[100px]">Item Semi<br><span class="text-[8px] opacity-70 normal-case font-normal">รหัสฟิล์ม</span></th>
-                <th class="px-2 py-3 text-right bg-amber-900 w-20">ระบบ<br><span class="text-[8px] opacity-70 normal-case font-normal">(แถบ)</span></th>
-                <th class="px-2 py-3 text-right bg-emerald-900 w-20">รวม FG<br><span class="text-[8px] opacity-70 normal-case font-normal">(คำนวณ)</span></th>
-                <th class="px-2 py-3 text-right bg-slate-600 w-16">Diff</th>
-                <th class="px-2 py-3 text-center bg-slate-700 w-28">สถานะ</th>
-                <th class="px-2 py-3 text-left bg-slate-800 min-w-[180px]">สาเหตุส่วนต่าง</th>
+                <th class="px-2 py-3 text-center cyc-sticky" style="left:0;min-width:40px;width:40px;background:#0f172a;">No.<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-left cyc-th cyc-sticky" data-col="wh" onclick="invCycSort('wh')" style="left:40px;min-width:72px;width:72px;background:#0f172a;">WH<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-left cyc-th cyc-sticky" data-col="sku" onclick="invCycSort('sku')" style="left:112px;min-width:110px;background:#0f172a;">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 1</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-left cyc-th" data-col="name" onclick="invCycSort('name')" style="min-width:140px;">Product name 1<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-center bg-teal-900" style="min-width:112px;">Check 1<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-left bg-slate-800" style="min-width:100px;">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 2</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-left bg-slate-800" style="min-width:140px;">Product name 2<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-center bg-teal-900" style="min-width:112px;">Check 2<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-left bg-purple-900" style="min-width:100px;">Item Semi<br><span class="text-[8px] opacity-70 normal-case font-normal">รหัสฟิล์ม</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-right bg-amber-900 cyc-th" data-col="system" onclick="invCycSort('system')" style="min-width:80px;">ระบบ<br><span class="text-[8px] opacity-70 normal-case font-normal">(แถบ)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-right bg-emerald-900 cyc-th" data-col="total" onclick="invCycSort('total')" style="min-width:80px;">รวม FG<br><span class="text-[8px] opacity-70 normal-case font-normal">(คำนวณ)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-right bg-slate-600 cyc-th" data-col="diff" onclick="invCycSort('diff')" style="min-width:64px;">Diff<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-center bg-slate-700" style="min-width:112px;">สถานะ<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+                <th class="px-2 py-3 text-left bg-slate-800" style="min-width:180px;">สาเหตุส่วนต่าง<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
+              </tr>
+              <tr class="cyc-filter-row">
+                <th class="cyc-sticky" style="left:0;background:#172033;"></th>
+                <th class="cyc-sticky" style="left:40px;background:#172033;"><input type="text" placeholder="WH..." oninput="invCycFilter('wh',this.value)" onclick="event.stopPropagation()"></th>
+                <th class="cyc-sticky" style="left:112px;background:#172033;"><input type="text" placeholder="Item1..." oninput="invCycFilter('sku',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="ชื่อ1..." oninput="invCycFilter('name',this.value)" onclick="event.stopPropagation()"></th>
+                <th></th>
+                <th><input type="text" placeholder="Item2..." oninput="invCycFilter('sku2',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="ชื่อ2..." oninput="invCycFilter('name2',this.value)" onclick="event.stopPropagation()"></th>
+                <th></th>
+                <th><input type="text" placeholder="Semi..." oninput="invCycFilter('itemSemi',this.value)" onclick="event.stopPropagation()"></th>
+                <th><input type="text" placeholder="ระบบ..." oninput="invCycFilter('system',this.value)" onclick="event.stopPropagation()"></th>
+                <th></th>
+                <th><input type="text" placeholder="±..." oninput="invCycFilter('diff',this.value)" onclick="event.stopPropagation()"></th>
+                <th></th>
+                <th><input type="text" placeholder="สาเหตุ..." oninput="invCycFilter('reason',this.value)" onclick="event.stopPropagation()"></th>
               </tr>
             </thead>
             <tbody id="inv-cyc-tbody-semi" class="divide-y divide-slate-100"></tbody>
@@ -9075,105 +9140,198 @@ let blockingChartInstance = null;
             .getCycleCountItems(dateStr, mode);
     };
 
+    // ── Excel-like features: state ──────────────────────────────────
+    var _cycSort = { fg: { col: null, dir: 1 }, semi: { col: null, dir: 1 } };
+    var _cycColFilters = { fg: {}, semi: {} };
+
+    window.invCycSort = function(col) {
+        var mode = invCycleCurrentMode;
+        var s = _cycSort[mode];
+        if (s.col === col) s.dir *= -1; else { s.col = col; s.dir = 1; }
+        var tblId = mode === 'fg' ? 'inv-cyc-table-fg' : 'inv-cyc-table-semi';
+        document.querySelectorAll('#' + tblId + ' thead th.cyc-th').forEach(function(th) {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.col === col) th.classList.add(s.dir === 1 ? 'sort-asc' : 'sort-desc');
+        });
+        invRenderCycleTable(invCycleData);
+    };
+
+    window.invCycFilter = function(col, val) {
+        var mode = invCycleCurrentMode;
+        _cycColFilters[mode][col] = val.toLowerCase().trim();
+        invRenderCycleTable(invCycleData);
+    };
+
+    window.invCycResizeStart = function(e, handle) {
+        e.preventDefault(); e.stopPropagation();
+        var th = handle.parentElement;
+        var startX = e.clientX, startW = th.getBoundingClientRect().width;
+        handle.classList.add('active');
+        function onMove(ev) {
+            var w = Math.max(40, startW + ev.clientX - startX);
+            th.style.minWidth = w + 'px'; th.style.maxWidth = w + 'px'; th.style.width = w + 'px';
+        }
+        function onUp() {
+            handle.classList.remove('active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    };
+
+    window.invCycInlineEdit = function(td) {
+        if (td.querySelector('input[data-inline]')) return;
+        var orig = td.textContent.trim();
+        var ri = parseInt(td.dataset.row), fld = td.dataset.field;
+        td.classList.add('editing');
+        var inp = document.createElement('input');
+        inp.setAttribute('data-inline', '1');
+        inp.style.cssText = 'width:100%;background:transparent;border:none;outline:none;font:inherit;color:inherit;padding:0;min-width:40px;';
+        inp.value = orig; td.textContent = ''; td.appendChild(inp);
+        inp.focus(); inp.select();
+        function commit() {
+            var v = inp.value.trim() || orig;
+            td.classList.remove('editing'); td.textContent = v;
+            if (!isNaN(ri) && fld && invCycleData[ri]) invCycleData[ri][fld] = v;
+        }
+        inp.addEventListener('blur', commit);
+        inp.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') inp.blur();
+            if (ev.key === 'Escape') { inp.value = orig; inp.blur(); }
+        });
+    };
+
+    function _cycApplySort(arr, mode) {
+        var s = _cycSort[mode];
+        if (!s.col) return arr;
+        return arr.slice().sort(function(a, b) {
+            var va, vb, d = s.dir;
+            switch (s.col) {
+                case 'wh':     return d * (a.wh||'').localeCompare(b.wh||'');
+                case 'sku':    return d * (a.sku||'').localeCompare(b.sku||'');
+                case 'name':   return d * (a.name||'').localeCompare(b.name||'');
+                case 'receipt':return d * (Number(a.receiptQty||0) - Number(b.receiptQty||0));
+                case 'issue':  return d * (Number(a.issueQty||0)   - Number(b.issueQty||0));
+                case 'system': return d * (Number(a.systemQty||0)  - Number(b.systemQty||0));
+                case 'actual': va = a._actual !== undefined ? a._actual : -1; vb = b._actual !== undefined ? b._actual : -1; return d * (va - vb);
+                case 'diff':   va = a._diff   !== undefined ? a._diff   : 999999; vb = b._diff !== undefined ? b._diff : 999999; return d * (va - vb);
+                case 'total':  va = a._total  !== undefined ? a._total  : -1; vb = b._total !== undefined ? b._total : -1; return d * (va - vb);
+                default: return 0;
+            }
+        });
+    }
+
     window.invFilterCycle = function() {
         invRenderCycleTable(invCycleData);
     };
 
     window.invRenderCycleTable = function(data) {
-        const mode = invCycleCurrentMode;
+        var mode = invCycleCurrentMode;
         if (!data || data.length === 0) return;
-        const q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
-        const filtered = data.filter(r => !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q));
+        var q = ((document.getElementById('inv-cyc-search')||{}).value||'').toLowerCase();
+        var filtered = data.filter(function(r) { return !q || (r.sku||'').toLowerCase().includes(q) || (r.name||'').toLowerCase().includes(q); });
+        var cf = _cycColFilters[mode] || {};
+
         if (mode === 'fg') {
-            const tbody = document.getElementById('inv-cyc-tbody-fg');
+            if (cf.wh)      filtered = filtered.filter(function(r){ return (r.wh||'').toLowerCase().includes(cf.wh); });
+            if (cf.sku)     filtered = filtered.filter(function(r){ return (r.sku||'').toLowerCase().includes(cf.sku); });
+            if (cf.name)    filtered = filtered.filter(function(r){ return (r.name||'').toLowerCase().includes(cf.name); });
+            if (cf.receipt) filtered = filtered.filter(function(r){ return String(Number(r.receiptQty||0)).includes(cf.receipt); });
+            if (cf.issue)   filtered = filtered.filter(function(r){ return String(Number(r.issueQty||0)).includes(cf.issue); });
+            if (cf.system)  filtered = filtered.filter(function(r){ return String(Number(r.systemQty||0)).includes(cf.system); });
+            if (cf.actual)  filtered = filtered.filter(function(r){ return r._actual !== undefined && String(r._actual).includes(cf.actual); });
+            if (cf.diff)    filtered = filtered.filter(function(r){ return r._diff   !== undefined && String(r._diff).includes(cf.diff); });
+            if (cf.reason)  filtered = filtered.filter(function(r){ return (r._reason||'').toLowerCase().includes(cf.reason); });
+            filtered = _cycApplySort(filtered, 'fg');
+
+            var tbody = document.getElementById('inv-cyc-tbody-fg');
             if (!tbody) return;
-            const rows = filtered.map((r, i) => {
-                const lpb    = Number(r.lpb||0);
-                const sysQty = Number(r.systemQty||0);
-                const rowId  = 'cyc-row-' + i;
-                const skuSafe = (r.sku||'').replace(/"/g,'&quot;');
-                const rowBg  = i % 2 === 0 ? '' : 'bg-slate-50/40';
+            var inpCls = 'w-16 text-center border rounded-lg px-1 py-1 text-xs font-bold focus:outline-none ';
+            var rows = filtered.map(function(r, i) {
+                var ri = invCycleData.indexOf(r);
+                var sysQty = Number(r.systemQty||0);
+                var skuSafe = (r.sku||'').replace(/"/g,'&quot;');
+                var rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50';
 
-                // ปุ่มลูกศร expand/collapse
-                const expandBtn = '<button onclick="invToggleCycleHistory(\'' + skuSafe + '\',' + i + ')"'
-                    + ' id="cyc-hist-btn-' + i + '"'
+                var expandBtn = '<button onclick="invToggleCycleHistory(\'' + skuSafe + '\',' + ri + ')"'
+                    + ' id="cyc-hist-btn-' + ri + '"'
                     + ' class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-400 hover:text-indigo-600 flex items-center justify-center transition-all mx-auto"'
-                    + ' title="ดูประวัติการนับย้อนหลัง">'
-                    + '<i class="fas fa-chevron-down text-[10px]" id="cyc-hist-icon-' + i + '"></i>'
-                    + '</button>';
+                    + ' title="ดูประวัติ">'
+                    + '<i class="fas fa-chevron-down text-[10px]" id="cyc-hist-icon-' + ri + '"></i></button>';
 
-                const mainRow = '<tr id="cyc-row-' + i + '" class="hover:bg-teal-50/50 transition-colors ' + rowBg + '">'
-                    + '<td class="px-2 py-2 text-center">' + expandBtn + '</td>'
-                    + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold">' + (i+1) + '</td>'
-                    + '<td class="px-3 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
-                    + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
-                    + '<td class="px-4 py-2 text-xs text-slate-700">' + (r.name||'') + '</td>'
+                var diffHtml = r._diff !== undefined
+                    ? (r._diff >= 0 ? '+' : '') + r._diff : '—';
+                var diffCls = r._diff === undefined ? '' : r._diff === 0 ? 'text-emerald-700' : r._reason ? 'text-blue-600' : 'text-rose-700';
+                var reasonHtml = (r._actual !== undefined && r._diff !== 0)
+                    ? _invReasonDropdown('fg', ri, r._reason || '')
+                    : '<span class="text-slate-300 text-[10px]">—</span>';
+
+                return '<tr id="cyc-row-' + ri + '" class="hover:bg-teal-50/50 transition-colors ' + rowBg + '">'
+                    + '<td class="px-2 py-2 text-center cyc-sticky" style="left:0;">' + expandBtn + '</td>'
+                    + '<td class="px-3 py-2 text-center text-xs text-slate-400 font-bold cyc-sticky" style="left:36px;">' + (i+1) + '</td>'
+                    + '<td class="px-3 py-2 text-xs font-bold text-slate-600 cyc-sticky cyc-editable" data-row="' + ri + '" data-field="wh" ondblclick="invCycInlineEdit(this)" style="left:76px;">' + (r.wh||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs font-mono font-black text-slate-800 cyc-sticky" style="left:148px;">' + (r.sku||'') + '</td>'
+                    + '<td class="px-4 py-2 text-xs text-slate-700 cyc-editable" data-row="' + ri + '" data-field="name" ondblclick="invCycInlineEdit(this)">' + (r.name||'') + '</td>'
                     + '<td class="px-3 py-2 text-right text-xs font-bold text-blue-700">' + Number(r.receiptQty||0).toLocaleString() + '</td>'
                     + '<td class="px-3 py-2 text-right text-xs font-bold text-rose-700">' + Number(r.issueQty||0).toLocaleString() + '</td>'
-                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="b1" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-blue-300 rounded-lg px-1 py-1 text-xs font-bold text-blue-700 focus:outline-none focus:border-blue-500"></td>'
-                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="b2" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-blue-300 rounded-lg px-1 py-1 text-xs font-bold text-blue-700 focus:outline-none focus:border-blue-500"></td>'
-                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="p1" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-purple-300 rounded-lg px-1 py-1 text-xs font-bold text-purple-700 focus:outline-none focus:border-purple-500"></td>'
-                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="p2" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-purple-300 rounded-lg px-1 py-1 text-xs font-bold text-purple-700 focus:outline-none focus:border-purple-500"></td>'
-                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="0" data-row="' + i + '" data-field="hold" oninput="invCalcActual(' + i + ')" class="w-16 text-center border border-rose-300 rounded-lg px-1 py-1 text-xs font-bold text-rose-700 focus:outline-none focus:border-rose-500"></td>'
-                    + '<td class="px-3 py-2 text-right font-mono text-xs font-black text-teal-700" id="inv-actual-' + i + '">—</td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="' + (r._b1||0) + '" data-row="' + ri + '" data-field="b1" oninput="invCalcActual(' + ri + ')" class="' + inpCls + 'border-blue-300 text-blue-700 focus:border-blue-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="' + (r._b2||0) + '" data-row="' + ri + '" data-field="b2" oninput="invCalcActual(' + ri + ')" class="' + inpCls + 'border-blue-300 text-blue-700 focus:border-blue-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="' + (r._p1||0) + '" data-row="' + ri + '" data-field="p1" oninput="invCalcActual(' + ri + ')" class="' + inpCls + 'border-purple-300 text-purple-700 focus:border-purple-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="' + (r._p2||0) + '" data-row="' + ri + '" data-field="p2" oninput="invCalcActual(' + ri + ')" class="' + inpCls + 'border-purple-300 text-purple-700 focus:border-purple-500"></td>'
+                    + '<td class="px-3 py-2 text-center"><input type="number" min="0" value="' + (r._hold||0) + '" data-row="' + ri + '" data-field="hold" oninput="invCalcActual(' + ri + ')" class="' + inpCls + 'border-rose-300 text-rose-700 focus:border-rose-500"></td>'
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-black text-teal-700" id="inv-actual-' + ri + '">' + (r._actual !== undefined ? r._actual.toLocaleString() : '—') + '</td>'
                     + '<td class="px-3 py-2 text-right font-mono text-xs font-bold text-amber-700">' + sysQty.toLocaleString() + '</td>'
-                    + '<td class="px-3 py-2 text-right font-mono text-xs font-black" id="inv-diff-' + i + '">—</td>'
-                    + '<td class="px-2 py-2" id="inv-fg-reason-cell-' + i + '">'
-                    +   '<span class="text-slate-300 text-[10px]">—</span>'
-                    + '</td>'
-                    + '</tr>';
-
-                // History sub-row (hidden by default)
-                const histRow = '<tr id="cyc-hist-' + i + '" class="hidden">'
-                    + '<td colspan="15" class="px-4 pb-3 pt-0 bg-indigo-50/40">'
-                    + '<div class="rounded-xl border border-indigo-100 bg-white overflow-hidden">'
-                    + '<div class="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100">'
-                    + '<i class="fas fa-history text-indigo-400 text-xs"></i>'
-                    + '<span class="text-xs font-black text-indigo-600 uppercase tracking-wider">ประวัติการนับ — ' + (r.sku||'') + '</span>'
-                    + '</div>'
-                    + '<div id="cyc-hist-body-' + i + '" class="p-3 text-center text-slate-300 text-xs">'
-                    + '<i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลด...'
-                    + '</div>'
-                    + '</div>'
-                    + '</td>'
-                    + '</tr>';
-
-                return mainRow + histRow;
+                    + '<td class="px-3 py-2 text-right font-mono text-xs font-black ' + diffCls + '" id="inv-diff-' + ri + '">' + diffHtml + '</td>'
+                    + '<td class="px-2 py-2" id="inv-fg-reason-cell-' + ri + '">' + reasonHtml + '</td>'
+                    + '</tr>'
+                    + '<tr id="cyc-hist-' + ri + '" class="hidden"><td colspan="16" class="px-4 pb-3 pt-0 bg-indigo-50/40"><div class="rounded-xl border border-indigo-100 bg-white overflow-hidden"><div class="bg-indigo-50 px-4 py-2 flex items-center gap-2 border-b border-indigo-100"><i class="fas fa-history text-indigo-400 text-xs"></i><span class="text-xs font-black text-indigo-600 uppercase tracking-wider">ประวัติการนับ — ' + (r.sku||'') + '</span></div><div id="cyc-hist-body-' + ri + '" class="p-3 text-center text-slate-300 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> กำลังโหลด...</div></div></td></tr>';
             });
             tbody.innerHTML = rows.join('');
+
         } else {
-            // SEMI — layout matches physical form: WH | Item1 | Product1 | Check1 | Item2 | Product2 | Check2 | ItemSemi
-            const tbody = document.getElementById('inv-cyc-tbody-semi');
+            if (cf.wh)       filtered = filtered.filter(function(r){ return (r.wh||'').toLowerCase().includes(cf.wh); });
+            if (cf.sku)      filtered = filtered.filter(function(r){ return (r.sku||'').toLowerCase().includes(cf.sku); });
+            if (cf.name)     filtered = filtered.filter(function(r){ return (r.name||'').toLowerCase().includes(cf.name); });
+            if (cf.sku2)     filtered = filtered.filter(function(r){ return (r.sku2||'').toLowerCase().includes(cf.sku2); });
+            if (cf.name2)    filtered = filtered.filter(function(r){ return (r.name2||'').toLowerCase().includes(cf.name2); });
+            if (cf.itemSemi) filtered = filtered.filter(function(r){ return (r.itemSemi||r.serial||'').toLowerCase().includes(cf.itemSemi); });
+            if (cf.system)   filtered = filtered.filter(function(r){ return String(Number(r.systemQty||0)).includes(cf.system); });
+            if (cf.diff)     filtered = filtered.filter(function(r){ return r._diff !== undefined && String(r._diff).includes(cf.diff); });
+            if (cf.reason)   filtered = filtered.filter(function(r){ return (r._reason||'').toLowerCase().includes(cf.reason); });
+            filtered = _cycApplySort(filtered, 'semi');
+
+            var tbody = document.getElementById('inv-cyc-tbody-semi');
             if (!tbody) return;
-            const rows = filtered.map((r, i) => {
-                const ri = invCycleData.indexOf(r);
-                const inpCls1 = 'w-full text-center border border-teal-400 rounded-lg px-1 py-1 text-xs font-bold text-teal-800 focus:outline-none focus:border-teal-600 bg-teal-50';
-                const inpCls2 = 'w-full text-center border border-teal-400 rounded-lg px-1 py-1 text-xs font-bold text-teal-800 focus:outline-none focus:border-teal-600 bg-teal-50';
-                // item2 / name2 / itemSemi may be separate fields or blank if only 1 product
-                const sku2     = r.sku2     || '';
-                const name2    = r.name2    || '';
-                const itemSemi = r.itemSemi || r.serial || '';
-                return '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + ' hover:bg-purple-50 border-b border-slate-100">'
-                    + '<td class="px-2 py-2 text-center text-[10px] text-slate-400 font-bold">' + (i+1) + '</td>'
-                    + '<td class="px-2 py-2 text-xs font-bold text-slate-600">' + (r.wh||'') + '</td>'
-                    + '<td class="px-2 py-2 text-[10px] font-mono font-black text-slate-800">' + (r.sku||'') + '</td>'
-                    + '<td class="px-2 py-2 text-[10px] text-slate-700 max-w-[160px]">' + (r.name||'') + '</td>'
-                    + '<td class="px-2 py-2 bg-teal-50">'
-                    +   '<input type="text" placeholder="เช่น 9+1" data-row="' + ri + '" data-field="check1" oninput="invSemiMarkFilled(' + ri + ')" class="' + inpCls1 + '">'
-                    + '</td>'
+            var inpCls = 'w-full text-center border border-teal-400 rounded-lg px-1 py-1 text-xs font-bold text-teal-800 focus:outline-none focus:border-teal-600 bg-teal-50';
+            var rows = filtered.map(function(r, i) {
+                var ri = invCycleData.indexOf(r);
+                var rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+                var sku2 = r.sku2||'', name2 = r.name2||'', itemSemi = r.itemSemi||r.serial||'';
+                var check1Val = r._check1 || '', check2Val = r._check2 || '';
+                var totalHtml = r._total !== undefined ? '<span class="text-emerald-700">' + r._total.toLocaleString() + '</span>' : '—';
+                var diffVal = r._diff !== undefined ? (r._diff >= 0 ? '+' : '') + r._diff : '—';
+                var diffCls2 = r._diff === undefined ? 'text-slate-400' : r._diff === 0 ? 'text-emerald-700' : 'text-rose-600';
+                var statusHtml = (!check1Val && !check2Val) ? '<span class="text-amber-400 font-black">❓</span>' : (r._diff !== undefined ? _invDiffStatusHtml(r._diff, r._reason||'') : '<span class="text-amber-400 font-black">❓</span>');
+                var reasonHtml = (r._diff !== undefined && r._diff !== 0)
+                    ? _invReasonDropdown('semi', ri, r._reason||'')
+                    : '<span class="text-slate-300 text-[10px]">—</span>';
+
+                return '<tr class="' + rowBg + ' hover:bg-purple-50 border-b border-slate-100">'
+                    + '<td class="px-2 py-2 text-center text-[10px] text-slate-400 font-bold cyc-sticky" style="left:0;">' + (i+1) + '</td>'
+                    + '<td class="px-2 py-2 text-xs font-bold text-slate-600 cyc-sticky cyc-editable" data-row="' + ri + '" data-field="wh" ondblclick="invCycInlineEdit(this)" style="left:40px;">' + (r.wh||'') + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] font-mono font-black text-slate-800 cyc-sticky" style="left:112px;">' + (r.sku||'') + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] text-slate-700 max-w-[160px] cyc-editable" data-row="' + ri + '" data-field="name" ondblclick="invCycInlineEdit(this)">' + (r.name||'') + '</td>'
+                    + '<td class="px-2 py-2 bg-teal-50"><input type="text" placeholder="เช่น 9+1" value="' + check1Val + '" data-row="' + ri + '" data-field="check1" oninput="invSemiMarkFilled(' + ri + ')" class="' + inpCls + '"></td>'
                     + '<td class="px-2 py-2 text-[10px] font-mono font-black text-slate-600 bg-slate-50">' + sku2 + '</td>'
-                    + '<td class="px-2 py-2 text-[10px] text-slate-600 bg-slate-50 max-w-[160px]">' + name2 + '</td>'
-                    + '<td class="px-2 py-2 bg-teal-50">'
-                    +   '<input type="text" placeholder="เช่น 7+2" data-row="' + ri + '" data-field="check2" oninput="invSemiMarkFilled(' + ri + ')" class="' + inpCls2 + '">'
-                    + '</td>'
+                    + '<td class="px-2 py-2 text-[10px] text-slate-600 bg-slate-50 max-w-[160px] cyc-editable" data-row="' + ri + '" data-field="name2" ondblclick="invCycInlineEdit(this)">' + name2 + '</td>'
+                    + '<td class="px-2 py-2 bg-teal-50"><input type="text" placeholder="เช่น 7+2" value="' + check2Val + '" data-row="' + ri + '" data-field="check2" oninput="invSemiMarkFilled(' + ri + ')" class="' + inpCls + '"></td>'
                     + '<td class="px-2 py-2 text-[10px] font-mono font-black text-purple-700 bg-purple-50">' + itemSemi + '</td>'
-                    + '<td class="px-2 py-2 text-right font-mono font-black text-amber-700 text-xs bg-amber-50">' + (r.systemQty || 0) + '</td>'
-                    + '<td id="inv-semi-total-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-slate-400 text-xs">—</td>'
-                    + '<td id="inv-semi-diff-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-slate-400 text-xs">—</td>'
-                    + '<td id="inv-semi-status-' + ri + '" class="px-2 py-2 text-center text-xs"><span class="text-amber-400 font-black">❓</span></td>'
-                    + '<td class="px-2 py-2" id="inv-semi-reason-cell-' + ri + '">'
-                    +   '<span class="text-slate-300 text-[10px]">—</span>'
-                    + '</td>'
+                    + '<td class="px-2 py-2 text-right font-mono font-black text-amber-700 text-xs bg-amber-50">' + (r.systemQty||0) + '</td>'
+                    + '<td id="inv-semi-total-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-xs">' + totalHtml + '</td>'
+                    + '<td id="inv-semi-diff-' + ri + '" class="px-2 py-2 text-right font-mono font-black text-xs ' + diffCls2 + '">' + diffVal + '</td>'
+                    + '<td id="inv-semi-status-' + ri + '" class="px-2 py-2 text-center text-xs">' + statusHtml + '</td>'
+                    + '<td class="px-2 py-2" id="inv-semi-reason-cell-' + ri + '">' + reasonHtml + '</td>'
                     + '</tr>';
             });
             tbody.innerHTML = rows.join('');
@@ -9526,6 +9684,12 @@ let blockingChartInstance = null;
             } else {
                 reasonCellSemi.innerHTML = '<span class="text-slate-300 text-[10px]">—</span>';
             }
+        }
+        // เก็บค่าลงใน data object เพื่อให้ sort/filter ทำงานได้หลังกรอกข้อมูล
+        if (rowData) {
+            rowData._check1 = v1; rowData._check2 = v2;
+            rowData._total  = total !== null ? total : undefined;
+            rowData._diff   = diff  !== null ? diff  : undefined;
         }
         invUpdateCycleKPI();
     };
