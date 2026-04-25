@@ -5125,8 +5125,13 @@ thead.sticky {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">WH</label>
-            <input type="text" id="cyc-add-wh" placeholder="เช่น WH-01"
-              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all">
+            <select id="cyc-add-wh"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-400 transition-all cursor-pointer">
+              <option value="">— เลือกคลัง —</option>
+              <option value="FG-A">FG-A</option>
+              <option value="FG-BB">FG-BB</option>
+              <option value="FG-BP">FG-BP</option>
+            </select>
           </div>
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item number <span class="text-rose-500">*</span></label>
@@ -5162,8 +5167,13 @@ thead.sticky {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">WH</label>
-            <input type="text" id="cyc-add-semi-wh" placeholder="เช่น WH-01"
-              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition-all">
+            <select id="cyc-add-semi-wh"
+              class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-purple-400 transition-all cursor-pointer">
+              <option value="">— เลือกคลัง —</option>
+              <option value="FG-A">FG-A</option>
+              <option value="FG-BB">FG-BB</option>
+              <option value="FG-BP">FG-BP</option>
+            </select>
           </div>
           <div>
             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Item Semi (รหัสฟิล์ม) <span class="text-rose-500">*</span></label>
@@ -9279,8 +9289,16 @@ let blockingChartInstance = null;
         return (typeof LOGI_MASTER_CACHE !== 'undefined' && LOGI_MASTER_CACHE.products) ? LOGI_MASTER_CACHE.products : [];
     }
     function _cycGetFgRow(sku) {
-        var rows = window.fgTableData || [];
-        return rows.find(function(r){ return String(r.sku||'').toUpperCase() === sku; }) || null;
+        var upSku = sku.toUpperCase();
+        // 1. fgTableData (โหลดแล้วจาก FG Dashboard)
+        var found = (window.fgTableData || []).find(function(r){ return String(r.sku||'').toUpperCase() === upSku; });
+        if (found) return found;
+        // 2. countingProductList (cache จาก getFGProductList — โหลดเมื่อเปิด modal เพิ่มสินค้า)
+        if (typeof countingProductList !== 'undefined' && countingProductList.length) {
+            found = countingProductList.find(function(p){ return String(p.sku||'').toUpperCase() === upSku; });
+            if (found) return found;
+        }
+        return null;
     }
 
     window.cycSkuInput = function(fieldKey, input) {
@@ -9415,9 +9433,17 @@ let blockingChartInstance = null;
             title.textContent = 'เพิ่มรายการ FG';
             header.className = 'bg-gradient-to-r from-indigo-600 to-indigo-500 p-5 rounded-t-[2rem] flex items-center justify-between';
             btn.className    = 'flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-lg text-sm';
-            ['cyc-add-wh','cyc-add-sku','cyc-add-name'].forEach(function(id){ document.getElementById(id).value=''; });
+            ['cyc-add-sku','cyc-add-name'].forEach(function(id){ document.getElementById(id).value=''; });
+            document.getElementById('cyc-add-wh').value  = '';
             document.getElementById('cyc-add-sys').value = '0';
             document.getElementById('cyc-add-lpb').value = '10';
+            // preload countingProductList (ให้ _cycGetFgRow ดึง lpb/sys ได้)
+            if (typeof countingProductList !== 'undefined' && countingProductList.length === 0 &&
+                typeof google !== 'undefined' && google.script && google.script.run) {
+                google.script.run
+                    .withSuccessHandler(function(res){ if (res && res.success) countingProductList = res.products || []; })
+                    .getFGProductList();
+            }
         } else {
             fgFlds.classList.add('hidden'); smFlds.classList.remove('hidden');
             title.textContent = 'เพิ่มรายการ SEMI';
