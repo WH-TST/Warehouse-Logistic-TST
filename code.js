@@ -575,18 +575,32 @@ function getQCStandardMap() {
   return _withCache('qcStdMap', 600, function() {
     try {
       const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('QC-Standard');
-      if (!sheet || sheet.getLastRow() < 2) return {};
-      const data = sheet.getDataRange().getValues();
       const map = {};
-      for (let i = 1; i < data.length; i++) {
-        if (!data[i][0]) continue;
-        map[String(data[i][0]).trim()] = {
-          productSize: data[i][1] || '',
-          wStd: data[i][2] || '',
-          wMinMax: data[i][3] || ''
-        };
+
+      // productSize จากชีต QC-Standard (Col B)
+      const qcSheet = ss.getSheetByName('QC-Standard');
+      if (qcSheet && qcSheet.getLastRow() >= 2) {
+        const data = qcSheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+          if (!data[i][0]) continue;
+          const sku = String(data[i][0]).trim();
+          map[sku] = { productSize: data[i][1] || '', wStd: '', wMinMax: '' };
+        }
       }
+
+      // wMinMax (Col E) และ wStd (Col F) จากชีต Product
+      const prodSheet = ss.getSheetByName('Product');
+      if (prodSheet && prodSheet.getLastRow() >= 2) {
+        const data = prodSheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+          if (!data[i][0]) continue;
+          const sku = String(data[i][0]).trim();
+          if (!map[sku]) map[sku] = { productSize: '', wStd: '', wMinMax: '' };
+          map[sku].wMinMax = String(data[i][4] || '').trim();  // Col E: W(Min-Max)
+          map[sku].wStd    = String(data[i][5] || '').trim();  // Col F: W(std)
+        }
+      }
+
       return map;
     } catch (e) { return {}; }
   });
@@ -5855,32 +5869,16 @@ function _getOrCreateLogiItemSheet(ss) {
 
 /**
  * getPreShipmentProductList()
- * ดึงรายการสินค้าทั้งหมดจากชีต Product + TST QC Standard
+ * ดึงรายการสินค้าทั้งหมดจากชีต Product
+ * Col A=SKU, B=ชื่อ, C=เส้น/มัด, D=มัด/lift, E=W(Min-Max), F=W(std)
  * สำหรับ Manual Mode (รถต่างจังหวัด / ลูกค้ามารับเอง)
- * Return: Array of { sku, name, linesPerBundle, bundlesPerLift, weightRange, likelyW }
+ * Return: Array of { sku, name, linesPerBundle, bundlesPerLift, weightRange, likelyW, minW, maxW }
  */
 function getPreShipmentProductList() {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // ── QC Standard Map ────────────────────────────────────────────────
-    var qcSheet = ss.getSheetByName('TST QC Standard');
-    var qcMap   = {};
-    if (qcSheet && qcSheet.getLastRow() >= 2) {
-      var qd = qcSheet.getDataRange().getValues();
-      for (var q = 1; q < qd.length; q++) {
-        var qSku = String(qd[q][0] || '').trim();
-        if (!qSku) continue;
-        qcMap[qSku] = {
-          minW:        parseFloat(qd[q][2]) || 0,
-          maxW:        parseFloat(qd[q][3]) || 0,
-          likelyW:     parseFloat(qd[q][4]) || 0,
-          weightRange: String(qd[q][5] || '').trim()
-        };
-      }
-    }
-
-    // ── Product Sheet ──────────────────────────────────────────────────
+    // ── Product Sheet (A=SKU, B=ชื่อ, C=เส้น/มัด, D=มัด/lift, E=W(Min-Max), F=W(std)) ──
     var productSheet = ss.getSheetByName(LOGI_SH_PRODUCT);
     var list = [];
     if (productSheet && productSheet.getLastRow() >= 2) {
@@ -5888,16 +5886,19 @@ function getPreShipmentProductList() {
       for (var i = 1; i < pd.length; i++) {
         var sku = String(pd[i][0] || '').trim();
         if (!sku) continue;
-        var qcInfo = qcMap[sku] || {};
+        var wRange = String(pd[i][4] || '').trim();  // Col E: W(Min-Max) เช่น "7.1 - 7.2"
+        var parts  = wRange.split('-');
+        var minW   = parts.length >= 2 ? (parseFloat(parts[0]) || 0) : 0;
+        var maxW   = parts.length >= 2 ? (parseFloat(parts[parts.length - 1]) || 0) : 0;
         list.push({
           sku:            sku,
           name:           String(pd[i][1] || '').trim(),
           linesPerBundle: Number(pd[i][2]) || 1,
           bundlesPerLift: Number(pd[i][3]) || 1,
-          likelyW:        qcInfo.likelyW     || 0,  // น้ำหนักเฉลี่ย/เส้น
-          minW:           qcInfo.minW        || 0,
-          maxW:           qcInfo.maxW        || 0,
-          weightRange:    qcInfo.weightRange || ''
+          weightRange:    wRange,
+          likelyW:        parseFloat(pd[i][5]) || 0,  // Col F: W(std)
+          minW:           minW,
+          maxW:           maxW
         });
       }
     }
@@ -5917,24 +5918,7 @@ function getPreShipmentData(planId) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // ── 1. โหลด QC Standard Map (weightRange จาก Col F) ──────────────────
-    var qcSheet = ss.getSheetByName('TST QC Standard');
-    var qcMap   = {};
-    if (qcSheet && qcSheet.getLastRow() >= 2) {
-      var qd = qcSheet.getDataRange().getValues();
-      for (var q = 1; q < qd.length; q++) {
-        var qSku = String(qd[q][0] || '').trim();
-        if (!qSku) continue;
-        qcMap[qSku] = {
-          minW:        parseFloat(qd[q][2]) || 0,
-          maxW:        parseFloat(qd[q][3]) || 0,
-          likelyW:     parseFloat(qd[q][4]) || 0,
-          weightRange: String(qd[q][5] || '').trim()
-        };
-      }
-    }
-
-    // ── 2. โหลด Product Map (Col C=เส้น/มัด, Col D=มัด/lift) ─────────────
+    // ── 1. โหลด Product Map (A=SKU, B=ชื่อ, C=เส้น/มัด, D=มัด/lift, E=W(Min-Max), F=W(std)) ──
     var productSheet = ss.getSheetByName(LOGI_SH_PRODUCT);
     var prodMap = {};
     if (productSheet && productSheet.getLastRow() >= 2) {
@@ -5942,15 +5926,18 @@ function getPreShipmentData(planId) {
       for (var i = 1; i < pd.length; i++) {
         var sku = String(pd[i][0] || '').trim();
         if (!sku) continue;
-        var qcInfo = qcMap[sku] || {};
+        var wRange = String(pd[i][4] || '').trim();  // Col E: W(Min-Max) เช่น "7.1 - 7.2"
+        var parts  = wRange.split('-');
+        var minW   = parts.length >= 2 ? (parseFloat(parts[0]) || 0) : 0;
+        var maxW   = parts.length >= 2 ? (parseFloat(parts[parts.length - 1]) || 0) : 0;
         prodMap[sku] = {
           name:           String(pd[i][1] || '').trim(),
           linesPerBundle: Number(pd[i][2]) || 1,
           bundlesPerLift: Number(pd[i][3]) || 1,
-          minW:           qcInfo.minW        || 0,
-          maxW:           qcInfo.maxW        || 0,
-          likelyW:        qcInfo.likelyW     || 0,
-          weightRange:    qcInfo.weightRange || ''
+          weightRange:    wRange,
+          likelyW:        parseFloat(pd[i][5]) || 0,  // Col F: W(std)
+          minW:           minW,
+          maxW:           maxW
         };
       }
     }
