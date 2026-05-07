@@ -4060,8 +4060,8 @@ thead.sticky {
 <!-- MODAL: แก้ไข KPI WH & LOGISTIC                             -->
 <!-- ============================================================ -->
 <div id="kpi-wh-edit-modal" class="fixed inset-0 bg-black/70 hidden z-[80] flex items-center justify-center backdrop-blur-sm px-4">
-  <div class="bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl border border-slate-600">
-    <div class="bg-gradient-to-r from-amber-600 to-amber-500 p-5 rounded-t-2xl flex justify-between items-center">
+  <div class="bg-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-600 max-h-[90vh] flex flex-col">
+    <div class="bg-gradient-to-r from-amber-600 to-amber-500 p-5 rounded-t-2xl flex justify-between items-center flex-shrink-0">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white text-lg"><i class="fas fa-edit"></i></div>
         <div>
@@ -4073,31 +4073,88 @@ thead.sticky {
         <i class="fas fa-times"></i>
       </button>
     </div>
-    <div class="p-6 space-y-4">
+    <div class="p-6 space-y-4 overflow-y-auto">
       <input type="hidden" id="kpi-edit-modal-date">
-      <div class="grid grid-cols-2 gap-4">
-        <!-- Final Adj SEMI (MANUAL) -->
+      <p class="text-xs text-slate-400"><i class="fas fa-info-circle mr-1 text-sky-400"></i>ช่อง <span class="text-sky-400 font-bold">AUTO</span> แสดงค่าจากระบบ — แก้ไขได้ หากปล่อยว่างจะใช้ค่า AUTO</p>
+      <div class="grid grid-cols-3 gap-3">
+        <!-- FG Checker -->
         <div>
           <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
-            <i class="fas fa-pencil-alt mr-1 text-amber-400"></i>Final Adj SEMI (%)
+            <i class="fas fa-robot mr-1 text-sky-400"></i>FG Checker (%) <span class="text-sky-500 text-[10px] normal-case">AUTO</span>
+          </label>
+          <input type="number" id="kpi-edit-checkerFGPct" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/40 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+        </div>
+        <!-- SEMI Checker -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-robot mr-1 text-sky-400"></i>SEMI Checker (%) <span class="text-sky-500 text-[10px] normal-case">AUTO</span>
+          </label>
+          <input type="number" id="kpi-edit-checkerSEMIPct" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/40 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+        </div>
+        <!-- Final Adj FG -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-robot mr-1 text-sky-400"></i>Final Adj FG (%) <span class="text-sky-500 text-[10px] normal-case">AUTO</span>
+          </label>
+          <input type="number" id="kpi-edit-finalAdjFG" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/40 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+        </div>
+        <!-- Final Adj SEMI -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-pencil-alt mr-1 text-amber-400"></i>Final Adj SEMI (%) <span class="text-amber-400 text-[10px] normal-case">MANUAL</span>
           </label>
           <input type="number" id="kpi-edit-finalAdjSEMI" min="0" max="100" step="0.01" placeholder="—"
             class="w-full bg-slate-700 border border-amber-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-amber-400">
         </div>
-        <!-- Space Breakdown (กรอกนาที → คำนวณ KPI% AUTO) -->
+        <!-- Space Breakdown -->
         <div>
           <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
-            <i class="fas fa-warehouse mr-1 text-sky-400"></i>Space Breakdown
+            <i class="fas fa-warehouse mr-1 text-sky-400"></i>Space Breakdown <span class="text-amber-400 text-[10px] normal-case">MANUAL</span>
           </label>
-          <div class="text-xs text-slate-400 mb-1.5">แผน: <span id="kpi-edit-space-planhours" class="text-sky-300 font-bold">—</span></div>
+          <div class="text-xs text-slate-400 mb-1">แผน: <span id="kpi-edit-space-planhours" class="text-sky-300 font-bold">—</span></div>
           <input type="number" id="kpi-edit-breakdownMins" min="0" step="1" placeholder="กรอกนาที Breakdown"
             oninput="calcSpaceBreakdownModal()"
-            class="w-full bg-slate-700 border border-sky-600/50 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
-          <div class="mt-1.5 text-xs text-slate-400">KPI: <span id="kpi-edit-space-result" class="font-bold text-slate-300">—</span></div>
+            class="w-full bg-slate-700 border border-sky-600/50 text-white rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-sky-400">
+          <div class="mt-1 text-xs text-slate-400">KPI: <span id="kpi-edit-space-result" class="font-bold text-slate-300">—</span></div>
+        </div>
+        <!-- Load Score -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-robot mr-1 text-sky-400"></i>Load Score (%) <span class="text-sky-500 text-[10px] normal-case">AUTO</span>
+          </label>
+          <input type="number" id="kpi-edit-loadScore" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/40 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+        </div>
+        <!-- Damage Score -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-robot mr-1 text-sky-400"></i>Damage Score (%) <span class="text-sky-500 text-[10px] normal-case">AUTO</span>
+          </label>
+          <input type="number" id="kpi-edit-damageScore" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/40 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+        </div>
+        <!-- Data Err FG -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-robot mr-1 text-sky-400"></i>Data Err FG (%) <span class="text-sky-500 text-[10px] normal-case">AUTO</span>
+          </label>
+          <input type="number" id="kpi-edit-dataErrFG" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/40 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
+        </div>
+        <!-- Data Err SEMI -->
+        <div>
+          <label class="block text-slate-300 text-xs font-black mb-1.5 uppercase tracking-widest">
+            <i class="fas fa-robot mr-1 text-sky-400"></i>Data Err SEMI (%) <span class="text-sky-500 text-[10px] normal-case">AUTO</span>
+          </label>
+          <input type="number" id="kpi-edit-dataErrSEMI" min="0" max="100" step="0.01" placeholder="—"
+            class="w-full bg-slate-700 border border-sky-600/40 text-white rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:border-sky-400">
         </div>
       </div>
     </div>
-    <div class="px-6 pb-6 flex gap-3 justify-end">
+    <div class="px-6 pb-6 flex gap-3 justify-end flex-shrink-0">
       <button onclick="closeKpiWHEditModal()"
         class="px-5 py-2 rounded-xl bg-slate-700 text-slate-300 hover:bg-slate-600 font-bold text-sm transition-all">
         ยกเลิก
@@ -27031,15 +27088,27 @@ window.openKpiWHEditModal = function openKpiWHEditModal(isoDate) {
     const [y, m, d] = isoDate.split('-');
     const ddmmyyyy  = `${d}/${m}/${y}`;
     const saved = kpiWHSavedData[isoDate] || kpiWHSavedData[ddmmyyyy] || {};
+    const auto  = kpiWHAutoData[isoDate]  || kpiWHAutoData[ddmmyyyy]  || {};
 
     const dateInput = safeGet('kpi-edit-modal-date');
     if (dateInput) dateInput.value = isoDate;
     safeSetText('kpi-edit-modal-subtitle', `วันที่ ${ddmmyyyy}`);
 
     const setField = (id, val) => { const el = safeGet(id); if (el) el.value = (val !== null && val !== undefined) ? val : ''; };
+
+    // AUTO fields: ใช้ค่า override ที่บันทึกไว้ก่อน ถ้าไม่มีใช้ค่า AUTO
+    setField('kpi-edit-checkerFGPct',   saved.checkerFGPct  ?? auto.checkerFGPct);
+    setField('kpi-edit-checkerSEMIPct', saved.checkerSEMIPct ?? auto.checkerSEMIPct);
+    setField('kpi-edit-finalAdjFG',     saved.finalAdjFG    ?? auto.finalAdjFGPct);
+    setField('kpi-edit-loadScore',      saved.loadScore     ?? auto.efficiency);
+    setField('kpi-edit-damageScore',    saved.damageScore   ?? auto.damagePct);
+    setField('kpi-edit-dataErrFG',      saved.dataErrFG     ?? auto.prdKPIFG);
+    setField('kpi-edit-dataErrSEMI',    saved.dataErrSEMI   ?? auto.prdKPISEMI);
+
+    // MANUAL field
     setField('kpi-edit-finalAdjSEMI', saved.finalAdjSEMI);
-    // Space Breakdown: แสดงแผนชม. + ล้าง minutes input
-    const auto = kpiWHAutoData[isoDate] || kpiWHAutoData[ddmmyyyy] || {};
+
+    // Space Breakdown
     const planHEl = safeGet('kpi-edit-space-planhours');
     if (planHEl) planHEl.textContent = (auto.planHours !== null && auto.planHours !== undefined) ? auto.planHours.toFixed(1) + ' ชม.' : '—';
     setField('kpi-edit-breakdownMins', '');
@@ -27065,23 +27134,25 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
     const auto = kpiWHAutoData[isoDate] || kpiWHAutoData[ddmmyyyy] || {};
 
     const getF = id => { const el = safeGet(id); return (el && el.value !== '') ? parseFloat(el.value) : null; };
-    // คำนวณ Space Breakdown KPI% จาก breakdownMins ที่กรอกใหม่ (ถ้ากรอก) หรือใช้ค่าเดิม
+
+    // Space Breakdown: กรอกนาที → คำนวณ%, ถ้าไม่กรอกใช้ค่าที่บันทึกไว้
     const editPlanM = auto.planMinutes ?? 0;
     const editBMins = getF('kpi-edit-breakdownMins');
     const editSpaceKPI = (editBMins !== null && editPlanM > 0)
         ? Math.min(100, Math.max(0, Math.round(((editPlanM - editBMins) / editPlanM) * 1000) / 10))
         : (kpiWHSavedData[isoDate] || {}).spaceBreakdown ?? null;
+
     const row = {
         date:           ddmmyyyy,
-        checkerFGPct:   auto.checkerFGPct    ?? null,
-        checkerSEMIPct: auto.checkerSEMIPct  ?? null,
-        finalAdjFG:     auto.finalAdjFGPct   ?? null,   // AUTO: (tL-|dL|)/tL×100 จาก KPI Log
-        finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),  // MANUAL
-        spaceBreakdown: editSpaceKPI,                   // AUTO-CALC: (planMins-bMins)/planMins×100
-        loadScore:      auto.efficiency      ?? null,
-        damageScore:    auto.damagePct       ?? null,
-        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG (KPI Log col O)
-        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI (KPI Log col O)
+        checkerFGPct:   getF('kpi-edit-checkerFGPct')   ?? auto.checkerFGPct   ?? null,
+        checkerSEMIPct: getF('kpi-edit-checkerSEMIPct') ?? auto.checkerSEMIPct ?? null,
+        finalAdjFG:     getF('kpi-edit-finalAdjFG')     ?? auto.finalAdjFGPct  ?? null,
+        finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),
+        spaceBreakdown: editSpaceKPI,
+        loadScore:      getF('kpi-edit-loadScore')      ?? auto.efficiency     ?? null,
+        damageScore:    getF('kpi-edit-damageScore')    ?? auto.damagePct      ?? null,
+        dataErrFG:      getF('kpi-edit-dataErrFG')      ?? auto.prdKPIFG      ?? null,
+        dataErrSEMI:    getF('kpi-edit-dataErrSEMI')    ?? auto.prdKPISEMI    ?? null,
     };
 
     const submitBtn = safeGet('btn-kpi-edit-submit');
@@ -27093,12 +27164,22 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
             if (res && res.success) {
                 closeKpiWHEditModal();
                 showToast(`✅ แก้ไข KPI วันที่ ${ddmmyyyy} สำเร็จ`);
+                // อัปเดต saved data
                 kpiWHSavedData[isoDate] = row;
-                // อัปเดต inputs ที่ locked ในตาราง (เฉพาะ manual fields)
-                ['finalAdjSEMI','spaceBreakdown'].forEach(f => {
-                    const el = safeGet(`kpi-manual-${f}-${isoDate}`);
-                    if (el) el.value = (row[f] !== null && row[f] !== undefined) ? row[f] : '';
+                // อัปเดต auto data ด้วยค่าที่ override เพื่อให้ตารางแสดงผลทันที
+                kpiWHAutoData[isoDate] = Object.assign({}, auto, {
+                    checkerFGPct:  row.checkerFGPct,
+                    checkerSEMIPct: row.checkerSEMIPct,
+                    finalAdjFGPct: row.finalAdjFG,
+                    efficiency:    row.loadScore,
+                    damagePct:     row.damageScore,
+                    prdKPIFG:      row.dataErrFG,
+                    prdKPISEMI:    row.dataErrSEMI,
                 });
+                // re-render ตารางให้แสดงค่าใหม่ทันที
+                const fromEl = safeGet('kpi-wh-date-from');
+                const toEl   = safeGet('kpi-wh-date-to');
+                if (fromEl && toEl) renderKpiWHTable(fromEl.value, toEl.value);
             } else {
                 showToast(`❌ แก้ไขไม่สำเร็จ: ${res ? res.message : 'unknown error'}`, true);
             }
