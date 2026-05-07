@@ -7344,7 +7344,11 @@ function getKpiWHLGData(startDateStr, endDateStr) {
     var whaSheet = ss.getSheetByName(WH_ACTIVITY_SHEET);
     var whaMap      = {}; // key yyyy-MM-dd → { wpuList, mpiList, wrongCount, claimCount }
     var truckMap    = {}; // key 'yyyy-MM-dd|plate' → { plate, date, mpiPerKgList }
-    var allMpiPerKg = []; // นาที/KG ทุก row สำหรับคำนวณ median baseline
+    // แยก median baseline ตามกลุ่มน้ำหนัก เพื่อให้ยุติธรรมกับรถหนัก/เบาต่างกัน
+    var allMpiPerKgA = []; // กลุ่ม A: < 3,000 KG
+    var allMpiPerKgB = []; // กลุ่ม B: 3,000–8,000 KG
+    var allMpiPerKgC = []; // กลุ่ม C: 8,000–16,000 KG
+    var allMpiPerKgD = []; // กลุ่ม D: > 16,000 KG
 
     if (whaSheet && whaSheet.getLastRow() >= 2) {
       var whaData = whaSheet.getDataRange().getValues();
@@ -7380,7 +7384,11 @@ function getKpiWHLGData(startDateStr, endDateStr) {
 
         whaMap[wKey].wpuList.push(wpu);
         whaMap[wKey].mpiList.push(mpi);
-        allMpiPerKg.push(mpi / wpu); // นาที/KG per trip
+        var mpkg = mpi / wpu; // นาที/KG per trip
+        if      (wpu < 3000)   allMpiPerKgA.push(mpkg);
+        else if (wpu <= 8000)  allMpiPerKgB.push(mpkg);
+        else if (wpu <= 16000) allMpiPerKgC.push(mpkg);
+        else                   allMpiPerKgD.push(mpkg);
 
         // Per-truck map (Col U index 20 = ทะเบียนรถ, optional)
         var rowTruck = String(whaData[i][20] || '').trim();
@@ -7392,8 +7400,19 @@ function getKpiWHLGData(startDateStr, endDateStr) {
       }
     }
 
-    // Median นาที/KG จากข้อมูลทั้งหมด (historical baseline)
-    var mpiPerKgMedian = median(allMpiPerKg);
+    // Median นาที/KG แยกตามกลุ่มน้ำหนัก (historical baseline ที่ยุติธรรมกว่า)
+    var medianA = median(allMpiPerKgA); // < 3,000 KG
+    var medianB = median(allMpiPerKgB); // 3,000–8,000 KG
+    var medianC = median(allMpiPerKgC); // 8,000–16,000 KG
+    var medianD = median(allMpiPerKgD); // > 16,000 KG
+    // ถ้ากลุ่มใดไม่มีข้อมูลพอ ให้ fallback ไปใช้ median รวมทุกกลุ่ม
+    var medianAll = median(allMpiPerKgA.concat(allMpiPerKgB).concat(allMpiPerKgC).concat(allMpiPerKgD));
+    function getGroupMedian(wpu) {
+      if (wpu < 3000)   return medianA || medianAll;
+      if (wpu <= 8000)  return medianB || medianAll;
+      if (wpu <= 16000) return medianC || medianAll;
+      return medianD || medianAll;
+    }
 
     // ── 2. Sheet Plan → planMinutes ต่อวัน (SUM prodTimeDay Col F × 60) ──
     // Col A(0)=วันที่(yyyyMMdd), Col F(5)=prodTimeDay(ชั่วโมง)
@@ -7498,30 +7517,39 @@ function getKpiWHLGData(startDateStr, endDateStr) {
       var wrongCount  = wha ? (wha.wrongCount || 0) : 0;
       var claimCount  = wha ? (wha.claimCount || 0) : 0;
 
-      if (wha && wha.wpuList.length > 0 && mpiPerKgMedian) {
+      if (wha && wha.wpuList.length > 0 && medianAll) {
         // wpuActual / mpiActual = ค่าเฉลี่ย (ใช้แสดงผลในตาราง เท่านั้น)
         wpuActual = wha.wpuList.reduce(function(a,b){return a+b;},0) / wha.wpuList.length;
         mpiActual = wha.mpiList.reduce(function(a,b){return a+b;},0) / wha.mpiList.length;
-        // ✅ สูตรใหม่: นาที/KG = MPI÷WPU → normalize ด้วยน้ำหนักต่อรายการ (ยุติธรรมกว่า)
+
+        // ── Step 1: Efficiency Score (เปรียบกับ median ของกลุ่มน้ำหนักเดียวกัน) ──
         var effList = [];
         for (var t = 0; t < wha.wpuList.length; t++) {
           var wpu_t = wha.wpuList[t];
           var mpi_t = wha.mpiList[t];
           if (wpu_t > 0 && mpi_t > 0) {
-            var mpiPerKg_t = mpi_t / wpu_t; // นาที/KG ของ trip นี้
-            // เร็วกว่า median → คะแนนสูง, cap ที่ 100
-            var speedScore = Math.min(100, (mpiPerKgMedian / mpiPerKg_t) * 100);
+            var groupMedian = getGroupMedian(wpu_t);
+            if (!groupMedian) continue;
+            var mpiPerKg_t = mpi_t / wpu_t;
+            // เร็วกว่า median ของกลุ่มเดียวกัน → คะแนนสูง, cap ที่ 100
+            var speedScore = Math.min(100, (groupMedian / mpiPerKg_t) * 100);
             effList.push(speedScore);
           }
         }
+
         if (effList.length > 0) {
           effStep1 = effList.reduce(function(a,b){return a+b;},0) / effList.length;
-          // Penalty: โหลดสินค้าผิด −15/ครั้ง, เคลมสินค้า −10/ครั้ง
-          efficiency = Math.round(Math.max(0, effStep1 - wrongCount * 15 - claimCount * 10) * 10) / 10;
+
+          // ── Step 2: Accuracy Score (แยกออกจาก speed — ไม่ผิด ไม่เคลม) ──
+          var accuracyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
+
+          // ── Step 3: รวม Load Score = Efficiency(60%) + Accuracy(40%) ──
+          efficiency = Math.round((effStep1 * 0.6 + accuracyScore * 0.4) * 10) / 10;
         }
       } else if (wha && (wrongCount > 0 || claimCount > 0)) {
-        // มี penalty แต่ไม่มี trip data → แสดง null
-        efficiency = null;
+        // ไม่มี trip data แต่มีความผิดพลาด → คำนวณจาก Accuracy เพียงอย่างเดียว
+        var accuracyOnlyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
+        efficiency = Math.round(accuracyOnlyScore * 10) / 10;
       }
 
       // Checker(%), PRD KPI(%), Final Adj(%) จาก KPI Log
@@ -7553,9 +7581,9 @@ function getKpiWHLGData(startDateStr, endDateStr) {
       Object.keys(truckMap).forEach(function(tKey) {
         var tm = truckMap[tKey];
         if (tm.date !== key) return;
-        if (!mpiPerKgMedian || !tm.mpiPerKgList.length) return;
+        if (!medianAll || !tm.mpiPerKgList.length) return;
         var effList_t = tm.mpiPerKgList.map(function(v) {
-          return Math.min(100, (mpiPerKgMedian / v) * 100);
+          return Math.min(100, (medianAll / v) * 100);
         });
         var avgEff_t = effList_t.reduce(function(a, b) { return a + b; }, 0) / effList_t.length;
         truckScores.push({
