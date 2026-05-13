@@ -75,6 +75,7 @@ function _handleApiPost(e) {
 }
 
 const SPREADSHEET_ID = '1uLXHWv6_jTb1wnaIzq652gn2gH0Odiw2KOlB8DyY2Us';
+const PRODUCT_MASTER_SS_ID = '1YK0duOxi1-LxIfBWRZb3KsRrnhxo14H0DaHJvqSQP_A';
 const PLAN_SHEET_NAME = 'Sheet Plan'; 
 const HOLIDAY_SHEET_NAME = 'Holiday-TST';
 const HISTORY_SHEET_NAME = 'History_Log';
@@ -571,6 +572,30 @@ function getProductMap() {
   });
 }
 
+function getExternalProductMap() {
+  return _withCache('extProductMap', 600, function() {
+    try {
+      const ss = SpreadsheetApp.openById(PRODUCT_MASTER_SS_ID);
+      const sheet = ss.getSheetByName('Product');
+      if (!sheet || sheet.getLastRow() < 2) return {};
+      const data = sheet.getDataRange().getValues();
+      const map = {};
+      for (let i = 1; i < data.length; i++) {
+        const sku = String(data[i][1] || '').trim(); // Col B
+        if (!sku) continue;
+        map[sku] = {
+          productSize: String(data[i][72] || '').trim(), // Col BU
+          pcsPerBundle: Number(data[i][21]) || 1         // Col V
+        };
+      }
+      return map;
+    } catch (e) {
+      Logger.log('❌ getExternalProductMap error: ' + e.message);
+      return {};
+    }
+  });
+}
+
 function getQCStandardMap() {
   return _withCache('qcStdMap', 600, function() {
     try {
@@ -718,8 +743,8 @@ function calculatePrintTagList(selectedDateStr) {
     Logger.log("  - Selected Date: " + selectedDateStr);
     
     const productMap = getProductMap();
+    const extMap = getExternalProductMap();
     const qcMap = getQCStandardMap();
-    const stdCMap = getStandardCMap();
     
     // 1. ดึงข้อมูลประกอบ (ยอดปริ้นเก่า, ยอดใช้จริง, ยอดบันทึกวันนี้)
     const printedBundlesExcludeToday = getPrintedQtyExcludeDate(selectedDateStr);
@@ -763,16 +788,17 @@ function calculatePrintTagList(selectedDateStr) {
       // เงื่อนไข: เนื่องจากเรา Loop ตามแผนอยู่แล้ว ก็ให้ Push ลงตารางได้เลย
       // แต่เช็คกันเหนียวนิดนึงว่าแผนต้องมากกว่า 0 (ซึ่งปกติควรจะใช่ ถ้ามาจาก getPlanLinesByDate)
       if (planTodayBundles > 0) {
-        let qc = id.startsWith('0C') ? (stdCMap[id] || {}) : (qcMap[id] || {});
-        
+        const ext = extMap[id] || {};
+        const qc = qcMap[id] || {};
+
         result.push({
           productId: id,
           productName: pInfo.name,
-          productSize: qc.productSize || '-',
+          productSize: ext.productSize || '-',
           wStd: qc.wStd || '-',
           wMinMax: qc.wMinMax || '-',
           linesPerBundle: linesPerBundle,
-          pcsPerBundle: pInfo.pcsPerBundle,
+          pcsPerBundle: ext.pcsPerBundle || pInfo.pcsPerBundle,
           
           printedExcludeToday: printedExcludeTodayBundles,
           usedExcludeToday: actualExcludeTodayBundles,
