@@ -601,31 +601,18 @@ function getQCStandardMap() {
     try {
       const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
       const map = {};
-
-      // productSize จากชีต QC-Standard (Col B)
-      const qcSheet = ss.getSheetByName('QC-Standard');
-      if (qcSheet && qcSheet.getLastRow() >= 2) {
-        const data = qcSheet.getDataRange().getValues();
-        for (let i = 1; i < data.length; i++) {
-          if (!data[i][0]) continue;
-          const sku = String(data[i][0]).trim();
-          map[sku] = { productSize: data[i][1] || '', wStd: '', wMinMax: '' };
-        }
-      }
-
-      // wMinMax (Col E) และ wStd (Col F) จากชีต Product
       const prodSheet = ss.getSheetByName('Product');
       if (prodSheet && prodSheet.getLastRow() >= 2) {
         const data = prodSheet.getDataRange().getValues();
         for (let i = 1; i < data.length; i++) {
           if (!data[i][0]) continue;
           const sku = String(data[i][0]).trim();
-          if (!map[sku]) map[sku] = { productSize: '', wStd: '', wMinMax: '' };
-          map[sku].wMinMax = String(data[i][4] || '').trim();  // Col E: W(Min-Max)
-          map[sku].wStd    = String(data[i][5] || '').trim();  // Col F: W(std)
+          map[sku] = {
+            wMinMax: String(data[i][4] || '').trim(), // Col E
+            wStd:    String(data[i][5] || '').trim()  // Col F
+          };
         }
       }
-
       return map;
     } catch (e) { return {}; }
   });
