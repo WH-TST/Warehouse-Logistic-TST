@@ -1715,20 +1715,21 @@ function getAllProductsForDropdown() {
   return _withCache('allProductsDropdown', 600, function() {
     try {
       const productMap = getProductMap();
+      const extMap = getExternalProductMap();
       const qcMap = getQCStandardMap();
-      const stdCMap = getStandardCMap();
       const list = [];
       Object.keys(productMap).forEach(id => {
         const p = productMap[id];
-        let qc = id.startsWith('0C') ? (stdCMap[id] || {}) : (qcMap[id] || {});
+        const ext = extMap[id] || {};
+        const qc = qcMap[id] || {};
         list.push({
           id: id,
           name: p.name,
-          productSize: qc.productSize || '-',
+          productSize: ext.productSize || '-',
           wStd: qc.wStd || '-',
           wMinMax: qc.wMinMax || '-',
           linesPerBundle: p.linesPerBundle || 1,
-          pcsPerBundle: p.pcsPerBundle || 1
+          pcsPerBundle: ext.pcsPerBundle || p.pcsPerBundle || 1
         });
       });
       list.sort((a, b) => a.id.localeCompare(b.id));
