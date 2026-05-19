@@ -8299,14 +8299,14 @@ function saveInventoryKPI(data) {
     if (!sheet) {
       sheet = ss.insertSheet(INVENTORY_KPI_LOG_SHEET);
       const headers = [
-        'บันทึกเมื่อ','วันที่นับ','รหัสพนักงาน',
-        'SKU ทั้งหมด','PCS ทั้งหมด',
-        'SKU งานผลิต','PCS งานผลิต',
-        'Checker Err SKU','Checker Err PCS',
-        'Prod Err SKU','Prod Err PCS',
-        'Weight SKU%','Weight PCS%',
-        'Checker SKU Acc%','Checker PCS Acc%','Checker KPI%',
-        'Prod SKU Acc%','Prod PCS Acc%','Prod KPI%'
+        'บันทึกเมื่อ','วันที่นับ','ประเภท','รหัสพนักงาน',
+        'SKU ทั้งหมด','PCS/แถบ ทั้งหมด',
+        'SKU งานผลิต','PCS/แถบ งานผลิต',
+        'Checker Err SKU','Checker Err PCS/แถบ',
+        'Prod Err SKU','Prod Err PCS/แถบ',
+        'Weight SKU%','Weight PCS/แถบ%',
+        'Checker SKU Acc%','Checker PCS/แถบ Acc%','Checker KPI%',
+        'Prod SKU Acc%','Prod PCS/แถบ Acc%','Prod KPI%'
       ];
       const headerRow = sheet.getRange(1, 1, 1, headers.length);
       headerRow.setValues([headers]);
@@ -8316,36 +8316,40 @@ function saveInventoryKPI(data) {
       sheet.setFrozenRows(1);
       sheet.setColumnWidth(1, 160);
       sheet.setColumnWidth(2, 110);
-      sheet.setColumnWidth(3, 120);
+      sheet.setColumnWidth(3, 70);
+      sheet.setColumnWidth(4, 120);
     }
 
+    const isSemi = (data.type === 'SEMI');
     const now = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
     const row = [
       now,
       data.countDate     || '',
+      data.type          || 'FG',
       data.employeeId    || '',
       data.totalSKU      || 0,
-      data.totalPCS      || 0,
+      isSemi ? (data.totalBand  || 0) : (data.totalPCS  || 0),
       data.prodSKU       || 0,
-      data.prodPCS       || 0,
+      isSemi ? (data.prodBand   || 0) : (data.prodPCS   || 0),
       data.checkerErrSKU || 0,
-      data.checkerErrPCS || 0,
+      isSemi ? (data.checkerErrBand || 0) : (data.checkerErrPCS || 0),
       data.prodErrSKU    || 0,
-      data.prodErrPCS    || 0,
+      isSemi ? (data.prodErrBand    || 0) : (data.prodErrPCS    || 0),
       data.weightSKU     || 40,
-      data.weightPCS     || 60,
+      isSemi ? (data.weightBand || 60)    : (data.weightPCS     || 60),
       data.checkerSKUpct || 0,
-      data.checkerPCSpct || 0,
+      isSemi ? (data.checkerBandpct || 0) : (data.checkerPCSpct || 0),
       data.checkerKPI    || 0,
       data.prodSKUpct    || 0,
-      data.prodPCSpct    || 0,
+      isSemi ? (data.prodBandpct || 0)    : (data.prodPCSpct    || 0),
       data.prodKPI       || 0
     ];
 
     sheet.appendRow(row);
 
     saveAuditLog('Inventory KPI', 'SAVE',
-      'วันที่นับ: ' + (data.countDate || '-') +
+      'ประเภท: ' + (data.type || 'FG') +
+      ' | วันที่นับ: ' + (data.countDate || '-') +
       ' | พนักงาน: ' + (data.employeeId || '-') +
       ' | Checker KPI: ' + (data.checkerKPI || 0).toFixed(1) + '%' +
       ' | Prod KPI: ' + (data.prodKPI || 0).toFixed(1) + '%',

@@ -3191,7 +3191,20 @@ thead.sticky {
     </div>
   </div>
 
+  <!-- Tab switcher: FG / SEMI -->
+  <div class="flex gap-2 p-1 bg-slate-800/60 border border-slate-700 rounded-2xl w-fit">
+    <button onclick="switchKpiTab('fg')" id="kpi-tab-fg"
+      class="px-7 py-2.5 rounded-xl font-black text-sm transition-all bg-emerald-600 text-white shadow">
+      <i class="fas fa-box mr-2"></i>FG
+    </button>
+    <button onclick="switchKpiTab('semi')" id="kpi-tab-semi"
+      class="px-7 py-2.5 rounded-xl font-black text-sm transition-all text-slate-400 hover:text-white">
+      <i class="fas fa-stream mr-2"></i>SEMI
+    </button>
+  </div>
 
+  <!-- ════ FG Panel ════ -->
+  <div id="kpi-fg-panel">
   <!-- 2-column grid: LEFT = input, RIGHT = results -->
   <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 
@@ -3522,7 +3535,336 @@ thead.sticky {
 
   </div><!-- end 2-column grid -->
 
+  </div><!-- end kpi-fg-panel -->
 
+  <!-- ════ SEMI Panel ════ -->
+  <div id="kpi-semi-panel" class="hidden space-y-6">
+  <!-- 2-column grid SEMI: LEFT = input, RIGHT = results -->
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+
+    <!-- LEFT: Input Form SEMI -->
+    <div class="space-y-6">
+
+      <!-- วันที่ -->
+      <div class="bg-slate-800/80 border border-sky-700/60 rounded-2xl px-6 py-5 flex items-center gap-5">
+        <div class="w-12 h-12 bg-sky-500/20 border border-sky-500/40 rounded-xl flex items-center justify-center text-sky-300 text-xl flex-shrink-0">
+          <i class="fas fa-calendar-alt"></i>
+        </div>
+        <div class="flex-1">
+          <label class="block text-sky-300 font-black text-sm uppercase tracking-widest mb-2">วันที่นับสต็อก (Cycle Count Date)</label>
+          <input type="date" id="kpi-semi-date"
+            oninput="kpiSemiAutoCalc()"
+            class="w-full max-w-xs bg-slate-700 border-2 border-sky-600/60 text-white rounded-xl px-4 py-3 font-bold text-base focus:outline-none focus:border-sky-400">
+        </div>
+      </div>
+
+      <!-- Section A -->
+      <div class="rounded-2xl border-2 border-sky-700/50 overflow-hidden">
+        <div class="bg-sky-900/40 px-5 py-3 flex items-center gap-3 border-b border-sky-700/40">
+          <div class="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white font-black text-sm">A</div>
+          <div>
+            <span class="text-sky-200 font-black text-base">จำนวนที่นับทั้งหมด</span>
+            <span class="text-sky-400/70 text-xs font-bold ml-2">— ข้อมูลพื้นฐานก่อนเปรียบเทียบ</span>
+          </div>
+        </div>
+        <div class="bg-slate-800/60 p-5 space-y-4">
+          <div>
+            <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <i class="fas fa-layer-group text-slate-500"></i> ยอดรวมทั้งหมดที่นับ
+            </p>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-slate-700/60 rounded-xl p-4 border border-slate-600">
+                <label class="block text-sky-300 font-black text-xs uppercase tracking-widest mb-2">จำนวน SKU นับทั้งหมด</label>
+                <input type="number" id="kpi-semi-total-sku" min="0" placeholder="0"
+                  oninput="kpiSemiAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-slate-500 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-sky-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">รายการ (SKU)</p>
+              </div>
+              <div class="bg-slate-700/60 rounded-xl p-4 border border-slate-600">
+                <label class="block text-sky-300 font-black text-xs uppercase tracking-widest mb-2">จำนวน แถบ ทั้งหมด</label>
+                <input type="number" id="kpi-semi-total-band" min="0" placeholder="0"
+                  oninput="kpiSemiAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-slate-500 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-sky-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">แถบ</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <i class="fas fa-industry text-amber-500/70"></i> เฉพาะรายการงานผลิต (Subset จากยอดรวม)
+            </p>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+                <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">SKU ที่เป็นงานผลิต</label>
+                <input type="number" id="kpi-semi-prod-sku" min="0" placeholder="0"
+                  oninput="kpiSemiAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-amber-700/50 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">รายการ (SKU)</p>
+              </div>
+              <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+                <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">แถบ ของงานผลิต</label>
+                <input type="number" id="kpi-semi-prod-band" min="0" placeholder="0"
+                  oninput="kpiSemiAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-amber-700/50 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">แถบ</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section B -->
+      <div class="rounded-2xl border-2 border-rose-700/50 overflow-hidden">
+        <div class="bg-rose-900/40 px-5 py-3 flex items-center gap-3 border-b border-rose-700/40">
+          <div class="w-8 h-8 bg-rose-500 rounded-lg flex items-center justify-center text-white font-black text-sm">B</div>
+          <div>
+            <span class="text-rose-200 font-black text-base">ความผิดพลาดของเช็คเกอร์</span>
+            <span class="text-rose-400/70 text-xs font-bold ml-2">— นับผิดเอง ไม่ว่าจะเป็น SKU งานผลิตหรือไม่ก็ตาม</span>
+          </div>
+        </div>
+        <div class="bg-slate-800/60 p-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-rose-900/20 rounded-xl p-4 border border-rose-700/40">
+              <label class="block text-rose-300 font-black text-xs uppercase tracking-widest mb-2">SKU ที่เช็คเกอร์นับผิด</label>
+              <input type="number" id="kpi-semi-checker-err-sku" min="0" placeholder="0"
+                oninput="kpiSemiAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-rose-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-rose-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">รวมทุก SKU ที่นับผิด</p>
+            </div>
+            <div class="bg-rose-900/20 rounded-xl p-4 border border-rose-700/40">
+              <label class="block text-rose-300 font-black text-xs uppercase tracking-widest mb-2">แถบ ที่เช็คเกอร์นับผิด</label>
+              <input type="number" id="kpi-semi-checker-err-band" min="0" placeholder="0"
+                oninput="kpiSemiAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-rose-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-rose-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">รวม แถบ ทั้งหมดที่ผิด</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-3 flex items-start gap-1.5">
+            <i class="fas fa-info-circle text-rose-500/60 mt-0.5 flex-shrink-0"></i>
+            เช็คเกอร์นับเกิน/ขาด, อ่านรหัสผิด, บันทึกผิดช่อง — รวมทั้ง SKU งานผลิตและไม่ใช่งานผลิต
+          </p>
+        </div>
+      </div>
+
+      <!-- Section C -->
+      <div class="rounded-2xl border-2 border-amber-700/50 overflow-hidden">
+        <div class="bg-amber-900/40 px-5 py-3 flex items-center gap-3 border-b border-amber-700/40">
+          <div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white font-black text-sm">C</div>
+          <div>
+            <span class="text-amber-200 font-black text-base">ความผิดพลาดของฝ่ายผลิต</span>
+            <span class="text-amber-400/70 text-xs font-bold ml-2">— ส่งข้อมูลผิด, รายงานยอดผิด (เฉพาะ production items)</span>
+          </div>
+        </div>
+        <div class="bg-slate-800/60 p-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+              <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">SKU ที่ฝ่ายผลิตส่งผิด</label>
+              <input type="number" id="kpi-semi-prod-err-sku" min="0" placeholder="0"
+                oninput="kpiSemiAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-amber-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">เฉพาะ SKU งานผลิต</p>
+            </div>
+            <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+              <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">แถบ ที่ฝ่ายผลิตส่งผิด</label>
+              <input type="number" id="kpi-semi-prod-err-band" min="0" placeholder="0"
+                oninput="kpiSemiAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-amber-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">เฉพาะ แถบ งานผลิต</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-3 flex items-start gap-1.5">
+            <i class="fas fa-info-circle text-amber-500/60 mt-0.5 flex-shrink-0"></i>
+            ฝ่ายผลิตรายงานยอดผิด, บันทึก Lot ผิด, ส่งจำนวนไม่ตรง — นับเฉพาะ production items เท่านั้น
+          </p>
+        </div>
+      </div>
+
+      <!-- Section D -->
+      <div class="rounded-2xl border-2 border-violet-700/50 overflow-hidden">
+        <div class="bg-violet-900/40 px-5 py-3 flex items-center gap-3 border-b border-violet-700/40">
+          <div class="w-8 h-8 bg-violet-500 rounded-lg flex items-center justify-center text-white font-black text-sm">D</div>
+          <span class="text-violet-200 font-black text-base">น้ำหนักการถ่วง</span>
+          <span class="text-violet-400/70 text-xs font-bold">— ต้องรวมกัน = 100%</span>
+        </div>
+        <div class="bg-slate-800/60 p-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-violet-900/20 rounded-xl p-4 border border-violet-700/40">
+              <label class="block text-violet-300 font-black text-xs uppercase tracking-widest mb-2">น้ำหนัก SKU (%)</label>
+              <input type="number" id="kpi-semi-weight-sku" min="0" max="100" value="40"
+                oninput="kpiSemiSyncWeight('sku'); kpiSemiAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-violet-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-violet-400 text-center">
+            </div>
+            <div class="bg-violet-900/20 rounded-xl p-4 border border-violet-700/40">
+              <label class="block text-violet-300 font-black text-xs uppercase tracking-widest mb-2">น้ำหนัก แถบ (%)</label>
+              <input type="number" id="kpi-semi-weight-band" min="0" max="100" value="60"
+                oninput="kpiSemiSyncWeight('band'); kpiSemiAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-violet-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-violet-400 text-center">
+            </div>
+          </div>
+          <div id="kpi-semi-weight-warn" class="hidden mt-3 bg-red-900/30 border border-red-600 rounded-xl px-4 py-2.5 flex items-center gap-2">
+            <i class="fas fa-exclamation-triangle text-red-400"></i>
+            <span class="text-red-300 text-sm font-bold">ผลรวมน้ำหนักต้องเท่ากับ 100%</span>
+          </div>
+          <div id="kpi-semi-weight-ok" class="mt-3 bg-emerald-900/30 border border-emerald-700 rounded-xl px-4 py-2.5 flex items-center gap-2">
+            <i class="fas fa-check-circle text-emerald-400"></i>
+            <span class="text-emerald-300 text-sm font-bold">น้ำหนักถูกต้อง: SKU 40% + แถบ 60% = 100%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reset -->
+      <div class="flex justify-end">
+        <button onclick="resetSemiKPI()"
+          class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-8 py-3 rounded-xl font-black text-sm shadow transition-all flex items-center gap-2">
+          <i class="fas fa-redo"></i> ล้างข้อมูล
+        </button>
+      </div>
+
+    </div><!-- end LEFT SEMI -->
+
+    <!-- RIGHT: Real-time Results SEMI (sticky) -->
+    <div class="xl:sticky xl:top-20 space-y-4">
+
+      <div id="kpi-semi-placeholder" class="bg-slate-800/40 border border-slate-700 border-dashed rounded-2xl py-16 text-center">
+        <i class="fas fa-chart-pie text-4xl text-slate-600 mb-3 block"></i>
+        <p class="text-slate-500 font-bold text-base">ผลการคำนวณจะแสดงที่นี่แบบ Real-time</p>
+        <p class="text-slate-600 text-sm mt-1">เริ่มกรอกข้อมูลในส่วน A เพื่อดูผล</p>
+      </div>
+
+      <div id="kpi-semi-realtime" class="hidden space-y-4">
+
+        <!-- Summary bar -->
+        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl px-5 py-4">
+          <div class="flex items-center gap-3 mb-3">
+            <i class="fas fa-chart-pie text-emerald-400 text-xl"></i>
+            <div>
+              <span class="text-white font-black text-base">ผลการคำนวณ KPI (SEMI)</span>
+              <p id="kpi-sres-date-label" class="text-emerald-400 text-xs font-bold mt-0.5"></p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs font-bold">
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">SKU weight: <span id="kpi-sres-wsku" class="text-white">40%</span></span>
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">แถบ weight: <span id="kpi-sres-wband" class="text-white">60%</span></span>
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">SKU รวม: <span id="kpi-sres-totalsku" class="text-white">—</span></span>
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">แถบ รวม: <span id="kpi-sres-totalband" class="text-white">—</span></span>
+          </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="space-y-4">
+
+          <!-- Checker -->
+          <div class="bg-slate-800/60 border border-slate-700 rounded-2xl overflow-hidden">
+            <div class="bg-gradient-to-r from-rose-900 to-rose-800 px-5 py-3.5 flex items-center gap-3">
+              <div class="w-9 h-9 bg-rose-500 rounded-xl flex items-center justify-center text-white text-base">
+                <i class="fas fa-user-check"></i>
+              </div>
+              <div>
+                <h3 class="text-white font-black text-base">KPI เช็คเกอร์</h3>
+                <p class="text-rose-300 text-xs font-bold">วัดความแม่นยำการนับ (ทุก SKU)</p>
+              </div>
+              <div class="ml-auto">
+                <div id="kpi-sres-checker-badge" class="px-3 py-1.5 rounded-xl font-black text-xl"></div>
+              </div>
+            </div>
+            <div class="p-5 space-y-3">
+              <div>
+                <div class="flex justify-between text-xs font-bold text-slate-400 mb-1.5">
+                  <span>KPI รวม (ถ่วงน้ำหนัก)</span>
+                  <span id="kpi-sres-checker-kpi-pct" class="text-white">—</span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-3.5 overflow-hidden">
+                  <div id="kpi-sres-checker-bar" class="h-3.5 rounded-full transition-all duration-700" style="width:0%"></div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">SKU Accuracy</p>
+                  <p id="kpi-sres-checker-sku" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-sres-checker-sku-ok">—</span> / <span id="kpi-sres-checker-sku-total">—</span> SKU)</p>
+                </div>
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แถบ Accuracy</p>
+                  <p id="kpi-sres-checker-pcs" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-sres-checker-pcs-ok">—</span> / <span id="kpi-sres-checker-pcs-total">—</span> แถบ)</p>
+                </div>
+              </div>
+              <div class="bg-slate-700/30 rounded-xl p-3">
+                <p class="text-xs text-slate-400 font-bold mb-1">สูตรคำนวณ</p>
+                <p id="kpi-sres-checker-formula" class="text-xs text-slate-300 font-mono leading-relaxed">—</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Production -->
+          <div class="bg-slate-800/60 border border-slate-700 rounded-2xl overflow-hidden">
+            <div class="bg-gradient-to-r from-amber-900 to-amber-800 px-5 py-3.5 flex items-center gap-3">
+              <div class="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center text-white text-base">
+                <i class="fas fa-industry"></i>
+              </div>
+              <div>
+                <h3 class="text-white font-black text-base">KPI ฝ่ายผลิต</h3>
+                <p class="text-amber-300 text-xs font-bold">วัดความถูกต้องข้อมูล (เฉพาะงานผลิต)</p>
+              </div>
+              <div class="ml-auto">
+                <div id="kpi-sres-prod-badge" class="px-3 py-1.5 rounded-xl font-black text-xl"></div>
+              </div>
+            </div>
+            <div class="p-5 space-y-3">
+              <div>
+                <div class="flex justify-between text-xs font-bold text-slate-400 mb-1.5">
+                  <span>KPI รวม (ถ่วงน้ำหนัก)</span>
+                  <span id="kpi-sres-prod-kpi-pct" class="text-white">—</span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-3.5 overflow-hidden">
+                  <div id="kpi-sres-prod-bar" class="h-3.5 rounded-full transition-all duration-700" style="width:0%"></div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">SKU Accuracy</p>
+                  <p id="kpi-sres-prod-sku" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-sres-prod-sku-ok">—</span> / <span id="kpi-sres-prod-sku-total">—</span> SKU)</p>
+                </div>
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แถบ Accuracy</p>
+                  <p id="kpi-sres-prod-pcs" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-sres-prod-pcs-ok">—</span> / <span id="kpi-sres-prod-pcs-total">—</span> แถบ)</p>
+                </div>
+              </div>
+              <div class="bg-slate-700/30 rounded-xl p-3">
+                <p class="text-xs text-slate-400 font-bold mb-1">สูตรคำนวณ</p>
+                <p id="kpi-sres-prod-formula" class="text-xs text-slate-300 font-mono leading-relaxed">—</p>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- end KPI cards -->
+
+        <!-- Target legend -->
+        <div class="bg-slate-800/40 border border-slate-700 rounded-2xl px-5 py-3.5">
+          <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">เกณฑ์ Target</p>
+          <div class="flex flex-wrap gap-3 text-xs font-bold">
+            <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-emerald-500 inline-block"></span> ≥ 95% — ดีเยี่ยม</span>
+            <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-amber-500 inline-block"></span> 80–94% — พอใช้</span>
+            <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-red-500 inline-block"></span> &lt; 80% — ต้องปรับปรุง</span>
+          </div>
+        </div>
+
+        <!-- Save button -->
+        <div class="flex justify-center">
+          <button onclick="saveInventoryKPIResult()" id="btn-save-semi-kpi"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-3 rounded-xl font-black text-base shadow-lg transition-all flex items-center gap-2 w-full justify-center">
+            <i class="fas fa-save"></i> บันทึกผลลงชีต
+          </button>
+        </div>
+
+      </div><!-- end kpi-semi-realtime -->
+
+    </div><!-- end RIGHT SEMI -->
+
+  </div><!-- end 2-column grid SEMI -->
+  </div><!-- end kpi-semi-panel -->
 
 </div><!-- end view-kpi-stock-content -->
 
@@ -26815,7 +27157,33 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
 // ══════════════════════════════════════════════════════════════
 
 // ── helpers ──────────────────────────────────────────────────
-let _lastInvKPIResult = null;
+let _lastInvKPIResult  = null;
+let _lastSemiKPIResult = null;
+let _activeKpiTab      = 'fg';
+
+// ── Tab switcher ──────────────────────────────────────────────
+window.switchKpiTab = function(tab) {
+    _activeKpiTab = tab;
+    const fg   = document.getElementById('kpi-fg-panel');
+    const semi = document.getElementById('kpi-semi-panel');
+    const btnFg   = document.getElementById('kpi-tab-fg');
+    const btnSemi = document.getElementById('kpi-tab-semi');
+    if (tab === 'fg') {
+        fg?.classList.remove('hidden');
+        semi?.classList.add('hidden');
+        btnFg?.classList.add('bg-emerald-600','text-white','shadow');
+        btnFg?.classList.remove('text-slate-400');
+        btnSemi?.classList.remove('bg-emerald-600','text-white','shadow');
+        btnSemi?.classList.add('text-slate-400');
+    } else {
+        semi?.classList.remove('hidden');
+        fg?.classList.add('hidden');
+        btnSemi?.classList.add('bg-emerald-600','text-white','shadow');
+        btnSemi?.classList.remove('text-slate-400');
+        btnFg?.classList.remove('bg-emerald-600','text-white','shadow');
+        btnFg?.classList.add('text-slate-400');
+    }
+};
 
 function kpiInvVal(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
 
@@ -26825,32 +27193,35 @@ function kpiScoreColor(pct) {
     return             { bar: 'bg-red-500',         badge: 'bg-red-500/20 text-red-300 border border-red-500'           };
 }
 
-function kpiSetCard(prefix, skuOk, skuTotal, pcsOk, pcsTotal, wSKU, wPCS) {
+function kpiSetCard(prefix, skuOk, skuTotal, pcsOk, pcsTotal, wSKU, wPCS, unit, idBase) {
+    unit   = unit   || 'PCS';
+    idBase = idBase || 'kpi-res';
     const skuPct = skuTotal > 0 ? (skuOk / skuTotal) * 100 : 0;
     const pcsPct = pcsTotal > 0 ? (pcsOk / pcsTotal) * 100 : 0;
     const kpi    = (wSKU / 100) * skuPct + (wPCS / 100) * pcsPct;
     const col    = kpiScoreColor(kpi);
     const fmt    = v => v.toLocaleString('th-TH', { maximumFractionDigits: 1 }) + '%';
     const fmtN   = v => v.toLocaleString('th-TH');
+    const base   = `${idBase}-${prefix}`;
 
-    document.getElementById(`kpi-res-${prefix}-kpi-pct`).textContent  = fmt(kpi);
-    document.getElementById(`kpi-res-${prefix}-sku`).textContent       = fmt(skuPct);
-    document.getElementById(`kpi-res-${prefix}-pcs`).textContent       = fmt(pcsPct);
-    document.getElementById(`kpi-res-${prefix}-sku-ok`).textContent    = fmtN(skuOk);
-    document.getElementById(`kpi-res-${prefix}-sku-total`).textContent = fmtN(skuTotal);
-    document.getElementById(`kpi-res-${prefix}-pcs-ok`).textContent    = fmtN(pcsOk);
-    document.getElementById(`kpi-res-${prefix}-pcs-total`).textContent = fmtN(pcsTotal);
+    document.getElementById(`${base}-kpi-pct`).textContent  = fmt(kpi);
+    document.getElementById(`${base}-sku`).textContent       = fmt(skuPct);
+    document.getElementById(`${base}-pcs`).textContent       = fmt(pcsPct);
+    document.getElementById(`${base}-sku-ok`).textContent    = fmtN(skuOk);
+    document.getElementById(`${base}-sku-total`).textContent = fmtN(skuTotal);
+    document.getElementById(`${base}-pcs-ok`).textContent    = fmtN(pcsOk);
+    document.getElementById(`${base}-pcs-total`).textContent = fmtN(pcsTotal);
 
-    const bar   = document.getElementById(`kpi-res-${prefix}-bar`);
-    const badge = document.getElementById(`kpi-res-${prefix}-badge`);
+    const bar   = document.getElementById(`${base}-bar`);
+    const badge = document.getElementById(`${base}-badge`);
     bar.style.width = Math.min(kpi, 100) + '%';
-    bar.className   = `h-4 rounded-full transition-all duration-500 ${col.bar}`;
+    bar.className   = `h-3.5 rounded-full transition-all duration-500 ${col.bar}`;
     badge.textContent = fmt(kpi);
-    badge.className   = `px-4 py-2 rounded-xl font-black text-xl ${col.badge}`;
+    badge.className   = `px-3 py-1.5 rounded-xl font-black text-xl ${col.badge}`;
 
-    document.getElementById(`kpi-res-${prefix}-formula`).textContent =
+    document.getElementById(`${base}-formula`).textContent =
         `(${wSKU}% × ${fmt(skuPct)}) + (${wPCS}% × ${fmt(pcsPct)}) = ${fmt(kpi)}\n` +
-        `SKU: ${fmtN(skuOk)} ถูก / ${fmtN(skuTotal)} รายการ | PCS: ${fmtN(pcsOk)} ถูก / ${fmtN(pcsTotal)} ชิ้น`;
+        `SKU: ${fmtN(skuOk)} ถูก / ${fmtN(skuTotal)} รายการ | ${unit}: ${fmtN(pcsOk)} ถูก / ${fmtN(pcsTotal)} ${unit}`;
 
     return kpi;
 }
@@ -26954,7 +27325,7 @@ window.kpiInvAutoCalc = function() {
     };
 };
 
-// ── Reset ──────────────────────────────────────────────────────
+// ── Reset FG ──────────────────────────────────────────────────
 window.resetStockKPI = function() {
     ['kpi-inv-total-sku','kpi-inv-total-pcs','kpi-inv-prod-sku','kpi-inv-prod-pcs',
      'kpi-inv-checker-err-sku','kpi-inv-checker-err-pcs',
@@ -26966,23 +27337,131 @@ window.resetStockKPI = function() {
     kpiInvAutoCalc();
 };
 
-// ── Save: เปิด Modal ───────────────────────────────────────────
-window.saveInventoryKPIResult = function() {
-    if (!_lastInvKPIResult) {
-        showToast('⚠️ กรอกข้อมูล Section A ก่อนบันทึก', true); return;
+// ── SEMI weight sync ───────────────────────────────────────────
+window.kpiSemiSyncWeight = function(changed) {
+    const skuEl  = document.getElementById('kpi-semi-weight-sku');
+    const bandEl = document.getElementById('kpi-semi-weight-band');
+    if (!skuEl || !bandEl) return;
+    if (changed === 'sku') bandEl.value = Math.max(0, 100 - parseFloat(skuEl.value || 0));
+    else skuEl.value = Math.max(0, 100 - parseFloat(bandEl.value || 0));
+};
+
+// ── SEMI Real-time calculation ─────────────────────────────────
+window.kpiSemiAutoCalc = function() {
+    const wSKU  = kpiInvVal('kpi-semi-weight-sku');
+    const wBand = kpiInvVal('kpi-semi-weight-band');
+
+    const warn = document.getElementById('kpi-semi-weight-warn');
+    const ok   = document.getElementById('kpi-semi-weight-ok');
+    const weightInvalid = Math.abs(wSKU + wBand - 100) > 0.01;
+    if (warn && ok) {
+        warn.classList.toggle('hidden', !weightInvalid);
+        ok.classList.toggle('hidden',   weightInvalid);
+        if (!weightInvalid) ok.querySelector('span').textContent = `น้ำหนักถูกต้อง: SKU ${wSKU}% + แถบ ${wBand}% = 100%`;
     }
-    const r   = _lastInvKPIResult;
-    const fmt = v => Number(v).toFixed(1) + '%';
+
+    const totalSKU    = kpiInvVal('kpi-semi-total-sku');
+    const totalBand   = kpiInvVal('kpi-semi-total-band');
+    const placeholder = document.getElementById('kpi-semi-placeholder');
+    const realtime    = document.getElementById('kpi-semi-realtime');
+
+    if (totalSKU <= 0 || totalBand <= 0 || weightInvalid) {
+        placeholder?.classList.remove('hidden');
+        realtime?.classList.add('hidden');
+        _lastSemiKPIResult = null;
+        return;
+    }
+
+    placeholder?.classList.add('hidden');
+    realtime?.classList.remove('hidden');
+
+    const prodSKU        = kpiInvVal('kpi-semi-prod-sku');
+    const prodBand       = kpiInvVal('kpi-semi-prod-band');
+    const checkerErrSKU  = kpiInvVal('kpi-semi-checker-err-sku');
+    const checkerErrBand = kpiInvVal('kpi-semi-checker-err-band');
+    const prodErrSKU     = kpiInvVal('kpi-semi-prod-err-sku');
+    const prodErrBand    = kpiInvVal('kpi-semi-prod-err-band');
+    const fmtN           = v => v.toLocaleString('th-TH');
+    const dateVal        = document.getElementById('kpi-semi-date')?.value;
+
+    const checkerSKUpct  = (totalSKU  - checkerErrSKU)  / totalSKU  * 100;
+    const checkerBandpct = (totalBand - checkerErrBand) / totalBand * 100;
+    const checkerKPI     = (wSKU / 100) * checkerSKUpct + (wBand / 100) * checkerBandpct;
+    kpiSetCard('checker', totalSKU - checkerErrSKU, totalSKU, totalBand - checkerErrBand, totalBand, wSKU, wBand, 'แถบ', 'kpi-sres');
+
+    let prodSKUpct = 0, prodBandpct = 0, prodKPI = 0;
+    if (prodSKU > 0) {
+        prodSKUpct  = (prodSKU  - prodErrSKU)  / prodSKU  * 100;
+        prodBandpct = prodBand > 0 ? (prodBand - prodErrBand) / prodBand * 100 : 0;
+        prodKPI     = (wSKU / 100) * prodSKUpct + (wBand / 100) * prodBandpct;
+        kpiSetCard('prod', prodSKU - prodErrSKU, prodSKU, prodBand - prodErrBand, prodBand, wSKU, wBand, 'แถบ', 'kpi-sres');
+    } else {
+        ['sku','pcs','sku-ok','sku-total','pcs-ok','pcs-total'].forEach(s =>
+            document.getElementById(`kpi-sres-prod-${s}`).textContent = 'N/A');
+        document.getElementById('kpi-sres-prod-kpi-pct').textContent = 'N/A';
+        document.getElementById('kpi-sres-prod-formula').textContent = 'ไม่มีข้อมูลงานผลิต';
+        const bar = document.getElementById('kpi-sres-prod-bar');
+        bar.style.width = '0%'; bar.className = 'h-3.5 rounded-full transition-all duration-500 bg-slate-600';
+        const badge = document.getElementById('kpi-sres-prod-badge');
+        badge.textContent = 'N/A'; badge.className = 'px-3 py-1.5 rounded-xl font-black text-xl bg-slate-600 text-slate-400';
+    }
+
+    document.getElementById('kpi-sres-wsku').textContent      = wSKU + '%';
+    document.getElementById('kpi-sres-wband').textContent     = wBand + '%';
+    document.getElementById('kpi-sres-totalsku').textContent  = fmtN(totalSKU) + ' SKU';
+    document.getElementById('kpi-sres-totalband').textContent = fmtN(totalBand) + ' แถบ';
+    const dateLabel = document.getElementById('kpi-sres-date-label');
+    if (dateLabel) {
+        if (dateVal) { const [y,m,d] = dateVal.split('-'); dateLabel.textContent = `วันที่นับ: ${d}/${m}/${y}`; }
+        else dateLabel.textContent = 'วันที่: ไม่ระบุ';
+    }
+
+    _lastSemiKPIResult = {
+        type: 'SEMI',
+        countDate: dateVal || '',
+        totalSKU, totalBand, prodSKU, prodBand,
+        checkerErrSKU, checkerErrBand, prodErrSKU, prodErrBand,
+        weightSKU: wSKU, weightBand: wBand,
+        checkerSKUpct:  Math.round(checkerSKUpct  * 10) / 10,
+        checkerBandpct: Math.round(checkerBandpct * 10) / 10,
+        checkerKPI:     Math.round(checkerKPI     * 10) / 10,
+        prodSKUpct:     Math.round(prodSKUpct     * 10) / 10,
+        prodBandpct:    Math.round(prodBandpct    * 10) / 10,
+        prodKPI:        Math.round(prodKPI        * 10) / 10
+    };
+};
+
+// ── Reset SEMI ────────────────────────────────────────────────
+window.resetSemiKPI = function() {
+    ['kpi-semi-total-sku','kpi-semi-total-band','kpi-semi-prod-sku','kpi-semi-prod-band',
+     'kpi-semi-checker-err-sku','kpi-semi-checker-err-band',
+     'kpi-semi-prod-err-sku','kpi-semi-prod-err-band',
+     'kpi-semi-date'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('kpi-semi-weight-sku').value  = 40;
+    document.getElementById('kpi-semi-weight-band').value = 60;
+    _lastSemiKPIResult = null;
+    kpiSemiAutoCalc();
+};
+
+// ── Save: เปิด Modal (FG หรือ SEMI) ───────────────────────────
+window.saveInventoryKPIResult = function() {
+    const isSemi = _activeKpiTab === 'semi';
+    const r = isSemi ? _lastSemiKPIResult : _lastInvKPIResult;
+    if (!r) { showToast('⚠️ กรอกข้อมูล Section A ก่อนบันทึก', true); return; }
+
+    const fmt  = v => Number(v).toFixed(1) + '%';
     const fmtN = v => Number(v).toLocaleString('th-TH');
     const dateVal = r.countDate;
     let dateStr = 'ไม่ระบุ';
     if (dateVal) { const [y,m,d] = dateVal.split('-'); dateStr = `${d}/${m}/${y}`; }
+    const unit2 = isSemi ? 'แถบ' : 'PCS';
+    const qty2  = isSemi ? fmtN(r.totalBand) + ' แถบ' : fmtN(r.totalPCS) + ' PCS';
 
     document.getElementById('kpi-modal-summary').innerHTML = `
-      <p class="text-slate-400 text-xs uppercase tracking-widest font-black mb-2">สรุปผลที่จะบันทึก</p>
+      <p class="text-slate-400 text-xs uppercase tracking-widest font-black mb-2">สรุปผลที่จะบันทึก (${isSemi ? 'SEMI' : 'FG'})</p>
       <div class="grid grid-cols-2 gap-1 text-sm">
         <span class="text-slate-400">วันที่นับ</span>      <span class="text-white font-bold">${dateStr}</span>
-        <span class="text-slate-400">SKU ทั้งหมด</span>   <span class="text-white font-bold">${fmtN(r.totalSKU)} SKU / ${fmtN(r.totalPCS)} PCS</span>
+        <span class="text-slate-400">SKU / ${unit2}</span> <span class="text-white font-bold">${fmtN(r.totalSKU)} SKU / ${qty2}</span>
         <span class="text-rose-300">Checker KPI</span>     <span class="text-white font-bold">${fmt(r.checkerKPI)}</span>
         <span class="text-amber-300">Prod KPI</span>       <span class="text-white font-bold">${r.prodSKU > 0 ? fmt(r.prodKPI) : 'N/A'}</span>
       </div>`;
@@ -27008,7 +27487,9 @@ window.confirmSaveInvKPI = function() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
     btn.disabled  = true;
 
-    const payload = Object.assign({}, _lastInvKPIResult, { employeeId: empId });
+    const isSemi = _activeKpiTab === 'semi';
+    const base   = isSemi ? _lastSemiKPIResult : _lastInvKPIResult;
+    const payload = Object.assign({}, base, { employeeId: empId, type: isSemi ? 'SEMI' : 'FG' });
 
     google.script.run
         .withSuccessHandler(res => {
@@ -27016,7 +27497,7 @@ window.confirmSaveInvKPI = function() {
             btn.disabled  = false;
             if (res && res.success) {
                 closeKpiEmpModal();
-                showToast(`✅ บันทึกสำเร็จ (รหัส: ${empId}) — ชีต "Inventory KPI Log"`);
+                showToast(`✅ บันทึกสำเร็จ (${isSemi ? 'SEMI' : 'FG'} — รหัส: ${empId})`);
             } else {
                 showToast('❌ บันทึกไม่สำเร็จ: ' + (res?.message || 'unknown'), true);
             }
