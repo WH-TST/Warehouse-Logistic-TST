@@ -7496,23 +7496,24 @@ function getKpiWHLGData(startDateStr, endDateStr) {
 
     // ── 4. KPI Log → Checker(%), PRD KPI(%), tL, dL สำหรับ FG และ SEMI ──
     // Col A(0)=บันทึกเมื่อ, B(1)=วันที่Cycle, C(2)=ประเภท
-    // E(4)=เส้นทั้งหมด(tL), M(12)=Diff เส้น(dL), N(13)=KPI Checker(%), O(14)=KPI PRD(%)
-    var kpiLogSheet = ss.getSheetByName('KPI Log');
-    var kpiLogMap   = {}; // key yyyy-MM-dd → { FG: {checker,prd,tL,dL}, SEMI: {checker,prd,tL,dL} }
+    // ดึงจาก Inventory KPI Log (โครงสร้างใหม่ 21 คอลัมน์)
+    // Col B(1)=วันที่นับ, Col D(3)=ประเภท, Col Q(16)=Checker KPI%, Col T(19)=Prod KPI%, Col U(20)=Final Adjust%
+    var kpiLogSheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
+    var kpiLogMap   = {}; // key yyyy-MM-dd → { FG: {checker,prd,finalAdj}, SEMI: {checker,prd,finalAdj} }
     if (kpiLogSheet && kpiLogSheet.getLastRow() >= 2) {
       var kpiLogData = kpiLogSheet.getDataRange().getValues();
       for (var p = 1; p < kpiLogData.length; p++) {
-        var kd = parseDateValue(kpiLogData[p][1]); // Col B = วันที่ Cycle
-        if (!kd) continue;
-        var kKey     = Utilities.formatDate(kd, 'GMT+7', 'yyyy-MM-dd');
-        var kType    = String(kpiLogData[p][2] || '').trim(); // Col C = ประเภท
-        var kTL      = parseFloat(String(kpiLogData[p][4]).replace(/,/g,''));  // Col E = เส้น ทั้งหมด
-        var kDL      = parseFloat(String(kpiLogData[p][12]).replace(/,/g,'')); // Col M = Diff เส้น
-        var kChecker = parseFloat(String(kpiLogData[p][13]).replace(/,/g,'')); // Col N = KPI Checker(%)
-        var kPrd     = parseFloat(String(kpiLogData[p][14]).replace(/,/g,'')); // Col O = KPI PRD(%)
-        if (isNaN(kChecker) && isNaN(kPrd) && isNaN(kTL)) continue;
+        var kRaw = kpiLogData[p][1]; // Col B = วันที่นับ
+        if (!kRaw) continue;
+        var kKey     = kRaw instanceof Date
+          ? Utilities.formatDate(kRaw, 'GMT+7', 'yyyy-MM-dd') : String(kRaw);
+        var kType    = String(kpiLogData[p][3] || '').trim();  // Col D = ประเภท (FG/SEMI)
+        var kChecker = parseFloat(String(kpiLogData[p][16]).replace(/,/g,'')); // Col Q = Checker KPI%
+        var kPrd     = parseFloat(String(kpiLogData[p][19]).replace(/,/g,'')); // Col T = Prod KPI%
+        var kFinalAdj= parseFloat(String(kpiLogData[p][20]).replace(/,/g,'')); // Col U = Final Adjust%
+        if (isNaN(kChecker) && isNaN(kPrd) && isNaN(kFinalAdj)) continue;
         if (!kpiLogMap[kKey]) kpiLogMap[kKey] = {};
-        kpiLogMap[kKey][kType] = { checker: kChecker, prd: kPrd, tL: kTL, dL: kDL }; // last row wins
+        kpiLogMap[kKey][kType] = { checker: kChecker, prd: kPrd, finalAdj: kFinalAdj };
       }
     }
 
@@ -7567,19 +7568,16 @@ function getKpiWHLGData(startDateStr, endDateStr) {
         efficiency = Math.round(accuracyOnlyScore * 10) / 10;
       }
 
-      // Checker(%), PRD KPI(%), Final Adj(%) จาก KPI Log
-      var kpiLog         = kpiLogMap[key] || {};
-      var kpiFG          = kpiLog['FG']   || {};
-      var kpiSEMI        = kpiLog['SEMI'] || {};
-      var checkerFGPct   = !isNaN(kpiFG.checker)   ? Math.round(kpiFG.checker   * 10) / 10 : null;
-      var checkerSEMIPct = !isNaN(kpiSEMI.checker) ? Math.round(kpiSEMI.checker * 10) / 10 : null;
-      // Final Adj FG (%) = (tL - |dL|) / tL × 100 จาก KPI Log type='FG'
-      var finalAdjFGPct  = (!isNaN(kpiFG.tL) && kpiFG.tL > 0)
-          ? Math.round(((kpiFG.tL - Math.abs(isNaN(kpiFG.dL) ? 0 : kpiFG.dL)) / kpiFG.tL) * 1000) / 10
-          : null;
-      // prdKPI FG → Data Err FG (%), prdKPI SEMI → Data Err SEMI (%)
-      var prdKPIFG       = !isNaN(kpiFG.prd)       ? Math.round(kpiFG.prd       * 10) / 10 : null;
-      var prdKPISEMI     = !isNaN(kpiSEMI.prd)     ? Math.round(kpiSEMI.prd     * 10) / 10 : null;
+      // ดึงค่าจาก Inventory KPI Log
+      var kpiLog          = kpiLogMap[key] || {};
+      var kpiFG           = kpiLog['FG']   || {};
+      var kpiSEMI         = kpiLog['SEMI'] || {};
+      var checkerFGPct    = !isNaN(kpiFG.checker)    ? Math.round(kpiFG.checker    * 10) / 10 : null;
+      var checkerSEMIPct  = !isNaN(kpiSEMI.checker)  ? Math.round(kpiSEMI.checker  * 10) / 10 : null;
+      var finalAdjFGPct   = !isNaN(kpiFG.finalAdj)   ? Math.round(kpiFG.finalAdj   * 10) / 10 : null;
+      var finalAdjSEMIPct = !isNaN(kpiSEMI.finalAdj) ? Math.round(kpiSEMI.finalAdj * 10) / 10 : null;
+      var prdKPIFG        = !isNaN(kpiFG.prd)        ? Math.round(kpiFG.prd        * 10) / 10 : null;
+      var prdKPISEMI      = !isNaN(kpiSEMI.prd)      ? Math.round(kpiSEMI.prd      * 10) / 10 : null;
 
       // คำนวณ Damage KPI จาก WH_Activity_Log
       var dmgLoadCount  = wha ? (wha.dmgLoadCount  || 0) : 0;
@@ -7610,16 +7608,17 @@ function getKpiWHLGData(startDateStr, endDateStr) {
 
       result.push({
         date:             key,
-        efficiency:       efficiency,       // → Load Score (%)
-        checkerFGPct:     checkerFGPct,     // → FG Checker (%)
-        checkerSEMIPct:   checkerSEMIPct,   // → SEMI Checker (%)
-        finalAdjFGPct:    finalAdjFGPct,    // → Final Adj FG (%) = (tL-|dL|)/tL×100
-        damagePct:        damagePct,        // → Damage Score (%)
-        prdKPIFG:         prdKPIFG,         // → Data Err FG (%)
-        prdKPISEMI:       prdKPISEMI,       // → Data Err SEMI (%)
-        planHours:        planHours,        // → แผนชั่วโมง (แสดงใน Space Breakdown)
-        planMinutes:      planMinutes,      // → แผนนาที (ใช้คำนวณ Space Breakdown KPI)
-        truckScores:      truckScores,      // → per-truck efficiency [{ plate, efficiency, tripCount }]
+        efficiency:       efficiency,        // → Load Score (%)
+        checkerFGPct:     checkerFGPct,      // → FG Checker (%)
+        checkerSEMIPct:   checkerSEMIPct,    // → SEMI Checker (%)
+        finalAdjFGPct:    finalAdjFGPct,     // → Final Adj FG (%) จาก Inventory KPI Log
+        finalAdjSEMIPct:  finalAdjSEMIPct,   // → Final Adj SEMI (%) จาก Inventory KPI Log
+        damagePct:        damagePct,         // → Damage Score (%)
+        prdKPIFG:         prdKPIFG,          // → Data Err FG (%)
+        prdKPISEMI:       prdKPISEMI,        // → Data Err SEMI (%)
+        planHours:        planHours,         // → แผนชั่วโมง (แสดงใน Space Breakdown)
+        planMinutes:      planMinutes,       // → แผนนาที (ใช้คำนวณ Space Breakdown KPI)
+        truckScores:      truckScores,       // → per-truck efficiency [{ plate, efficiency, tripCount }]
       });
       cur.setDate(cur.getDate() + 1);
     }
