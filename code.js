@@ -8292,19 +8292,17 @@ function setupInventorySheets() {
 // ══════════════════════════════════════════════════════════════
 
 // ── Sheet headers (1 row per date, FG + SEMI combined) ────────
+// โครงสร้าง: 1 แถวต่อ 1 ประเภท (FG หรือ SEMI) — 21 คอลัมน์
 var INV_KPI_HEADERS = [
-  'บันทึกเมื่อ','วันที่นับ','รหัสพนักงาน',
-  '[FG] SKU ทั้งหมด','[FG] PCS ทั้งหมด','[FG] SKU งานผลิต','[FG] PCS งานผลิต',
-  '[FG] Checker Err SKU','[FG] Checker Err PCS','[FG] Prod Err SKU','[FG] Prod Err PCS',
-  '[FG] Weight SKU%','[FG] Weight PCS%',
-  '[FG] Checker SKU Acc%','[FG] Checker PCS Acc%','[FG] Checker KPI%',
-  '[FG] Prod SKU Acc%','[FG] Prod PCS Acc%','[FG] Prod KPI%',
-  '[SEMI] SKU ทั้งหมด','[SEMI] แถบ ทั้งหมด','[SEMI] SKU งานผลิต','[SEMI] แถบ งานผลิต',
-  '[SEMI] Checker Err SKU','[SEMI] Checker Err แถบ','[SEMI] Prod Err SKU','[SEMI] Prod Err แถบ',
-  '[SEMI] Weight SKU%','[SEMI] Weight แถบ%',
-  '[SEMI] Checker SKU Acc%','[SEMI] Checker แถบ Acc%','[SEMI] Checker KPI%',
-  '[SEMI] Prod SKU Acc%','[SEMI] Prod แถบ Acc%','[SEMI] Prod KPI%',
-  'KPI Final Adjust FG%','KPI Final Adjust SEMI%'
+  'บันทึกเมื่อ','วันที่นับ','รหัสพนักงาน','ประเภท',
+  'SKU ทั้งหมด','หน่วย ทั้งหมด',
+  'SKU งานผลิต','หน่วย งานผลิต',
+  'Checker Err SKU','Checker Err หน่วย',
+  'Prod Err SKU','Prod Err หน่วย',
+  'Weight SKU%','Weight หน่วย%',
+  'Checker SKU Acc%','Checker หน่วย Acc%','Checker KPI%',
+  'Prod SKU Acc%','Prod หน่วย Acc%','Prod KPI%',
+  'KPI Final Adjust%'
 ];
 
 function _getOrCreateInvKPISheet(ss) {
@@ -8315,78 +8313,81 @@ function _getOrCreateInvKPISheet(ss) {
     hr.setValues([INV_KPI_HEADERS]);
     hr.setFontWeight('bold').setBackground('#1e293b').setFontColor('#f8fafc');
     sheet.setFrozenRows(1);
-    sheet.setColumnWidth(1, 160); sheet.setColumnWidth(2, 110); sheet.setColumnWidth(3, 130);
+    sheet.setColumnWidth(1, 160); sheet.setColumnWidth(2, 110);
+    sheet.setColumnWidth(3, 120); sheet.setColumnWidth(4, 80);
   }
   return sheet;
 }
 
 function saveInventoryKPI(data) {
   try {
-    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = _getOrCreateInvKPISheet(ss);
-    const now   = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-    const fg    = data.fg   || {};
-    const semi  = data.semi || {};
-    const n     = v => (v !== null && v !== undefined) ? Number(v) : 0;
-
-    const row = [
-      now,
-      data.countDate  || '',
-      data.employeeId || '',
-      // FG columns
-      n(fg.totalSKU),        n(fg.totalPCS),
-      n(fg.prodSKU),         n(fg.prodPCS),
-      n(fg.checkerErrSKU),   n(fg.checkerErrPCS),
-      n(fg.prodErrSKU),      n(fg.prodErrPCS),
-      n(fg.weightSKU) || 40, n(fg.weightPCS) || 60,
-      n(fg.checkerSKUpct),   n(fg.checkerPCSpct),  n(fg.checkerKPI),
-      n(fg.prodSKUpct),      n(fg.prodPCSpct),      n(fg.prodKPI),
-      // SEMI columns
-      n(semi.totalSKU),         n(semi.totalBand),
-      n(semi.prodSKU),          n(semi.prodBand),
-      n(semi.checkerErrSKU),    n(semi.checkerErrBand),
-      n(semi.prodErrSKU),       n(semi.prodErrBand),
-      n(semi.weightSKU) || 40,  n(semi.weightBand) || 60,
-      n(semi.checkerSKUpct),    n(semi.checkerBandpct), n(semi.checkerKPI),
-      n(semi.prodSKUpct),       n(semi.prodBandpct),    n(semi.prodKPI),
-      // Finals
-      n(data.finalAdjustFG),
-      n(data.finalAdjustSEMI)
-    ];
-
-    // Upsert: find existing row by date
+    const ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet   = _getOrCreateInvKPISheet(ss);
+    const now     = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    const n       = v => (v !== null && v !== undefined) ? Number(v) : 0;
     const dateStr = data.countDate || '';
-    let rowIndex  = -1;
-    if (dateStr && sheet.getLastRow() > 1) {
-      const existing = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
-      for (var i = 0; i < existing.length; i++) {
-        if (String(existing[i][0]) === dateStr) { rowIndex = i + 2; break; }
+    const empId   = data.employeeId || '';
+    const pctFmt  = '0.0"%"';
+
+    // สร้างแถวสำหรับแต่ละประเภท
+    function buildRow(type, d, finalAdjust) {
+      const isF = type === 'FG';
+      return [
+        now, dateStr, empId, type,
+        n(d.totalSKU),
+        isF ? n(d.totalPCS)       : n(d.totalBand),
+        n(d.prodSKU),
+        isF ? n(d.prodPCS)        : n(d.prodBand),
+        n(d.checkerErrSKU),
+        isF ? n(d.checkerErrPCS)  : n(d.checkerErrBand),
+        n(d.prodErrSKU),
+        isF ? n(d.prodErrPCS)     : n(d.prodErrBand),
+        n(d.weightSKU) || 40,
+        isF ? (n(d.weightPCS) || 60)  : (n(d.weightBand) || 60),
+        n(d.checkerSKUpct),
+        isF ? n(d.checkerPCSpct)  : n(d.checkerBandpct),
+        n(d.checkerKPI),
+        n(d.prodSKUpct),
+        isF ? n(d.prodPCSpct)     : n(d.prodBandpct),
+        n(d.prodKPI),
+        n(finalAdjust)
+      ];
+    }
+
+    // Upsert: ค้นหาแถวตาม date + type
+    function upsertRow(type, rowData) {
+      let rowIdx = -1;
+      if (dateStr && sheet.getLastRow() > 1) {
+        const vals = sheet.getRange(2, 2, sheet.getLastRow() - 1, 3).getValues(); // col B,C,D
+        for (var i = 0; i < vals.length; i++) {
+          if (String(vals[i][0]) === dateStr && String(vals[i][2]) === type) {
+            rowIdx = i + 2; break;
+          }
+        }
       }
+      if (rowIdx > 0) {
+        sheet.getRange(rowIdx, 1, 1, rowData.length).setValues([rowData]);
+      } else {
+        sheet.appendRow(rowData);
+        rowIdx = sheet.getLastRow();
+      }
+      // ใส่ % format คอลัมน์ 13-21 (Weight% ถึง Final Adjust%)
+      sheet.getRange(rowIdx, 13, 1, 9).setNumberFormat(pctFmt);
+      return rowIdx;
     }
 
-    if (rowIndex > 0) {
-      sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-    } else {
-      sheet.appendRow(row);
-    }
+    const fg   = data.fg   || {};
+    const semi = data.semi || {};
+    upsertRow('FG',   buildRow('FG',   fg,   data.finalAdjustFG));
+    upsertRow('SEMI', buildRow('SEMI', semi, data.finalAdjustSEMI));
 
-    // ใส่ % format ให้คอลัมน์ที่เป็นเปอร์เซ็นต์
-    const targetRow = rowIndex > 0 ? rowIndex : sheet.getLastRow();
-    const pctFmt    = '0.0"%"';
-    sheet.getRange(targetRow, 12, 1, 8).setNumberFormat(pctFmt);  // FG: Weight+Acc+KPI (col 12-19)
-    sheet.getRange(targetRow, 28, 1, 8).setNumberFormat(pctFmt);  // SEMI: Weight+Acc+KPI (col 28-35)
-    sheet.getRange(targetRow, 36, 1, 2).setNumberFormat(pctFmt);  // Final Adjust FG+SEMI (col 36-37)
-
-    const fgKPI   = fg.checkerKPI   !== undefined ? n(fg.checkerKPI).toFixed(1)   : '-';
-    const semiKPI = semi.checkerKPI !== undefined ? n(semi.checkerKPI).toFixed(1) : '-';
-    saveAuditLog('Inventory KPI', rowIndex > 0 ? 'UPDATE' : 'SAVE',
-      'วันที่นับ: ' + dateStr +
-      ' | พนักงาน: ' + (data.employeeId || '-') +
-      ' | FG Checker: ' + fgKPI + '% | SEMI Checker: ' + semiKPI + '%' +
-      ' | Final FG: ' + n(data.finalAdjustFG) + '% | Final SEMI: ' + n(data.finalAdjustSEMI) + '%',
+    saveAuditLog('Inventory KPI', 'SAVE',
+      'วันที่นับ: ' + dateStr + ' | พนักงาน: ' + empId +
+      ' | FG Checker: ' + n(fg.checkerKPI).toFixed(1) + '%' +
+      ' | SEMI Checker: ' + n(semi.checkerKPI).toFixed(1) + '%',
       'success');
 
-    return { success: true, message: rowIndex > 0 ? 'อัปเดตข้อมูลเรียบร้อย' : 'บันทึกข้อมูลเรียบร้อย' };
+    return { success: true, message: 'บันทึกข้อมูลเรียบร้อย (FG + SEMI)' };
   } catch (e) {
     return { success: false, message: e.toString() };
   }
@@ -8399,31 +8400,46 @@ function getInventoryKPIByDate(dateStr) {
     if (!sheet || sheet.getLastRow() < 2) return { success: true, data: null };
 
     const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, INV_KPI_HEADERS.length).getValues();
+    let fgRow = null, semiRow = null, empId = '';
+
     for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i][1]) === dateStr) {
-        const r = rows[i];
-        return { success: true, data: {
-          countDate:  r[1], employeeId: r[2],
-          fg: {
-            totalSKU: r[3],  totalPCS: r[4],   prodSKU: r[5],  prodPCS: r[6],
-            checkerErrSKU: r[7], checkerErrPCS: r[8], prodErrSKU: r[9], prodErrPCS: r[10],
-            weightSKU: r[11], weightPCS: r[12],
-            checkerSKUpct: r[13], checkerPCSpct: r[14], checkerKPI: r[15],
-            prodSKUpct: r[16], prodPCSpct: r[17], prodKPI: r[18]
-          },
-          semi: {
-            totalSKU: r[19], totalBand: r[20], prodSKU: r[21], prodBand: r[22],
-            checkerErrSKU: r[23], checkerErrBand: r[24], prodErrSKU: r[25], prodErrBand: r[26],
-            weightSKU: r[27], weightBand: r[28],
-            checkerSKUpct: r[29], checkerBandpct: r[30], checkerKPI: r[31],
-            prodSKUpct: r[32], prodBandpct: r[33], prodKPI: r[34]
-          },
-          finalAdjustFG:   r[35],
-          finalAdjustSEMI: r[36]
-        }};
+      const r = rows[i];
+      if (String(r[1]) !== dateStr) continue;
+      empId = empId || String(r[2]);
+      const type = String(r[3]);
+      // r[4]=SKU, r[5]=หน่วย, r[6]=prodSKU, r[7]=prodUnit,
+      // r[8]=checkerErrSKU, r[9]=checkerErrUnit, r[10]=prodErrSKU, r[11]=prodErrUnit,
+      // r[12]=wSKU, r[13]=wUnit, r[14]=checkerSKUpct, r[15]=checkerUnitpct, r[16]=checkerKPI,
+      // r[17]=prodSKUpct, r[18]=prodUnitpct, r[19]=prodKPI, r[20]=finalAdjust
+      if (type === 'FG') {
+        fgRow = {
+          totalSKU: r[4], totalPCS: r[5], prodSKU: r[6], prodPCS: r[7],
+          checkerErrSKU: r[8], checkerErrPCS: r[9], prodErrSKU: r[10], prodErrPCS: r[11],
+          weightSKU: r[12], weightPCS: r[13],
+          checkerSKUpct: r[14], checkerPCSpct: r[15], checkerKPI: r[16],
+          prodSKUpct: r[17], prodPCSpct: r[18], prodKPI: r[19],
+          finalAdjust: r[20]
+        };
+      } else if (type === 'SEMI') {
+        semiRow = {
+          totalSKU: r[4], totalBand: r[5], prodSKU: r[6], prodBand: r[7],
+          checkerErrSKU: r[8], checkerErrBand: r[9], prodErrSKU: r[10], prodErrBand: r[11],
+          weightSKU: r[12], weightBand: r[13],
+          checkerSKUpct: r[14], checkerBandpct: r[15], checkerKPI: r[16],
+          prodSKUpct: r[17], prodBandpct: r[18], prodKPI: r[19],
+          finalAdjust: r[20]
+        };
       }
     }
-    return { success: true, data: null };
+
+    if (!fgRow && !semiRow) return { success: true, data: null };
+    return { success: true, data: {
+      countDate: dateStr, employeeId: empId,
+      fg:   fgRow,
+      semi: semiRow,
+      finalAdjustFG:   fgRow   ? fgRow.finalAdjust   : null,
+      finalAdjustSEMI: semiRow ? semiRow.finalAdjust  : null
+    }};
   } catch (e) {
     return { success: false, message: e.toString() };
   }
