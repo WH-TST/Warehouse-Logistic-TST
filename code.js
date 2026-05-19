@@ -8354,13 +8354,20 @@ function saveInventoryKPI(data) {
       ];
     }
 
+    // แปลง Date object หรือ string → "yyyy-MM-dd"
+    function _normDate(v) {
+      return v instanceof Date
+        ? Utilities.formatDate(v, 'GMT+7', 'yyyy-MM-dd')
+        : String(v);
+    }
+
     // Upsert: ค้นหาแถวตาม date + type
     function upsertRow(type, rowData) {
       let rowIdx = -1;
       if (dateStr && sheet.getLastRow() > 1) {
         const vals = sheet.getRange(2, 2, sheet.getLastRow() - 1, 3).getValues(); // col B,C,D
         for (var i = 0; i < vals.length; i++) {
-          if (String(vals[i][0]) === dateStr && String(vals[i][2]) === type) {
+          if (_normDate(vals[i][0]) === dateStr && String(vals[i][2]) === type) {
             rowIdx = i + 2; break;
           }
         }
@@ -8402,9 +8409,14 @@ function getInventoryKPIByDate(dateStr) {
     const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, INV_KPI_HEADERS.length).getValues();
     let fgRow = null, semiRow = null, empId = '';
 
+    function _normDate(v) {
+      return v instanceof Date
+        ? Utilities.formatDate(v, 'GMT+7', 'yyyy-MM-dd')
+        : String(v);
+    }
     for (var i = 0; i < rows.length; i++) {
       const r = rows[i];
-      if (String(r[1]) !== dateStr) continue;
+      if (_normDate(r[1]) !== dateStr) continue;
       empId = empId || String(r[2]);
       const type = String(r[3]);
       // r[4]=SKU, r[5]=หน่วย, r[6]=prodSKU, r[7]=prodUnit,
