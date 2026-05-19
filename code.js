@@ -8370,6 +8370,13 @@ function saveInventoryKPI(data) {
       sheet.appendRow(row);
     }
 
+    // ใส่ % format ให้คอลัมน์ที่เป็นเปอร์เซ็นต์
+    const targetRow = rowIndex > 0 ? rowIndex : sheet.getLastRow();
+    const pctFmt    = '0.0"%"';
+    sheet.getRange(targetRow, 12, 1, 8).setNumberFormat(pctFmt);  // FG: Weight+Acc+KPI (col 12-19)
+    sheet.getRange(targetRow, 28, 1, 8).setNumberFormat(pctFmt);  // SEMI: Weight+Acc+KPI (col 28-35)
+    sheet.getRange(targetRow, 36, 1, 2).setNumberFormat(pctFmt);  // Final Adjust FG+SEMI (col 36-37)
+
     const fgKPI   = fg.checkerKPI   !== undefined ? n(fg.checkerKPI).toFixed(1)   : '-';
     const semiKPI = semi.checkerKPI !== undefined ? n(semi.checkerKPI).toFixed(1) : '-';
     saveAuditLog('Inventory KPI', rowIndex > 0 ? 'UPDATE' : 'SAVE',
