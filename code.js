@@ -41,7 +41,7 @@ function _handleApiPost(e) {
       'getStaffEventLog','saveStaffEventRow',
       'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
       'saveWHActivityRows','getWHActivityLog',
-      'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog',
+      'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -207,7 +207,7 @@ function doGet(e) {
           'getStaffEventLog','saveStaffEventRow',
           'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
           'saveWHActivityRows','getWHActivityLog',
-          'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog',
+          'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -8291,71 +8291,132 @@ function setupInventorySheets() {
 // INVENTORY KPI LOG — บันทึกผลการคำนวณ KPI Inventory Accuracy
 // ══════════════════════════════════════════════════════════════
 
+// ── Sheet headers (1 row per date, FG + SEMI combined) ────────
+var INV_KPI_HEADERS = [
+  'บันทึกเมื่อ','วันที่นับ','รหัสพนักงาน',
+  '[FG] SKU ทั้งหมด','[FG] PCS ทั้งหมด','[FG] SKU งานผลิต','[FG] PCS งานผลิต',
+  '[FG] Checker Err SKU','[FG] Checker Err PCS','[FG] Prod Err SKU','[FG] Prod Err PCS',
+  '[FG] Weight SKU%','[FG] Weight PCS%',
+  '[FG] Checker SKU Acc%','[FG] Checker PCS Acc%','[FG] Checker KPI%',
+  '[FG] Prod SKU Acc%','[FG] Prod PCS Acc%','[FG] Prod KPI%',
+  '[SEMI] SKU ทั้งหมด','[SEMI] แถบ ทั้งหมด','[SEMI] SKU งานผลิต','[SEMI] แถบ งานผลิต',
+  '[SEMI] Checker Err SKU','[SEMI] Checker Err แถบ','[SEMI] Prod Err SKU','[SEMI] Prod Err แถบ',
+  '[SEMI] Weight SKU%','[SEMI] Weight แถบ%',
+  '[SEMI] Checker SKU Acc%','[SEMI] Checker แถบ Acc%','[SEMI] Checker KPI%',
+  '[SEMI] Prod SKU Acc%','[SEMI] Prod แถบ Acc%','[SEMI] Prod KPI%',
+  'KPI Final Adjust FG%','KPI Final Adjust SEMI%'
+];
+
+function _getOrCreateInvKPISheet(ss) {
+  let sheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(INVENTORY_KPI_LOG_SHEET);
+    const hr = sheet.getRange(1, 1, 1, INV_KPI_HEADERS.length);
+    hr.setValues([INV_KPI_HEADERS]);
+    hr.setFontWeight('bold').setBackground('#1e293b').setFontColor('#f8fafc');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 160); sheet.setColumnWidth(2, 110); sheet.setColumnWidth(3, 130);
+  }
+  return sheet;
+}
+
 function saveInventoryKPI(data) {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = _getOrCreateInvKPISheet(ss);
+    const now   = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    const fg    = data.fg   || {};
+    const semi  = data.semi || {};
+    const n     = v => (v !== null && v !== undefined) ? Number(v) : 0;
 
-    if (!sheet) {
-      sheet = ss.insertSheet(INVENTORY_KPI_LOG_SHEET);
-      const headers = [
-        'บันทึกเมื่อ','วันที่นับ','ประเภท','รหัสพนักงาน',
-        'SKU ทั้งหมด','PCS/แถบ ทั้งหมด',
-        'SKU งานผลิต','PCS/แถบ งานผลิต',
-        'Checker Err SKU','Checker Err PCS/แถบ',
-        'Prod Err SKU','Prod Err PCS/แถบ',
-        'Weight SKU%','Weight PCS/แถบ%',
-        'Checker SKU Acc%','Checker PCS/แถบ Acc%','Checker KPI%',
-        'Prod SKU Acc%','Prod PCS/แถบ Acc%','Prod KPI%'
-      ];
-      const headerRow = sheet.getRange(1, 1, 1, headers.length);
-      headerRow.setValues([headers]);
-      headerRow.setFontWeight('bold');
-      headerRow.setBackground('#1e293b');
-      headerRow.setFontColor('#f8fafc');
-      sheet.setFrozenRows(1);
-      sheet.setColumnWidth(1, 160);
-      sheet.setColumnWidth(2, 110);
-      sheet.setColumnWidth(3, 70);
-      sheet.setColumnWidth(4, 120);
-    }
-
-    const isSemi = (data.type === 'SEMI');
-    const now = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
     const row = [
       now,
-      data.countDate     || '',
-      data.type          || 'FG',
-      data.employeeId    || '',
-      data.totalSKU      || 0,
-      isSemi ? (data.totalBand  || 0) : (data.totalPCS  || 0),
-      data.prodSKU       || 0,
-      isSemi ? (data.prodBand   || 0) : (data.prodPCS   || 0),
-      data.checkerErrSKU || 0,
-      isSemi ? (data.checkerErrBand || 0) : (data.checkerErrPCS || 0),
-      data.prodErrSKU    || 0,
-      isSemi ? (data.prodErrBand    || 0) : (data.prodErrPCS    || 0),
-      data.weightSKU     || 40,
-      isSemi ? (data.weightBand || 60)    : (data.weightPCS     || 60),
-      data.checkerSKUpct || 0,
-      isSemi ? (data.checkerBandpct || 0) : (data.checkerPCSpct || 0),
-      data.checkerKPI    || 0,
-      data.prodSKUpct    || 0,
-      isSemi ? (data.prodBandpct || 0)    : (data.prodPCSpct    || 0),
-      data.prodKPI       || 0
+      data.countDate  || '',
+      data.employeeId || '',
+      // FG columns
+      n(fg.totalSKU),        n(fg.totalPCS),
+      n(fg.prodSKU),         n(fg.prodPCS),
+      n(fg.checkerErrSKU),   n(fg.checkerErrPCS),
+      n(fg.prodErrSKU),      n(fg.prodErrPCS),
+      n(fg.weightSKU) || 40, n(fg.weightPCS) || 60,
+      n(fg.checkerSKUpct),   n(fg.checkerPCSpct),  n(fg.checkerKPI),
+      n(fg.prodSKUpct),      n(fg.prodPCSpct),      n(fg.prodKPI),
+      // SEMI columns
+      n(semi.totalSKU),         n(semi.totalBand),
+      n(semi.prodSKU),          n(semi.prodBand),
+      n(semi.checkerErrSKU),    n(semi.checkerErrBand),
+      n(semi.prodErrSKU),       n(semi.prodErrBand),
+      n(semi.weightSKU) || 40,  n(semi.weightBand) || 60,
+      n(semi.checkerSKUpct),    n(semi.checkerBandpct), n(semi.checkerKPI),
+      n(semi.prodSKUpct),       n(semi.prodBandpct),    n(semi.prodKPI),
+      // Finals
+      n(data.finalAdjustFG),
+      n(data.finalAdjustSEMI)
     ];
 
-    sheet.appendRow(row);
+    // Upsert: find existing row by date
+    const dateStr = data.countDate || '';
+    let rowIndex  = -1;
+    if (dateStr && sheet.getLastRow() > 1) {
+      const existing = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
+      for (var i = 0; i < existing.length; i++) {
+        if (String(existing[i][0]) === dateStr) { rowIndex = i + 2; break; }
+      }
+    }
 
-    saveAuditLog('Inventory KPI', 'SAVE',
-      'ประเภท: ' + (data.type || 'FG') +
-      ' | วันที่นับ: ' + (data.countDate || '-') +
+    if (rowIndex > 0) {
+      sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    } else {
+      sheet.appendRow(row);
+    }
+
+    const fgKPI   = fg.checkerKPI   !== undefined ? n(fg.checkerKPI).toFixed(1)   : '-';
+    const semiKPI = semi.checkerKPI !== undefined ? n(semi.checkerKPI).toFixed(1) : '-';
+    saveAuditLog('Inventory KPI', rowIndex > 0 ? 'UPDATE' : 'SAVE',
+      'วันที่นับ: ' + dateStr +
       ' | พนักงาน: ' + (data.employeeId || '-') +
-      ' | Checker KPI: ' + (data.checkerKPI || 0).toFixed(1) + '%' +
-      ' | Prod KPI: ' + (data.prodKPI || 0).toFixed(1) + '%',
+      ' | FG Checker: ' + fgKPI + '% | SEMI Checker: ' + semiKPI + '%' +
+      ' | Final FG: ' + n(data.finalAdjustFG) + '% | Final SEMI: ' + n(data.finalAdjustSEMI) + '%',
       'success');
 
-    return { success: true, message: 'บันทึกเรียบร้อยแล้ว' };
+    return { success: true, message: rowIndex > 0 ? 'อัปเดตข้อมูลเรียบร้อย' : 'บันทึกข้อมูลเรียบร้อย' };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function getInventoryKPIByDate(dateStr) {
+  try {
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, data: null };
+
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, INV_KPI_HEADERS.length).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][1]) === dateStr) {
+        const r = rows[i];
+        return { success: true, data: {
+          countDate:  r[1], employeeId: r[2],
+          fg: {
+            totalSKU: r[3],  totalPCS: r[4],   prodSKU: r[5],  prodPCS: r[6],
+            checkerErrSKU: r[7], checkerErrPCS: r[8], prodErrSKU: r[9], prodErrPCS: r[10],
+            weightSKU: r[11], weightPCS: r[12],
+            checkerSKUpct: r[13], checkerPCSpct: r[14], checkerKPI: r[15],
+            prodSKUpct: r[16], prodPCSpct: r[17], prodKPI: r[18]
+          },
+          semi: {
+            totalSKU: r[19], totalBand: r[20], prodSKU: r[21], prodBand: r[22],
+            checkerErrSKU: r[23], checkerErrBand: r[24], prodErrSKU: r[25], prodErrBand: r[26],
+            weightSKU: r[27], weightBand: r[28],
+            checkerSKUpct: r[29], checkerBandpct: r[30], checkerKPI: r[31],
+            prodSKUpct: r[32], prodBandpct: r[33], prodKPI: r[34]
+          },
+          finalAdjustFG:   r[35],
+          finalAdjustSEMI: r[36]
+        }};
+      }
+    }
+    return { success: true, data: null };
   } catch (e) {
     return { success: false, message: e.toString() };
   }
@@ -8366,29 +8427,9 @@ function getInventoryKPILog() {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, data: [] };
-
-    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues();
-    const data = rows.map(r => ({
-      savedAt:        r[0]  ? Utilities.formatDate(new Date(r[0]), 'GMT+7', 'dd/MM/yyyy HH:mm') : String(r[0]),
-      countDate:      r[1]  || '',
-      totalSKU:       r[2]  || 0,
-      totalPCS:       r[3]  || 0,
-      prodSKU:        r[4]  || 0,
-      prodPCS:        r[5]  || 0,
-      checkerErrSKU:  r[6]  || 0,
-      checkerErrPCS:  r[7]  || 0,
-      prodErrSKU:     r[8]  || 0,
-      prodErrPCS:     r[9]  || 0,
-      weightSKU:      r[10] || 40,
-      weightPCS:      r[11] || 60,
-      checkerSKUpct:  r[12] || 0,
-      checkerPCSpct:  r[13] || 0,
-      checkerKPI:     r[14] || 0,
-      prodSKUpct:     r[15] || 0,
-      prodPCSpct:     r[16] || 0,
-      prodKPI:        r[17] || 0
-    }));
-    return { success: true, data: data.reverse() };
+    const ncols = Math.min(sheet.getLastColumn(), INV_KPI_HEADERS.length);
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, ncols).getValues();
+    return { success: true, data: rows.reverse() };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

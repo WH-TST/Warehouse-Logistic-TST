@@ -3191,6 +3191,31 @@ thead.sticky {
     </div>
   </div>
 
+  <!-- Shared date + loading indicator -->
+  <div class="bg-slate-800/80 border border-sky-700/60 rounded-2xl px-6 py-5 flex flex-wrap items-center gap-5">
+    <div class="w-12 h-12 bg-sky-500/20 border border-sky-500/40 rounded-xl flex items-center justify-center text-sky-300 text-xl flex-shrink-0">
+      <i class="fas fa-calendar-alt"></i>
+    </div>
+    <div class="flex-1">
+      <label class="block text-sky-300 font-black text-sm uppercase tracking-widest mb-2">วันที่นับสต็อก (Cycle Count Date)</label>
+      <input type="date" id="kpi-shared-date"
+        oninput="kpiOnDateChange(this.value)"
+        class="w-full max-w-xs bg-slate-700 border-2 border-sky-600/60 text-white rounded-xl px-4 py-3 font-bold text-base focus:outline-none focus:border-sky-400">
+    </div>
+    <div id="kpi-date-loading" class="hidden text-slate-400 text-sm font-bold flex items-center gap-2">
+      <i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...
+    </div>
+  </div>
+
+  <!-- Edit mode banner (hidden by default) -->
+  <div id="kpi-edit-banner" class="hidden bg-amber-900/30 border border-amber-600 rounded-2xl px-5 py-3.5 flex items-center gap-3">
+    <i class="fas fa-edit text-amber-400 text-xl flex-shrink-0"></i>
+    <div>
+      <p class="text-amber-300 font-black text-sm">พบข้อมูลวันนี้แล้ว — โหลดข้อมูลเดิมให้แก้ไข</p>
+      <p class="text-amber-400/70 text-xs mt-0.5">แก้ไขค่าแล้วกด <strong>บันทึก</strong> เพื่ออัปเดตข้อมูล (จะเขียนทับข้อมูลเดิม)</p>
+    </div>
+  </div>
+
   <!-- Tab switcher: FG / SEMI -->
   <div class="flex gap-2 p-1 bg-slate-800/60 border border-slate-700 rounded-2xl w-fit">
     <button onclick="switchKpiTab('fg')" id="kpi-tab-fg"
@@ -3210,19 +3235,6 @@ thead.sticky {
 
     <!-- ════════════ LEFT: Input Form (original sizing) ════════════ -->
     <div class="space-y-6">
-
-      <!-- วันที่ -->
-      <div class="bg-slate-800/80 border border-sky-700/60 rounded-2xl px-6 py-5 flex items-center gap-5">
-        <div class="w-12 h-12 bg-sky-500/20 border border-sky-500/40 rounded-xl flex items-center justify-center text-sky-300 text-xl flex-shrink-0">
-          <i class="fas fa-calendar-alt"></i>
-        </div>
-        <div class="flex-1">
-          <label class="block text-sky-300 font-black text-sm uppercase tracking-widest mb-2">วันที่นับสต็อก (Cycle Count Date)</label>
-          <input type="date" id="kpi-inv-date"
-            oninput="kpiInvAutoCalc()"
-            class="w-full max-w-xs bg-slate-700 border-2 border-sky-600/60 text-white rounded-xl px-4 py-3 font-bold text-base focus:outline-none focus:border-sky-400">
-        </div>
-      </div>
 
       <!-- Section A -->
       <div class="rounded-2xl border-2 border-sky-700/50 overflow-hidden">
@@ -3382,9 +3394,9 @@ thead.sticky {
 
       <!-- Reset button -->
       <div class="flex justify-end">
-        <button onclick="resetStockKPI()"
+        <button onclick="resetAllKPI()"
           class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-8 py-3 rounded-xl font-black text-sm shadow transition-all flex items-center gap-2">
-          <i class="fas fa-redo"></i> ล้างข้อมูล
+          <i class="fas fa-redo"></i> ล้างข้อมูลทั้งหมด
         </button>
       </div>
 
@@ -3544,19 +3556,6 @@ thead.sticky {
 
     <!-- LEFT: Input Form SEMI -->
     <div class="space-y-6">
-
-      <!-- วันที่ -->
-      <div class="bg-slate-800/80 border border-sky-700/60 rounded-2xl px-6 py-5 flex items-center gap-5">
-        <div class="w-12 h-12 bg-sky-500/20 border border-sky-500/40 rounded-xl flex items-center justify-center text-sky-300 text-xl flex-shrink-0">
-          <i class="fas fa-calendar-alt"></i>
-        </div>
-        <div class="flex-1">
-          <label class="block text-sky-300 font-black text-sm uppercase tracking-widest mb-2">วันที่นับสต็อก (Cycle Count Date)</label>
-          <input type="date" id="kpi-semi-date"
-            oninput="kpiSemiAutoCalc()"
-            class="w-full max-w-xs bg-slate-700 border-2 border-sky-600/60 text-white rounded-xl px-4 py-3 font-bold text-base focus:outline-none focus:border-sky-400">
-        </div>
-      </div>
 
       <!-- Section A -->
       <div class="rounded-2xl border-2 border-sky-700/50 overflow-hidden">
@@ -3872,15 +3871,15 @@ thead.sticky {
 <!-- MODAL: กรอกรหัสพนักงานก่อนบันทึก KPI                      -->
 <!-- ============================================================ -->
 <div id="kpi-emp-modal" class="fixed inset-0 bg-black/75 hidden z-[90] flex items-center justify-center backdrop-blur-sm px-4">
-  <div class="bg-slate-800 w-full max-w-sm rounded-2xl shadow-2xl border border-slate-600 overflow-hidden">
+  <div class="bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl border border-slate-600 overflow-hidden">
     <!-- Header -->
     <div class="bg-gradient-to-r from-emerald-700 to-emerald-600 px-6 py-5 flex items-center gap-3">
       <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white text-xl">
         <i class="fas fa-id-badge"></i>
       </div>
       <div>
-        <h3 class="text-white font-black text-lg">ยืนยันการบันทึก</h3>
-        <p class="text-emerald-200 text-xs font-bold">กรอกรหัสพนักงานเพื่อบันทึก KPI</p>
+        <h3 class="text-white font-black text-lg">ยืนยันการบันทึก KPI</h3>
+        <p class="text-emerald-200 text-xs font-bold">กรอกข้อมูลด้านล่างให้ครบก่อนบันทึก</p>
       </div>
       <button onclick="closeKpiEmpModal()" class="ml-auto text-white/60 hover:text-white text-xl">
         <i class="fas fa-times"></i>
@@ -3890,6 +3889,46 @@ thead.sticky {
     <div class="p-6 space-y-5">
       <!-- สรุปผลที่จะบันทึก -->
       <div id="kpi-modal-summary" class="bg-slate-700/50 rounded-xl p-4 space-y-1.5 text-sm"></div>
+
+      <!-- KPI FINAL Adjust (required) -->
+      <div class="bg-slate-700/40 border border-slate-600 rounded-xl p-4 space-y-3">
+        <p class="text-slate-300 font-black text-xs uppercase tracking-widest flex items-center gap-1.5">
+          <i class="fas fa-star text-yellow-400"></i> KPI FINAL (กรอกทั้ง 2 ช่อง — บังคับ)
+        </p>
+        <div class="grid grid-cols-2 gap-3">
+          <!-- FG Final -->
+          <div>
+            <label class="block text-emerald-300 font-black text-xs uppercase tracking-widest mb-1.5">
+              <i class="fas fa-box mr-1"></i>FG Final %
+            </label>
+            <div class="relative">
+              <input type="number" id="kpi-final-fg" min="0" max="100" step="0.1" placeholder="0.0"
+                oninput="kpiFormatFinal('kpi-final-fg')"
+                class="w-full bg-slate-800 border-2 border-emerald-700/60 text-white rounded-lg px-3 py-2.5 font-black text-xl focus:outline-none focus:border-emerald-400 text-center pr-8">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 font-black text-sm pointer-events-none">%</span>
+            </div>
+            <p id="kpi-final-fg-error" class="hidden text-red-400 text-xs font-bold mt-1">
+              <i class="fas fa-exclamation-circle mr-1"></i>กรุณากรอก
+            </p>
+          </div>
+          <!-- SEMI Final -->
+          <div>
+            <label class="block text-sky-300 font-black text-xs uppercase tracking-widest mb-1.5">
+              <i class="fas fa-stream mr-1"></i>SEMI Final %
+            </label>
+            <div class="relative">
+              <input type="number" id="kpi-final-semi" min="0" max="100" step="0.1" placeholder="0.0"
+                oninput="kpiFormatFinal('kpi-final-semi')"
+                class="w-full bg-slate-800 border-2 border-sky-700/60 text-white rounded-lg px-3 py-2.5 font-black text-xl focus:outline-none focus:border-sky-400 text-center pr-8">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sky-400 font-black text-sm pointer-events-none">%</span>
+            </div>
+            <p id="kpi-final-semi-error" class="hidden text-red-400 text-xs font-bold mt-1">
+              <i class="fas fa-exclamation-circle mr-1"></i>กรุณากรอก
+            </p>
+          </div>
+        </div>
+      </div>
+
       <!-- รหัสพนักงาน -->
       <div>
         <label class="block text-slate-300 font-black text-sm uppercase tracking-widest mb-2">
@@ -3903,6 +3942,7 @@ thead.sticky {
           <i class="fas fa-exclamation-circle mr-1"></i>กรุณากรอกรหัสพนักงาน
         </p>
       </div>
+
       <!-- Buttons -->
       <div class="flex gap-3">
         <button onclick="confirmSaveInvKPI()" id="btn-confirm-save-kpi"
@@ -27273,7 +27313,7 @@ window.kpiInvAutoCalc = function() {
     const prodErrSKU    = kpiInvVal('kpi-inv-prod-err-sku');
     const prodErrPCS    = kpiInvVal('kpi-inv-prod-err-pcs');
     const fmtN          = v => v.toLocaleString('th-TH');
-    const dateVal       = document.getElementById('kpi-inv-date')?.value;
+    const dateVal       = document.getElementById('kpi-shared-date')?.value;
 
     // Checker KPI
     const checkerSKUpct = (totalSKU - checkerErrSKU) / totalSKU * 100;
@@ -27382,7 +27422,7 @@ window.kpiSemiAutoCalc = function() {
     const prodErrSKU     = kpiInvVal('kpi-semi-prod-err-sku');
     const prodErrBand    = kpiInvVal('kpi-semi-prod-err-band');
     const fmtN           = v => v.toLocaleString('th-TH');
-    const dateVal        = document.getElementById('kpi-semi-date')?.value;
+    const dateVal        = document.getElementById('kpi-shared-date')?.value;
 
     const checkerSKUpct  = (totalSKU  - checkerErrSKU)  / totalSKU  * 100;
     const checkerBandpct = (totalBand - checkerErrBand) / totalBand * 100;
@@ -27435,61 +27475,183 @@ window.kpiSemiAutoCalc = function() {
 window.resetSemiKPI = function() {
     ['kpi-semi-total-sku','kpi-semi-total-band','kpi-semi-prod-sku','kpi-semi-prod-band',
      'kpi-semi-checker-err-sku','kpi-semi-checker-err-band',
-     'kpi-semi-prod-err-sku','kpi-semi-prod-err-band',
-     'kpi-semi-date'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+     'kpi-semi-prod-err-sku','kpi-semi-prod-err-band'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
     document.getElementById('kpi-semi-weight-sku').value  = 40;
     document.getElementById('kpi-semi-weight-band').value = 60;
     _lastSemiKPIResult = null;
     kpiSemiAutoCalc();
 };
 
-// ── Save: เปิด Modal (FG หรือ SEMI) ───────────────────────────
-window.saveInventoryKPIResult = function() {
-    const isSemi = _activeKpiTab === 'semi';
-    const r = isSemi ? _lastSemiKPIResult : _lastInvKPIResult;
-    if (!r) { showToast('⚠️ กรอกข้อมูล Section A ก่อนบันทึก', true); return; }
+// ── Reset ทั้งหมด (FG + SEMI + shared date + edit banner) ─────
+window.resetAllKPI = function() {
+    ['kpi-inv-total-sku','kpi-inv-total-pcs','kpi-inv-prod-sku','kpi-inv-prod-pcs',
+     'kpi-inv-checker-err-sku','kpi-inv-checker-err-pcs',
+     'kpi-inv-prod-err-sku','kpi-inv-prod-err-pcs'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('kpi-inv-weight-sku').value = 40;
+    document.getElementById('kpi-inv-weight-pcs').value = 60;
+    const sharedDate = document.getElementById('kpi-shared-date');
+    if (sharedDate) sharedDate.value = '';
+    document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+    _lastInvKPIResult = null;
+    kpiInvAutoCalc();
+    resetSemiKPI();
+};
 
+// ── Date change → check for existing data ─────────────────────
+window.kpiOnDateChange = function(dateVal) {
+    kpiInvAutoCalc();
+    kpiSemiAutoCalc();
+    if (!dateVal) {
+        document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+        return;
+    }
+    const loading = document.getElementById('kpi-date-loading');
+    loading?.classList.remove('hidden');
+    google.script.run
+        .withSuccessHandler(res => {
+            loading?.classList.add('hidden');
+            if (res && res.success && res.data) {
+                document.getElementById('kpi-edit-banner')?.classList.remove('hidden');
+                kpiLoadExistingData(res.data);
+            } else {
+                document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+            }
+        })
+        .withFailureHandler(() => { loading?.classList.add('hidden'); })
+        .getInventoryKPIByDate(dateVal);
+};
+
+// ── Load existing data into both forms ────────────────────────
+function kpiLoadExistingData(d) {
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v !== undefined && v !== null && v !== '') ? v : 0; };
+    // FG
+    if (d.fg) {
+        const fg = d.fg;
+        setVal('kpi-inv-total-sku',       fg.totalSKU);
+        setVal('kpi-inv-total-pcs',       fg.totalPCS);
+        setVal('kpi-inv-prod-sku',        fg.prodSKU);
+        setVal('kpi-inv-prod-pcs',        fg.prodPCS);
+        setVal('kpi-inv-checker-err-sku', fg.checkerErrSKU);
+        setVal('kpi-inv-checker-err-pcs', fg.checkerErrPCS);
+        setVal('kpi-inv-prod-err-sku',    fg.prodErrSKU);
+        setVal('kpi-inv-prod-err-pcs',    fg.prodErrPCS);
+        setVal('kpi-inv-weight-sku',      fg.weightSKU || 40);
+        setVal('kpi-inv-weight-pcs',      fg.weightPCS || 60);
+        kpiInvAutoCalc();
+    }
+    // SEMI
+    if (d.semi) {
+        const s = d.semi;
+        setVal('kpi-semi-total-sku',        s.totalSKU);
+        setVal('kpi-semi-total-band',       s.totalBand);
+        setVal('kpi-semi-prod-sku',         s.prodSKU);
+        setVal('kpi-semi-prod-band',        s.prodBand);
+        setVal('kpi-semi-checker-err-sku',  s.checkerErrSKU);
+        setVal('kpi-semi-checker-err-band', s.checkerErrBand);
+        setVal('kpi-semi-prod-err-sku',     s.prodErrSKU);
+        setVal('kpi-semi-prod-err-band',    s.prodErrBand);
+        setVal('kpi-semi-weight-sku',       s.weightSKU || 40);
+        setVal('kpi-semi-weight-band',      s.weightBand || 60);
+        kpiSemiAutoCalc();
+    }
+    // Pre-fill Final Adjusts in modal
+    const fgFinal = document.getElementById('kpi-final-fg');
+    const semiFinal = document.getElementById('kpi-final-semi');
+    if (fgFinal && d.finalAdjustFG !== undefined && d.finalAdjustFG !== '') fgFinal.value = d.finalAdjustFG;
+    if (semiFinal && d.finalAdjustSEMI !== undefined && d.finalAdjustSEMI !== '') semiFinal.value = d.finalAdjustSEMI;
+}
+
+// ── Format final % input (clamp 0-100) ────────────────────────
+window.kpiFormatFinal = function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    let v = parseFloat(el.value);
+    if (isNaN(v)) return;
+    if (v < 0) el.value = 0;
+    if (v > 100) el.value = 100;
+};
+
+// ── Save: เปิด Modal ──────────────────────────────────────────
+window.saveInventoryKPIResult = function() {
+    const fgOk   = !!_lastInvKPIResult;
+    const semiOk = !!_lastSemiKPIResult;
+    if (!fgOk && !semiOk) {
+        showToast('⚠️ กรอกข้อมูล FG และ SEMI (Section A) ก่อนบันทึก', true); return;
+    }
     const fmt  = v => Number(v).toFixed(1) + '%';
     const fmtN = v => Number(v).toLocaleString('th-TH');
-    const dateVal = r.countDate;
+    const fg   = _lastInvKPIResult;
+    const semi = _lastSemiKPIResult;
+    const dateVal = (fg || semi)?.countDate || '';
     let dateStr = 'ไม่ระบุ';
     if (dateVal) { const [y,m,d] = dateVal.split('-'); dateStr = `${d}/${m}/${y}`; }
-    const unit2 = isSemi ? 'แถบ' : 'PCS';
-    const qty2  = isSemi ? fmtN(r.totalBand) + ' แถบ' : fmtN(r.totalPCS) + ' PCS';
 
     document.getElementById('kpi-modal-summary').innerHTML = `
-      <p class="text-slate-400 text-xs uppercase tracking-widest font-black mb-2">สรุปผลที่จะบันทึก (${isSemi ? 'SEMI' : 'FG'})</p>
+      <p class="text-slate-400 text-xs uppercase tracking-widest font-black mb-2">สรุปผลที่จะบันทึก</p>
       <div class="grid grid-cols-2 gap-1 text-sm">
-        <span class="text-slate-400">วันที่นับ</span>      <span class="text-white font-bold">${dateStr}</span>
-        <span class="text-slate-400">SKU / ${unit2}</span> <span class="text-white font-bold">${fmtN(r.totalSKU)} SKU / ${qty2}</span>
-        <span class="text-rose-300">Checker KPI</span>     <span class="text-white font-bold">${fmt(r.checkerKPI)}</span>
-        <span class="text-amber-300">Prod KPI</span>       <span class="text-white font-bold">${r.prodSKU > 0 ? fmt(r.prodKPI) : 'N/A'}</span>
+        <span class="text-slate-400">วันที่นับ</span>         <span class="text-white font-bold">${dateStr}</span>
+        <span class="text-emerald-300 font-bold">FG Checker</span>  <span class="text-white font-bold">${fg ? fmt(fg.checkerKPI) : '—'}</span>
+        <span class="text-emerald-300/70">FG Prod</span>      <span class="text-white font-bold">${(fg && fg.prodSKU > 0) ? fmt(fg.prodKPI) : '—'}</span>
+        <span class="text-sky-300 font-bold">SEMI Checker</span> <span class="text-white font-bold">${semi ? fmt(semi.checkerKPI) : '—'}</span>
+        <span class="text-sky-300/70">SEMI Prod</span>        <span class="text-white font-bold">${(semi && semi.prodSKU > 0) ? fmt(semi.prodKPI) : '—'}</span>
       </div>`;
 
     document.getElementById('kpi-emp-id-input').value = '';
     document.getElementById('kpi-emp-id-error').classList.add('hidden');
+    document.getElementById('kpi-final-fg-error')?.classList.add('hidden');
+    document.getElementById('kpi-final-semi-error')?.classList.add('hidden');
     document.getElementById('kpi-emp-modal').classList.remove('hidden');
-    setTimeout(() => document.getElementById('kpi-emp-id-input').focus(), 100);
+    setTimeout(() => document.getElementById('kpi-final-fg').focus(), 100);
 };
 
 window.closeKpiEmpModal = function() {
     document.getElementById('kpi-emp-modal').classList.add('hidden');
 };
 
-// ── Save: ยืนยันด้วยรหัสพนักงาน ───────────────────────────────
+// ── Save: ยืนยัน (validate finals + empId → send combined payload) ─
 window.confirmSaveInvKPI = function() {
-    const empId = document.getElementById('kpi-emp-id-input').value.trim();
-    const errEl = document.getElementById('kpi-emp-id-error');
-    if (!empId) { errEl.classList.remove('hidden'); return; }
-    errEl.classList.add('hidden');
+    const finalFGEl   = document.getElementById('kpi-final-fg');
+    const finalSEMIEl = document.getElementById('kpi-final-semi');
+    const empIdEl     = document.getElementById('kpi-emp-id-input');
+    const finalFG     = finalFGEl?.value.trim();
+    const finalSEMI   = finalSEMIEl?.value.trim();
+    const empId       = empIdEl?.value.trim();
+
+    let valid = true;
+    if (!finalFG || finalFG === '') {
+        document.getElementById('kpi-final-fg-error')?.classList.remove('hidden');
+        valid = false;
+    } else { document.getElementById('kpi-final-fg-error')?.classList.add('hidden'); }
+
+    if (!finalSEMI || finalSEMI === '') {
+        document.getElementById('kpi-final-semi-error')?.classList.remove('hidden');
+        valid = false;
+    } else { document.getElementById('kpi-final-semi-error')?.classList.add('hidden'); }
+
+    if (!empId) {
+        document.getElementById('kpi-emp-id-error')?.classList.remove('hidden');
+        valid = false;
+    } else { document.getElementById('kpi-emp-id-error')?.classList.add('hidden'); }
+
+    if (!valid) return;
 
     const btn = document.getElementById('btn-confirm-save-kpi');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
     btn.disabled  = true;
 
-    const isSemi = _activeKpiTab === 'semi';
-    const base   = isSemi ? _lastSemiKPIResult : _lastInvKPIResult;
-    const payload = Object.assign({}, base, { employeeId: empId, type: isSemi ? 'SEMI' : 'FG' });
+    const sharedDate = document.getElementById('kpi-shared-date')?.value || '';
+    const payload = {
+        employeeId:    empId,
+        countDate:     sharedDate,
+        finalAdjustFG:   parseFloat(finalFG),
+        finalAdjustSEMI: parseFloat(finalSEMI),
+        fg:   _lastInvKPIResult  ? Object.assign({}, _lastInvKPIResult)  : null,
+        semi: _lastSemiKPIResult ? Object.assign({}, _lastSemiKPIResult) : null
+    };
 
     google.script.run
         .withSuccessHandler(res => {
@@ -27497,7 +27659,10 @@ window.confirmSaveInvKPI = function() {
             btn.disabled  = false;
             if (res && res.success) {
                 closeKpiEmpModal();
-                showToast(`✅ บันทึกสำเร็จ (${isSemi ? 'SEMI' : 'FG'} — รหัส: ${empId})`);
+                showToast(`✅ บันทึกสำเร็จ (รหัส: ${empId}) — KPI Final FG: ${finalFG}% / SEMI: ${finalSEMI}%`);
+                document.getElementById('kpi-edit-banner')?.classList.remove('hidden');
+                const b = document.getElementById('kpi-edit-banner');
+                if (b) b.querySelector('p').textContent = 'บันทึกสำเร็จ — ข้อมูลวันนี้ถูกอัปเดตแล้ว';
             } else {
                 showToast('❌ บันทึกไม่สำเร็จ: ' + (res?.message || 'unknown'), true);
             }
