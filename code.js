@@ -41,7 +41,7 @@ function _handleApiPost(e) {
       'getStaffEventLog','saveStaffEventRow',
       'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
       'saveWHActivityRows','getWHActivityLog',
-      'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
+      'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -90,6 +90,7 @@ const DAILY_CYCLE_COUNT_FG_SHEET_NAME = 'Daily Cycle Count FG';
 const RECHECK_LOG_SHEET  = 'ReCheck_Log';
 const ROOT_CAUSE_SHEET   = 'RootCause_Log';
 const AUDIT_LOG_SHEET   = 'Audit_Log';
+const INVENTORY_KPI_LOG_SHEET = 'Inventory KPI Log';
 const AUDIT_LOG_HEADERS = ['Timestamp','User','Module','Action','Detail','Status'];
 
 // ══════════════════════════════════════════════════════════════════════
@@ -206,7 +207,7 @@ function doGet(e) {
           'getStaffEventLog','saveStaffEventRow',
           'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
           'saveWHActivityRows','getWHActivityLog',
-          'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG',
+          'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -8281,6 +8282,109 @@ function setupInventorySheets() {
     if (!msg) msg = 'ไม่มีการเปลี่ยนแปลง';
 
     return { success: true, created: created, skipped: skipped, message: msg };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// INVENTORY KPI LOG — บันทึกผลการคำนวณ KPI Inventory Accuracy
+// ══════════════════════════════════════════════════════════════
+
+function saveInventoryKPI(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
+
+    if (!sheet) {
+      sheet = ss.insertSheet(INVENTORY_KPI_LOG_SHEET);
+      const headers = [
+        'บันทึกเมื่อ','วันที่นับ','รหัสพนักงาน',
+        'SKU ทั้งหมด','PCS ทั้งหมด',
+        'SKU งานผลิต','PCS งานผลิต',
+        'Checker Err SKU','Checker Err PCS',
+        'Prod Err SKU','Prod Err PCS',
+        'Weight SKU%','Weight PCS%',
+        'Checker SKU Acc%','Checker PCS Acc%','Checker KPI%',
+        'Prod SKU Acc%','Prod PCS Acc%','Prod KPI%'
+      ];
+      const headerRow = sheet.getRange(1, 1, 1, headers.length);
+      headerRow.setValues([headers]);
+      headerRow.setFontWeight('bold');
+      headerRow.setBackground('#1e293b');
+      headerRow.setFontColor('#f8fafc');
+      sheet.setFrozenRows(1);
+      sheet.setColumnWidth(1, 160);
+      sheet.setColumnWidth(2, 110);
+      sheet.setColumnWidth(3, 120);
+    }
+
+    const now = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    const row = [
+      now,
+      data.countDate     || '',
+      data.employeeId    || '',
+      data.totalSKU      || 0,
+      data.totalPCS      || 0,
+      data.prodSKU       || 0,
+      data.prodPCS       || 0,
+      data.checkerErrSKU || 0,
+      data.checkerErrPCS || 0,
+      data.prodErrSKU    || 0,
+      data.prodErrPCS    || 0,
+      data.weightSKU     || 40,
+      data.weightPCS     || 60,
+      data.checkerSKUpct || 0,
+      data.checkerPCSpct || 0,
+      data.checkerKPI    || 0,
+      data.prodSKUpct    || 0,
+      data.prodPCSpct    || 0,
+      data.prodKPI       || 0
+    ];
+
+    sheet.appendRow(row);
+
+    saveAuditLog('Inventory KPI', 'SAVE',
+      'วันที่นับ: ' + (data.countDate || '-') +
+      ' | พนักงาน: ' + (data.employeeId || '-') +
+      ' | Checker KPI: ' + (data.checkerKPI || 0).toFixed(1) + '%' +
+      ' | Prod KPI: ' + (data.prodKPI || 0).toFixed(1) + '%',
+      'success');
+
+    return { success: true, message: 'บันทึกเรียบร้อยแล้ว' };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function getInventoryKPILog() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, data: [] };
+
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues();
+    const data = rows.map(r => ({
+      savedAt:        r[0]  ? Utilities.formatDate(new Date(r[0]), 'GMT+7', 'dd/MM/yyyy HH:mm') : String(r[0]),
+      countDate:      r[1]  || '',
+      totalSKU:       r[2]  || 0,
+      totalPCS:       r[3]  || 0,
+      prodSKU:        r[4]  || 0,
+      prodPCS:        r[5]  || 0,
+      checkerErrSKU:  r[6]  || 0,
+      checkerErrPCS:  r[7]  || 0,
+      prodErrSKU:     r[8]  || 0,
+      prodErrPCS:     r[9]  || 0,
+      weightSKU:      r[10] || 40,
+      weightPCS:      r[11] || 60,
+      checkerSKUpct:  r[12] || 0,
+      checkerPCSpct:  r[13] || 0,
+      checkerKPI:     r[14] || 0,
+      prodSKUpct:     r[15] || 0,
+      prodPCSpct:     r[16] || 0,
+      prodKPI:        r[17] || 0
+    }));
+    return { success: true, data: data.reverse() };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

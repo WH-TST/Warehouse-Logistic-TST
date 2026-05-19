@@ -553,7 +553,7 @@ thead.sticky {
                 <i class="fas fa-layer-group" style="color:#475569;font-size:8px;"></i>&nbsp;INVENTORY
                 <span class="line"></span>
             </div>
-            <button onclick="switchView('inventory')" id="nav-inventory" class="nav-btn">
+            <button onclick="switchView('kpi-stock')" id="nav-kpi-stock" class="nav-btn">
                 <span class="nav-icon"><i class="fas fa-boxes"></i></span> INVENTORY
             </button>
 
@@ -1291,780 +1291,6 @@ thead.sticky {
 </div><!-- end view-whactivity-content -->
 
 
-<!-- ============================================ -->
-<!-- VIEW: INVENTORY (wrapper + sub-tabs) -->
-<!-- ============================================ -->
-<div id="view-inventory-content" class="hidden space-y-0">
-
-  <!-- Sub-tab Navigation Bar -->
-  <div class="bg-slate-900 px-6 pt-5 pb-0 flex gap-1 border-b border-slate-700 sticky top-0 z-30">
-    <button id="inv-tab-btn-control" onclick="switchInvTab('control')"
-      class="inv-tab-btn px-6 py-3 rounded-t-xl font-black text-sm transition-all bg-amber-500 text-slate-900 border-b-2 border-amber-400">
-      <i class="fas fa-clipboard-check mr-1.5"></i> INVENTORY CONTROL
-    </button>
-    <button id="inv-tab-btn-fg" onclick="switchInvTab('fg')"
-      class="inv-tab-btn px-6 py-3 rounded-t-xl font-black text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-800">
-      <i class="fas fa-th-large mr-1.5"></i> FG DASHBOARD
-    </button>
-    <button id="inv-tab-btn-semi" onclick="switchInvTab('semi')"
-      class="inv-tab-btn px-6 py-3 rounded-t-xl font-black text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-800">
-      <i class="fas fa-film mr-1.5"></i> SEMI DASHBOARD
-    </button>
-  </div>
-
-  <!-- Sub-panel: INVENTORY CONTROL -->
-  <div id="inv-sub-control" class="space-y-6 pt-6">
-
-<!-- ============================================ -->
-<!-- VIEW 6: INVENTORY CONTROL -->
-<!-- ============================================ -->
-<div id="view-inventory-control-content" class="space-y-6">
-    <!-- Header -->
-    <div class="bg-gradient-to-br from-teal-900 via-slate-900 to-slate-800 rounded-[2.5rem] p-10 shadow-2xl flex flex-col md:flex-row gap-6 items-start justify-between">
-        <div class="flex items-center gap-5">
-            <div class="w-16 h-16 bg-teal-500 rounded-2xl flex items-center justify-center text-white text-3xl shadow-xl">
-                <i class="fas fa-clipboard-check"></i>
-            </div>
-            <div>
-                <h2 class="text-3xl font-black text-white tracking-tight">INVENTORY CONTROL</h2>
-                <p class="text-teal-300 text-sm font-bold mt-1 uppercase tracking-widest">ระบบตรวจนับและเทียบสต๊อกสินค้า</p>
-            </div>
-        </div>
-        <button onclick="invSetupSheets()"
-                id="inv-setup-btn"
-                class="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-3 rounded-2xl font-black text-sm transition-all shadow-md ml-auto">
-            <i class="fas fa-cog"></i> Settings
-        </button>
-    </div>
-
-    <!-- Sub-Tab Navigation (2 tabs) -->
-    <div class="flex gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
-        <button onclick="switchInvSubTab('import')" id="inv-tab-import"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all bg-teal-600 text-white shadow-lg">
-            <i class="fas fa-file-import mr-2"></i> นำเข้าข้อมูล
-        </button>
-        <button onclick="switchInvSubTab('cyclecount')" id="inv-tab-cyclecount"
-            class="inv-sub-tab flex-1 py-4 px-6 rounded-xl font-black text-sm transition-all text-slate-500 hover:bg-slate-50">
-            <i class="fas fa-clipboard-check mr-2"></i> นับ &amp; เทียบ
-        </button>
-    </div>
-
-    <!-- ====== SUB-TAB: นำเข้าข้อมูล (Import) ====== -->
-    <div id="inv-sub-import" class="space-y-6">
-
-      <!-- 6 Import Type Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-
-        <div id="inv-import-card-counting"
-             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-teal-400 hover:bg-teal-50"
-             onclick="invSelectImport('counting')">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 bg-teal-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
-              <i class="fas fa-database"></i>
-            </div>
-            <div class="min-w-0">
-              <p class="font-black text-teal-700 text-xs uppercase tracking-wider truncate">COUNTING</p>
-              <p class="text-[10px] text-teal-500 font-bold">ชีต: Counting</p>
-            </div>
-          </div>
-          <p class="text-xs text-slate-600 font-bold leading-relaxed">ยอดสต๊อกจาก D365 • เทียบสต๊อก + Dashboard</p>
-          <p id="inv-import-lastdate-counting" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
-        </div>
-
-        <div id="inv-import-card-onhand_fg"
-             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50"
-             onclick="invSelectImport('onhand_fg')">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
-              <i class="fas fa-boxes"></i>
-            </div>
-            <div class="min-w-0">
-              <p class="font-black text-blue-700 text-xs uppercase tracking-wider truncate">ON-HAND FG</p>
-              <p class="text-[10px] text-blue-500 font-bold">ชีต: ON-HAND FG</p>
-            </div>
-          </div>
-          <p class="text-xs text-slate-600 font-bold leading-relaxed">สต๊อก FG • จอง + คงเหลือ</p>
-          <p id="inv-import-lastdate-onhand_fg" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
-        </div>
-
-        <div id="inv-import-card-onhand_semi"
-             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-purple-400 hover:bg-purple-50"
-             onclick="invSelectImport('onhand_semi')">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 bg-purple-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
-              <i class="fas fa-film"></i>
-            </div>
-            <div class="min-w-0">
-              <p class="font-black text-purple-700 text-xs uppercase tracking-wider truncate">ON-HAND SEMI</p>
-              <p class="text-[10px] text-purple-500 font-bold">ชีต: ON-HAND SEMI</p>
-            </div>
-          </div>
-          <p class="text-xs text-slate-600 font-bold leading-relaxed">สต๊อก SEMI • ระดับ Batch + Serial</p>
-          <p id="inv-import-lastdate-onhand_semi" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
-        </div>
-
-        <div id="inv-import-card-transection_fg"
-             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-orange-400 hover:bg-orange-50"
-             onclick="invSelectImport('transection_fg')">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 bg-orange-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
-              <i class="fas fa-exchange-alt"></i>
-            </div>
-            <div class="min-w-0">
-              <p class="font-black text-orange-700 text-xs uppercase tracking-wider truncate">TRANSACTION FG</p>
-              <p class="text-[10px] text-orange-500 font-bold">ชีต: Transection FG</p>
-            </div>
-          </div>
-          <p class="text-xs text-slate-600 font-bold leading-relaxed">การเคลื่อนไหว FG • ใช้สร้างใบตรวจนับ</p>
-          <p id="inv-import-lastdate-transection_fg" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
-        </div>
-
-        <div id="inv-import-card-transection_semi"
-             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-rose-400 hover:bg-rose-50"
-             onclick="invSelectImport('transection_semi')">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 bg-rose-600 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
-              <i class="fas fa-retweet"></i>
-            </div>
-            <div class="min-w-0">
-              <p class="font-black text-rose-700 text-xs uppercase tracking-wider truncate">TRANSACTION SEMI</p>
-              <p class="text-[10px] text-rose-500 font-bold">ชีต: Transection SEMI</p>
-            </div>
-          </div>
-          <p class="text-xs text-slate-600 font-bold leading-relaxed">การเคลื่อนไหว SEMI • ใช้สร้างใบตรวจนับ SEMI</p>
-          <p id="inv-import-lastdate-transection_semi" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
-        </div>
-
-        <div id="inv-import-card-inventory_blocking"
-             class="inv-import-card cursor-pointer rounded-2xl border-2 p-5 transition-all border-slate-200 bg-white hover:border-red-400 hover:bg-red-50"
-             onclick="invSelectImport('inventory_blocking')">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 bg-red-700 text-white rounded-xl flex items-center justify-center text-base flex-shrink-0">
-              <i class="fas fa-ban"></i>
-            </div>
-            <div class="min-w-0">
-              <p class="font-black text-red-700 text-xs uppercase tracking-wider truncate">INV BLOCKING</p>
-              <p class="text-[10px] text-red-500 font-bold">ชีต: Overdue Reservations</p>
-            </div>
-          </div>
-          <p class="text-xs text-slate-600 font-bold leading-relaxed">รายการ Inventory Blocking จาก D365 • Lock stock</p>
-          <p id="inv-import-lastdate-inventory_blocking" class="text-[10px] text-slate-400 font-bold mt-2">นำเข้าล่าสุด: —</p>
-        </div>
-
-      </div>
-
-      <!-- ====== Morning Setup Panel ====== -->
-      <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-slate-700 p-5">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center flex-shrink-0">
-            <i class="fas fa-clipboard-check text-white text-base"></i>
-          </div>
-          <div>
-            <p class="font-black text-white text-sm">Morning Setup — เตรียมใบตรวจนับ</p>
-            <p class="text-xs text-slate-400 font-bold">Import Transaction เสร็จ ระบบ detect วันที่และเตรียมพิมพ์ให้อัตโนมัติ</p>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- FG Box -->
-          <div class="bg-slate-700/50 rounded-xl p-4 border border-slate-600">
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-black text-orange-400 uppercase tracking-wider"><i class="fas fa-boxes mr-1"></i> FG</span>
-              <span id="inv-morning-fg-status" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-600 text-slate-300">รอ Import</span>
-            </div>
-            <p class="text-xs text-slate-400 font-bold mb-1">วันที่ตรวจนับ</p>
-            <p id="inv-morning-fg-date" class="text-lg font-black text-white mb-3">—</p>
-            <button onclick="invMorningPrint('fg')" id="inv-morning-btn-fg" disabled
-                    class="w-full bg-orange-600 hover:bg-orange-500 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-black text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-2">
-              <i class="fas fa-print"></i> พิมพ์ใบตรวจนับ FG
-            </button>
-          </div>
-          <!-- SEMI Box -->
-          <div class="bg-slate-700/50 rounded-xl p-4 border border-slate-600">
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-black text-rose-400 uppercase tracking-wider"><i class="fas fa-film mr-1"></i> SEMI</span>
-              <span id="inv-morning-semi-status" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-600 text-slate-300">รอ Import</span>
-            </div>
-            <p class="text-xs text-slate-400 font-bold mb-1">วันที่ตรวจนับ</p>
-            <p id="inv-morning-semi-date" class="text-lg font-black text-white mb-3">—</p>
-            <button onclick="invMorningPrint('semi')" id="inv-morning-btn-semi" disabled
-                    class="w-full bg-rose-600 hover:bg-rose-500 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-black text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-2">
-              <i class="fas fa-print"></i> พิมพ์ใบตรวจนับ SEMI
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Upload Panel -->
-      <div id="inv-upload-panel" class="hidden bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 space-y-6">
-        <div class="flex items-center gap-3">
-          <div id="inv-upload-icon" class="w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg bg-teal-600">
-            <i class="fas fa-database"></i>
-          </div>
-          <div>
-            <h3 id="inv-upload-title" class="text-lg font-black text-slate-700 uppercase tracking-wider">COUNTING</h3>
-            <p id="inv-upload-desc" class="text-xs text-slate-400 font-bold">ยอดสต๊อกจาก D365</p>
-          </div>
-          <button onclick="invCancelImport()" class="ml-auto text-slate-400 hover:text-rose-500 transition-all text-sm font-black flex items-center gap-1">
-            <i class="fas fa-times"></i> ปิด
-          </button>
-        </div>
-        <div id="inv-file-drop-zone"
-             class="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50 transition-all"
-             onclick="document.getElementById('inv-file-input').click()"
-             ondragover="event.preventDefault(); this.classList.add('border-teal-400','bg-teal-50')"
-             ondragleave="this.classList.remove('border-teal-400','bg-teal-50')"
-             ondrop="invImportHandleDrop(event)">
-          <input type="file" id="inv-file-input" accept=".xlsx,.xls" class="hidden" onchange="invImportHandleFile(this)">
-          <i class="fas fa-cloud-upload-alt text-5xl text-slate-300 mb-4 block"></i>
-          <p id="inv-file-label" class="font-black text-slate-400 text-base">คลิกหรือลากไฟล์ Excel มาวาง</p>
-          <p class="text-slate-300 text-sm mt-1 font-bold">.xlsx, .xls</p>
-        </div>
-        <div id="inv-import-preview" class="hidden space-y-4">
-          <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-            <div class="flex items-center gap-4 p-4 border-b border-slate-200">
-              <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
-                <i class="fas fa-file-excel text-lg"></i>
-              </div>
-              <div class="flex-1">
-                <p id="inv-preview-text" class="font-black text-slate-700 text-sm"></p>
-                <p id="inv-preview-sub" class="text-xs text-slate-400 font-bold mt-0.5"></p>
-              </div>
-              <button onclick="invClearImportFile()" class="text-rose-400 hover:text-rose-600 transition-all text-sm font-black">
-                <i class="fas fa-times mr-1"></i> ล้าง
-              </button>
-            </div>
-            <div class="overflow-x-auto max-h-48">
-              <table id="inv-preview-table" class="w-full text-xs"></table>
-            </div>
-          </div>
-          <button onclick="invConfirmImport()"
-                  class="w-full bg-teal-600 hover:bg-teal-700 text-white py-4 rounded-xl font-black transition-all shadow-md flex items-center justify-center gap-2 text-base">
-            <i class="fas fa-check-circle"></i> ยืนยันนำเข้าข้อมูลเข้าชีต
-            <span id="inv-confirm-sheet-name" class="bg-white/20 px-2 py-0.5 rounded-lg text-sm">Counting</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Import Log -->
-      <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
-        <h3 class="text-lg font-black text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-2">
-          <i class="fas fa-history text-slate-400"></i> ประวัติการนำเข้าข้อมูล
-        </h3>
-        <div id="inv-import-log" class="text-center text-slate-300 py-10">
-          <i class="fas fa-database text-4xl mb-3 block opacity-20"></i>
-          <p class="font-bold">ยังไม่มีประวัติการนำเข้า</p>
-        </div>
-      </div>
-
-    </div><!-- end inv-sub-import -->
-
-
-    <!-- ====== SUB-TAB: นับ & เทียบ (Cycle Count) ====== -->
-    <div id="inv-sub-cyclecount" class="hidden space-y-6">
-
-      <!-- Mode Toggle Bar — FG vs SEMI (prominent) -->
-      <div id="inv-cyc-mode-bar" class="rounded-2xl overflow-hidden shadow-md border-2 border-teal-200 transition-all duration-300">
-        <div id="inv-cyc-mode-header" class="bg-gradient-to-r from-teal-700 to-teal-500 px-5 py-4 flex flex-wrap items-center gap-3">
-
-          <!-- FG / SEMI Toggle Buttons -->
-          <button onclick="invCycleMode('fg')" id="inv-cyc-btn-fg"
-                  class="inv-cyc-mode-btn flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-sm transition-all bg-white text-teal-700 shadow-lg ring-2 ring-white/80">
-            <i class="fas fa-boxes text-base"></i>
-            <div class="text-left leading-tight">
-              <div class="text-sm font-black">FG</div>
-              <div class="text-[10px] font-bold opacity-60">สินค้าสำเร็จรูป</div>
-            </div>
-          </button>
-          <button onclick="invCycleMode('semi')" id="inv-cyc-btn-semi"
-                  class="inv-cyc-mode-btn flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-sm transition-all text-white/60 hover:bg-white/10">
-            <i class="fas fa-film text-base"></i>
-            <div class="text-left leading-tight">
-              <div class="text-sm font-black">SEMI</div>
-              <div class="text-[10px] font-bold opacity-60">Film / กึ่งสำเร็จรูป</div>
-            </div>
-          </button>
-
-          <!-- Active Mode Badge -->
-          <div id="inv-cyc-active-badge" class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-black">
-            <i id="inv-cyc-badge-icon" class="fas fa-boxes"></i>
-            <span id="inv-cyc-badge-label">FG MODE — สินค้าสำเร็จรูป</span>
-          </div>
-
-          <!-- Date + Search + Actions -->
-          <div class="ml-auto flex items-center gap-2 flex-wrap justify-end">
-            <div class="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
-              <i class="fas fa-calendar-alt text-white/70 text-xs"></i>
-              <input type="date" id="inv-cyc-date"
-                     class="bg-transparent text-white font-black text-sm outline-none w-32">
-            </div>
-            <input type="text" id="inv-cyc-search" placeholder="ค้นหารหัส / ชื่อ..."
-                   oninput="invFilterCycle()"
-                   class="bg-white/20 rounded-xl px-3 py-2 text-sm font-bold text-white placeholder-white/50 outline-none focus:bg-white/30 w-40 transition-all border border-white/20">
-            <button onclick="invLoadCycleCount()"
-                    class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all border border-white/30">
-              <i class="fas fa-sync-alt"></i> โหลด
-            </button>
-            <button onclick="invCycShowAddModal()"
-                    class="bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
-              <i class="fas fa-plus"></i> เพิ่มรายการ
-            </button>
-            <button onclick="invPrintCycleForm()"
-                    class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all border border-white/30">
-              <i class="fas fa-print"></i> พิมพ์
-            </button>
-            <button onclick="invSaveCycleCount()"
-                    class="bg-emerald-500 hover:bg-emerald-400 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
-              <i class="fas fa-save"></i> บันทึก
-            </button>
-            <button onclick="invToggleRecheckPanel()" id="inv-cyc-recheck-btn"
-                    class="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow-lg">
-              <i class="fas fa-exclamation-triangle"></i> รีเช็ค
-              <span id="inv-cyc-recheck-badge" class="hidden bg-white text-rose-600 text-[10px] font-black rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none">0</span>
-            </button>
-          </div>
-
-        </div>
-      </div>
-
-      <div id="inv-cyc-kpi-row" class="hidden grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div id="inv-cyc-kpi-card-total" class="bg-teal-600 text-white p-4 rounded-2xl shadow-lg text-center transition-all duration-300">
-          <p id="inv-cyc-kpi-total-label" class="text-[10px] font-black text-teal-100 uppercase">รายการทั้งหมด</p>
-          <p id="inv-cyc-kpi-total" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-amber-500 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-amber-100 uppercase">รอกรอก</p>
-          <p id="inv-cyc-kpi-pending" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-emerald-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-emerald-100 uppercase">✅ ตรง</p>
-          <p id="inv-cyc-kpi-match" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-blue-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-blue-100 uppercase">✅ รับทราบ</p>
-          <p id="inv-cyc-kpi-accepted" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-rose-600 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-rose-100 uppercase">⚠️ รอชี้แจง</p>
-          <p id="inv-cyc-kpi-unresolved" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-        <div class="bg-slate-700 text-white p-4 rounded-2xl shadow-lg text-center">
-          <p class="text-[10px] font-black text-slate-300 uppercase">กรอกแล้ว</p>
-          <p id="inv-cyc-kpi-filled" class="text-3xl font-black mt-1 font-mono">0</p>
-        </div>
-      </div>
-
-      <!-- Recheck Panel — รายการที่ต้องรีเช็ค (FG + SEMI รวมกัน) -->
-      <div id="inv-cyc-recheck-panel" class="hidden rounded-2xl border-2 border-rose-300 shadow-md overflow-hidden">
-        <div class="bg-gradient-to-r from-rose-700 to-orange-600 px-5 py-3 flex items-center justify-between">
-          <div class="flex items-center gap-2 text-white">
-            <i class="fas fa-exclamation-triangle text-base"></i>
-            <span class="font-black text-sm">รายการที่ต้องรีเช็ค</span>
-            <span id="inv-cyc-recheck-count-badge" class="bg-white/25 text-white text-xs font-black px-2.5 py-0.5 rounded-full">0 รายการ</span>
-          </div>
-          <button onclick="invToggleRecheckPanel()" class="text-white/70 hover:text-white text-xs font-black flex items-center gap-1 px-2 py-1 rounded hover:bg-white/10 transition-all">
-            <i class="fas fa-times"></i> ปิด
-          </button>
-        </div>
-        <div class="overflow-x-auto bg-white">
-          <table class="w-full text-xs" style="min-width:700px;">
-            <thead class="bg-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-wider">
-              <tr>
-                <th class="px-3 py-2.5 text-center w-8">No.</th>
-                <th class="px-3 py-2.5 text-center w-14">Mode</th>
-                <th class="px-3 py-2.5 text-left">SKU</th>
-                <th class="px-3 py-2.5 text-left">ชื่อสินค้า</th>
-                <th class="px-3 py-2.5 text-right w-20">Diff</th>
-                <th class="px-3 py-2.5 text-center w-32">สถานะ</th>
-                <th class="px-3 py-2.5 text-left min-w-[160px]">สาเหตุ</th>
-              </tr>
-            </thead>
-            <tbody id="inv-cyc-recheck-tbody" class="divide-y divide-slate-100"></tbody>
-          </table>
-          <div id="inv-cyc-recheck-empty" class="hidden py-12 text-center text-slate-400">
-            <i class="fas fa-check-circle text-4xl text-emerald-400 mb-3 block"></i>
-            <p class="font-black text-emerald-600">ไม่มีรายการที่ต้องรีเช็ค</p>
-            <p class="text-xs text-slate-400 mt-1">สต็อกทุกรายการตรงหรือได้รับทราบแล้ว</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm">
-        <div id="inv-cyc-empty" class="py-20 text-center text-slate-300">
-          <i class="fas fa-clipboard-list text-6xl mb-4 opacity-20 block"></i>
-          <p class="font-bold text-slate-400">เลือกวันที่และกดปุ่ม <strong>โหลด</strong> เพื่อดึงรายการเคลื่อนไหว</p>
-        </div>
-        <div id="inv-cyc-loading" class="hidden py-20 text-center">
-          <i class="fas fa-spinner fa-spin text-4xl text-teal-400 mb-4 block"></i>
-          <p class="text-slate-500 font-bold">กำลังโหลดข้อมูล...</p>
-        </div>
-        <div id="inv-cyc-table-wrap" class="hidden overflow-x-auto">
-          <table id="inv-cyc-table-fg" class="w-full text-sm" style="min-width:1100px;">
-            <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
-              <tr>
-                <th class="px-2 py-3 text-center cyc-sticky" style="left:0;min-width:36px;width:36px;background:#0f172a;">▼<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-center cyc-sticky" style="left:36px;min-width:40px;width:40px;background:#0f172a;">No.<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-left cyc-th cyc-sticky" data-col="wh" onclick="invCycSort('wh')" style="left:76px;min-width:72px;width:72px;background:#0f172a;">WH<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-4 py-3 text-left cyc-th cyc-sticky" data-col="sku" onclick="invCycSort('sku')" style="left:148px;min-width:120px;background:#0f172a;">Item number<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-4 py-3 text-left cyc-th" data-col="name" onclick="invCycSort('name')" style="min-width:150px;">Product name<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-right bg-blue-900 cyc-th" data-col="receipt" onclick="invCycSort('receipt')" style="min-width:80px;">รับเข้า<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-right bg-rose-900 cyc-th" data-col="issue" onclick="invCycSort('issue')" style="min-width:80px;">เบิกออก<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-center bg-blue-800" style="min-width:78px;">bundle_1<br><span class="text-[8px] font-normal opacity-70">(มัด)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-center bg-blue-700" style="min-width:78px;">bundle_2<br><span class="text-[8px] font-normal opacity-70">(มัด)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-center bg-purple-800" style="min-width:78px;">Pcs.(1)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-center bg-purple-700" style="min-width:78px;">Pcs.(2)<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-center bg-rose-800" style="min-width:78px;">Hold<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-right bg-teal-900 cyc-th" data-col="actual" onclick="invCycSort('actual')" style="min-width:90px;">นับจริง<br><span class="text-[8px] font-normal opacity-70">(คำนวณ)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-right bg-amber-900 cyc-th" data-col="system" onclick="invCycSort('system')" style="min-width:90px;">ระบบ<br><span class="text-[8px] font-normal opacity-70">(เส้น)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-right bg-slate-700 cyc-th" data-col="diff" onclick="invCycSort('diff')" style="min-width:90px;">ผลต่าง<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-3 py-3 text-left bg-slate-800" style="min-width:180px;">สาเหตุส่วนต่าง<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-              </tr>
-              <tr class="cyc-filter-row">
-                <th class="cyc-sticky" style="left:0;background:#172033;"></th>
-                <th class="cyc-sticky" style="left:36px;background:#172033;"></th>
-                <th class="cyc-sticky" style="left:76px;background:#172033;"><input type="text" placeholder="WH..." oninput="invCycFilter('wh',this.value)" onclick="event.stopPropagation()"></th>
-                <th class="cyc-sticky" style="left:148px;background:#172033;"><input type="text" placeholder="Item..." oninput="invCycFilter('sku',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="ชื่อ..." oninput="invCycFilter('name',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="รับ..." oninput="invCycFilter('receipt',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="เบิก..." oninput="invCycFilter('issue',this.value)" onclick="event.stopPropagation()"></th>
-                <th></th><th></th><th></th><th></th><th></th>
-                <th><input type="text" placeholder="นับ..." oninput="invCycFilter('actual',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="ระบบ..." oninput="invCycFilter('system',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="±..." oninput="invCycFilter('diff',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="สาเหตุ..." oninput="invCycFilter('reason',this.value)" onclick="event.stopPropagation()"></th>
-              </tr>
-            </thead>
-            <tbody id="inv-cyc-tbody-fg" class="divide-y divide-slate-100"></tbody>
-          </table>
-          <table id="inv-cyc-table-semi" class="w-full text-xs hidden">
-            <thead class="bg-slate-900 text-slate-300 text-[10px] font-black uppercase tracking-wider sticky top-0 z-10">
-              <tr>
-                <th class="px-2 py-3 text-center cyc-sticky" style="left:0;min-width:40px;width:40px;background:#0f172a;">No.<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-left cyc-th cyc-sticky" data-col="wh" onclick="invCycSort('wh')" style="left:40px;min-width:72px;width:72px;background:#0f172a;">WH<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-left cyc-th cyc-sticky" data-col="sku" onclick="invCycSort('sku')" style="left:112px;min-width:110px;background:#0f172a;">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 1</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-left cyc-th" data-col="name" onclick="invCycSort('name')" style="min-width:140px;">Product name 1<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-center bg-teal-900" style="min-width:112px;">Check 1<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-left bg-slate-800" style="min-width:100px;">Item number<br><span class="text-[8px] opacity-60 normal-case font-normal">Product 2</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-left bg-slate-800" style="min-width:140px;">Product name 2<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-center bg-teal-900" style="min-width:112px;">Check 2<br><span class="text-[8px] opacity-70 normal-case font-normal">กรอกผลนับ</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-left bg-purple-900" style="min-width:100px;">Item Semi<br><span class="text-[8px] opacity-70 normal-case font-normal">รหัสฟิล์ม</span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-right bg-amber-900 cyc-th" data-col="system" onclick="invCycSort('system')" style="min-width:80px;">ระบบ<br><span class="text-[8px] opacity-70 normal-case font-normal">(แถบ)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-right bg-emerald-900 cyc-th" data-col="total" onclick="invCycSort('total')" style="min-width:80px;">รวม FG<br><span class="text-[8px] opacity-70 normal-case font-normal">(คำนวณ)</span><span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-right bg-slate-600 cyc-th" data-col="diff" onclick="invCycSort('diff')" style="min-width:64px;">Diff<span class="cyc-sort-icon"></span><div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-center bg-slate-700" style="min-width:112px;">สถานะ<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-                <th class="px-2 py-3 text-left bg-slate-800" style="min-width:180px;">สาเหตุส่วนต่าง<div class="cyc-resize-handle" onmousedown="invCycResizeStart(event,this)"></div></th>
-              </tr>
-              <tr class="cyc-filter-row">
-                <th class="cyc-sticky" style="left:0;background:#172033;"></th>
-                <th class="cyc-sticky" style="left:40px;background:#172033;"><input type="text" placeholder="WH..." oninput="invCycFilter('wh',this.value)" onclick="event.stopPropagation()"></th>
-                <th class="cyc-sticky" style="left:112px;background:#172033;"><input type="text" placeholder="Item1..." oninput="invCycFilter('sku',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="ชื่อ1..." oninput="invCycFilter('name',this.value)" onclick="event.stopPropagation()"></th>
-                <th></th>
-                <th><input type="text" placeholder="Item2..." oninput="invCycFilter('sku2',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="ชื่อ2..." oninput="invCycFilter('name2',this.value)" onclick="event.stopPropagation()"></th>
-                <th></th>
-                <th><input type="text" placeholder="Semi..." oninput="invCycFilter('itemSemi',this.value)" onclick="event.stopPropagation()"></th>
-                <th><input type="text" placeholder="ระบบ..." oninput="invCycFilter('system',this.value)" onclick="event.stopPropagation()"></th>
-                <th></th>
-                <th><input type="text" placeholder="±..." oninput="invCycFilter('diff',this.value)" onclick="event.stopPropagation()"></th>
-                <th></th>
-                <th><input type="text" placeholder="สาเหตุ..." oninput="invCycFilter('reason',this.value)" onclick="event.stopPropagation()"></th>
-              </tr>
-            </thead>
-            <tbody id="inv-cyc-tbody-semi" class="divide-y divide-slate-100"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Print Area -->
-      <div id="inv-print-area" class="hidden">
-        <div style="font-family:'Sarabun',sans-serif;font-size:11pt;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;">
-            <div>
-              <div style="font-size:14pt;font-weight:900;">TST — ใบตรวจนับสินค้า</div>
-              <div style="font-size:9pt;color:#555;">Warehouse Cycle Count Form</div>
-            </div>
-            <div style="text-align:right;font-size:9pt;">
-              <div style="font-weight:700;">FM-WH-03Rev.00</div>
-              <div>วันที่: <span id="inv-print-date"></span></div>
-            </div>
-          </div>
-          <table id="inv-print-table" style="width:100%;border-collapse:collapse;font-size:9pt;">
-            <thead>
-              <tr style="background:#1e293b;color:#fff;">
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">No.</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:left;">WH</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:left;">Item number</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:left;">Product name</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">bundle_1</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">bundle_2</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">Pcs.(1)</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">Pcs.(2)</th>
-                <th style="border:1px solid #ccc;padding:4px 6px;text-align:center;">Hold pcs.</th>
-              </tr>
-            </thead>
-            <tbody id="inv-print-tbody"></tbody>
-          </table>
-          <div style="margin-top:24px;display:flex;gap:60px;">
-            <div>
-              <div style="font-size:9pt;">ลงชื่อผู้ตรวจเช็ค / Checker Name</div>
-              <div style="border-bottom:1px solid #333;width:200px;margin-top:20px;"></div>
-            </div>
-            <div>
-              <div style="font-size:9pt;">วันที่ / Date</div>
-              <div style="border-bottom:1px solid #333;width:120px;margin-top:20px;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- SEMI Print Area (landscape) -->
-      <div id="inv-print-area-semi" class="hidden">
-        <div style="font-family:'Sarabun',sans-serif;font-size:10pt;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px;">
-            <div>
-              <u style="font-weight:900;font-size:11pt;">Checker Name</u>
-              <span id="inv-semi-print-checker" style="font-size:11pt;margin-left:12px;">___________________</span>
-              &nbsp;&nbsp;&nbsp;
-              <u style="font-weight:900;">AREA</u>
-              <span id="inv-semi-print-area" style="margin-left:8px;">___________</span>
-            </div>
-            <div style="text-align:right;font-size:8pt;">
-              <span id="inv-semi-print-date"></span>
-              &nbsp;&nbsp;&nbsp;
-              <strong>FM-WH-03Rev.00</strong>
-            </div>
-          </div>
-          <table id="inv-semi-print-table" style="width:100%;border-collapse:collapse;font-size:8.5pt;">
-            <thead>
-              <tr style="background:#1e293b;color:#fff;">
-                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:40px;">WH</th>
-                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:110px;">Item number</th>
-                <th style="border:1px solid #999;padding:3px 5px;text-align:left;">Product 1</th>
-                <th style="border:1px solid #999;padding:3px 5px;text-align:center;width:70px;">Check1</th>
-                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:110px;">Item number</th>
-                <th style="border:1px solid #999;padding:3px 5px;text-align:left;">Product 2</th>
-                <th style="border:1px solid #999;padding:3px 5px;text-align:center;width:70px;">Check2</th>
-                <th style="border:1px solid #999;padding:3px 5px;text-align:left;width:100px;">Item Semi</th>
-              </tr>
-            </thead>
-            <tbody id="inv-semi-print-tbody"></tbody>
-          </table>
-          <div style="margin-top:18px;display:flex;gap:40px;">
-            <div>
-              <div style="font-size:8pt;">ลงชื่อผู้ตรวจเช็ค / Checker Name</div>
-              <div style="border-bottom:1px solid #333;width:180px;margin-top:18px;"></div>
-            </div>
-            <div>
-              <div style="font-size:8pt;">วันที่ / Date</div>
-              <div style="border-bottom:1px solid #333;width:100px;margin-top:18px;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- end inv-sub-cyclecount -->
-
-    <!-- Modal: ผลการสร้าง Sheet (Settings) -->
-    <div id="inv-setup-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div class="bg-gradient-to-r from-teal-700 to-slate-800 px-6 py-4 flex items-center justify-between">
-          <div class="flex items-center gap-3 text-white">
-            <i class="fas fa-cog text-lg"></i>
-            <span class="font-black text-base">ผลการสร้าง Sheet อัตโนมัติ</span>
-          </div>
-          <button onclick="document.getElementById('inv-setup-modal').classList.add('hidden')"
-                  class="text-white/70 hover:text-white text-lg transition-colors">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div id="inv-setup-modal-body" class="p-6 max-h-[60vh] overflow-y-auto text-sm"></div>
-        <div class="px-6 pb-5 flex justify-end">
-          <button onclick="document.getElementById('inv-setup-modal').classList.add('hidden')"
-                  class="bg-teal-600 hover:bg-teal-500 text-white font-black px-6 py-2.5 rounded-xl transition-all text-sm">
-            ตกลง
-          </button>
-        </div>
-      </div>
-    </div>
-
-</div><!-- end view-inventory-control-content -->
-  </div><!-- end inv-sub-control -->
-
-  <!-- Sub-panel: FG DASHBOARD -->
-  <div id="inv-sub-fg" class="hidden space-y-6 pt-6">
-<!-- VIEW 7: FG DASHBOARD SUMMARY -->
-<div id="view-fg-dashboard-content" class="space-y-6">
-  <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row gap-6 items-center justify-between border-b-4 border-amber-500">
-    <div class="flex items-center gap-5">
-      <div class="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center text-slate-900 text-3xl shadow-xl"><i class="fas fa-boxes"></i></div>
-      <div>
-        <h2 class="text-3xl font-black text-white tracking-tight">FG STOCK DASHBOARD</h2>
-        <p class="text-amber-400 text-sm font-bold mt-1 uppercase tracking-widest">สรุปสต็อกสินค้าสำเร็จรูป ณ ปัจจุบัน</p>
-      </div>
-    </div>
-    <button onclick="loadFGDashboard()" class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-10 py-4 rounded-2xl font-black text-lg shadow-xl transition-all flex items-center gap-3">
-      <i class="fas fa-sync-alt"></i> โหลดข้อมูล
-    </button>
-  </div>
-  <div id="fg-dash-kpi" class="hidden grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
-  <div id="fg-dash-filter-bar" class="hidden bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-wrap gap-4 items-center">
-    <div class="flex-1 min-w-[200px]">
-      <input type="text" id="fg-dash-search" placeholder="🔍 ค้นหา SKU หรือชื่อสินค้า..." oninput="filterFGDashboard()"
-             class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 transition-all">
-    </div>
-    <select id="fg-dash-filter-match" onchange="filterFGDashboard()" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 cursor-pointer">
-      <option value="all">ทุกสถานะ Cycle Count</option>
-      <option value="MATCH">✅ ตรง</option>
-      <option value="DIFF">⚠️ ไม่ตรง</option>
-      <option value="NO_CYCLE">❓ ยังไม่นับ</option>
-      <option value="NO_SYSTEM">🚨 ไม่มีในระบบ</option>
-      <option value="RECHECK">🔄 รอรีเช็ค</option>
-      <option value="ACCEPTED">✅ Accept</option>
-    </select>
-    <select id="fg-dash-filter-block" onchange="filterFGDashboard()" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-amber-400 cursor-pointer">
-      <option value="all">ทุกรายการ</option>
-      <option value="has_block">มีงานกักกัน</option>
-      <option value="no_block">ไม่มีงานกักกัน</option>
-    </select>
-    <div class="text-sm font-black text-slate-400">แสดง <span id="fg-dash-count" class="text-slate-700">0</span> รายการ</div>
-    <button onclick="openBulkRecheck()" id="btn-bulk-recheck"
-      class="bg-rose-500 hover:bg-rose-400 text-white font-black text-sm px-5 py-3 rounded-xl transition-all flex items-center gap-2 shadow">
-      <i class="fas fa-redo-alt"></i> Re-Check ทั้งหมดที่ DIFF
-      <span id="btn-bulk-recheck-count" class="bg-white/30 text-white text-xs font-black px-2 py-0.5 rounded-full"></span>
-    </button>
-    <button onclick="printFGRecheckForm()"
-      class="bg-blue-600 hover:bg-blue-500 text-white font-black text-sm px-5 py-3 rounded-xl transition-all flex items-center gap-2 shadow">
-      <i class="fas fa-print"></i> พิมพ์ใบรีเช็ค FG
-    </button>
-    <button onclick="printDailySummaryReport()"
-      class="bg-slate-800 hover:bg-slate-700 text-white font-black text-sm px-5 py-3 rounded-xl transition-all flex items-center gap-2 shadow border border-slate-600">
-      <i class="fas fa-file-alt"></i> Daily Summary Report
-    </button>
-  </div>
-  <div id="fg-dash-table-wrap" class="hidden bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-900 text-slate-300 text-[11px] font-black uppercase tracking-wider sticky top-0 z-10">
-          <tr>
-            <th class="px-4 py-4 text-center w-8">#</th>
-            <th class="px-4 py-4 text-left">SKU / ชื่อสินค้า</th>
-            <th class="px-4 py-4 text-right bg-blue-900">ยอดระบบ<br><span class="text-blue-300 text-[9px] normal-case font-normal">(เส้น)</span></th>
-            <th class="px-4 py-4 text-right bg-blue-900">น้ำหนักรวม<br><span class="text-blue-300 text-[9px] normal-case font-normal">(kg)</span></th>
-            <th class="px-4 py-4 text-right bg-green-900">ผลิต<br><span class="text-green-300 text-[9px] normal-case font-normal">+Production</span></th>
-            <th class="px-4 py-4 text-right bg-orange-900">จำหน่าย<br><span class="text-orange-300 text-[9px] normal-case font-normal">Sales order</span></th>
-            <th class="px-4 py-4 text-right bg-violet-900">โอน<br><span class="text-violet-300 text-[9px] normal-case font-normal">Transfer</span></th>
-            <th class="px-4 py-4 text-center bg-teal-900">นับล่าสุด</th>
-            <th class="px-4 py-4 text-right bg-teal-900">นับจริง<br><span class="text-teal-300 text-[9px] normal-case font-normal">(เส้น)</span></th>
-            <th class="px-4 py-4 text-right bg-teal-900">Diff<br><span class="text-teal-300 text-[9px] normal-case font-normal">(นับจริง−ระบบ)</span></th>
-            <th class="px-4 py-4 text-center">สถานะ</th>
-            <th class="px-4 py-4 text-right bg-rose-900">กักกัน<br><span class="text-rose-300 text-[9px] normal-case font-normal">(เส้น)</span></th>
-            <th class="px-4 py-4 text-right bg-rose-900">น้ำหนักกักกัน<br><span class="text-rose-300 text-[9px] normal-case font-normal">(kg)</span></th>
-            <th class="px-4 py-4 text-center bg-amber-900">รีเช็ค</th>
-            <th class="px-4 py-4 text-center bg-indigo-900 min-w-[160px]">สาเหตุ DIFF</th>
-          </tr>
-        </thead>
-        <tbody id="fg-dash-tbody" class="divide-y divide-slate-100"></tbody>
-      </table>
-    </div>
-  </div>
-  <div id="fg-dash-empty" class="p-32 text-center">
-    <i class="fas fa-boxes text-7xl mb-6 opacity-10 text-slate-400"></i>
-    <p class="text-xl font-bold text-slate-400">กดปุ่ม "โหลดข้อมูล" เพื่อดูสรุปสต็อก FG</p>
-  </div>
-</div>
-
-  </div><!-- end inv-sub-fg -->
-
-  <!-- Sub-panel: SEMI DASHBOARD -->
-  <div id="inv-sub-semi" class="hidden space-y-6 pt-6">
-<!-- VIEW 8: SEMI DASHBOARD SUMMARY -->
-<div id="view-semi-dashboard-content" class="space-y-6">
-
-  <!-- Header -->
-  <div class="bg-gradient-to-br from-purple-900 via-slate-900 to-slate-800 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row gap-6 items-center justify-between border-b-4 border-purple-500">
-    <div class="flex items-center gap-5">
-      <div class="w-16 h-16 bg-purple-500 rounded-2xl flex items-center justify-center text-slate-900 text-3xl shadow-xl"><i class="fas fa-film"></i></div>
-      <div>
-        <h2 class="text-3xl font-black text-white tracking-tight">SEMI STOCK DASHBOARD</h2>
-        <p class="text-purple-400 text-sm font-bold mt-1 uppercase tracking-widest">สรุปสต็อก SEMI (Film) และ FG ที่เชื่อมโยง</p>
-      </div>
-    </div>
-    <button onclick="loadSemiDashboard()" class="bg-purple-500 hover:bg-purple-400 text-white px-10 py-4 rounded-2xl font-black text-lg shadow-xl transition-all flex items-center gap-3">
-      <i class="fas fa-sync-alt"></i> โหลดข้อมูล
-    </button>
-  </div>
-
-  <!-- KPI Cards -->
-  <div id="semi-dash-kpi" class="hidden grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4"></div>
-
-  <!-- Filter Bar -->
-  <div id="semi-dash-filter-bar" class="hidden bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-wrap gap-4 items-center">
-    <div class="flex-1 min-w-[200px]">
-      <input type="text" id="semi-dash-search" placeholder="🔍 ค้นหา SEMI หรือ FG SKU..." oninput="filterSemiDashboard()"
-             class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-purple-400 transition-all">
-    </div>
-    <select id="semi-dash-filter-match" onchange="filterSemiDashboard()" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-purple-400 cursor-pointer">
-      <option value="all">ทุกสถานะ</option>
-      <option value="MATCH">✅ ตรง</option>
-      <option value="DIFF">⚠️ ไม่ตรง</option>
-      <option value="NO_CYCLE">❓ ยังไม่นับ</option>
-      <option value="RECHECK">🔄 รอรีเช็ค</option>
-      <option value="ACCEPTED">✅ Accept</option>
-    </select>
-    <select id="semi-dash-filter-fg" onchange="filterSemiDashboard()" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:border-purple-400 cursor-pointer">
-      <option value="all">SEMI ทุกแบบ</option>
-      <option value="single">FG เดียว</option>
-      <option value="dual">FG คู่ (2 SKU)</option>
-    </select>
-    <div class="text-sm font-black text-slate-400">แสดง <span id="semi-dash-count" class="text-slate-700">0</span> รายการ</div>
-    <button onclick="printSemiRecheckForm()"
-      class="bg-blue-600 hover:bg-blue-500 text-white font-black text-sm px-5 py-3 rounded-xl transition-all flex items-center gap-2 shadow">
-      <i class="fas fa-print"></i> พิมพ์ใบรีเช็ค SEMI
-    </button>
-    <button onclick="printDailySummaryReport()"
-      class="bg-slate-800 hover:bg-slate-700 text-white font-black text-sm px-5 py-3 rounded-xl transition-all flex items-center gap-2 shadow border border-slate-600">
-      <i class="fas fa-file-alt"></i> Daily Summary Report
-    </button>
-  </div>
-
-  <!-- Table -->
-  <div id="semi-dash-table-wrap" class="hidden bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-900 text-slate-300 text-[11px] font-black uppercase tracking-wider sticky top-0 z-10">
-          <tr>
-            <th class="px-3 py-4 text-center w-8">#</th>
-            <th class="px-4 py-4 text-left min-w-[130px]">SEMI CODE</th>
-            <th class="px-4 py-4 text-left min-w-[170px]">RAW MATERIAL NAME</th>
-            <th class="px-4 py-4 text-right bg-blue-900 w-24">SYSTEM<br><span class="text-blue-300 text-[9px] normal-case font-normal">(แถว)</span></th>
-            <th class="px-4 py-4 text-center bg-green-900 min-w-[100px]">FG1 CODE</th>
-            <th class="px-4 py-4 text-left bg-green-900 min-w-[140px]">FG1 NAME</th>
-            <th class="px-4 py-4 text-right bg-green-700 w-24">QTY FG1<br><span class="text-green-200 text-[9px] normal-case font-normal">(นับ)</span></th>
-            <th class="px-4 py-4 text-center bg-orange-900 min-w-[100px]">FG2 CODE</th>
-            <th class="px-4 py-4 text-left bg-orange-900 min-w-[140px]">FG2 NAME</th>
-            <th class="px-4 py-4 text-right bg-orange-700 w-24">QTY FG2<br><span class="text-orange-200 text-[9px] normal-case font-normal">(นับ)</span></th>
-            <th class="px-4 py-4 text-right bg-teal-900 w-24">TOTAL</th>
-            <th class="px-4 py-4 text-right bg-slate-700 w-24">DIFF</th>
-            <th class="px-4 py-4 text-center">สถานะ</th>
-            <th class="px-4 py-4 text-center bg-purple-900 w-28">AUDIT</th>
-            <th class="px-4 py-4 text-center bg-amber-900 w-24">รีเช็ค</th>
-            <th class="px-4 py-4 text-center bg-indigo-900 min-w-[160px]">สาเหตุ DIFF</th>
-          </tr>
-        </thead>
-        <tbody id="semi-dash-tbody" class="divide-y divide-slate-100"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Empty State -->
-  <div id="semi-dash-empty" class="p-32 text-center">
-    <i class="fas fa-film text-7xl mb-6 opacity-10 text-purple-400"></i>
-    <p class="text-xl font-bold text-slate-400">กดปุ่ม "โหลดข้อมูล" เพื่อดูสรุปสต็อก SEMI</p>
-  </div>
-</div>
-  </div><!-- end inv-sub-semi -->
-
-</div><!-- end view-inventory-content -->
 
 <!-- ============================================ -->
 <!-- VIEW: LOGISTIC — วางแผนส่งมอบ              -->
@@ -3947,6 +3173,409 @@ thead.sticky {
 </div>
 
 <!-- ============================================================ -->
+<!-- ============================================================ -->
+<!-- KPI สต็อก — Inventory Accuracy Calculator                   -->
+<!-- ============================================================ -->
+<div id="view-kpi-stock-content" class="hidden space-y-6">
+
+  <!-- Header -->
+  <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-5 border border-slate-700 shadow-xl">
+    <div class="flex items-center gap-5">
+      <div class="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-3xl shadow-xl flex-shrink-0">
+        <i class="fas fa-calculator"></i>
+      </div>
+      <div>
+        <h2 class="text-3xl font-black text-white tracking-tight">KPI Inventory Accuracy</h2>
+        <p class="text-emerald-400 text-sm font-bold mt-1 uppercase tracking-widest">คำนวณ KPI การนับสต็อกถ่วงน้ำหนัก SKU + PCS</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 2-column grid: LEFT = input, RIGHT = results -->
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+
+    <!-- ════════════ LEFT: Input Form (original sizing) ════════════ -->
+    <div class="space-y-6">
+
+      <!-- วันที่ -->
+      <div class="bg-slate-800/80 border border-sky-700/60 rounded-2xl px-6 py-5 flex items-center gap-5">
+        <div class="w-12 h-12 bg-sky-500/20 border border-sky-500/40 rounded-xl flex items-center justify-center text-sky-300 text-xl flex-shrink-0">
+          <i class="fas fa-calendar-alt"></i>
+        </div>
+        <div class="flex-1">
+          <label class="block text-sky-300 font-black text-sm uppercase tracking-widest mb-2">วันที่นับสต็อก (Cycle Count Date)</label>
+          <input type="date" id="kpi-inv-date"
+            oninput="kpiInvAutoCalc()"
+            class="w-full max-w-xs bg-slate-700 border-2 border-sky-600/60 text-white rounded-xl px-4 py-3 font-bold text-base focus:outline-none focus:border-sky-400">
+        </div>
+      </div>
+
+      <!-- Section A -->
+      <div class="rounded-2xl border-2 border-sky-700/50 overflow-hidden">
+        <div class="bg-sky-900/40 px-5 py-3 flex items-center gap-3 border-b border-sky-700/40">
+          <div class="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white font-black text-sm">A</div>
+          <div>
+            <span class="text-sky-200 font-black text-base">จำนวนที่นับทั้งหมด</span>
+            <span class="text-sky-400/70 text-xs font-bold ml-2">— ข้อมูลพื้นฐานก่อนเปรียบเทียบ</span>
+          </div>
+        </div>
+        <div class="bg-slate-800/60 p-5 space-y-4">
+          <!-- ยอดรวมทั้งหมด -->
+          <div>
+            <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <i class="fas fa-layer-group text-slate-500"></i> ยอดรวมทั้งหมดที่นับ
+            </p>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-slate-700/60 rounded-xl p-4 border border-slate-600">
+                <label class="block text-sky-300 font-black text-xs uppercase tracking-widest mb-2">จำนวน SKU นับทั้งหมด</label>
+                <input type="number" id="kpi-inv-total-sku" min="0" placeholder="0"
+                  oninput="kpiInvAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-slate-500 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-sky-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">รายการ (SKU)</p>
+              </div>
+              <div class="bg-slate-700/60 rounded-xl p-4 border border-slate-600">
+                <label class="block text-sky-300 font-black text-xs uppercase tracking-widest mb-2">จำนวน PCS/เส้น ทั้งหมด</label>
+                <input type="number" id="kpi-inv-total-pcs" min="0" placeholder="0"
+                  oninput="kpiInvAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-slate-500 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-sky-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">ชิ้น / เส้น</p>
+              </div>
+            </div>
+          </div>
+          <!-- เฉพาะงานผลิต -->
+          <div>
+            <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <i class="fas fa-industry text-amber-500/70"></i> เฉพาะรายการงานผลิต (Subset จากยอดรวม)
+            </p>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+                <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">SKU ที่เป็นงานผลิต</label>
+                <input type="number" id="kpi-inv-prod-sku" min="0" placeholder="0"
+                  oninput="kpiInvAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-amber-700/50 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">รายการ (SKU)</p>
+              </div>
+              <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+                <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">PCS ของงานผลิต</label>
+                <input type="number" id="kpi-inv-prod-pcs" min="0" placeholder="0"
+                  oninput="kpiInvAutoCalc()"
+                  class="w-full bg-slate-800 border-2 border-amber-700/50 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+                <p class="text-xs text-slate-300 mt-1.5 text-center">ชิ้น / เส้น</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section B -->
+      <div class="rounded-2xl border-2 border-rose-700/50 overflow-hidden">
+        <div class="bg-rose-900/40 px-5 py-3 flex items-center gap-3 border-b border-rose-700/40">
+          <div class="w-8 h-8 bg-rose-500 rounded-lg flex items-center justify-center text-white font-black text-sm">B</div>
+          <div>
+            <span class="text-rose-200 font-black text-base">ความผิดพลาดของเช็คเกอร์</span>
+            <span class="text-rose-400/70 text-xs font-bold ml-2">— นับผิดเอง ไม่ว่าจะเป็น SKU งานผลิตหรือไม่ก็ตาม</span>
+          </div>
+        </div>
+        <div class="bg-slate-800/60 p-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-rose-900/20 rounded-xl p-4 border border-rose-700/40">
+              <label class="block text-rose-300 font-black text-xs uppercase tracking-widest mb-2">SKU ที่เช็คเกอร์นับผิด</label>
+              <input type="number" id="kpi-inv-checker-err-sku" min="0" placeholder="0"
+                oninput="kpiInvAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-rose-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-rose-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">รวมทุก SKU ที่นับผิด</p>
+            </div>
+            <div class="bg-rose-900/20 rounded-xl p-4 border border-rose-700/40">
+              <label class="block text-rose-300 font-black text-xs uppercase tracking-widest mb-2">PCS ที่เช็คเกอร์นับผิด</label>
+              <input type="number" id="kpi-inv-checker-err-pcs" min="0" placeholder="0"
+                oninput="kpiInvAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-rose-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-rose-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">รวม PCS ทั้งหมดที่ผิด</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-3 flex items-start gap-1.5">
+            <i class="fas fa-info-circle text-rose-500/60 mt-0.5 flex-shrink-0"></i>
+            เช็คเกอร์นับเกิน/ขาด, อ่านรหัสผิด, บันทึกผิดช่อง — รวมทั้ง SKU งานผลิตและไม่ใช่งานผลิต
+          </p>
+        </div>
+      </div>
+
+      <!-- Section C -->
+      <div class="rounded-2xl border-2 border-amber-700/50 overflow-hidden">
+        <div class="bg-amber-900/40 px-5 py-3 flex items-center gap-3 border-b border-amber-700/40">
+          <div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white font-black text-sm">C</div>
+          <div>
+            <span class="text-amber-200 font-black text-base">ความผิดพลาดของฝ่ายผลิต</span>
+            <span class="text-amber-400/70 text-xs font-bold ml-2">— ส่งข้อมูลผิด, รายงานยอดผิด (เฉพาะ production items)</span>
+          </div>
+        </div>
+        <div class="bg-slate-800/60 p-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+              <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">SKU ที่ฝ่ายผลิตส่งผิด</label>
+              <input type="number" id="kpi-inv-prod-err-sku" min="0" placeholder="0"
+                oninput="kpiInvAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-amber-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">เฉพาะ SKU งานผลิต</p>
+            </div>
+            <div class="bg-amber-900/20 rounded-xl p-4 border border-amber-700/40">
+              <label class="block text-amber-300 font-black text-xs uppercase tracking-widest mb-2">PCS ที่ฝ่ายผลิตส่งผิด</label>
+              <input type="number" id="kpi-inv-prod-err-pcs" min="0" placeholder="0"
+                oninput="kpiInvAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-amber-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-amber-400 text-center">
+              <p class="text-xs text-slate-300 mt-1.5 text-center">เฉพาะ PCS งานผลิต</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-3 flex items-start gap-1.5">
+            <i class="fas fa-info-circle text-amber-500/60 mt-0.5 flex-shrink-0"></i>
+            ฝ่ายผลิตรายงานยอดผิด, บันทึก Lot ผิด, ส่งจำนวนไม่ตรง — นับเฉพาะ production items เท่านั้น
+          </p>
+        </div>
+      </div>
+
+      <!-- Section D -->
+      <div class="rounded-2xl border-2 border-violet-700/50 overflow-hidden">
+        <div class="bg-violet-900/40 px-5 py-3 flex items-center gap-3 border-b border-violet-700/40">
+          <div class="w-8 h-8 bg-violet-500 rounded-lg flex items-center justify-center text-white font-black text-sm">D</div>
+          <span class="text-violet-200 font-black text-base">น้ำหนักการถ่วง</span>
+          <span class="text-violet-400/70 text-xs font-bold">— ต้องรวมกัน = 100%</span>
+        </div>
+        <div class="bg-slate-800/60 p-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-violet-900/20 rounded-xl p-4 border border-violet-700/40">
+              <label class="block text-violet-300 font-black text-xs uppercase tracking-widest mb-2">น้ำหนัก SKU (%)</label>
+              <input type="number" id="kpi-inv-weight-sku" min="0" max="100" value="40"
+                oninput="kpiInvSyncWeight('sku'); kpiInvAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-violet-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-violet-400 text-center">
+            </div>
+            <div class="bg-violet-900/20 rounded-xl p-4 border border-violet-700/40">
+              <label class="block text-violet-300 font-black text-xs uppercase tracking-widest mb-2">น้ำหนัก PCS (%)</label>
+              <input type="number" id="kpi-inv-weight-pcs" min="0" max="100" value="60"
+                oninput="kpiInvSyncWeight('pcs'); kpiInvAutoCalc()"
+                class="w-full bg-slate-800 border-2 border-violet-700/60 text-white rounded-lg px-3 py-2.5 font-black text-2xl focus:outline-none focus:border-violet-400 text-center">
+            </div>
+          </div>
+          <div id="kpi-inv-weight-warn" class="hidden mt-3 bg-red-900/30 border border-red-600 rounded-xl px-4 py-2.5 flex items-center gap-2">
+            <i class="fas fa-exclamation-triangle text-red-400"></i>
+            <span class="text-red-300 text-sm font-bold">ผลรวมน้ำหนักต้องเท่ากับ 100%</span>
+          </div>
+          <div id="kpi-inv-weight-ok" class="mt-3 bg-emerald-900/30 border border-emerald-700 rounded-xl px-4 py-2.5 flex items-center gap-2">
+            <i class="fas fa-check-circle text-emerald-400"></i>
+            <span class="text-emerald-300 text-sm font-bold">น้ำหนักถูกต้อง: SKU 40% + PCS 60% = 100%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reset button -->
+      <div class="flex justify-end">
+        <button onclick="resetStockKPI()"
+          class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-8 py-3 rounded-xl font-black text-sm shadow transition-all flex items-center gap-2">
+          <i class="fas fa-redo"></i> ล้างข้อมูล
+        </button>
+      </div>
+
+    </div><!-- end LEFT column -->
+
+    <!-- ════════════ RIGHT: Real-time Results (sticky) ════════════ -->
+    <div class="xl:sticky xl:top-20 space-y-4">
+
+      <!-- Placeholder -->
+      <div id="kpi-inv-placeholder" class="bg-slate-800/40 border border-slate-700 border-dashed rounded-2xl py-16 text-center">
+        <i class="fas fa-chart-pie text-4xl text-slate-600 mb-3 block"></i>
+        <p class="text-slate-500 font-bold text-base">ผลการคำนวณจะแสดงที่นี่แบบ Real-time</p>
+        <p class="text-slate-600 text-sm mt-1">เริ่มกรอกข้อมูลในส่วน A เพื่อดูผล</p>
+      </div>
+
+      <!-- Real-time results -->
+      <div id="kpi-inv-realtime" class="hidden space-y-4">
+
+        <!-- Summary bar -->
+        <div class="bg-slate-800/60 border border-slate-700 rounded-2xl px-5 py-4">
+          <div class="flex items-center gap-3 mb-3">
+            <i class="fas fa-chart-pie text-emerald-400 text-xl"></i>
+            <div>
+              <span class="text-white font-black text-base">ผลการคำนวณ KPI</span>
+              <p id="kpi-res-date-label" class="text-emerald-400 text-xs font-bold mt-0.5"></p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs font-bold">
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">SKU weight: <span id="kpi-res-wsku" class="text-white">40%</span></span>
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">PCS weight: <span id="kpi-res-wpcs" class="text-white">60%</span></span>
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">SKU รวม: <span id="kpi-res-totalsku" class="text-white">—</span></span>
+            <span class="bg-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">PCS รวม: <span id="kpi-res-totalpcs" class="text-white">—</span></span>
+          </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="space-y-4">
+
+          <!-- Checker KPI Card -->
+          <div class="bg-slate-800/60 border border-slate-700 rounded-2xl overflow-hidden">
+            <div class="bg-gradient-to-r from-rose-900 to-rose-800 px-5 py-3.5 flex items-center gap-3">
+              <div class="w-9 h-9 bg-rose-500 rounded-xl flex items-center justify-center text-white text-base">
+                <i class="fas fa-user-check"></i>
+              </div>
+              <div>
+                <h3 class="text-white font-black text-base">KPI เช็คเกอร์</h3>
+                <p class="text-rose-300 text-xs font-bold">วัดความแม่นยำการนับ (ทุก SKU)</p>
+              </div>
+              <div class="ml-auto">
+                <div id="kpi-res-checker-badge" class="px-3 py-1.5 rounded-xl font-black text-xl"></div>
+              </div>
+            </div>
+            <div class="p-5 space-y-3">
+              <div>
+                <div class="flex justify-between text-xs font-bold text-slate-400 mb-1.5">
+                  <span>KPI รวม (ถ่วงน้ำหนัก)</span>
+                  <span id="kpi-res-checker-kpi-pct" class="text-white">—</span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-3.5 overflow-hidden">
+                  <div id="kpi-res-checker-bar" class="h-3.5 rounded-full transition-all duration-700" style="width:0%"></div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">SKU Accuracy</p>
+                  <p id="kpi-res-checker-sku" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-res-checker-sku-ok">—</span> / <span id="kpi-res-checker-sku-total">—</span> SKU)</p>
+                </div>
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">PCS Accuracy</p>
+                  <p id="kpi-res-checker-pcs" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-res-checker-pcs-ok">—</span> / <span id="kpi-res-checker-pcs-total">—</span> PCS)</p>
+                </div>
+              </div>
+              <div class="bg-slate-700/30 rounded-xl p-3">
+                <p class="text-xs text-slate-400 font-bold mb-1">สูตรคำนวณ</p>
+                <p id="kpi-res-checker-formula" class="text-xs text-slate-300 font-mono leading-relaxed">—</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Production KPI Card -->
+          <div class="bg-slate-800/60 border border-slate-700 rounded-2xl overflow-hidden">
+            <div class="bg-gradient-to-r from-amber-900 to-amber-800 px-5 py-3.5 flex items-center gap-3">
+              <div class="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center text-white text-base">
+                <i class="fas fa-industry"></i>
+              </div>
+              <div>
+                <h3 class="text-white font-black text-base">KPI ฝ่ายผลิต</h3>
+                <p class="text-amber-300 text-xs font-bold">วัดความถูกต้องข้อมูล (เฉพาะงานผลิต)</p>
+              </div>
+              <div class="ml-auto">
+                <div id="kpi-res-prod-badge" class="px-3 py-1.5 rounded-xl font-black text-xl"></div>
+              </div>
+            </div>
+            <div class="p-5 space-y-3">
+              <div>
+                <div class="flex justify-between text-xs font-bold text-slate-400 mb-1.5">
+                  <span>KPI รวม (ถ่วงน้ำหนัก)</span>
+                  <span id="kpi-res-prod-kpi-pct" class="text-white">—</span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-3.5 overflow-hidden">
+                  <div id="kpi-res-prod-bar" class="h-3.5 rounded-full transition-all duration-700" style="width:0%"></div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">SKU Accuracy</p>
+                  <p id="kpi-res-prod-sku" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-res-prod-sku-ok">—</span> / <span id="kpi-res-prod-sku-total">—</span> SKU)</p>
+                </div>
+                <div class="bg-slate-700/50 rounded-xl p-3 text-center">
+                  <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">PCS Accuracy</p>
+                  <p id="kpi-res-prod-pcs" class="text-xl font-black text-white font-mono">—</p>
+                  <p class="text-xs text-slate-500 mt-1">(<span id="kpi-res-prod-pcs-ok">—</span> / <span id="kpi-res-prod-pcs-total">—</span> PCS)</p>
+                </div>
+              </div>
+              <div class="bg-slate-700/30 rounded-xl p-3">
+                <p class="text-xs text-slate-400 font-bold mb-1">สูตรคำนวณ</p>
+                <p id="kpi-res-prod-formula" class="text-xs text-slate-300 font-mono leading-relaxed">—</p>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- end KPI cards -->
+
+        <!-- Target legend -->
+        <div class="bg-slate-800/40 border border-slate-700 rounded-2xl px-5 py-3.5">
+          <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">เกณฑ์ Target</p>
+          <div class="flex flex-wrap gap-3 text-xs font-bold">
+            <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-emerald-500 inline-block"></span> ≥ 95% — ดีเยี่ยม</span>
+            <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-amber-500 inline-block"></span> 80–94% — พอใช้</span>
+            <span class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded bg-red-500 inline-block"></span> &lt; 80% — ต้องปรับปรุง</span>
+          </div>
+        </div>
+
+        <!-- Save button -->
+        <div class="flex justify-center">
+          <button onclick="saveInventoryKPIResult()" id="btn-save-inv-kpi"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-3 rounded-xl font-black text-base shadow-lg transition-all flex items-center gap-2 w-full justify-center">
+            <i class="fas fa-save"></i> บันทึกผลลงชีต
+          </button>
+        </div>
+
+      </div><!-- end kpi-inv-realtime -->
+
+    </div><!-- end RIGHT column -->
+
+  </div><!-- end 2-column grid -->
+
+
+
+</div><!-- end view-kpi-stock-content -->
+
+<!-- ============================================================ -->
+<!-- MODAL: กรอกรหัสพนักงานก่อนบันทึก KPI                      -->
+<!-- ============================================================ -->
+<div id="kpi-emp-modal" class="fixed inset-0 bg-black/75 hidden z-[90] flex items-center justify-center backdrop-blur-sm px-4">
+  <div class="bg-slate-800 w-full max-w-sm rounded-2xl shadow-2xl border border-slate-600 overflow-hidden">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-emerald-700 to-emerald-600 px-6 py-5 flex items-center gap-3">
+      <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white text-xl">
+        <i class="fas fa-id-badge"></i>
+      </div>
+      <div>
+        <h3 class="text-white font-black text-lg">ยืนยันการบันทึก</h3>
+        <p class="text-emerald-200 text-xs font-bold">กรอกรหัสพนักงานเพื่อบันทึก KPI</p>
+      </div>
+      <button onclick="closeKpiEmpModal()" class="ml-auto text-white/60 hover:text-white text-xl">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <!-- Body -->
+    <div class="p-6 space-y-5">
+      <!-- สรุปผลที่จะบันทึก -->
+      <div id="kpi-modal-summary" class="bg-slate-700/50 rounded-xl p-4 space-y-1.5 text-sm"></div>
+      <!-- รหัสพนักงาน -->
+      <div>
+        <label class="block text-slate-300 font-black text-sm uppercase tracking-widest mb-2">
+          <i class="fas fa-user mr-1.5 text-emerald-400"></i>รหัสพนักงาน
+        </label>
+        <input type="text" id="kpi-emp-id-input"
+          placeholder="กรอกรหัสพนักงานของคุณ"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-3 font-bold text-lg focus:outline-none focus:border-emerald-400 tracking-widest"
+          onkeydown="if(event.key==='Enter') confirmSaveInvKPI()">
+        <p id="kpi-emp-id-error" class="hidden text-red-400 text-xs font-bold mt-1.5">
+          <i class="fas fa-exclamation-circle mr-1"></i>กรุณากรอกรหัสพนักงาน
+        </p>
+      </div>
+      <!-- Buttons -->
+      <div class="flex gap-3">
+        <button onclick="confirmSaveInvKPI()" id="btn-confirm-save-kpi"
+          class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-black text-base shadow-lg transition-all flex items-center justify-center gap-2">
+          <i class="fas fa-save"></i> ยืนยันบันทึก
+        </button>
+        <button onclick="closeKpiEmpModal()"
+          class="px-6 bg-slate-700 hover:bg-slate-600 text-slate-300 py-3 rounded-xl font-black text-sm transition-all">
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
 <!-- ============================================================ -->
 <div id="view-kpi-wh-content" class="hidden space-y-6">
@@ -5761,20 +5390,6 @@ window.refreshCurrentView = function refreshCurrentView() {
     } else if (_isActive('nav-whactivity')) {
         whaLoadDate();
         showToast("รีเฟรชข้อมูล WH Activity แล้ว");
-    } else if (_isActive('nav-inventory')) {
-        // ตรวจว่า sub-tab ไหน active อยู่ แล้วรีเฟรชสต๊อกระบบจาก Sheet
-        const fgTab   = document.getElementById('inv-tab-fg');
-        const semiTab = document.getElementById('inv-tab-semi');
-        const pcTab   = document.getElementById('inv-tab-policycheck');
-        if (fgTab && fgTab.classList.contains('active-inv')) {
-            refreshFGSystemStock();
-        } else if (semiTab && semiTab.classList.contains('active-inv')) {
-            refreshSemiSystemStock();
-        } else if (pcTab && pcTab.classList.contains('active-inv')) {
-            runPolicyCheck();
-        } else {
-            showToast("กรุณาสร้างตารางเทียบก่อนรีเฟรช");
-        }
     } else if (_isActive('nav-logistic-plan')) {
         // ตรวจ sub-tab ที่ active โดยดูจาก panel ที่ไม่ hidden
         const _logiPanelVisible = id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); };
@@ -7879,7 +7494,7 @@ let currentAnalysis = null;
  * ฟังก์ชันหลักในการสลับ View ใหญ่
  */
 window.switchView = function switchView(view) {
-    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'inventory', 'logistic-plan', 'kpi-wh'];
+    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'kpi-wh', 'kpi-stock'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -7902,9 +7517,9 @@ window.switchView = function switchView(view) {
             'analytics': 'Warehouse Analytics & Flow',
             'overdue': 'Space Recovery Center',
             'whactivity': 'WH Activity Log — บันทึกข้อมูลจริงจากหน้างาน',
-            'inventory': 'Inventory Control System',
             'logistic-plan': 'Logistic — วางแผนส่งมอบ',
-            'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard'
+            'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
+            'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก'
         }[view] || 'WL Management';
     }
 
@@ -13443,9 +13058,8 @@ function renderSemiCycleTable(rows) {
      * → เด้งไปหน้า SEMI Cycle Count + โหลดเฉพาะ SEMI SKU นั้น + แสดง banner
      */
     function goSemiRecheckSKU(sku, name) {
-        switchView('inventory');
-        setTimeout(() => switchInvTab('control'), 50);
-        setTimeout(() => switchInvSubTab('semi'), 100);
+        showToast('⚠️ ฟังก์ชันนี้ถูกปิดใช้งานแล้ว (Inventory view ถูกลบออก)', true);
+        return;
         setTimeout(() => {
             showToast('⏳ กำลังโหลดรายการ SEMI: ' + sku + '...');
             google.script.run
@@ -27194,6 +26808,225 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
             if (submitBtn) { submitBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกการแก้ไข'; submitBtn.disabled = false; }
         })
         .saveKpiWHLG(row);
+};
+
+// ══════════════════════════════════════════════════════════════
+// KPI INVENTORY ACCURACY CALCULATOR
+// ══════════════════════════════════════════════════════════════
+
+// ── helpers ──────────────────────────────────────────────────
+let _lastInvKPIResult = null;
+
+function kpiInvVal(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+
+function kpiScoreColor(pct) {
+    if (pct >= 95) return { bar: 'bg-emerald-500', badge: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500' };
+    if (pct >= 80) return { bar: 'bg-amber-500',   badge: 'bg-amber-500/20 text-amber-300 border border-amber-500'     };
+    return             { bar: 'bg-red-500',         badge: 'bg-red-500/20 text-red-300 border border-red-500'           };
+}
+
+function kpiSetCard(prefix, skuOk, skuTotal, pcsOk, pcsTotal, wSKU, wPCS) {
+    const skuPct = skuTotal > 0 ? (skuOk / skuTotal) * 100 : 0;
+    const pcsPct = pcsTotal > 0 ? (pcsOk / pcsTotal) * 100 : 0;
+    const kpi    = (wSKU / 100) * skuPct + (wPCS / 100) * pcsPct;
+    const col    = kpiScoreColor(kpi);
+    const fmt    = v => v.toLocaleString('th-TH', { maximumFractionDigits: 1 }) + '%';
+    const fmtN   = v => v.toLocaleString('th-TH');
+
+    document.getElementById(`kpi-res-${prefix}-kpi-pct`).textContent  = fmt(kpi);
+    document.getElementById(`kpi-res-${prefix}-sku`).textContent       = fmt(skuPct);
+    document.getElementById(`kpi-res-${prefix}-pcs`).textContent       = fmt(pcsPct);
+    document.getElementById(`kpi-res-${prefix}-sku-ok`).textContent    = fmtN(skuOk);
+    document.getElementById(`kpi-res-${prefix}-sku-total`).textContent = fmtN(skuTotal);
+    document.getElementById(`kpi-res-${prefix}-pcs-ok`).textContent    = fmtN(pcsOk);
+    document.getElementById(`kpi-res-${prefix}-pcs-total`).textContent = fmtN(pcsTotal);
+
+    const bar   = document.getElementById(`kpi-res-${prefix}-bar`);
+    const badge = document.getElementById(`kpi-res-${prefix}-badge`);
+    bar.style.width = Math.min(kpi, 100) + '%';
+    bar.className   = `h-4 rounded-full transition-all duration-500 ${col.bar}`;
+    badge.textContent = fmt(kpi);
+    badge.className   = `px-4 py-2 rounded-xl font-black text-xl ${col.badge}`;
+
+    document.getElementById(`kpi-res-${prefix}-formula`).textContent =
+        `(${wSKU}% × ${fmt(skuPct)}) + (${wPCS}% × ${fmt(pcsPct)}) = ${fmt(kpi)}\n` +
+        `SKU: ${fmtN(skuOk)} ถูก / ${fmtN(skuTotal)} รายการ | PCS: ${fmtN(pcsOk)} ถูก / ${fmtN(pcsTotal)} ชิ้น`;
+
+    return kpi;
+}
+
+// ── weight sync ───────────────────────────────────────────────
+window.kpiInvSyncWeight = function(changed) {
+    const skuEl = document.getElementById('kpi-inv-weight-sku');
+    const pcsEl = document.getElementById('kpi-inv-weight-pcs');
+    if (!skuEl || !pcsEl) return;
+    if (changed === 'sku') pcsEl.value = Math.max(0, 100 - parseFloat(skuEl.value || 0));
+    else skuEl.value = Math.max(0, 100 - parseFloat(pcsEl.value || 0));
+};
+
+// ── Real-time calculation (เรียกทุกครั้งที่ input เปลี่ยน) ──
+window.kpiInvAutoCalc = function() {
+    const wSKU = kpiInvVal('kpi-inv-weight-sku');
+    const wPCS = kpiInvVal('kpi-inv-weight-pcs');
+
+    // validate weights
+    const warn = document.getElementById('kpi-inv-weight-warn');
+    const ok   = document.getElementById('kpi-inv-weight-ok');
+    const weightInvalid = Math.abs(wSKU + wPCS - 100) > 0.01;
+    if (warn && ok) {
+        warn.classList.toggle('hidden', !weightInvalid);
+        ok.classList.toggle('hidden',   weightInvalid);
+        if (!weightInvalid) ok.querySelector('span').textContent = `น้ำหนักถูกต้อง: SKU ${wSKU}% + PCS ${wPCS}% = 100%`;
+    }
+
+    const totalSKU      = kpiInvVal('kpi-inv-total-sku');
+    const totalPCS      = kpiInvVal('kpi-inv-total-pcs');
+    const placeholder   = document.getElementById('kpi-inv-placeholder');
+    const realtime      = document.getElementById('kpi-inv-realtime');
+
+    // ยังไม่มีข้อมูลหลัก → แสดง placeholder
+    if (totalSKU <= 0 || totalPCS <= 0 || weightInvalid) {
+        placeholder?.classList.remove('hidden');
+        realtime?.classList.add('hidden');
+        _lastInvKPIResult = null;
+        return;
+    }
+
+    placeholder?.classList.add('hidden');
+    realtime?.classList.remove('hidden');
+
+    const prodSKU       = kpiInvVal('kpi-inv-prod-sku');
+    const prodPCS       = kpiInvVal('kpi-inv-prod-pcs');
+    const checkerErrSKU = kpiInvVal('kpi-inv-checker-err-sku');
+    const checkerErrPCS = kpiInvVal('kpi-inv-checker-err-pcs');
+    const prodErrSKU    = kpiInvVal('kpi-inv-prod-err-sku');
+    const prodErrPCS    = kpiInvVal('kpi-inv-prod-err-pcs');
+    const fmtN          = v => v.toLocaleString('th-TH');
+    const dateVal       = document.getElementById('kpi-inv-date')?.value;
+
+    // Checker KPI
+    const checkerSKUpct = (totalSKU - checkerErrSKU) / totalSKU * 100;
+    const checkerPCSpct = (totalPCS - checkerErrPCS) / totalPCS * 100;
+    const checkerKPI    = (wSKU / 100) * checkerSKUpct + (wPCS / 100) * checkerPCSpct;
+    kpiSetCard('checker', totalSKU - checkerErrSKU, totalSKU, totalPCS - checkerErrPCS, totalPCS, wSKU, wPCS);
+
+    // Production KPI
+    let prodSKUpct = 0, prodPCSpct = 0, prodKPI = 0;
+    if (prodSKU > 0) {
+        prodSKUpct = (prodSKU - prodErrSKU) / prodSKU * 100;
+        prodPCSpct = prodPCS > 0 ? (prodPCS - prodErrPCS) / prodPCS * 100 : 0;
+        prodKPI    = (wSKU / 100) * prodSKUpct + (wPCS / 100) * prodPCSpct;
+        kpiSetCard('prod', prodSKU - prodErrSKU, prodSKU, prodPCS - prodErrPCS, prodPCS, wSKU, wPCS);
+    } else {
+        ['sku','pcs','sku-ok','sku-total','pcs-ok','pcs-total'].forEach(s =>
+            document.getElementById(`kpi-res-prod-${s}`).textContent = 'N/A');
+        document.getElementById('kpi-res-prod-kpi-pct').textContent = 'N/A';
+        document.getElementById('kpi-res-prod-formula').textContent = 'ไม่มีข้อมูลงานผลิต';
+        const bar = document.getElementById('kpi-res-prod-bar');
+        bar.style.width = '0%'; bar.className = 'h-4 rounded-full transition-all duration-500 bg-slate-600';
+        const badge = document.getElementById('kpi-res-prod-badge');
+        badge.textContent = 'N/A'; badge.className = 'px-4 py-2 rounded-xl font-black text-xl bg-slate-600 text-slate-400';
+    }
+
+    // Summary bar
+    document.getElementById('kpi-res-wsku').textContent     = wSKU + '%';
+    document.getElementById('kpi-res-wpcs').textContent     = wPCS + '%';
+    document.getElementById('kpi-res-totalsku').textContent = fmtN(totalSKU) + ' SKU';
+    document.getElementById('kpi-res-totalpcs').textContent = fmtN(totalPCS) + ' PCS';
+    const dateLabel = document.getElementById('kpi-res-date-label');
+    if (dateLabel) {
+        if (dateVal) { const [y,m,d] = dateVal.split('-'); dateLabel.textContent = `วันที่นับ: ${d}/${m}/${y}`; }
+        else dateLabel.textContent = 'วันที่: ไม่ระบุ';
+    }
+
+    // เก็บผลสำหรับบันทึก
+    _lastInvKPIResult = {
+        countDate: dateVal || '',
+        totalSKU, totalPCS, prodSKU, prodPCS,
+        checkerErrSKU, checkerErrPCS, prodErrSKU, prodErrPCS,
+        weightSKU: wSKU, weightPCS: wPCS,
+        checkerSKUpct: Math.round(checkerSKUpct * 10) / 10,
+        checkerPCSpct: Math.round(checkerPCSpct * 10) / 10,
+        checkerKPI:    Math.round(checkerKPI    * 10) / 10,
+        prodSKUpct:    Math.round(prodSKUpct    * 10) / 10,
+        prodPCSpct:    Math.round(prodPCSpct    * 10) / 10,
+        prodKPI:       Math.round(prodKPI       * 10) / 10
+    };
+};
+
+// ── Reset ──────────────────────────────────────────────────────
+window.resetStockKPI = function() {
+    ['kpi-inv-total-sku','kpi-inv-total-pcs','kpi-inv-prod-sku','kpi-inv-prod-pcs',
+     'kpi-inv-checker-err-sku','kpi-inv-checker-err-pcs',
+     'kpi-inv-prod-err-sku','kpi-inv-prod-err-pcs',
+     'kpi-inv-date'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('kpi-inv-weight-sku').value = 40;
+    document.getElementById('kpi-inv-weight-pcs').value = 60;
+    _lastInvKPIResult = null;
+    kpiInvAutoCalc();
+};
+
+// ── Save: เปิด Modal ───────────────────────────────────────────
+window.saveInventoryKPIResult = function() {
+    if (!_lastInvKPIResult) {
+        showToast('⚠️ กรอกข้อมูล Section A ก่อนบันทึก', true); return;
+    }
+    const r   = _lastInvKPIResult;
+    const fmt = v => Number(v).toFixed(1) + '%';
+    const fmtN = v => Number(v).toLocaleString('th-TH');
+    const dateVal = r.countDate;
+    let dateStr = 'ไม่ระบุ';
+    if (dateVal) { const [y,m,d] = dateVal.split('-'); dateStr = `${d}/${m}/${y}`; }
+
+    document.getElementById('kpi-modal-summary').innerHTML = `
+      <p class="text-slate-400 text-xs uppercase tracking-widest font-black mb-2">สรุปผลที่จะบันทึก</p>
+      <div class="grid grid-cols-2 gap-1 text-sm">
+        <span class="text-slate-400">วันที่นับ</span>      <span class="text-white font-bold">${dateStr}</span>
+        <span class="text-slate-400">SKU ทั้งหมด</span>   <span class="text-white font-bold">${fmtN(r.totalSKU)} SKU / ${fmtN(r.totalPCS)} PCS</span>
+        <span class="text-rose-300">Checker KPI</span>     <span class="text-white font-bold">${fmt(r.checkerKPI)}</span>
+        <span class="text-amber-300">Prod KPI</span>       <span class="text-white font-bold">${r.prodSKU > 0 ? fmt(r.prodKPI) : 'N/A'}</span>
+      </div>`;
+
+    document.getElementById('kpi-emp-id-input').value = '';
+    document.getElementById('kpi-emp-id-error').classList.add('hidden');
+    document.getElementById('kpi-emp-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('kpi-emp-id-input').focus(), 100);
+};
+
+window.closeKpiEmpModal = function() {
+    document.getElementById('kpi-emp-modal').classList.add('hidden');
+};
+
+// ── Save: ยืนยันด้วยรหัสพนักงาน ───────────────────────────────
+window.confirmSaveInvKPI = function() {
+    const empId = document.getElementById('kpi-emp-id-input').value.trim();
+    const errEl = document.getElementById('kpi-emp-id-error');
+    if (!empId) { errEl.classList.remove('hidden'); return; }
+    errEl.classList.add('hidden');
+
+    const btn = document.getElementById('btn-confirm-save-kpi');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+    btn.disabled  = true;
+
+    const payload = Object.assign({}, _lastInvKPIResult, { employeeId: empId });
+
+    google.script.run
+        .withSuccessHandler(res => {
+            btn.innerHTML = '<i class="fas fa-save"></i> ยืนยันบันทึก';
+            btn.disabled  = false;
+            if (res && res.success) {
+                closeKpiEmpModal();
+                showToast(`✅ บันทึกสำเร็จ (รหัส: ${empId}) — ชีต "Inventory KPI Log"`);
+            } else {
+                showToast('❌ บันทึกไม่สำเร็จ: ' + (res?.message || 'unknown'), true);
+            }
+        })
+        .withFailureHandler(err => {
+            btn.innerHTML = '<i class="fas fa-save"></i> ยืนยันบันทึก';
+            btn.disabled  = false;
+            showToast('❌ เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
+        })
+        .saveInventoryKPI(payload);
 };
 
 </script>
