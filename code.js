@@ -6803,7 +6803,7 @@ function getDriverEventLog() {
         id:        Number(row[0]) || 0,
         category:  String(row[1] || ''),
         type:      String(row[2] || ''),
-        date:      String(row[3] || ''),
+        date:      row[3] instanceof Date ? Utilities.formatDate(row[3], 'GMT+7', 'yyyy-MM-dd') : String(row[3] || ''),
         driver:    String(row[4] || ''),
         truck:     String(row[5] || ''),
         detail:    String(row[6] || ''),
