@@ -1293,20 +1293,29 @@ function getDeliveryTypeData(startDate, endDate) {
     const siSheet = siSS.getSheetByName('All SI LINE');
     if (siSheet && siSheet.getLastRow() >= 2) {
       const siLastRow  = siSheet.getLastRow();
-      const siReadFrom = Math.max(2, siLastRow - 10000); // อ่านแค่ 10,000 แถวล่าสุด
+      const siReadFrom = Math.max(2, siLastRow - 30000); // อ่านแค่ 30,000 แถวล่าสุด
       const siRange    = siSheet.getRange(siReadFrom, 1, siLastRow - siReadFrom + 1, 10);
-      // ใช้ getDisplayValues() สำหรับวันที่ — ได้ text M/D/YYYY ตรงๆ ไม่ขึ้นกับ locale ของชีต
-      const siDisplay  = siRange.getDisplayValues(); // text ทุก cell
-      const siValues   = siRange.getValues();        // ตัวเลขสำหรับ Col I, J
+      const siDisplay  = siRange.getDisplayValues(); // text สำหรับ Col E (ประเภทจัดส่ง)
+      const siValues   = siRange.getValues();        // ตัวเลข/Date สำหรับ Col A, I, J
 
       for (let i = 0; i < siDisplay.length; i++) {
-        // Col A (0) = วันที่ M/D/YYYY — อ่านจาก display text เสมอ (ไม่สนใจ locale/auto-convert)
-        const aStr = String(siDisplay[i][0] || '').trim().split(' ')[0];
-        const ap   = aStr.split('/');
+        // Col A (0) = วันที่ — อ่านจาก getValues() เป็น Date object ตรงๆ ไม่ขึ้นกับ locale/format ของชีต
         let siDateObj;
-        if (ap.length === 3) {
-          const m = parseInt(ap[0]), d = parseInt(ap[1]), y = parseInt(ap[2]);
-          if (!isNaN(m) && !isNaN(d) && !isNaN(y)) siDateObj = new Date(y, m - 1, d);
+        const rawDate = siValues[i][0];
+        if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+          siDateObj = new Date(rawDate.getFullYear(), rawDate.getMonth(), rawDate.getDate());
+        } else {
+          // fallback: parse string หาก cell เก็บเป็น text
+          const aStr = String(siDisplay[i][0] || '').trim().split(' ')[0];
+          const ap   = aStr.split('/');
+          if (ap.length === 3) {
+            const p0 = parseInt(ap[0]), p1 = parseInt(ap[1]), p2 = parseInt(ap[2]);
+            if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
+              // ถ้า p0 > 12 แสดงว่าเป็น D/M/YYYY
+              const m = p0 <= 12 ? p0 : p1, d = p0 <= 12 ? p1 : p0, y = p2;
+              siDateObj = new Date(y, m - 1, d);
+            }
+          }
         }
         if (!siDateObj || siDateObj < start || siDateObj > end) continue;
 
