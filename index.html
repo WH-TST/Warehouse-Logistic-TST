@@ -16058,9 +16058,11 @@ window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
     var plannerEl = document.getElementById('logi-trailer-planner');
 
     const isPM = document.getElementById('logi-job-type')?.value === 'maintenance_pm';
+    const _jt  = document.getElementById('logi-job-type')?.value;
+    const isTransferJob = (_jt === 'transfer_fg' || _jt === 'transfer_semi');
     const pmTargetSec = document.getElementById('logi-pm-target-section');
-    if (isTrailer && !isPM) {
-        // แสดง trailer mode section + info badge (ซ่อนถ้าเป็น PM)
+    if (isTrailer && !isPM && !isTransferJob) {
+        // แสดง trailer mode section + info badge (ซ่อนถ้าเป็น PM หรืองานย้าย)
         if (pmTargetSec) pmTargetSec.classList.add('hidden');
         if (trailerModeSec) trailerModeSec.classList.remove('hidden');
         var badge = document.getElementById('logi-trailer-info-badge');
@@ -17160,8 +17162,8 @@ window.saveLogisticPlan = function saveLogisticPlan() {
         const truckOpt2 = truckSel2?.options[truckSel2.selectedIndex];
         payload.truckPlate  = truckOpt2?.value || '';
         const rawChildPlate = truckOpt2?.dataset?.childPlate || '';
-        if (jobType !== 'maintenance_pm') {
-            // trailerMode validation (ข้ามสำหรับแผนซ่อม)
+        if (jobType !== 'maintenance_pm' && !isTransfer) {
+            // trailerMode validation (ข้ามสำหรับแผนซ่อมและงานย้าย)
             if (rawChildPlate) {
                 if (!logiTrailerMode) return showToast('กรุณาเลือกรูปแบบการวิ่ง (เฉพาะแม่ / ทั้งพ่วง)', true);
                 if (logiTrailerMode === 'full_trailer') {
