@@ -17667,8 +17667,10 @@ window.renderLogisticList = function renderLogisticList() {
 
         // ── TRANSFER: render แบบพิเศษ — แสดง ต้นทาง→ปลายทาง แทนชื่อร้าน ──
         if (isTransferJob) {
-            const whSrc  = p.whSource || p.warehouse || '—';
-            const whDst  = p.whDest   || '—';
+            // fallback: ถ้า whSource/whDest ว่าง ให้ parse จาก shops[0].shopName ("คลังA → คลังB")
+            const _snParts = ((shops[0] && shops[0].shopName) || '').split(' → ');
+            const whSrc  = p.whSource || p.warehouse || (_snParts[0] && _snParts[0].trim()) || '—';
+            const whDst  = p.whDest   || (_snParts[1] && _snParts[1].trim()) || '—';
             const tRemark = (shops[0] && shops[0].remark) ? shops[0].remark : (p.transferRemark || p.failReason || '');
             if (!p.totalWeight && transferItems.length > 0) {
                 p.totalWeight = transferItems.reduce((s, it) => s + (it.weight || 0), 0);
