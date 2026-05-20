@@ -25642,7 +25642,11 @@ window.genMgmtReport = function genMgmtReport() {
 
     const _ddmmToMs = function(ddmmyyyy) {
         if (!ddmmyyyy) return 0;
-        const p = String(ddmmyyyy).split('/');
+        const s = String(ddmmyyyy).trim();
+        // YYYY-MM-DD (จาก HTML date input)
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.substring(0, 10)).getTime();
+        // DD/MM/YYYY (Thai format)
+        const p = s.split('/');
         if (p.length !== 3) return 0;
         return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0])).getTime();
     };
