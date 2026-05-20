@@ -5686,6 +5686,24 @@ function getLogisticPlanById(planId) {
         });
         plan.totalWeight += itemWt;
       }
+
+      // ── Transfer: สร้าง transferItems โดยตรงจาก item sheet (ไม่พึ่ง shopName matching) ──
+      if (plan.jobType === 'transfer_fg' || plan.jobType === 'transfer_semi') {
+        var tfList = [];
+        for (var tfi = 1; tfi < itemData.length; tfi++) {
+          var tfRow = itemData[tfi];
+          if (String(tfRow[0]).replace(/-[MC]$/, '') !== basePlanId) continue;
+          if (!tfRow[1]) continue;  // ข้าม placeholder
+          tfList.push({
+            sku:           String(tfRow[1] || ''),
+            productName:   String(tfRow[2] || ''),
+            qty:           parseFloat(tfRow[3]) || 0,
+            weightPerUnit: parseFloat(tfRow[4]) || 0,
+            weight:        parseFloat(tfRow[5]) || 0
+          });
+        }
+        plan.transferItems = tfList;
+      }
     }
 
     // sort shops ตาม shopSeq

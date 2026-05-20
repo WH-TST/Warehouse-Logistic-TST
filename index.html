@@ -22224,8 +22224,12 @@ window.editLogiPlan = function editLogiPlan(planId) {
                     const tRemarkEl = document.getElementById('logi-transfer-remark');
                     // FIX: ใช้ transferRemark หรือ failReason เป็น fallback (บันทึกใน Col N)
                     if (tRemarkEl) tRemarkEl.value = p.transferRemark || p.failReason || '';
-                    // restore transfer items จาก shops[0].items
-                    const savedItems = (p.shops && p.shops[0]) ? (p.shops[0].items || []) : [];
+                    // restore transfer items — ใช้ p.transferItems (direct scan) เป็นหลัก
+                    // fallback: shops[0].items (shopName matching)
+                    const savedItems = (p.transferItems && p.transferItems.length > 0)
+                        ? p.transferItems
+                        : (p.shops && p.shops[0] ? (p.shops[0].items || []) : []);
+                    console.log('📦 Transfer edit items:', savedItems.length, JSON.stringify(savedItems));
                     _tiCounter = 0;
                     const tiCon = document.getElementById('logi-transfer-items-container');
                     if (tiCon) tiCon.innerHTML = '';
