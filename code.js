@@ -7553,12 +7553,13 @@ function getKpiWHLGData(startDateStr, endDateStr) {
       var planMinutes = planMap[key] !== undefined ? planMap[key] : null;
 
       // คำนวณ efficiency จาก WH_Activity_Log
-      var efficiency  = null;
-      var effStep1    = null;
-      var wpuActual   = null;
-      var mpiActual   = null;
-      var wrongCount  = wha ? (wha.wrongCount || 0) : 0;
-      var claimCount  = wha ? (wha.claimCount || 0) : 0;
+      var efficiency    = null;
+      var effStep1      = null;
+      var accuracyScore = null;
+      var wpuActual     = null;
+      var mpiActual     = null;
+      var wrongCount    = wha ? (wha.wrongCount || 0) : 0;
+      var claimCount    = wha ? (wha.claimCount || 0) : 0;
 
       if (wha && wha.wpuList.length > 0 && medianAll) {
         // wpuActual / mpiActual = ค่าเฉลี่ย (ใช้แสดงผลในตาราง เท่านั้น)
@@ -7584,15 +7585,15 @@ function getKpiWHLGData(startDateStr, endDateStr) {
           effStep1 = effList.reduce(function(a,b){return a+b;},0) / effList.length;
 
           // ── Step 2: Accuracy Score (แยกออกจาก speed — ไม่ผิด ไม่เคลม) ──
-          var accuracyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
+          accuracyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
 
           // ── Step 3: รวม Load Score = Efficiency(60%) + Accuracy(40%) ──
           efficiency = Math.round((effStep1 * 0.6 + accuracyScore * 0.4) * 10) / 10;
         }
       } else if (wha && (wrongCount > 0 || claimCount > 0)) {
         // ไม่มี trip data แต่มีความผิดพลาด → คำนวณจาก Accuracy เพียงอย่างเดียว
-        var accuracyOnlyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
-        efficiency = Math.round(accuracyOnlyScore * 10) / 10;
+        accuracyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
+        efficiency    = Math.round(accuracyScore * 10) / 10;
       }
 
       // ดึงค่าจาก Inventory KPI Log
@@ -7635,12 +7636,16 @@ function getKpiWHLGData(startDateStr, endDateStr) {
 
       result.push({
         date:             key,
-        efficiency:       efficiency,        // → Load Score (%)
+        efficiency:       efficiency,        // → Load Score (%) pre-calc ด้วย 60/40
+        effStep1:         effStep1 !== null ? Math.round(effStep1 * 10) / 10 : null,      // → Speed component
+        accuracyScore:    accuracyScore !== null ? Math.round(accuracyScore * 10) / 10 : null, // → Accuracy component
         checkerFGPct:     checkerFGPct,      // → FG Checker (%)
         checkerSEMIPct:   checkerSEMIPct,    // → SEMI Checker (%)
         finalAdjFGPct:    finalAdjFGPct,     // → Final Adj FG (%) จาก Inventory KPI Log
         finalAdjSEMIPct:  finalAdjSEMIPct,   // → Final Adj SEMI (%) จาก Inventory KPI Log
-        damagePct:        damagePct,         // → Damage Score (%)
+        scoreLoad:        scoreLoad,         // → Loading damage component (pre-calc)
+        scoreStore:       scoreStore,        // → Storage damage component (pre-calc)
+        damagePct:        damagePct,         // → Damage Score (%) pre-calc ด้วย 60/40
         prdKPIFG:         prdKPIFG,          // → Data Err FG (%)
         prdKPISEMI:       prdKPISEMI,        // → Data Err SEMI (%)
         planHours:        planHours,         // → แผนชั่วโมง (แสดงใน Space Breakdown)

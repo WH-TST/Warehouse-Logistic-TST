@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbzR0hFsM0LR-ROQzBvllude_vtUR8xqQJIBpmN5C0muOsmO5_9tkxq64AZ-CLv1-oW2/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbxJkjYxRxY2OYaO9xnJMVUHGUm12eNzo9Hj82f5A2rkCm7KQ-7jitk8ZZSIhWKUiDZa/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -4055,6 +4055,21 @@ thead.sticky {
     </div>
   </div>
 
+  <!-- Tab Navigation -->
+  <div class="flex gap-1 border-b border-slate-700">
+    <button id="tab-kpi-wh-data" onclick="switchKpiWHTab('data')"
+      class="px-5 py-2.5 font-black text-sm rounded-t-xl border-b-2 border-amber-400 text-amber-400 bg-slate-800 transition-all">
+      <i class="fas fa-table mr-2"></i>ข้อมูล KPI
+    </button>
+    <button id="tab-kpi-wh-formula" onclick="switchKpiWHTab('formula')"
+      class="px-5 py-2.5 font-black text-sm rounded-t-xl border-b-2 border-transparent text-slate-400 hover:text-slate-200 bg-transparent transition-all">
+      <i class="fas fa-calculator mr-2"></i>สูตรคำนวน
+    </button>
+  </div>
+
+  <!-- Tab: ข้อมูล KPI -->
+  <div id="kpi-wh-tab-data" class="space-y-6">
+
   <!-- Controls: date range + load button -->
   <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6">
     <div class="flex flex-col sm:flex-row items-end gap-4">
@@ -4142,6 +4157,468 @@ thead.sticky {
       </tfoot>
     </table>
   </div>
+
+  </div><!-- end kpi-wh-tab-data -->
+
+  <!-- Tab: สูตรคำนวน KPI -->
+  <div id="kpi-wh-tab-formula" class="hidden space-y-5">
+
+    <!-- คำอธิบาย -->
+    <div class="bg-slate-800/40 border border-slate-700 rounded-2xl p-5 flex flex-wrap gap-6 text-sm">
+      <span class="flex items-center gap-2">
+        <span class="w-7 h-7 rounded-lg bg-sky-700/60 border border-sky-600 flex items-center justify-center"><i class="fas fa-robot text-sky-300 text-xs"></i></span>
+        <span class="text-slate-300"><span class="text-sky-300 font-bold">AUTO</span> — ระบบคำนวณให้อัตโนมัติ</span>
+      </span>
+      <span class="flex items-center gap-2">
+        <span class="w-7 h-7 rounded-lg bg-amber-900/60 border border-amber-600 flex items-center justify-center"><i class="fas fa-pencil-alt text-amber-400 text-xs"></i></span>
+        <span class="text-slate-300"><span class="text-amber-400 font-bold">MANUAL</span> — ต้องกรอกข้อมูลเอง</span>
+      </span>
+      <span class="flex items-center gap-2">
+        <span class="w-7 h-7 rounded-lg bg-emerald-900/60 border border-emerald-600 flex items-center justify-center text-emerald-400 text-xs font-black">≥90</span>
+        <span class="text-emerald-400 font-bold">ดี</span>
+      </span>
+      <span class="flex items-center gap-2">
+        <span class="w-7 h-7 rounded-lg bg-amber-900/60 border border-amber-600 flex items-center justify-center text-amber-400 text-xs font-black">≥70</span>
+        <span class="text-amber-400 font-bold">พอใช้</span>
+      </span>
+      <span class="flex items-center gap-2">
+        <span class="w-7 h-7 rounded-lg bg-rose-900/60 border border-rose-700 flex items-center justify-center text-rose-400 text-xs font-black">&lt;70</span>
+        <span class="text-rose-400 font-bold">ต้องปรับปรุง</span>
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- FG Checker -->
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+        <div class="bg-slate-700/80 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-robot text-sky-400"></i>
+            <span class="font-black text-white">FG Checker (%)</span>
+          </div>
+          <span class="text-xs bg-sky-700/60 text-sky-300 px-2.5 py-0.5 rounded-full font-bold">AUTO</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ประสิทธิภาพการตรวจนับสินค้า FG ในคลัง — สัดส่วน Line ที่ตรวจสอบถูกต้องเทียบกับยอดรวมทั้งหมด</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แหล่งข้อมูล</p>
+            <p class="text-sm text-slate-300">Sheet <code class="bg-slate-700 px-1.5 py-0.5 rounded text-sky-300 text-xs">Inventory KPI Log</code> — Col Q (Checker KPI%) กรองประเภท <span class="text-sky-200 font-bold">FG</span></p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง</p>
+            <p class="text-xs text-slate-300">Cycle Count FG วันนี้: ตรวจถูก <span class="text-emerald-400 font-bold">450 Line</span> จาก <span class="text-sky-300 font-bold">500 Line</span></p>
+            <p class="text-xs text-slate-400 mt-1 font-mono">450 ÷ 500 × 100 = <span class="text-emerald-400 font-bold">90.0%</span> → บันทึกใน Col Q</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEMI Checker -->
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+        <div class="bg-slate-700/80 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-robot text-sky-400"></i>
+            <span class="font-black text-white">SEMI Checker (%)</span>
+          </div>
+          <span class="text-xs bg-sky-700/60 text-sky-300 px-2.5 py-0.5 rounded-full font-bold">AUTO</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ประสิทธิภาพการตรวจนับสินค้า SEMI ในคลัง — วัดเช่นเดียวกับ FG Checker แต่สำหรับสินค้ากึ่งสำเร็จรูป</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แหล่งข้อมูล</p>
+            <p class="text-sm text-slate-300">Sheet <code class="bg-slate-700 px-1.5 py-0.5 rounded text-sky-300 text-xs">Inventory KPI Log</code> — Col Q (Checker KPI%) กรองประเภท <span class="text-sky-200 font-bold">SEMI</span></p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง</p>
+            <p class="text-xs text-slate-300">Cycle Count SEMI วันนี้: ตรวจถูก <span class="text-emerald-400 font-bold">180 Line</span> จาก <span class="text-sky-300 font-bold">200 Line</span></p>
+            <p class="text-xs text-slate-400 mt-1 font-mono">180 ÷ 200 × 100 = <span class="text-emerald-400 font-bold">90.0%</span> → บันทึกใน Col Q</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Final Adj FG -->
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+        <div class="bg-slate-700/80 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-robot text-sky-400"></i>
+            <span class="font-black text-white">Final Adj FG (%)</span>
+          </div>
+          <span class="text-xs bg-sky-700/60 text-sky-300 px-2.5 py-0.5 rounded-full font-bold">AUTO</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ความแม่นยำของยอดสินค้า FG หลังปรับปรุง — ยิ่งสูงยิ่งดี แสดงว่าปริมาณสินค้าในระบบตรงกับความเป็นจริง</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">สูตรคำนวน</p>
+            <div class="bg-slate-800 rounded-xl px-4 py-3 font-mono text-sm text-emerald-300 text-center">
+              (Total Lines − |Delta Lines|) ÷ Total Lines × 100
+            </div>
+            <div class="mt-2 space-y-1 text-xs text-slate-400">
+              <p><span class="text-slate-200 font-bold">Total Lines</span> = จำนวน Line สินค้า FG ทั้งหมด (จาก Inventory_Log_Daily Col D)</p>
+              <p><span class="text-slate-200 font-bold">Delta Lines</span> = ผลรวม Line ที่ปรับแก้จาก Transection FG (กรอง Counting, นับ Number ที่มีแถวเดียว)</p>
+            </div>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง</p>
+            <p class="text-xs text-slate-300">Total Lines = <span class="text-sky-300 font-bold">500</span>, มีการปรับแก้ <span class="text-rose-400 font-bold">15 Line</span></p>
+            <p class="text-xs text-slate-400 mt-1 font-mono">(500 − 15) ÷ 500 × 100 = <span class="text-emerald-400 font-bold">97.0%</span></p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Final Adj SEMI -->
+      <div class="bg-slate-900 border border-amber-900/40 rounded-2xl overflow-hidden">
+        <div class="bg-amber-900/40 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-pencil-alt text-amber-400"></i>
+            <span class="font-black text-white">Final Adj SEMI (%)</span>
+          </div>
+          <span class="text-xs bg-amber-700/60 text-amber-300 px-2.5 py-0.5 rounded-full font-bold">MANUAL</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ความแม่นยำของยอดสินค้า SEMI หลังปรับปรุง — วัดเช่นเดียวกับ FG แต่ข้อมูลมาจากรายงานฝ่ายผลิต SEMI</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">การกรอกข้อมูล</p>
+            <p class="text-sm text-slate-300">กรอกค่า % โดยตรงจากรายงาน Inventory KPI Log ของฝ่ายผลิต SEMI (Col U Final Adjust%)</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง</p>
+            <p class="text-xs text-slate-300">รายงานฝ่ายผลิต SEMI ระบุ Final Adjust = <span class="text-emerald-400 font-bold">92.5%</span></p>
+            <p class="text-xs text-slate-400 mt-1">→ กรอก <span class="text-amber-300 font-bold">92.5</span> ในช่อง Final Adj SEMI ของตาราง KPI</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Space Breakdown -->
+      <div class="bg-slate-900 border border-amber-900/40 rounded-2xl overflow-hidden">
+        <div class="bg-amber-900/40 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-warehouse text-amber-400"></i>
+            <span class="font-black text-white">Space Breakdown (%)</span>
+          </div>
+          <span class="text-xs bg-amber-700/60 text-amber-300 px-2.5 py-0.5 rounded-full font-bold">MANUAL + CALC</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ประสิทธิภาพเวลาทำงานในคลัง — ยิ่งสูงยิ่งดี หมายความว่าเวลาหยุด (Breakdown) น้อย</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">สูตรคำนวน</p>
+            <div class="bg-slate-800 rounded-xl px-4 py-3 font-mono text-sm text-emerald-300 text-center">
+              (เวลาแผน − นาที Breakdown) ÷ เวลาแผน × 100
+            </div>
+            <div class="mt-2 space-y-1 text-xs text-slate-400">
+              <p><span class="text-slate-200 font-bold">เวลาแผน</span> = เวลาทำงานตามแผนรายวัน (นาที) ดึงจาก Sheet Plan อัตโนมัติ</p>
+              <p><span class="text-slate-200 font-bold">นาที Breakdown</span> = รวมนาทีที่หยุดทำงาน (กรอกเองในตาราง)</p>
+            </div>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง</p>
+            <p class="text-xs text-slate-300">แผน <span class="text-sky-300 font-bold">480 นาที</span>, Breakdown <span class="text-rose-400 font-bold">24 นาที</span> → (480−24)÷480×100 = <span class="text-emerald-400 font-bold">95.0%</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Load Score -->
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden md:col-span-2">
+        <div class="bg-slate-700/80 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-robot text-sky-400"></i>
+            <span class="font-black text-white">Load Score (%)</span>
+          </div>
+          <span class="text-xs bg-sky-700/60 text-sky-300 px-2.5 py-0.5 rounded-full font-bold">AUTO</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ประสิทธิภาพรวมในการโหลดสินค้าขึ้นรถ — รวมทั้งความเร็วในการโหลด (60%) และความถูกต้อง (40%)</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แหล่งข้อมูล</p>
+            <p class="text-sm text-slate-300">Sheet <code class="bg-slate-700 px-1.5 py-0.5 rounded text-sky-300 text-xs">WH_Activity_Log</code> — กรองแถวประเภท <span class="text-sky-200 font-bold">บันทึกการโหลด</span>, <span class="text-rose-300 font-bold">โหลดสินค้าผิด</span>, <span class="text-rose-300 font-bold">เคลมสินค้า</span></p>
+            <div class="mt-1.5 flex flex-wrap gap-3 text-xs text-slate-400">
+              <span>Col K = <span class="text-slate-300">MPI (นาที/รายการ)</span></span>
+              <span>Col L = <span class="text-slate-300">WPU (น้ำหนัก KG/หน่วย)</span></span>
+              <span>Col U = <span class="text-slate-300">ทะเบียนรถ</span></span>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="bg-slate-800 rounded-xl p-3">
+              <p class="text-xs text-sky-400 font-bold uppercase mb-2">Step 1 — Speed Score</p>
+              <div class="font-mono text-xs text-emerald-300 mb-2 text-center">
+                min(100, Median_กลุ่ม ÷ (MPI÷WPU) × 100)
+              </div>
+              <p class="text-xs text-slate-400">เปรียบ <span class="text-slate-200">นาที/KG</span> ของแต่ละ trip กับ median ประวัติ แบ่ง 4 กลุ่มน้ำหนัก:</p>
+              <div class="mt-1.5 text-xs text-slate-400 space-y-0.5">
+                <p>กลุ่ม A &lt;3,000 KG &nbsp;|&nbsp; B 3,000–8,000 KG</p>
+                <p>กลุ่ม C 8,000–16,000 KG &nbsp;|&nbsp; D &gt;16,000 KG</p>
+              </div>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-3">
+              <p class="text-xs text-amber-400 font-bold uppercase mb-2">Step 2 — Accuracy Score</p>
+              <div class="font-mono text-xs text-emerald-300 mb-2 text-center">
+                100 − (โหลดผิด × 15) − (เคลม × 10)
+              </div>
+              <div class="text-xs text-slate-400 space-y-0.5">
+                <p><span class="text-rose-400 font-bold">โหลดสินค้าผิด</span> — หัก 15 คะแนน/ครั้ง</p>
+                <p><span class="text-rose-400 font-bold">เคลมสินค้า</span> — หัก 10 คะแนน/ครั้ง</p>
+              </div>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-3">
+              <p class="text-xs text-emerald-400 font-bold uppercase mb-2">Step 3 — Load Score</p>
+              <div class="font-mono text-xs text-emerald-300 mb-2 text-center" id="load-formula-display">
+                Speed × 60% + Accuracy × 40%
+              </div>
+              <p class="text-xs text-slate-400">ถ่วงน้ำหนักตามความสำคัญ</p>
+              <p class="text-xs text-slate-500 mt-1">* หากไม่มี trip data ใช้ Accuracy เพียงอย่างเดียว</p>
+            </div>
+          </div>
+
+          <!-- Weight Slider: Load Score -->
+          <div class="bg-amber-900/30 border border-amber-700/50 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-amber-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                <i class="fas fa-sliders-h"></i> ปรับค่าถ่วงน้ำหนัก
+              </p>
+              <button onclick="resetLoadWeights()" class="text-xs text-slate-500 hover:text-amber-400 transition-colors font-bold">
+                <i class="fas fa-undo mr-1"></i>Reset
+              </button>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-center w-20 flex-shrink-0">
+                <p class="text-xs text-sky-400 font-bold mb-0.5">Speed</p>
+                <span id="load-w-speed-pct" class="text-lg font-black text-sky-300 font-mono">60%</span>
+              </div>
+              <div class="flex-1">
+                <input type="range" id="load-weight-slider" min="0" max="100" step="5" value="60"
+                  oninput="onLoadWeightChange(this.value)"
+                  class="w-full h-2 rounded-full appearance-none cursor-pointer accent-amber-400"
+                  style="background: linear-gradient(to right, #38bdf8 0%, #38bdf8 60%, #f59e0b 60%, #f59e0b 100%)">
+              </div>
+              <div class="text-center w-20 flex-shrink-0">
+                <p class="text-xs text-amber-400 font-bold mb-0.5">Accuracy</p>
+                <span id="load-w-acc-pct" class="text-lg font-black text-amber-300 font-mono">40%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง (ปรับตามน้ำหนักที่ตั้ง)</p>
+            <p class="text-xs text-slate-300 mb-1">Speed avg = <span class="text-sky-300 font-bold">95.0</span>, โหลดผิด <span class="text-rose-400 font-bold">1 ครั้ง</span> → Accuracy = <span class="text-sky-300">85.0</span></p>
+            <p class="text-xs text-slate-400 font-mono" id="load-example-calc">(95.0×0.60) + (85.0×0.40) = 57.0 + 34.0 = <span class="text-emerald-400 font-bold">91.0%</span></p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Damage Score -->
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden md:col-span-2">
+        <div class="bg-slate-700/80 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-robot text-sky-400"></i>
+            <span class="font-black text-white">Damage Score (%)</span>
+          </div>
+          <span class="text-xs bg-sky-700/60 text-sky-300 px-2.5 py-0.5 rounded-full font-bold">AUTO</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">คะแนนรวมความปลอดภัยของสินค้า — แยกเป็น 2 มิติ: ความเสียหายตอนโหลด (60%) และตอนเก็บในคลัง (40%)</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แหล่งข้อมูล</p>
+            <p class="text-sm text-slate-300">Sheet <code class="bg-slate-700 px-1.5 py-0.5 rounded text-sky-300 text-xs">WH_Activity_Log</code> — กรองแถวประเภท <span class="text-rose-300 font-bold">สินค้าเสียหาย-การโหลด</span> และ <span class="text-orange-300 font-bold">สินค้าเสียหาย-การเก็บ</span> นับจำนวนครั้งต่อวัน</p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="bg-slate-800 rounded-xl p-3">
+              <p class="text-xs text-rose-400 font-bold uppercase mb-2">Score Loading (โหลด)</p>
+              <div class="font-mono text-xs text-emerald-300 mb-2 text-center">
+                100 − (ครั้งเสียหาย × 20)
+              </div>
+              <p class="text-xs text-slate-400">ประเภท <span class="text-rose-300 font-bold">สินค้าเสียหาย-การโหลด</span></p>
+              <p class="text-xs text-slate-500 mt-1">หัก <span class="text-rose-400 font-bold">20 คะแนน</span>/ครั้ง (รุนแรงกว่า)</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-3">
+              <p class="text-xs text-orange-400 font-bold uppercase mb-2">Score Storage (เก็บ)</p>
+              <div class="font-mono text-xs text-emerald-300 mb-2 text-center">
+                100 − (ครั้งเสียหาย × 10)
+              </div>
+              <p class="text-xs text-slate-400">ประเภท <span class="text-orange-300 font-bold">สินค้าเสียหาย-การเก็บ</span></p>
+              <p class="text-xs text-slate-500 mt-1">หัก <span class="text-orange-400 font-bold">10 คะแนน</span>/ครั้ง</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-3">
+              <p class="text-xs text-emerald-400 font-bold uppercase mb-2">Damage Score รวม</p>
+              <div class="font-mono text-xs text-emerald-300 mb-2 text-center" id="dmg-formula-display">
+                Loading × 60% + Storage × 40%
+              </div>
+              <p class="text-xs text-slate-400">ถ่วงน้ำหนักตามความสำคัญ</p>
+            </div>
+          </div>
+
+          <!-- Weight Slider: Damage Score -->
+          <div class="bg-amber-900/30 border border-amber-700/50 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-amber-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                <i class="fas fa-sliders-h"></i> ปรับค่าถ่วงน้ำหนัก
+              </p>
+              <button onclick="resetDamageWeights()" class="text-xs text-slate-500 hover:text-amber-400 transition-colors font-bold">
+                <i class="fas fa-undo mr-1"></i>Reset
+              </button>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-center w-20 flex-shrink-0">
+                <p class="text-xs text-rose-400 font-bold mb-0.5">Loading</p>
+                <span id="dmg-w-load-pct" class="text-lg font-black text-rose-300 font-mono">60%</span>
+              </div>
+              <div class="flex-1">
+                <input type="range" id="dmg-weight-slider" min="0" max="100" step="5" value="60"
+                  oninput="onDamageWeightChange(this.value)"
+                  class="w-full h-2 rounded-full appearance-none cursor-pointer accent-amber-400"
+                  style="background: linear-gradient(to right, #f87171 0%, #f87171 60%, #fb923c 60%, #fb923c 100%)">
+              </div>
+              <div class="text-center w-20 flex-shrink-0">
+                <p class="text-xs text-orange-400 font-bold mb-0.5">Storage</p>
+                <span id="dmg-w-store-pct" class="text-lg font-black text-orange-300 font-mono">40%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง (ปรับตามน้ำหนักที่ตั้ง)</p>
+            <p class="text-xs text-slate-300 mb-1">เสียหายโหลด <span class="text-rose-400 font-bold">1 ครั้ง</span> → Loading=80, เสียหายเก็บ <span class="text-orange-400 font-bold">0 ครั้ง</span> → Storage=100</p>
+            <p class="text-xs text-slate-400 font-mono" id="dmg-example-calc">(80×0.60) + (100×0.40) = 48.0 + 40.0 = <span class="text-amber-400 font-bold">88.0%</span></p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Err FG -->
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+        <div class="bg-slate-700/80 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-robot text-sky-400"></i>
+            <span class="font-black text-white">Data Err FG (%)</span>
+          </div>
+          <span class="text-xs bg-sky-700/60 text-sky-300 px-2.5 py-0.5 rounded-full font-bold">AUTO</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ความถูกต้องของข้อมูลการผลิต FG — วัดจากอัตราความผิดพลาดในการบันทึก Production เทียบกับยอดจริง</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แหล่งข้อมูล</p>
+            <p class="text-sm text-slate-300">Sheet <code class="bg-slate-700 px-1.5 py-0.5 rounded text-sky-300 text-xs">Inventory KPI Log</code> — Col T (Prod KPI%) กรองประเภท <span class="text-sky-200 font-bold">FG</span></p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง</p>
+            <p class="text-xs text-slate-300">รายการผลิต FG วันนี้ <span class="text-sky-300 font-bold">200 รายการ</span>, บันทึกผิดพลาด <span class="text-rose-400 font-bold">10 รายการ</span></p>
+            <p class="text-xs text-slate-400 mt-1 font-mono">(200 − 10) ÷ 200 × 100 = <span class="text-emerald-400 font-bold">95.0%</span> → บันทึกใน Col T</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Err SEMI -->
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+        <div class="bg-slate-700/80 px-5 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-robot text-sky-400"></i>
+            <span class="font-black text-white">Data Err SEMI (%)</span>
+          </div>
+          <span class="text-xs bg-sky-700/60 text-sky-300 px-2.5 py-0.5 rounded-full font-bold">AUTO</span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">วัดอะไร</p>
+            <p class="text-sm text-slate-200">ความถูกต้องของข้อมูลการผลิต SEMI — วัดแบบเดียวกับ Data Err FG แต่สำหรับสายการผลิต SEMI</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">แหล่งข้อมูล</p>
+            <p class="text-sm text-slate-300">Sheet <code class="bg-slate-700 px-1.5 py-0.5 rounded text-sky-300 text-xs">Inventory KPI Log</code> — Col T (Prod KPI%) กรองประเภท <span class="text-sky-200 font-bold">SEMI</span></p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-1.5">ตัวอย่าง</p>
+            <p class="text-xs text-slate-300">รายการผลิต SEMI วันนี้ <span class="text-sky-300 font-bold">120 รายการ</span>, บันทึกผิดพลาด <span class="text-rose-400 font-bold">8 รายการ</span></p>
+            <p class="text-xs text-slate-400 mt-1 font-mono">(120 − 8) ÷ 120 × 100 = <span class="text-emerald-400 font-bold">93.3%</span> → บันทึกใน Col T</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-3">
+            <p class="text-xs text-slate-500 font-bold uppercase mb-2">เกณฑ์</p>
+            <div class="flex gap-4 text-xs font-bold">
+              <span class="text-emerald-400">≥90% ดี</span>
+              <span class="text-amber-400">70–89% พอใช้</span>
+              <span class="text-rose-400">&lt;70% ปรับปรุง</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- end kpi-wh-tab-formula -->
 
 </div>
 
@@ -26817,8 +27294,37 @@ function applyInventoryFilters() {
 // ════════════════════════════════════════════════════════════════════════
 
 // State: ข้อมูล AUTO ที่โหลดจาก GAS และข้อมูล history ที่บันทึกแล้ว
-let kpiWHAutoData = {}; // key = dateStr (dd/MM/yyyy) → auto kpi object
+let kpiWHAutoData  = {}; // key = dateStr (dd/MM/yyyy) → auto kpi object
 let kpiWHSavedData = {}; // key = dateStr → saved record
+
+// น้ำหนัก KPI ที่ปรับได้ (บันทึกใน localStorage)
+const kpiWHWeights = {
+    get loadSpeed()    { return parseFloat(localStorage.getItem('kpiWH_loadSpeed')    ?? 60); },
+    get loadAccuracy() { return parseFloat(localStorage.getItem('kpiWH_loadAccuracy') ?? 40); },
+    get dmgLoading()   { return parseFloat(localStorage.getItem('kpiWH_dmgLoading')   ?? 60); },
+    get dmgStorage()   { return parseFloat(localStorage.getItem('kpiWH_dmgStorage')   ?? 40); },
+};
+
+// คำนวณ Load Score ด้วย custom weights (ถ้าไม่มี raw data ใช้ pre-calc)
+function calcLoadScoreKPI(auto) {
+    if (auto.effStep1 != null && auto.accuracyScore != null) {
+        const s = kpiWHWeights.loadSpeed / 100;
+        const a = kpiWHWeights.loadAccuracy / 100;
+        return Math.min(100, Math.max(0, Math.round((auto.effStep1 * s + auto.accuracyScore * a) * 10) / 10));
+    }
+    if (auto.accuracyScore != null) return auto.accuracyScore; // accuracy-only mode
+    return auto.efficiency ?? null;
+}
+
+// คำนวณ Damage Score ด้วย custom weights
+function calcDamageScoreKPI(auto) {
+    if (auto.scoreLoad != null && auto.scoreStore != null) {
+        const l = kpiWHWeights.dmgLoading / 100;
+        const s = kpiWHWeights.dmgStorage / 100;
+        return Math.min(100, Math.max(0, Math.round((auto.scoreLoad * l + auto.scoreStore * s) * 10) / 10));
+    }
+    return auto.damagePct ?? null;
+}
 
 // ── ตั้งค่า default วันที่เป็นวันนี้ ──────────────────────────────────
 (function kpiWHInitDates() {
@@ -26831,6 +27337,125 @@ let kpiWHSavedData = {}; // key = dateStr → saved record
 })();
 
 // ── โหลดข้อมูล KPI ─────────────────────────────────────────────────────
+// ── ตั้งค่า gradient slider background ──────────────────────────────────
+function setSliderGradient(slider, pct, leftColor, rightColor) {
+    slider.style.background = `linear-gradient(to right, ${leftColor} 0%, ${leftColor} ${pct}%, ${rightColor} ${pct}%, ${rightColor} 100%)`;
+}
+
+// ── Load Score weight handlers ───────────────────────────────────────────
+window.onLoadWeightChange = function onLoadWeightChange(speedVal) {
+    const sp = parseInt(speedVal);
+    const ac = 100 - sp;
+    localStorage.setItem('kpiWH_loadSpeed',    sp);
+    localStorage.setItem('kpiWH_loadAccuracy', ac);
+
+    const slider = safeGet('load-weight-slider');
+    if (slider) setSliderGradient(slider, sp, '#38bdf8', '#f59e0b');
+
+    const spEl = safeGet('load-w-speed-pct');
+    const acEl = safeGet('load-w-acc-pct');
+    if (spEl) spEl.textContent = sp + '%';
+    if (acEl) acEl.textContent = ac + '%';
+
+    const formulaEl = safeGet('load-formula-display');
+    if (formulaEl) formulaEl.textContent = `Speed × ${sp}% + Accuracy × ${ac}%`;
+
+    const exEl = safeGet('load-example-calc');
+    if (exEl) {
+        const spVal = (95.0 * sp / 100).toFixed(1);
+        const acVal = (85.0 * ac / 100).toFixed(1);
+        const result = (95.0 * sp / 100 + 85.0 * ac / 100).toFixed(1);
+        const cls = result >= 90 ? 'text-emerald-400' : result >= 70 ? 'text-amber-400' : 'text-rose-400';
+        exEl.innerHTML = `(95.0×${(sp/100).toFixed(2)}) + (85.0×${(ac/100).toFixed(2)}) = ${spVal} + ${acVal} = <span class="${cls} font-bold">${result}%</span>`;
+    }
+
+    rerenderKpiWHIfLoaded();
+};
+
+window.resetLoadWeights = function resetLoadWeights() {
+    localStorage.removeItem('kpiWH_loadSpeed');
+    localStorage.removeItem('kpiWH_loadAccuracy');
+    const slider = safeGet('load-weight-slider');
+    if (slider) { slider.value = 60; onLoadWeightChange(60); }
+};
+
+// ── Damage Score weight handlers ─────────────────────────────────────────
+window.onDamageWeightChange = function onDamageWeightChange(loadVal) {
+    const lv = parseInt(loadVal);
+    const sv = 100 - lv;
+    localStorage.setItem('kpiWH_dmgLoading', lv);
+    localStorage.setItem('kpiWH_dmgStorage', sv);
+
+    const slider = safeGet('dmg-weight-slider');
+    if (slider) setSliderGradient(slider, lv, '#f87171', '#fb923c');
+
+    const lvEl = safeGet('dmg-w-load-pct');
+    const svEl = safeGet('dmg-w-store-pct');
+    if (lvEl) lvEl.textContent = lv + '%';
+    if (svEl) svEl.textContent = sv + '%';
+
+    const formulaEl = safeGet('dmg-formula-display');
+    if (formulaEl) formulaEl.textContent = `Loading × ${lv}% + Storage × ${sv}%`;
+
+    const exEl = safeGet('dmg-example-calc');
+    if (exEl) {
+        const lRes = (80 * lv / 100).toFixed(1);
+        const sRes = (100 * sv / 100).toFixed(1);
+        const total = (80 * lv / 100 + 100 * sv / 100).toFixed(1);
+        const cls = total >= 90 ? 'text-emerald-400' : total >= 70 ? 'text-amber-400' : 'text-rose-400';
+        exEl.innerHTML = `(80×${(lv/100).toFixed(2)}) + (100×${(sv/100).toFixed(2)}) = ${lRes} + ${sRes} = <span class="${cls} font-bold">${total}%</span>`;
+    }
+
+    rerenderKpiWHIfLoaded();
+};
+
+window.resetDamageWeights = function resetDamageWeights() {
+    localStorage.removeItem('kpiWH_dmgLoading');
+    localStorage.removeItem('kpiWH_dmgStorage');
+    const slider = safeGet('dmg-weight-slider');
+    if (slider) { slider.value = 60; onDamageWeightChange(60); }
+};
+
+// ── Re-render ตาราง KPI ถ้าโหลดข้อมูลแล้ว ───────────────────────────────
+function rerenderKpiWHIfLoaded() {
+    const fromEl = safeGet('kpi-wh-date-from');
+    const toEl   = safeGet('kpi-wh-date-to');
+    if (!fromEl || !toEl || !fromEl.value || !toEl.value) return;
+    if (Object.keys(kpiWHAutoData).length === 0) return;
+    renderKpiWHTable(fromEl.value, toEl.value);
+}
+
+// ── Init sliders จาก localStorage ────────────────────────────────────────
+function initKpiWHWeightSliders() {
+    const lSlider = safeGet('load-weight-slider');
+    const dSlider = safeGet('dmg-weight-slider');
+    if (lSlider) { lSlider.value = kpiWHWeights.loadSpeed;  onLoadWeightChange(kpiWHWeights.loadSpeed); }
+    if (dSlider) { dSlider.value = kpiWHWeights.dmgLoading; onDamageWeightChange(kpiWHWeights.dmgLoading); }
+}
+
+window.switchKpiWHTab = function switchKpiWHTab(tab) {
+    const dataDiv    = safeGet('kpi-wh-tab-data');
+    const formulaDiv = safeGet('kpi-wh-tab-formula');
+    const btnData    = safeGet('tab-kpi-wh-data');
+    const btnFormula = safeGet('tab-kpi-wh-formula');
+
+    const activeClasses   = ['border-amber-400', 'text-amber-400', 'bg-slate-800'];
+    const inactiveClasses = ['border-transparent', 'text-slate-400', 'bg-transparent'];
+
+    if (tab === 'data') {
+        if (dataDiv)    dataDiv.classList.remove('hidden');
+        if (formulaDiv) formulaDiv.classList.add('hidden');
+        if (btnData)    { btnData.classList.add(...activeClasses);    btnData.classList.remove(...inactiveClasses); }
+        if (btnFormula) { btnFormula.classList.remove(...activeClasses); btnFormula.classList.add(...inactiveClasses); }
+    } else {
+        if (dataDiv)    dataDiv.classList.add('hidden');
+        if (formulaDiv) formulaDiv.classList.remove('hidden');
+        if (btnFormula) { btnFormula.classList.add(...activeClasses);  btnFormula.classList.remove(...inactiveClasses); }
+        if (btnData)    { btnData.classList.remove(...activeClasses);  btnData.classList.add(...inactiveClasses); }
+        initKpiWHWeightSliders();
+    }
+};
+
 window.loadKpiWH = function loadKpiWH() {
     const fromEl = safeGet('kpi-wh-date-from');
     const toEl   = safeGet('kpi-wh-date-to');
@@ -26993,8 +27618,8 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             ${autoCell(auto.finalAdjFGPct)}
             ${autoCell(auto.finalAdjSEMIPct)}
             ${spaceCell()}
-            ${autoCell(auto.efficiency)}
-            ${autoCell(auto.damagePct)}
+            ${autoCell(calcLoadScoreKPI(auto))}
+            ${autoCell(calcDamageScoreKPI(auto))}
             ${autoCell(auto.prdKPIFG)}
             ${autoCell(auto.prdKPISEMI)}
             <td class="px-4 py-2 text-center">
@@ -27042,10 +27667,10 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
         finalAdjFG:     auto.finalAdjFGPct   ?? null,   // AUTO: (tL-|dL|)/tL×100 จาก KPI Log
         finalAdjSEMI:   auto.finalAdjSEMIPct ?? null,  // AUTO จาก Inventory KPI Log
         spaceBreakdown: spaceBreakdownKPI,              // AUTO-CALC: (planMins-bMins)/planMins×100
-        loadScore:      auto.efficiency      ?? null,
-        damageScore:    auto.damagePct       ?? null,
-        dataErrFG:      auto.prdKPIFG        ?? null,   // AUTO: KPI PRD FG (KPI Log col O)
-        dataErrSEMI:    auto.prdKPISEMI      ?? null,   // AUTO: KPI PRD SEMI (KPI Log col O)
+        loadScore:      calcLoadScoreKPI(auto)   ?? null,
+        damageScore:    calcDamageScoreKPI(auto) ?? null,
+        dataErrFG:      auto.prdKPIFG            ?? null,
+        dataErrSEMI:    auto.prdKPISEMI          ?? null,
     };
 
     const saveBtn = safeGet(`btn-kpi-save-${isoDate}`);
@@ -27107,8 +27732,8 @@ window.renderKpiWHSummary = function renderKpiWHSummary(dates) {
     const cfgArr     = autos.map(a => a.checkerFGPct).filter(v => v !== undefined && v !== null);
     const csArr      = autos.map(a => a.checkerSEMIPct).filter(v => v !== undefined && v !== null);
     const adjFGArr   = autos.map(a => a.finalAdjFGPct).filter(v => v !== undefined && v !== null);
-    const lsArr      = autos.map(a => a.efficiency).filter(v => v !== undefined && v !== null);
-    const dmgArr     = autos.map(a => a.damagePct).filter(v => v !== undefined && v !== null);
+    const lsArr      = autos.map(a => calcLoadScoreKPI(a)).filter(v => v !== undefined && v !== null);
+    const dmgArr     = autos.map(a => calcDamageScoreKPI(a)).filter(v => v !== undefined && v !== null);
     const defgArr    = autos.map(a => a.prdKPIFG).filter(v => v !== undefined && v !== null);
     const desemiArr  = autos.map(a => a.prdKPISEMI).filter(v => v !== undefined && v !== null);
 
@@ -27190,8 +27815,8 @@ window.openKpiWHEditModal = function openKpiWHEditModal(isoDate) {
     setField('kpi-edit-checkerFGPct',   saved.checkerFGPct  ?? auto.checkerFGPct);
     setField('kpi-edit-checkerSEMIPct', saved.checkerSEMIPct ?? auto.checkerSEMIPct);
     setField('kpi-edit-finalAdjFG',     saved.finalAdjFG    ?? auto.finalAdjFGPct);
-    setField('kpi-edit-loadScore',      saved.loadScore     ?? auto.efficiency);
-    setField('kpi-edit-damageScore',    saved.damageScore   ?? auto.damagePct);
+    setField('kpi-edit-loadScore',      saved.loadScore   ?? calcLoadScoreKPI(auto));
+    setField('kpi-edit-damageScore',    saved.damageScore ?? calcDamageScoreKPI(auto));
     setField('kpi-edit-dataErrFG',      saved.dataErrFG     ?? auto.prdKPIFG);
     setField('kpi-edit-dataErrSEMI',    saved.dataErrSEMI   ?? auto.prdKPISEMI);
 
@@ -27239,8 +27864,8 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
         finalAdjFG:     getF('kpi-edit-finalAdjFG')     ?? auto.finalAdjFGPct  ?? null,
         finalAdjSEMI:   getF('kpi-edit-finalAdjSEMI'),
         spaceBreakdown: editSpaceKPI,
-        loadScore:      getF('kpi-edit-loadScore')      ?? auto.efficiency     ?? null,
-        damageScore:    getF('kpi-edit-damageScore')    ?? auto.damagePct      ?? null,
+        loadScore:      getF('kpi-edit-loadScore')   ?? calcLoadScoreKPI(auto)   ?? null,
+        damageScore:    getF('kpi-edit-damageScore') ?? calcDamageScoreKPI(auto) ?? null,
         dataErrFG:      getF('kpi-edit-dataErrFG')      ?? auto.prdKPIFG      ?? null,
         dataErrSEMI:    getF('kpi-edit-dataErrSEMI')    ?? auto.prdKPISEMI    ?? null,
     };
