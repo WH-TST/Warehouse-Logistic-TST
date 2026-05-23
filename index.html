@@ -1718,10 +1718,10 @@ thead.sticky {
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs font-semibold flex-wrap">
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-500"></span>วางแผนแล้ว</span>
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500"></span>กำลังดำเนินการ</span>
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500"></span>สำเร็จ</span>
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-rose-500"></span>ไม่สำเร็จ</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#1a5f8a;"></span><span style="color:#1a5f8a;">วางแผนแล้ว</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#8c5c08;"></span><span style="color:#8c5c08;">กำลังดำเนินการ</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#2a6020;"></span><span style="color:#2a6020;">สำเร็จ</span></span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full" style="background:#8c2020;"></span><span style="color:#8c2020;">ไม่สำเร็จ</span></span>
       </div>
     </div>
 
@@ -18078,11 +18078,11 @@ window.loadLogisticList = function loadLogisticList() {
 
 // ── แสดงตารางแผนการส่งมอบ ──
 const LOGI_STATUS_MAP = {
-    planned:    { label: 'วางแผนแล้ว',         cls: 'bg-blue-100 text-blue-700 border-blue-300' },
-    inprogress: { label: 'กำลังดำเนินการ',    cls: 'bg-amber-100 text-amber-700 border-amber-300' },
-    success:    { label: 'สำเร็จ',             cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
-    failed:     { label: 'ไม่สำเร็จ',          cls: 'bg-rose-100 text-rose-700 border-rose-300' },
-    extra:      { label: 'เกินแผน',            cls: 'bg-purple-100 text-purple-700 border-purple-300' },
+    planned:    { label: 'วางแผนแล้ว',      style: 'background:#ddeef8;color:#1a5f8a;border-color:#8bbbd8;' },
+    inprogress: { label: 'กำลังดำเนินการ', style: 'background:#fef3d8;color:#8c5c08;border-color:#e8c060;' },
+    success:    { label: 'สำเร็จ',          style: 'background:#dff0dc;color:#2a6020;border-color:#88c078;' },
+    failed:     { label: 'ไม่สำเร็จ',       style: 'background:#fae8e8;color:#8c2020;border-color:#e09090;' },
+    extra:      { label: 'เกินแผน',         style: 'background:#ece8f8;color:#5030a0;border-color:#b898e0;' },
 };
 const LOGI_JOB_MAP = {
     sale_order:      'Sale Order',
@@ -18145,7 +18145,7 @@ window.renderLogisticList = function renderLogisticList() {
 
     tbody.innerHTML = list.flatMap((p, i) => {
 
-        const st = LOGI_STATUS_MAP[p.status] || { label: p.status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+        const st = LOGI_STATUS_MAP[p.status] || { label: p.status, style: 'background:#f5ead8;color:#6b4c30;border-color:#d4bfa8;' };
         const truckDisplay = (() => {
             if (p.truckType === 'hire') return p.driverTransport || '—';
             const plate = p.truckPlate || '—';
@@ -18191,15 +18191,15 @@ window.renderLogisticList = function renderLogisticList() {
         const rowBg     = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
         const planBorderTop = 'border-t-2 border-slate-300';
 
-        const jobColors = {
-            sale_order:    'bg-emerald-100 text-emerald-700 border-emerald-300',
-            transfer_fg:   'bg-violet-100 text-violet-700 border-violet-300',
-            transfer_semi: 'bg-indigo-100 text-indigo-700 border-indigo-300',
-            maintenance_pm:'bg-amber-100 text-amber-700 border-amber-300',
+        const jobStyles = {
+            sale_order:    'background:#e0f5e8;color:#1a6840;border-color:#80c898;',
+            transfer_fg:   'background:#ece8f8;color:#5030a0;border-color:#b898e0;',
+            transfer_semi: 'background:#e0e8f8;color:#2040a8;border-color:#80a0e0;',
+            maintenance_pm:'background:#fef3d8;color:#8c5c08;border-color:#e8c060;',
         };
-        const jc = jobColors[p.jobType] || 'bg-slate-100 text-slate-600 border-slate-200';
+        const jcStyle = jobStyles[p.jobType] || 'background:#f5ead8;color:#6b4c30;border-color:#d4bfa8;';
 
-        const statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border ${st.cls} whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-current"></span>${st.label}</span>`;
+        const statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border whitespace-nowrap" style="${st.style || ''}"><span class="w-1.5 h-1.5 rounded-full" style="background:currentColor"></span>${st.label}</span>`;
 
         // แถว -C (รถลูก): ไม่มีปุ่มจัดการ (จัดการผ่านแถวรถแม่)
         const actionBtns = p.isChild
@@ -18224,7 +18224,7 @@ window.renderLogisticList = function renderLogisticList() {
                 <div class="text-xs font-semibold text-slate-700">${driver}</div>
             </td>
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200 ${planBorderTop}" style="vertical-align:top">
-                <span class="text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${jc} inline-block mb-1 whitespace-nowrap">${LOGI_JOB_MAP[p.jobType] || p.jobType}</span>
+                <span class="text-[10px] font-black px-2 py-0.5 rounded-full border uppercase inline-block mb-1 whitespace-nowrap" style="${jcStyle}">${LOGI_JOB_MAP[p.jobType] || p.jobType}</span>
                 <div>${statusBadge}</div>
             </td>`;
 
@@ -18280,10 +18280,10 @@ window.renderLogisticList = function renderLogisticList() {
         const firstDist = p.distance || '';
 
         const shopAccents = [
-            { dot: 'bg-emerald-500',    text: 'text-emerald-600' },
-            { dot: 'bg-violet-500', text: 'text-violet-600' },
-            { dot: 'bg-emerald-500',text: 'text-emerald-600' },
-            { dot: 'bg-rose-400',   text: 'text-rose-600' },
+            { dotColor: '#2a8a50', textColor: '#1a6840' },
+            { dotColor: '#6040b8', textColor: '#5030a0' },
+            { dotColor: '#1a7ab0', textColor: '#1a5f8a' },
+            { dotColor: '#b04040', textColor: '#8c2020' },
         ];
 
         const rows = [];
@@ -18398,10 +18398,10 @@ window.renderLogisticList = function renderLogisticList() {
                     row += `
                     <td rowspan="${shopRows}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200 ${shopSepClass}" style="vertical-align:top">
                         <div class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full ${accent.dot} text-white text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">${(s.shopSeq != null ? s.shopSeq : si) + 1}</span>
+                            <span class="w-5 h-5 rounded-full text-white text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5" style="background:${accent.dotColor};">${(s.shopSeq != null ? s.shopSeq : si) + 1}</span>
                             <div>
                                 <div class="font-bold text-xs text-slate-800 leading-snug">${s.shopName}</div>
-                                ${s.sale ? `<div class="text-[10px] ${accent.text} font-semibold mt-0.5"><i class="fas fa-user-tie mr-1 opacity-70"></i>${s.sale}</div>` : ''}
+                                ${s.sale ? `<div class="text-[10px] font-semibold mt-0.5" style="color:${accent.textColor};"><i class="fas fa-user-tie mr-1 opacity-70"></i>${s.sale}</div>` : ''}
                                 ${s.distance ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="fas fa-route mr-1"></i>${s.distance} กม.</div>` : ''}
                             </div>
                         </div>
