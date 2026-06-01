@@ -18265,7 +18265,7 @@ window.renderLogisticList = function renderLogisticList() {
         const stripeColor  = STATUS_STRIPE[p.status]  || '#94a3b8';
         const tintBase     = STATUS_TINT_BG[p.status] || '#f8fafc';
         // Even trips: full tint, Odd trips: 50% lighter (mix toward white)
-        const rowBgColor   = i % 2 === 0 ? tintBase : '#ffffff';
+        const rowBgColor   = tintBase;
         const planBorderTop = '';
 
         const jobStyles = {
@@ -18657,8 +18657,8 @@ function updateLogiKPI() {
 
     tbody.innerHTML = drivers.map((d, i) => {
         const lowDist = d.dist > 0 && d.dist < 300;
-        const bg      = lowDist ? 'bg-rose-50' : (i % 2 === 0 ? 'bg-white' : 'bg-emerald-50/30');
-        const hov     = lowDist ? 'hover:bg-rose-100/70' : 'hover:bg-emerald-50/60';
+        const bg      = lowDist ? '#fef2f2' : (i % 2 === 0 ? '#ffffff' : '#f8fafc');
+        const hov     = '';
         const wt      = d.weight > 0 ? d.weight.toLocaleString('th-TH', {minimumFractionDigits:2}) : '—';
         const dist    = d.dist > 0   ? d.dist.toLocaleString('th-TH', {minimumFractionDigits:1})   : '—';
         const distCls = lowDist ? 'text-rose-600 font-black' : 'text-slate-600 font-bold';
@@ -18667,16 +18667,16 @@ function updateLogiKPI() {
         // รหัสพนักงาน: ใช้จาก plan ถ้ามี, ไม่งั้น lookup จาก Master Cache
         d.id = (d.id && d.id !== '—') ? d.id : (driverIdLookup[d.name.trim()] || '—');
 
-        return `<tr class="${bg} ${hov} border-b border-slate-100 transition-colors">
+        return `<tr style="background:${bg};" class="border-b border-slate-100 transition-colors">
             <td class="px-3 py-1.5">
                 <div class="flex items-center gap-2 min-w-0">
-                    <div class="w-5 h-5 rounded-md ${lowDist ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-700'} flex items-center justify-center text-[10px] font-black flex-shrink-0">${d.name.charAt(0)}</div>
+                    <div style="${lowDist ? 'background:#fecaca;color:#dc2626' : 'background:#dbeafe;color:#1d4ed8'}" class="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black flex-shrink-0">${d.name.charAt(0)}</div>
                     <span class="font-semibold text-slate-800 text-xs truncate">${d.name}</span>
                 </div>
             </td>
             <td class="px-3 py-1.5 text-center">
                 <div class="flex flex-wrap gap-1 justify-center">
-                ${[...d.plates].map(pl => `<span class="${lowDist ? 'bg-rose-600' : 'bg-slate-700'} text-white text-[10px] font-black px-2 py-0.5 rounded-md tracking-wide whitespace-nowrap inline-block">${pl}</span>`).join('')}
+                ${[...d.plates].map(pl => `<span style="${lowDist ? 'background:#ef4444' : 'background:#1e2f42'};color:#ffffff;font-size:10px;font-weight:900;padding:2px 7px;border-radius:4px;white-space:nowrap;display:inline-block;letter-spacing:0.05em">${pl}</span>`).join('')}
                 </div>
             </td>
             <td class="px-3 py-1.5 text-center">
