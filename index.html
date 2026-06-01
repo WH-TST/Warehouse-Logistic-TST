@@ -172,6 +172,76 @@
     }
     .sidebar-stripe { display: none; }
     .sidebar-gradient > * { position: relative; z-index: 1; }
+    /* ── Sidebar Mini (icon-only) mode ── */
+    #app-sidebar.sidebar-mini { width: 64px !important; }
+    #app-main.sidebar-mini    { margin-left: 64px !important; }
+
+    /* ซ่อน text ใน nav-btn — font-size:0 ทำให้ text node invisible */
+    #app-sidebar.sidebar-mini .nav-btn {
+        justify-content: center;
+        padding: 10px 8px;
+        font-size: 0;
+        border-radius: 10px;
+    }
+    /* คืนค่า icon ให้ปกติ */
+    #app-sidebar.sidebar-mini .nav-btn .nav-icon {
+        font-size: 14px !important;
+        width: 38px; height: 38px;
+        margin: 0;
+    }
+    /* ซ่อน group label — เหลือแค่เส้นบาง */
+    #app-sidebar.sidebar-mini .nav-group-label {
+        padding: 6px 0 2px;
+        font-size: 0;
+        overflow: hidden;
+        height: 10px;
+    }
+    #app-sidebar.sidebar-mini .nav-group-label > * { display: none; }
+    #app-sidebar.sidebar-mini .nav-group-label::after {
+        content: '';
+        display: block;
+        height: 1px;
+        background: rgba(255,255,255,0.12);
+        margin: 4px 8px 0;
+    }
+    /* ซ่อน brand text + bar */
+    #app-sidebar.sidebar-mini #sidebar-brand-text { display: none; }
+    #app-sidebar.sidebar-mini #sidebar-brand-bar  { display: none; }
+    #app-sidebar.sidebar-mini #sidebar-logo-area  { padding: 12px 8px 10px; text-align:center; }
+    #app-sidebar.sidebar-mini #sidebar-logo-area img {
+        height: 40px !important;
+        width: auto !important;
+        max-width: 48px !important;
+        object-fit: contain !important;
+        margin: 0 auto !important;
+        display: block !important;
+    }
+    /* ซ่อน footer text */
+    #app-sidebar.sidebar-mini #sidebar-footer-text { display: none; }
+    /* ซ่อน ปุ่ม collapse ใน header เมื่อ mini */
+    #app-sidebar.sidebar-mini ~ #app-main #sidebar-toggle-btn { display: none !important; }
+
+    /* Tooltip เมื่อ mini: แสดงชื่อ tab */
+    #app-sidebar.sidebar-mini .nav-btn { position: relative; }
+    #app-sidebar.sidebar-mini .nav-btn[data-tip]::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: calc(100% + 10px);
+        top: 50%; transform: translateY(-50%);
+        background: #1a2535;
+        color: #e2e8f0;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 5px 10px;
+        border-radius: 7px;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+        border: 1px solid #253b52;
+        z-index: 999;
+    }
+    #app-sidebar.sidebar-mini .nav-btn[data-tip]:hover::after { opacity: 1; }
 
     /* ── NAV BUTTON ── */
     .nav-btn {
@@ -796,19 +866,25 @@ thead.sticky {
 </head>
 <body>
 
-    <aside class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 hidden lg:flex flex-col">
+    <aside id="app-sidebar" class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 hidden lg:flex flex-col" style="transition:transform 0.25s ease;">
+        <!-- ── ปุ่ม collapse — ลอยที่ขอบขวาบนของ sidebar ── -->
+        <button onclick="toggleSidebar()" title="ซ่อน Sidebar"
+            style="position:absolute;right:-14px;top:22px;width:28px;height:28px;border-radius:50%;background:#1d4ed8;color:#fff;border:2px solid #bec8d8;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:60;box-shadow:0 2px 8px rgba(0,0,0,0.3);transition:background 0.15s;"
+            onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1d4ed8'">
+            <i id="sidebar-collapse-icon" class="fas fa-chevron-left" style="font-size:10px;"></i>
+        </button>
 
         <!-- amber stripe — real element ไม่โดน overflow ตัด -->
         <div class="sidebar-stripe"></div>
 
         <!-- ── Logo / Brand Area ──────────────────────────────────── -->
-        <div style="padding:28px 20px 18px; border-bottom:1px solid rgba(255,255,255,0.1); text-align:center;">
-            <img src="https://static.wixstatic.com/media/5a1d18_237433e7b53841cca74e8f402795c4ca~mv2.png" alt="Logo" style="height:88px;margin:0 auto 14px;display:block;filter:brightness(0) invert(1) sepia(0.15) saturate(1.2) brightness(1.05);opacity:0.92;">
-            <div>
+        <div id="sidebar-logo-area" style="padding:28px 20px 18px; border-bottom:1px solid rgba(255,255,255,0.1); text-align:center; transition:padding 0.25s;">
+            <img src="https://static.wixstatic.com/media/5a1d18_237433e7b53841cca74e8f402795c4ca~mv2.png" alt="Logo" style="height:88px;margin:0 auto 14px;display:block;filter:brightness(0) invert(1) sepia(0.15) saturate(1.2) brightness(1.05);opacity:0.92; transition:height 0.25s,margin 0.25s;">
+            <div id="sidebar-brand-text">
                 <p style="font-size:12.5px;font-weight:900;color:#e2e8f0;letter-spacing:0.04em;line-height:1.4;">บริษัท ที.แสตนดาร์ด สตีล จำกัด</p>
                 <p style="font-size:8.5px;font-weight:700;color:#60a5fa;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px;">T.STANDARD STEEL COMPANY LIMITED</p>
             </div>
-            <div style="display:flex;gap:3px;margin-top:14px;">
+            <div id="sidebar-brand-bar" style="display:flex;gap:3px;margin-top:14px;">
                 <div style="height:3px;flex:3;background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:2px;"></div>
                 <div style="height:3px;flex:1;background:rgba(255,255,255,0.12);border-radius:2px;"></div>
                 <div style="height:3px;width:6px;background:rgba(255,255,255,0.07);border-radius:2px;"></div>
@@ -816,7 +892,7 @@ thead.sticky {
         </div>
 
         <!-- ── Nav ────────────────────────────────────────────────── -->
-        <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-0.5" style="scrollbar-width:none;">
+        <nav id="sidebar-nav" class="flex-1 overflow-y-auto px-3 py-3 space-y-0.5" style="scrollbar-width:none;">
 
             <!-- ─── WAREHOUSE ─── -->
             <div class="nav-group-label">
@@ -824,22 +900,22 @@ thead.sticky {
                 <i class="fas fa-industry" style="color:#475569;font-size:8px;"></i>&nbsp;WAREHOUSE
                 <span class="line"></span>
             </div>
-            <button onclick="switchView('input')" id="nav-input" class="nav-btn active">
+            <button onclick="switchView('input')" id="nav-input" class="nav-btn active" data-tip="STORAGE FG">
                 <span class="nav-icon"><i class="fas fa-pallet"></i></span> STORAGE FG
             </button>
-            <button onclick="switchView('report')" id="nav-report" class="nav-btn">
+            <button onclick="switchView('report')" id="nav-report" class="nav-btn" data-tip="REPORT STORAGE">
                 <span class="nav-icon"><i class="fas fa-chart-pie"></i></span> REPORT STORAGE
             </button>
-            <button onclick="switchView('printtag')" id="nav-printtag" class="nav-btn">
+            <button onclick="switchView('printtag')" id="nav-printtag" class="nav-btn" data-tip="PRINT TAG FG">
                 <span class="nav-icon"><i class="fas fa-tags"></i></span> PRINT TAG FG
             </button>
-            <button onclick="switchView('analytics')" id="nav-analytics" class="nav-btn">
+            <button onclick="switchView('analytics')" id="nav-analytics" class="nav-btn" data-tip="ANALYTICS">
                 <span class="nav-icon"><i class="fas fa-chart-line"></i></span> ANALYTICS
             </button>
-            <button onclick="switchView('overdue')" id="nav-overdue" class="nav-btn">
+            <button onclick="switchView('overdue')" id="nav-overdue" class="nav-btn" data-tip="รายการจองค้าง">
                 <span class="nav-icon"><i class="fas fa-exclamation-triangle"></i></span> รายการจองค้าง
             </button>
-            <button onclick="switchView('whactivity')" id="nav-whactivity" class="nav-btn">
+            <button onclick="switchView('whactivity')" id="nav-whactivity" class="nav-btn" data-tip="WH ACTIVITY LOG">
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> WH ACTIVITY LOG
             </button>
 
@@ -849,7 +925,7 @@ thead.sticky {
                 <i class="fas fa-layer-group" style="color:#475569;font-size:8px;"></i>&nbsp;INVENTORY
                 <span class="line"></span>
             </div>
-            <button onclick="switchView('kpi-stock')" id="nav-kpi-stock" class="nav-btn">
+            <button onclick="switchView('kpi-stock')" id="nav-kpi-stock" class="nav-btn" data-tip="INVENTORY">
                 <span class="nav-icon"><i class="fas fa-boxes"></i></span> INVENTORY
             </button>
 
@@ -859,7 +935,7 @@ thead.sticky {
                 <i class="fas fa-truck" style="color:#475569;font-size:8px;"></i>&nbsp;LOGISTIC
                 <span class="line"></span>
             </div>
-            <button onclick="switchView('logistic-plan')" id="nav-logistic-plan" class="nav-btn">
+            <button onclick="switchView('logistic-plan')" id="nav-logistic-plan" class="nav-btn" data-tip="วางแผนส่งมอบ">
                 <span class="nav-icon"><i class="fas fa-route"></i></span> วางแผนส่งมอบ
             </button>
 
@@ -869,11 +945,11 @@ thead.sticky {
                 <i class="fas fa-user-tie" style="color:#475569;font-size:8px;"></i>&nbsp;SUPERVISOR
                 <span class="line"></span>
             </div>
-            <button onclick="switchView('kpi-wh')" id="nav-kpi-wh" class="nav-btn">
+            <button onclick="switchView('kpi-wh')" id="nav-kpi-wh" class="nav-btn" data-tip="KPI WH & LOGISTIC">
                 <span class="nav-icon"><i class="fas fa-chart-bar"></i></span> KPI WH &amp; LOGISTIC
             </button>
             <div style="height:1px;background:rgba(255,255,255,0.08);margin:6px 0;"></div>
-            <button onclick="openAuditLogModal()" class="nav-btn" title="ประวัติการแก้ไขข้อมูล">
+            <button onclick="openAuditLogModal()" class="nav-btn" data-tip="Audit Log" title="ประวัติการแก้ไขข้อมูล">
                 <span class="nav-icon"><i class="fas fa-history"></i></span> Audit Log
             </button>
 
@@ -881,14 +957,19 @@ thead.sticky {
 
         <!-- ── Footer ─────────────────────────────────────────────── -->
         <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.1);">
-            <p style="font-size:9px;color:#b08050;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">FlowWH · WH &amp; Logistic Management</p>
+            <p id="sidebar-footer-text" style="font-size:9px;color:#b08050;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">FlowWH · WH &amp; Logistic Management</p>
         </div>
 
     </aside>
 
-    <div class="lg:ml-72 min-h-screen flex flex-col">
+    <div id="app-main" class="lg:ml-72 min-h-screen flex flex-col" style="transition:margin-left 0.25s ease;">
     <header class="bg-white px-6 py-4 border-b flex justify-between items-center sticky top-0 z-40">
-        <h2 id="view-title" class="text-xl font-black text-slate-800 uppercase italic">Warehouse Management</h2>
+        <div class="flex items-center gap-3">
+            <button id="sidebar-toggle-btn" onclick="toggleSidebar()" title="แสดง Sidebar" class="w-9 h-9 rounded-xl items-center justify-center transition-all shadow-sm hidden" style="background:#1a2535;color:#e2e8f0;">
+                <i class="fas fa-bars text-sm"></i>
+            </button>
+            <h2 id="view-title" class="text-xl font-black text-slate-800 uppercase italic">Warehouse Management</h2>
+        </div>
         <div class="flex items-center gap-6">
             <div class="text-right">
                 <p class="text-[10px] font-bold uppercase tracking-widest" style="color:#5a6f88;">Plan Date Reference</p>
@@ -6140,6 +6221,32 @@ const _safeStorage = {
     setItem: (k, v) => { _memStore[k] = v; },
     removeItem: k => { delete _memStore[k]; }
 };
+
+    // ── Sidebar Toggle ────────────────────────────────────────────────────
+    let _sidebarMini = false;
+    window.toggleSidebar = function toggleSidebar() {
+        const sidebar      = document.getElementById('app-sidebar');
+        const main         = document.getElementById('app-main');
+        const headerBtn    = document.getElementById('sidebar-toggle-btn');
+        const collapseIcon = document.getElementById('sidebar-collapse-icon');
+        if (!sidebar || !main) return;
+        _sidebarMini = !_sidebarMini;
+        sidebar.classList.toggle('sidebar-mini', _sidebarMini);
+        main.classList.toggle('sidebar-mini', _sidebarMini);
+        if (collapseIcon) collapseIcon.className = _sidebarMini ? 'fas fa-chevron-right' : 'fas fa-chevron-left';
+        if (headerBtn)    headerBtn.style.display = _sidebarMini ? 'flex' : 'none';
+    };
+    // ── Auto-expand เมื่อกด nav ในโหมด mini ──
+    document.addEventListener('DOMContentLoaded', function() {
+        var nav = document.getElementById('sidebar-nav');
+        if (nav) {
+            nav.addEventListener('click', function(e) {
+                if (_sidebarMini && e.target.closest('.nav-btn')) {
+                    window.toggleSidebar();
+                }
+            });
+        }
+    });
 
     document.addEventListener("DOMContentLoaded", function() {
         console.log("✅ DOM Ready - Warehouse & Logistic Management System Initialized");
