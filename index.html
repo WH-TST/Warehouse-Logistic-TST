@@ -23869,8 +23869,8 @@ window.exportLogisticImage = async function exportLogisticImage() {
 
     // ── สร้าง tbody rows ─────────────────────────────────────────
     let tbodyHtml = '';
-    const C  = 'border:1px solid #e2e8f0;padding:8px 10px;vertical-align:top;font-size:12px;color:#1e293b';
-    const CH = 'background:#1e293b;color:#e2e8f0;padding:9px 10px;font-size:11px;font-weight:900;text-align:left;white-space:nowrap;border:1px solid #334155';
+    const C  = 'border:1px solid #e2e8f0;padding:9px 12px;vertical-align:top;font-size:12px;color:#1e293b;line-height:1.4';
+    const CH = 'background:#1a2535;color:#e2e8f0;padding:10px 12px;font-size:11px;font-weight:900;text-align:left;white-space:nowrap;border:1px solid #253b52;letter-spacing:0.03em';
 
     const EXP_STATUS_STRIPE  = { planned:'#2563eb', inprogress:'#f59e0b', success:'#10b981', failed:'#ef4444', extra:'#8b5cf6' };
     const EXP_STATUS_TINT   = { planned:'#eff6ff', inprogress:'#fffbeb', success:'#f0fdf4', failed:'#fef2f2', extra:'#faf5ff' };
@@ -23936,14 +23936,30 @@ window.exportLogisticImage = async function exportLogisticImage() {
         const totalPlanRows = shops.reduce((s, sh) => s + Math.max((sh.items||[]).length, 1), 0) || 1;
         const distKm = shops[0]?.distance ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">${shops[0].distance} Km</div>` : '';
 
+        const expTint = EXP_STATUS_TINT[p.status] || '#f8fafc';
+        const expBS   = `border-left:4px solid ${expStripe};border-top:2px solid ${expStripe};border-bottom:2px solid ${expStripe};`;
+        const expBSI  = `border-top:2px solid ${expStripe};border-bottom:2px solid ${expStripe};`;
         const leftCells = (rs) => `
-            <td rowspan="${rs}" style="${C};border-left:4px solid ${expStripe};border-top:2px solid ${expStripe};font-weight:900;white-space:nowrap">${truckLabel}<br><span style="font-size:10px;color:#94a3b8;font-weight:400">${p.id||''}</span></td>
-            <td rowspan="${rs}" style="${C};border-top:2px solid ${expStripe};text-align:center;font-weight:900;font-family:monospace">${trip}</td>
-            <td rowspan="${rs}" style="${C};border-top:2px solid ${expStripe}">${driver}</td>
-            <td rowspan="${rs}" style="${C};border-top:2px solid ${expStripe}">${badge(jbLabel,jbColor)}<br><span style="display:inline-block;margin-top:3px">${badge(stLabel,stColor)}</span></td>`;
+            <td rowspan="${rs}" style="${C};${expBS}background:${expTint}">
+              <div style="font-size:17px;font-weight:900;font-family:monospace;color:#0f1923;letter-spacing:.04em">${truckLabel}</div>
+              <div style="font-size:9px;color:#64748b;margin-top:2px;font-family:monospace">${p.id||''}</div>
+            </td>
+            <td rowspan="${rs}" style="${C};${expBSI}text-align:center;background:${expTint}">
+              <div style="font-size:22px;font-weight:900;font-family:monospace;color:#0f1923">${trip}</div>
+            </td>
+            <td rowspan="${rs}" style="${C};${expBSI}background:${expTint}">
+              <div style="font-size:12px;font-weight:700;color:#243550">${driver}</div>
+            </td>
+            <td rowspan="${rs}" style="${C};${expBSI}background:${expTint}">
+              ${badge(jbLabel,jbColor)}<div style="margin-top:5px">${badge(stLabel,stColor)}</div>
+            </td>`;
 
         const weightCell = (rs) => `
-            <td rowspan="${rs}" style="${C};border-top:2px solid ${expStripe};text-align:right;font-weight:900;color:#0369a1;font-family:monospace;white-space:nowrap">${wt} Kg${distKm}</td>`;
+            <td rowspan="${rs}" style="${C};${expBSI}text-align:right;background:${expTint}">
+              <div style="font-size:17px;font-weight:900;font-family:monospace;color:#059669;white-space:nowrap">${wt}</div>
+              <div style="font-size:10px;font-weight:700;color:#34d399">Kg</div>
+              ${distKm}
+            </td>`;
 
         shops.forEach((sh, si) => {
             const items     = sh.items || [];
@@ -23970,15 +23986,11 @@ window.exportLogisticImage = async function exportLogisticImage() {
                 // ปรับให้ชื่อสินค้าเด่นกว่ารหัสสินค้า
                 // ปรับให้ชื่อสินค้าอยู่บนและตัวหนา รหัสสินค้าอยู่ล่าง
                 const skuHtml = it ? `
-                    <div style="font-weight:900; color:#0f172a; font-size:13px; line-height:1.2; margin-bottom:2px;">
-                        ${it.productName || '—'}
-                    </div>
-                    <div style="font-family:monospace; font-weight:700; color:#0369a1; font-size:11px; opacity:0.8;">
-                        SKU: ${it.sku || '—'}
-                    </div>
-                ` : '<div style="color:#94a3b8; font-style:italic;">— ไม่มีข้อมูลสินค้า —</div>';
-                const qtyHtml  = it ? `<div style="font-weight:900;text-align:center">${(it.qty||0).toLocaleString('th-TH')}</div>` : '—';
-                const wtHtml   = it ? `<div style="text-align:right;font-size:11px;color:#475569">${it.weight ? it.weight.toLocaleString('th-TH',{minimumFractionDigits:2})+' กก.' : '—'}</div>` : '—';
+                    <div style="font-weight:800;color:#0f172a;font-size:13.5px;line-height:1.3;margin-bottom:3px">${it.productName || '—'}</div>
+                    <div style="display:inline-block;font-family:monospace;color:#1d4ed8;font-size:10px;font-weight:700;background:#eff6ff;padding:1px 6px;border-radius:3px;margin-top:1px">${it.sku || '—'}</div>
+                ` : '<div style="color:#94a3b8;font-style:italic;font-size:11px">— ไม่มีข้อมูลสินค้า —</div>';
+                const qtyHtml  = it ? `<div style="font-size:15px;font-weight:900;text-align:center;font-family:monospace;color:#0f1923">${(it.qty||0).toLocaleString('th-TH')}</div>` : '—';
+                const wtHtml   = it ? `<div style="text-align:right;font-size:12px;font-weight:700;color:#374151">${it.weight ? it.weight.toLocaleString('th-TH',{minimumFractionDigits:2})+' กก.' : '—'}</div>` : '—';
                 const itemSep  = ii > 0 ? 'border-top:1px solid #f1f5f9;' : (isFirstPlanRow ? `border-top:2px solid ${expStripe};` : shopSepBorder);
 
                 let row = `<tr style="background:${rowBg}">`;
@@ -23998,7 +24010,7 @@ window.exportLogisticImage = async function exportLogisticImage() {
 
     // ── สร้าง container ──────────────────────────────────────────
     const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-9999px;top:0;padding:24px;background:#f1f5f9;width:1200px;font-family:Sarabun,system-ui,sans-serif';
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;padding:28px;background:#e8ecf1;width:1300px;font-family:Sarabun,system-ui,sans-serif';
 
     // ── ตารางสรุปรายบุคคล (รถบริษัทเท่านั้น) สำหรับ export ──
     // ยึดตามตาราง: -C ไม่นับเที่ยว/ระยะ (แม่วิ่งแทน), นับแค่น.น.+ร้านที่แม่ไม่ได้ไป
@@ -24110,36 +24122,37 @@ window.exportLogisticImage = async function exportLogisticImage() {
         </div>`;
     }
 
+    const _expTime = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
     container.innerHTML = `
-        <div style="background:#f0fdf4;border:1px solid #d1fae5;border-radius:16px;padding:22px 28px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
-            <div style="display:flex;align-items:center;gap:14px">
-                <div style="width:52px;height:52px;background:#0ea5e9;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:26px">🚛</div>
+        <div style="background:linear-gradient(135deg,#0d1b2a 0%,#1e3a8a 60%,#2563eb 100%);border-radius:16px;padding:24px 32px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(15,25,60,0.3)">
+            <div style="display:flex;align-items:center;gap:16px">
+                <div style="width:60px;height:60px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:32px;border:2px solid rgba(255,255,255,0.2)">🚛</div>
                 <div>
-                    <div style="color:#111827;font-weight:900;font-size:22px;letter-spacing:-.3px">แผนการจัดส่งสินค้า</div>
-                    <div style="color:#16a34a;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Warehouse & Logistic Management System</div>
+                    <div style="color:#ffffff;font-weight:900;font-size:28px;letter-spacing:-.5px;line-height:1.1">แผนการจัดส่งสินค้า</div>
+                    <div style="color:#93c5fd;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin-top:4px">Warehouse &amp; Logistic Management System</div>
                 </div>
             </div>
             <div style="text-align:right">
-                <div style="color:#111827;font-weight:900;font-size:26px">📅 ${dateDisplay}</div>
-                <div style="color:#6b7280;font-size:11px;font-weight:600;margin-top:4px">Export ${new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</div>
+                <div style="color:#ffffff;font-weight:900;font-size:34px;font-family:monospace;letter-spacing:.02em">📅 ${dateDisplay}</div>
+                <div style="color:#93c5fd;font-size:11px;font-weight:600;margin-top:5px">Export ${_expTime}</div>
             </div>
         </div>
         ${driverSummaryHtml}
-        <div style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+        <div style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">
             <table style="width:100%;border-collapse:collapse;table-layout:auto">
                 <thead>
                     <tr>
-                        <th style="${CH}">ทะเบียนรถ</th>
-                        <th style="${CH};text-align:center;width:50px">เที่ยว</th>
-                        <th style="${CH};width:110px">คนขับ</th>
-                        <th style="${CH};width:130px">ประเภทงาน</th>
-                        <th style="${CH};min-width:160px">ชื่อร้าน / ปลายทาง</th>
-                        <th style="${CH};min-width:180px">รายการสินค้า</th>
-                        <th style="${CH};text-align:center;width:60px">จำนวน</th>
-                        <th style="${CH};text-align:right;width:110px">น้ำหนัก</th>
-                        <th style="${CH};text-align:center;width:70px">คลัง</th>
-                        <th style="${CH};width:120px">หมายเหตุ</th>
-                        <th style="${CH};text-align:right;width:110px">น.น.รวม/เที่ยว</th>
+                        <th style="${CH};width:120px">ทะเบียนรถ</th>
+                        <th style="${CH};text-align:center;width:55px">เที่ยว</th>
+                        <th style="${CH};width:120px">คนขับ</th>
+                        <th style="${CH};width:140px">ประเภทงาน</th>
+                        <th style="${CH};min-width:170px">ชื่อร้าน / ปลายทาง</th>
+                        <th style="${CH};min-width:200px">รายการสินค้า</th>
+                        <th style="${CH};text-align:center;width:70px">จำนวน</th>
+                        <th style="${CH};text-align:right;width:120px">น้ำหนัก/รายการ</th>
+                        <th style="${CH};text-align:center;width:75px">คลัง</th>
+                        <th style="${CH};width:110px">หมายเหตุ</th>
+                        <th style="${CH};text-align:right;width:130px">น.น.รวม/เที่ยว</th>
                     </tr>
                 </thead>
                 <tbody>${tbodyHtml}</tbody>
@@ -24151,7 +24164,7 @@ window.exportLogisticImage = async function exportLogisticImage() {
 
     document.body.appendChild(container);
     try {
-        const canvas = await html2canvas(container, { scale:2, useCORS:true, backgroundColor:'#f1f5f9', logging:false, windowWidth:1248 });
+        const canvas = await html2canvas(container, { scale:2, useCORS:true, backgroundColor:'#e8ecf1', logging:false, windowWidth:1356 });
         const link   = document.createElement('a');
         link.download = `แผนจัดส่ง_${dateVal||'export'}.png`;
         link.href     = canvas.toDataURL('image/png');
