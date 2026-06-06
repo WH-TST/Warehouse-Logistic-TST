@@ -8971,10 +8971,11 @@ function getSaleAndCustomerList() {
     var soMap = _loadSOData();
     var salesSet = {};
     Object.values(soMap).forEach(function(so) {
-      // หา sales taker จากแต่ละ SO (เก็บใน soMap.salesTaker ถ้ามี)
       if (so.salesTaker) {
         if (!salesSet[so.salesTaker]) salesSet[so.salesTaker] = {};
-        salesSet[so.salesTaker][so.company] = true;
+        // ใช้ deliveryName (ชื่อลูกค้า) แทน company code
+        var displayName = so.deliveryName || so.company;
+        salesSet[so.salesTaker][displayName] = true;
       }
     });
     var result = Object.keys(salesSet).sort().map(function(s) {
@@ -8994,7 +8995,9 @@ function getSOLinesByCustomer(params) {
     var soMap    = _loadSOData();
     var lines    = [];
     Object.values(soMap).forEach(function(so) {
-      if (customer && so.company !== customer) return;
+      // เปรียบเทียบด้วย deliveryName (ชื่อลูกค้า) แทนรหัส company
+      var displayName = so.deliveryName || so.company;
+      if (customer && displayName !== customer) return;
       if (saleName && so.salesTaker && so.salesTaker !== saleName) return;
       so.lines.forEach(function(l) {
         if (l.cwRem <= 0) return; // ไม่มียอดค้างส่งแล้ว
