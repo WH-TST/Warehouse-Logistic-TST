@@ -29433,7 +29433,9 @@ window.tdOnSaleChange = function() {
     if (nameSpan) nameSpan.textContent = saleName;
 };
 
-// ── Step 2: เลือกลูกค้า → แสดง Step 3 (manual entry) ─────────
+// ── Step 2: เลือกลูกค้า → โหลด SO cache + แสดง Step 3 ────────
+let _tdSOCache = {}; // sku → { name, weightPerPcs }
+
 window.tdOnCustomerChange = function() {
     const customer = document.getElementById('td-customer-select')?.value || '';
     const step3 = document.getElementById('td-step3');
@@ -29442,13 +29444,49 @@ window.tdOnCustomerChange = function() {
     const label = document.getElementById('td-customer-label');
     if (label) label.textContent = customer;
     _tdInitDate();
-    // ล้างแถวเดิมถ้า customer เปลี่ยน
+    // ล้างแถวเดิม
     document.getElementById('td-so-rows').innerHTML = '';
     document.getElementById('td-table-header')?.classList.add('hidden');
     document.getElementById('td-no-data')?.classList.remove('hidden');
+    document.getElementById('td-weight-summary')?.classList.add('hidden');
     document.getElementById('btn-td-save').disabled = true;
-    _tdRowCount = 0; _tdValidated = false;
+    _tdRowCount = 0; _tdValidated = false; _tdSOCache = {};
+
+    // โหลด SO lines เป็น cache เพื่อ fill ชื่อ/น้ำหนักทันที
+    google.script.run
+        .withSuccessHandler(res => {
+            if (!res?.success) return;
+            _tdSOLines = res.lines || [];
+            _tdSOCache = {};
+            _tdSOLines.forEach(l => {
+                if (!_tdSOCache[l.sku]) {
+                    _tdSOCache[l.sku] = { name: l.name || '', weightPerPcs: l.weightPerPcs || 0 };
+                }
+            });
+        })
+        .getSOLinesByCustomer({ saleName: _tdCurrentSale, customer });
 };
+
+// ── lookup ชื่อ+น้ำหนักจาก cache เมื่อกรอก SKU ─────────────
+function _tdFillNameWeight(row) {
+    const sku     = (row.querySelector('.td-inp-sku')?.value || '').trim().toUpperCase();
+    const nameEl  = row.querySelector('.td-inp-name');
+    const wgtEl   = row.querySelector('.td-inp-weight');
+    const qtyEl   = row.querySelector('.td-inp-qty');
+    const cached  = _tdSOCache[sku];
+    if (cached && nameEl) {
+        nameEl.textContent = cached.name || '—';
+        nameEl.className   = 'td-inp-name text-sky-300 text-[10px] truncate px-1';
+        row.dataset.wpp    = cached.weightPerPcs || 0;
+        if (wgtEl && cached.weightPerPcs > 0 && qtyEl?.value > 0) {
+            const kg = (cached.weightPerPcs * parseInt(qtyEl.value)).toFixed(2);
+            wgtEl.textContent = Number(kg).toLocaleString('th-TH', {maximumFractionDigits:2});
+        }
+    } else if (nameEl && sku) {
+        nameEl.textContent = 'ยังไม่ตรวจสอบ';
+        nameEl.className   = 'td-inp-name text-slate-500 text-[10px] truncate px-1 italic';
+    }
+}
 
 // ── เพิ่มแถวเปล่า ─────────────────────────────────────────────
 let _tdRowCount = 0;
@@ -29472,11 +29510,11 @@ window.tdAddRow = function(so, sku, qty) {
         oninput="tdMarkDirty()">
       <input type="text" value="${sku||''}" placeholder="0XXX000.0000"
         class="td-inp-sku bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-[11px] font-black focus:outline-none focus:border-amber-400 uppercase w-full"
-        oninput="tdMarkDirty()">
+        oninput="tdMarkDirty();_tdFillNameWeight(this.closest('[id^=tdr-]'))">
       <span class="td-inp-name text-slate-500 text-[10px] truncate px-1">—</span>
       <input type="number" value="${qty||''}" min="1" placeholder="จำนวน"
         class="td-inp-qty bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-[11px] font-black text-right focus:outline-none focus:border-emerald-400 w-full"
-        oninput="tdMarkDirty();tdCalcWeight()">
+        oninput="tdMarkDirty();_tdFillNameWeight(this.closest('[id^=tdr-]'));tdCalcWeight()">
       <span class="td-inp-weight text-amber-300 text-[10px] text-right font-black px-1">—</span>
       <span class="td-status text-[10px] text-center text-slate-600 font-black">—</span>
       <input type="text" placeholder="หมายเหตุ..."
@@ -29525,6 +29563,9 @@ window.tdParseDump = function() {
         const qty = parts[2] ? parseInt(parts[2].replace(/,/g,'')) || 0 : 0;
         if (!so || !sku) return;
         tdAddRow(so, sku, qty || '');
+        // fill ชื่อ+น้ำหนักทันทีจาก cache
+        const newRow = document.getElementById('td-so-rows')?.lastElementChild;
+        if (newRow) _tdFillNameWeight(newRow);
         added++;
     });
     if (added > 0) {
