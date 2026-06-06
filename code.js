@@ -8884,32 +8884,78 @@ function getWarehouseMoveLog() {
 // =====================================================================
 
 // ── โหลด SO database เข้า cache ──────────────────────────────
+// คอลัมน์จาก SO.xlsx:
+//   Sales order, Item number, Customer, Product name,
+//   CW quantity, CW deliver remainder, Line status
 var _soCache = null;
 var _soCacheTime = 0;
 
 function _loadSOData() {
   var now = new Date().getTime();
-  if (_soCache && (now - _soCacheTime) < 300000) return _soCache; // cache 5 min
+  if (_soCache && (now - _soCacheTime) < 300000) return _soCache;
   try {
     var ss    = SpreadsheetApp.openById(SO_SPREADSHEET_ID);
     var sheet = ss.getSheetByName(SO_SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) { _soCache = {}; return {}; }
+
+    // อ่าน header row เพื่อ map ชื่อคอลัมน์
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+                       .map(function(h) { return String(h).trim().toLowerCase(); });
+
+    function colIdx(name) {
+      var idx = headers.indexOf(name.toLowerCase());
+      return idx; // -1 ถ้าไม่พบ
+    }
+
+    var iSO      = colIdx('sales order');
+    var iSKU     = colIdx('item number');
+    var iCust    = colIdx('customer');
+    var iName    = colIdx('product name');
+    var iCWqty   = colIdx('cw quantity');
+    var iCWrem   = colIdx('cw deliver remainder');
+    var iStatus  = colIdx('line status');
+    var iDelName = colIdx('delivery name');
+    var iShip    = colIdx('ship date');
+
+    if (iSO < 0 || iSKU < 0) {
+      // fallback: ใช้ index ตาม Excel structure ที่รู้
+      iSO = 22; iSKU = 7; iCust = 1; iName = 8; iCWqty = 10; iCWrem = 15; iStatus = 2; iDelName = 3; iShip = 6;
+    }
+
     var data  = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
-    var soMap = {}; // { soNumber: { company, lines: [{sku, name, qty}] } }
+    var soMap = {};
+
     data.forEach(function(row) {
-      var company = String(row[0] || '').trim();
-      var so      = String(row[1] || '').trim();
-      var sku     = String(row[2] || '').trim();
-      var name    = String(row[3] || '').trim();
-      var qty     = Number(row[4]) || 0;
+      var so      = String(row[iSO]     || '').trim();
+      var sku     = String(row[iSKU]    || '').trim();
+      var company = String(row[iCust]   || '').trim();
+      var name    = String(row[iName]   || '').trim();
+      var cwQty   = Number(row[iCWqty]  || 0);
+      var cwRem   = iCWrem >= 0 ? Number(row[iCWrem] || 0) : cwQty;
+      var status  = iStatus >= 0 ? String(row[iStatus] || '').trim() : '';
+      var delName = iDelName >= 0 ? String(row[iDelName] || '').trim() : '';
+      var shipDate= iShip >= 0 ? row[iShip] : '';
+
       if (!so || !sku) return;
-      if (!soMap[so]) soMap[so] = { company: company, so: so, lines: [] };
-      soMap[so].lines.push({ sku: sku, name: name, qty: qty });
+      if (!soMap[so]) soMap[so] = { company: company, deliveryName: delName, so: so, lines: [] };
+
+      soMap[so].lines.push({
+        sku:      sku,
+        name:     name,
+        cwQty:    cwQty,
+        cwRem:    cwRem,
+        status:   status,
+        shipDate: shipDate instanceof Date
+                  ? Utilities.formatDate(shipDate, 'GMT+7', 'dd/MM/yyyy')
+                  : String(shipDate || '')
+      });
     });
+
     _soCache = soMap;
     _soCacheTime = now;
     return soMap;
   } catch(e) {
+    Logger.log('_loadSOData error: ' + e.toString());
     return {};
   }
 }
@@ -8950,10 +8996,16 @@ function validateSOLines(lines) {
         soItems: soLines.map(function(l) { return l.sku; }).join(', ')
       };
       return {
-        so: so, sku: sku, ok: true,
-        company: soMap[so].company,
-        name: found.name,
-        soQty: found.qty
+        so:          so,
+        sku:         sku,
+        ok:          true,
+        company:     soMap[so].company,
+        deliveryName:soMap[so].deliveryName || '',
+        name:        found.name,
+        cwQty:       found.cwQty,
+        cwRem:       found.cwRem,
+        status:      found.status,
+        shipDate:    found.shipDate
       };
     });
     return { success: true, results: results };

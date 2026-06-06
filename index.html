@@ -29459,11 +29459,18 @@ window.tdValidate = function() {
                 const nameEl = row.querySelector('.td-name');
                 const statEl = row.querySelector('.td-status');
                 if (r.ok) {
-                    if (nameEl) { nameEl.textContent = r.name || r.sku; nameEl.className = 'td-name text-emerald-400 text-[10px] truncate px-1 font-bold'; }
+                    const remTxt = r.cwRem > 0 ? ` [ค้าง ${Number(r.cwRem).toLocaleString('th-TH')}]` : '';
+                    const shipTxt = r.shipDate ? ` ส่ง ${r.shipDate}` : '';
+                    if (nameEl) {
+                        nameEl.textContent = (r.name || r.sku) + remTxt + shipTxt;
+                        nameEl.className = 'td-name text-emerald-400 text-[10px] truncate px-1 font-bold';
+                        nameEl.title = `${r.company} | ${r.name} | ยอดค้างส่ง: ${r.cwRem} เส้น`;
+                    }
                     if (statEl) { statEl.textContent = '✓ ผ่าน'; statEl.className = 'td-status text-[10px] text-center text-emerald-400 font-black'; }
-                    // set company name hidden
-                    row.dataset.company = r.company || '';
-                    row.dataset.name    = r.name    || '';
+                    row.dataset.company     = r.company      || '';
+                    row.dataset.deliveryName= r.deliveryName || '';
+                    row.dataset.name        = r.name         || '';
+                    row.dataset.cwRem       = r.cwRem        || 0;
                 } else {
                     allOk = false;
                     if (nameEl) { nameEl.textContent = r.error; nameEl.className = 'td-name text-red-400 text-[10px] truncate px-1'; }
