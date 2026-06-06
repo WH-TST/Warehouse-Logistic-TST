@@ -4846,31 +4846,21 @@ thead.sticky {
 <!-- VIEW: จัดรถส่งสินค้า — Truck Dispatch                       -->
 <!-- ============================================================ -->
 <div id="view-truck-dispatch-content" class="hidden space-y-5">
-
   <!-- Header -->
   <div class="rounded-2xl p-5 shadow-sm" style="background:#f4f6f9;border:1px solid #bec8d8;border-left:4px solid #f59e0b;">
     <div class="flex items-center justify-between gap-5 flex-wrap">
       <div class="flex items-center gap-5">
-        <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl flex-shrink-0" style="background:linear-gradient(135deg,#92400e,#f59e0b);">
-          <i class="fas fa-truck-loading"></i>
-        </div>
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl flex-shrink-0" style="background:linear-gradient(135deg,#92400e,#f59e0b);"><i class="fas fa-truck-loading"></i></div>
         <div>
           <h2 class="text-2xl font-black tracking-tight" style="color:#0f1923;">จัดรถส่งสินค้า</h2>
-          <p class="text-sm font-bold mt-0.5 uppercase tracking-widest" style="color:#d97706;">Truck Dispatch — Sales กรอกรายการส่ง + ตรวจสอบ SO</p>
+          <p class="text-sm font-bold mt-0.5 uppercase tracking-widest" style="color:#d97706;">Truck Dispatch — Sale เลือกลูกค้า + SO ค้างส่ง</p>
         </div>
       </div>
-      <div class="flex gap-2">
-        <button onclick="tdLoadHistory()" class="bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
-          <i class="fas fa-history"></i> ประวัติ
-        </button>
-        <button onclick="tdProbeSOSheet()" class="bg-slate-600 hover:bg-slate-500 text-slate-300 px-3 py-2 rounded-xl font-bold text-sm transition-all" title="ตรวจ SO Database">
-          <i class="fas fa-database"></i>
-        </button>
-      </div>
+      <button onclick="tdProbeSOSheet()" class="bg-slate-500 hover:bg-slate-400 text-white px-3 py-2 rounded-xl text-xs font-bold"><i class="fas fa-database mr-1"></i>Probe DB</button>
     </div>
   </div>
 
-  <!-- Probe result -->
+  <!-- Probe box -->
   <div id="td-probe-box" class="hidden bg-slate-900 border border-slate-600 rounded-xl p-4">
     <div class="flex justify-between mb-2"><span class="text-slate-300 font-black text-xs uppercase">SO Database Probe</span>
       <button onclick="document.getElementById('td-probe-box').classList.add('hidden')" class="text-slate-500 hover:text-white text-xs">ปิด</button>
@@ -4878,103 +4868,96 @@ thead.sticky {
     <pre id="td-probe-text" class="text-[10px] text-green-400 font-mono overflow-auto max-h-48 whitespace-pre-wrap"></pre>
   </div>
 
-  <!-- Form: ข้อมูลรถ -->
-  <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
-    <p class="text-slate-300 font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
-      <i class="fas fa-truck text-amber-400"></i> ข้อมูลรถและพนักงาน
-    </p>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div>
-        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">วันที่ส่ง</label>
-        <input type="date" id="td-date"
-          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400">
-      </div>
-      <div>
-        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">ทะเบียนรถ</label>
-        <input type="text" id="td-truck" placeholder="กข-0000"
-          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400 uppercase">
-      </div>
-      <div>
-        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">คนขับ</label>
-        <input type="text" id="td-driver" placeholder="ชื่อคนขับ"
-          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400">
-      </div>
-      <div>
-        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">รหัสพนักงาน (Sale)</label>
-        <input type="text" id="td-emp" placeholder="รหัสพนักงาน"
-          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400">
-      </div>
+  <!-- STEP 1: เลือก Sale -->
+  <div class="bg-slate-800/60 border border-amber-600/40 rounded-2xl p-5">
+    <p class="text-amber-400 font-black text-xs uppercase tracking-widest mb-3"><i class="fas fa-user-tie mr-2"></i>Step 1 — เลือก Sale ที่กำลังใช้งาน</p>
+    <div class="flex items-center gap-4 flex-wrap">
+      <select id="td-sale-select" onchange="tdOnSaleChange()"
+        class="bg-slate-700 border-2 border-amber-600/60 text-white rounded-xl px-4 py-2.5 font-black text-base focus:outline-none focus:border-amber-400 min-w-[240px]">
+        <option value="">-- เลือกชื่อ Sale --</option>
+      </select>
+      <button onclick="tdLoadHistory()" id="btn-td-history"
+        class="hidden bg-amber-600/20 border border-amber-600 text-amber-300 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
+        <i class="fas fa-history"></i> ประวัติของฉัน
+      </button>
     </div>
   </div>
 
-  <!-- Form: รายการสินค้า -->
-  <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
-    <div class="flex items-center justify-between mb-4">
-      <p class="text-slate-300 font-black text-sm uppercase tracking-widest flex items-center gap-2">
-        <i class="fas fa-list text-amber-400"></i> รายการสินค้าที่จัดรถ
+  <!-- STEP 2: เลือกลูกค้า -->
+  <div id="td-step2" class="hidden bg-slate-800/60 border border-sky-600/40 rounded-2xl p-5">
+    <p class="text-sky-400 font-black text-xs uppercase tracking-widest mb-3"><i class="fas fa-building mr-2"></i>Step 2 — เลือกลูกค้า / ปลายทาง</p>
+    <select id="td-customer-select" onchange="tdOnCustomerChange()"
+      class="bg-slate-700 border-2 border-sky-600/60 text-white rounded-xl px-4 py-2.5 font-bold text-sm focus:outline-none focus:border-sky-400 w-full max-w-lg">
+      <option value="">-- เลือกลูกค้า --</option>
+    </select>
+  </div>
+
+  <!-- STEP 3: ข้อมูลรถ + รายการ SO -->
+  <div id="td-step3" class="hidden space-y-4">
+
+    <!-- ข้อมูลรถ -->
+    <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
+      <p class="text-slate-300 font-black text-sm uppercase tracking-widest mb-3 flex items-center gap-2">
+        <i class="fas fa-truck text-amber-400"></i> ข้อมูลรถ
       </p>
-      <button onclick="tdAddRow()"
-        class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all">
-        <i class="fas fa-plus"></i> เพิ่มแถว
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div><label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">วันที่ส่ง</label>
+          <input type="date" id="td-date" class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400"></div>
+        <div><label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">ทะเบียนรถ</label>
+          <input type="text" id="td-truck" placeholder="กข-1234" class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400 uppercase"></div>
+        <div><label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">คนขับ</label>
+          <input type="text" id="td-driver" placeholder="ชื่อคนขับ" class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400"></div>
+      </div>
+    </div>
+
+    <!-- รายการ SO ค้างส่ง (auto-load จากระบบ) -->
+    <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-slate-300 font-black text-sm uppercase tracking-widest flex items-center gap-2">
+          <i class="fas fa-list-alt text-emerald-400"></i> SO ค้างส่ง —
+          <span id="td-customer-label" class="text-emerald-400 font-black text-sm"></span>
+        </p>
+        <div id="td-loading-so" class="hidden text-slate-400 text-xs flex items-center gap-2">
+          <i class="fas fa-spinner fa-spin"></i> กำลังโหลด...
+        </div>
+      </div>
+      <!-- Table header -->
+      <div class="grid gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-700 pb-2 mb-2"
+           style="grid-template-columns:120px 145px 1fr 80px 110px 90px">
+        <span>SO</span><span>รหัสสินค้า</span><span>ชื่อสินค้า</span>
+        <span class="text-right">ค้างส่ง</span><span class="text-right">จัดรถ (เส้น)</span><span class="text-center">วันส่ง</span>
+      </div>
+      <div id="td-so-rows" class="space-y-1.5 max-h-80 overflow-y-auto"></div>
+      <div id="td-no-data" class="hidden text-center py-8">
+        <i class="fas fa-inbox text-slate-600 text-3xl mb-2 block"></i>
+        <p class="text-slate-500 font-bold text-sm">ไม่มี SO ค้างส่งสำหรับลูกค้านี้</p>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex gap-3">
+      <button onclick="tdSave()" id="btn-td-save"
+        class="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+        <i class="fas fa-save"></i> บันทึกจัดรถ
+      </button>
+      <button onclick="tdReset()"
+        class="bg-slate-600 hover:bg-slate-500 text-slate-300 px-4 py-3 rounded-xl font-bold text-sm transition-all">
+        <i class="fas fa-redo"></i> เริ่มใหม่
       </button>
     </div>
 
-    <!-- Table header -->
-    <div class="grid gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-700 pb-2 mb-2"
-         style="grid-template-columns:40px 160px 150px 1fr 100px 80px 32px">
-      <span class="text-center">#</span>
-      <span>SO</span>
-      <span>รหัสสินค้า</span>
-      <span>ชื่อสินค้า (auto)</span>
-      <span class="text-right">จำนวน (เส้น)</span>
-      <span class="text-center">สถานะ</span>
-      <span></span>
-    </div>
-
-    <!-- Table body -->
-    <div id="td-rows" class="space-y-1.5"></div>
-
-    <!-- Summary -->
-    <div id="td-summary" class="hidden mt-4 pt-4 border-t border-slate-700">
-      <div class="grid grid-cols-3 gap-4 text-center">
-        <div class="bg-slate-700/40 rounded-xl p-3">
-          <p class="text-slate-500 text-xs font-bold mb-1">รายการทั้งหมด</p>
-          <p id="td-sum-lines" class="text-white font-black text-xl">0</p>
-        </div>
-        <div class="bg-emerald-900/30 rounded-xl p-3">
-          <p class="text-emerald-400 text-xs font-bold mb-1">ผ่าน</p>
-          <p id="td-sum-ok" class="text-emerald-300 font-black text-xl">0</p>
-        </div>
-        <div class="bg-red-900/30 rounded-xl p-3">
-          <p class="text-red-400 text-xs font-bold mb-1">ไม่ผ่าน</p>
-          <p id="td-sum-err" class="text-red-300 font-black text-xl">0</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Action buttons -->
-  <div class="flex gap-3">
-    <button onclick="tdValidate()"
-      class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
-      <i class="fas fa-check-circle"></i> ตรวจสอบ SO
-    </button>
-    <button onclick="tdSave()" id="btn-td-save" disabled
-      class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
-      <i class="fas fa-save"></i> บันทึกจัดรถ
-    </button>
-    <button onclick="tdReset()"
-      class="bg-slate-600 hover:bg-slate-500 text-slate-300 px-4 py-3 rounded-xl font-bold text-sm transition-all">
-      <i class="fas fa-redo"></i> เริ่มใหม่
-    </button>
-  </div>
+  </div><!-- end step3 -->
 
   <!-- History -->
   <div id="td-history-box" class="hidden bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
-    <p class="text-slate-300 font-black text-sm uppercase tracking-widest mb-3 flex items-center gap-2">
-      <i class="fas fa-history text-amber-400"></i> ประวัติการจัดรถล่าสุด
-    </p>
-    <div id="td-history-rows" class="space-y-1 max-h-72 overflow-y-auto text-[10px]"></div>
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-slate-300 font-black text-sm uppercase tracking-widest flex items-center gap-2">
+        <i class="fas fa-history text-amber-400"></i> ประวัติจัดรถ —
+        <span id="td-history-sale-name" class="text-amber-400"></span>
+      </p>
+      <button onclick="document.getElementById('td-history-box').classList.add('hidden')" class="text-slate-500 hover:text-white text-sm"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="td-history-rows" class="space-y-2 max-h-80 overflow-y-auto text-[10px]"></div>
   </div>
 
 </div><!-- end view-truck-dispatch-content -->
@@ -9482,9 +9465,9 @@ window.switchView = function switchView(view) {
         loadWarehouseMap();
     }
 
-    // จัดรถ — init เมื่อเข้าครั้งแรก
+    // จัดรถ — init เมื่อเข้า
     if (view === 'truck-dispatch') {
-        _tdInitDate();
+        tdInit();
     }
 }
 
@@ -29335,84 +29318,135 @@ window.closeKpiEmpModal = function() {
 
 // ── Save: ยืนยัน (validate final + empId → send payload เฉพาะ type) ─
 // ══════════════════════════════════════════════════════════════
-// TRUCK DISPATCH — จัดรถส่งสินค้า
+// TRUCK DISPATCH — จัดรถส่งสินค้า (Flow: Sale → ลูกค้า → SO)
 // ══════════════════════════════════════════════════════════════
 
-let _tdRowCount = 0;
-let _tdValidated = false;
-let _tdValidResults = [];
+let _tdSaleData    = [];   // [{sale, customers:[]}]
+let _tdCurrentSale = '';
+let _tdSOLines     = [];   // SO lines สำหรับลูกค้าที่เลือก
+let _tdLoaded      = false;
 
-// ── Init: เพิ่มแถวแรกอัตโนมัติเมื่อเข้าหน้า ──────────────────
-(function() {
-    const today = new Date();
-    const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    document.addEventListener('DOMContentLoaded', () => {
-        const dateEl = document.getElementById('td-date');
-        if (dateEl) dateEl.value = fmt(today);
-    });
-})();
-
+// ── Init: โหลด Sale list เมื่อเข้าหน้าครั้งแรก ────────────────
 function _tdInitDate() {
-    const dateEl = document.getElementById('td-date');
-    if (dateEl && !dateEl.value) {
+    const el = document.getElementById('td-date');
+    if (el && !el.value) {
         const t = new Date();
-        dateEl.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+        el.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
     }
-    if (document.getElementById('td-rows').children.length === 0) tdAddRow();
 }
 
-// ── เพิ่มแถว ──────────────────────────────────────────────────
-window.tdAddRow = function() {
-    _tdRowCount++;
-    _tdValidated = false;
-    document.getElementById('btn-td-save').disabled = true;
-    const rowId = 'td-row-' + _tdRowCount;
-    const idx   = _tdRowCount;
-    const div   = document.createElement('div');
-    div.id = rowId;
-    div.className = 'grid items-center gap-2';
-    div.style.gridTemplateColumns = '40px 160px 150px 1fr 100px 80px 32px';
-    div.innerHTML = `
-      <span class="text-slate-600 text-xs text-center font-bold">${idx}</span>
-      <input type="text" placeholder="1SO26-XXXXX" oninput="tdOnChange()"
-        class="td-so bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:border-amber-400 w-full uppercase">
-      <input type="text" placeholder="0XXX000.0000" oninput="tdOnChange()"
-        class="td-sku bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:border-amber-400 w-full uppercase">
-      <span class="td-name text-slate-500 text-[10px] truncate px-1">—</span>
-      <input type="number" min="1" placeholder="0" oninput="tdOnChange()"
-        class="td-qty bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-xs font-black text-right focus:outline-none focus:border-amber-400 w-full">
-      <span class="td-status text-[10px] text-center text-slate-600">—</span>
-      <button onclick="tdRemoveRow('${rowId}')" class="text-red-500 hover:text-red-400 text-sm w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-900/20 transition-all">
-        <i class="fas fa-times"></i>
-      </button>`;
-    document.getElementById('td-rows').appendChild(div);
+function tdInit() {
+    _tdInitDate();
+    if (_tdLoaded) return;
+    // โหลด Sale list จาก SO database
+    google.script.run
+        .withSuccessHandler(res => {
+            if (!res?.success) return;
+            _tdSaleData = res.sales || [];
+            const sel = document.getElementById('td-sale-select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">-- เลือกชื่อ Sale --</option>' +
+                _tdSaleData.map(s => `<option value="${s.sale}">${s.sale}</option>`).join('');
+            _tdLoaded = true;
+        })
+        .withFailureHandler(err => showToast('⚠️ โหลด Sale list ไม่สำเร็จ: ' + (err?.message||''), true))
+        .getSaleAndCustomerList();
+}
+
+// ── Step 1: เลือก Sale ──────────────────────────────────────
+window.tdOnSaleChange = function() {
+    const saleName = document.getElementById('td-sale-select')?.value || '';
+    _tdCurrentSale = saleName;
+    const step2 = document.getElementById('td-step2');
+    const step3 = document.getElementById('td-step3');
+    const histBtn = document.getElementById('btn-td-history');
+    const histBox = document.getElementById('td-history-box');
+
+    if (!saleName) {
+        step2?.classList.add('hidden');
+        step3?.classList.add('hidden');
+        histBtn?.classList.add('hidden');
+        histBox?.classList.add('hidden');
+        return;
+    }
+
+    // แสดง Step 2 + populate ลูกค้า
+    const saleObj = _tdSaleData.find(s => s.sale === saleName);
+    const customers = saleObj?.customers || [];
+    const custSel = document.getElementById('td-customer-select');
+    if (custSel) {
+        custSel.innerHTML = '<option value="">-- เลือกลูกค้า --</option>' +
+            customers.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+    step2?.classList.remove('hidden');
+    step3?.classList.add('hidden');
+    histBtn?.classList.remove('hidden');
+    histBox?.classList.add('hidden');
+
+    // อัพเดต history label
+    const nameSpan = document.getElementById('td-history-sale-name');
+    if (nameSpan) nameSpan.textContent = saleName;
 };
 
-window.tdRemoveRow = function(rowId) {
-    document.getElementById(rowId)?.remove();
-    _tdValidated = false;
-    document.getElementById('btn-td-save').disabled = true;
-    tdUpdateSummary();
+// ── Step 2: เลือกลูกค้า → โหลด SO lines ──────────────────────
+window.tdOnCustomerChange = function() {
+    const customer = document.getElementById('td-customer-select')?.value || '';
+    const step3    = document.getElementById('td-step3');
+    if (!customer) { step3?.classList.add('hidden'); return; }
+
+    // แสดง Step 3 + set label
+    step3?.classList.remove('hidden');
+    const label = document.getElementById('td-customer-label');
+    if (label) label.textContent = customer;
+    _tdInitDate();
+
+    // โหลด SO lines
+    const loadEl = document.getElementById('td-loading-so');
+    const rowsEl = document.getElementById('td-so-rows');
+    const noData = document.getElementById('td-no-data');
+    if (loadEl) loadEl.classList.remove('hidden');
+    if (rowsEl) rowsEl.innerHTML = '';
+    if (noData) noData.classList.add('hidden');
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if (loadEl) loadEl.classList.add('hidden');
+            if (!res?.success) { showToast('❌ ' + (res?.message||''), true); return; }
+            _tdSOLines = res.lines || [];
+            _tdRenderSOLines(_tdSOLines);
+        })
+        .withFailureHandler(err => {
+            if (loadEl) loadEl.classList.add('hidden');
+            showToast('❌ ' + (err?.message||String(err)), true);
+        })
+        .getSOLinesByCustomer({ saleName: _tdCurrentSale, customer });
 };
 
-window.tdOnChange = function() {
-    _tdValidated = false;
-    document.getElementById('btn-td-save').disabled = true;
-    // ล้าง validation status
-    document.querySelectorAll('.td-status').forEach(el => { el.textContent = '—'; el.className = 'td-status text-[10px] text-center text-slate-600'; });
-    document.querySelectorAll('.td-name').forEach(el => { el.textContent = '—'; el.className = 'td-name text-slate-500 text-[10px] truncate px-1'; });
-};
-
-function tdUpdateSummary() {
-    const rows = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
-    const sumBox = document.getElementById('td-summary');
-    if (rows.length === 0) { sumBox?.classList.add('hidden'); return; }
-    sumBox?.classList.remove('hidden');
-    document.getElementById('td-sum-lines').textContent = rows.length;
-    const ok  = document.querySelectorAll('.td-status.text-emerald-400').length;
-    const err = document.querySelectorAll('.td-status.text-red-400').length;
-    document.getElementById('td-sum-ok').textContent  = ok;
-    document.getElementById('td-sum-err').textContent  = err;
+// ── Render SO lines table ─────────────────────────────────────
+function _tdRenderSOLines(lines) {
+    const rowsEl = document.getElementById('td-so-rows');
+    const noData = document.getElementById('td-no-data');
+    if (!rowsEl) return;
+    if (lines.length === 0) {
+        rowsEl.innerHTML = '';
+        noData?.classList.remove('hidden');
+        return;
+    }
+    noData?.classList.add('hidden');
+    rowsEl.innerHTML = lines.map((l, i) =>
+        `<div class="grid items-center gap-2 py-1 border-b border-slate-700/40 last:border-0 hover:bg-slate-700/20 rounded-lg px-1"
+              style="grid-template-columns:120px 145px 1fr 80px 110px 90px"
+              data-so="${l.so}" data-sku="${l.sku}" data-name="${(l.name||'').replace(/"/g,'')}" data-company="${(l.company||'').replace(/"/g,'')}">
+          <span class="text-amber-300 font-black text-[10px]">${l.so}</span>
+          <span class="text-white font-black text-[10px]">${l.sku}</span>
+          <span class="text-slate-400 text-[9px] truncate" title="${l.name||''}">${l.name||''}</span>
+          <span class="text-sky-300 font-black text-[10px] text-right">${Number(l.cwRem).toLocaleString('th-TH')}</span>
+          <input type="number" id="td-qty-${i}" min="0" max="${l.cwRem}" placeholder="0"
+            class="bg-slate-700 border-2 border-slate-500 text-white rounded-lg px-2 py-1 text-xs font-black text-right focus:outline-none focus:border-emerald-400 w-full"
+            oninput="this.style.borderColor=this.value>0?'#10b981':'#475569'">
+          <span class="text-slate-500 text-[9px] text-center">${l.shipDate||'—'}</span>
+        </div>`
+    ).join('');
 }
 
 // ── Probe SO Sheet ────────────────────────────────────────────
@@ -29423,97 +29457,44 @@ window.tdProbeSOSheet = function() {
     if (pre) pre.textContent = 'กำลังตรวจ...';
     google.script.run
         .withSuccessHandler(res => { if (pre) pre.textContent = JSON.stringify(res, null, 2); })
-        .withFailureHandler(err => { if (pre) pre.textContent = 'Error: ' + (err?.message || String(err)); })
+        .withFailureHandler(err => { if (pre) pre.textContent = 'Error: ' + (err?.message||String(err)); })
         .probeSOSheet();
-};
-
-// ── Validate ──────────────────────────────────────────────────
-window.tdValidate = function() {
-    const rows = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
-    if (rows.length === 0) { showToast('⚠️ กรุณาเพิ่มรายการก่อน', true); return; }
-
-    const lines = Array.from(rows).map(row => ({
-        so:  (row.querySelector('.td-so')?.value  || '').trim().toUpperCase(),
-        sku: (row.querySelector('.td-sku')?.value || '').trim().toUpperCase(),
-        qty: parseInt(row.querySelector('.td-qty')?.value || '0')
-    })).filter(l => l.so || l.sku);
-
-    if (lines.length === 0) { showToast('⚠️ กรุณากรอก SO และรหัสสินค้า', true); return; }
-
-    const btn = document.querySelector('button[onclick="tdValidate()"]');
-    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังตรวจ...'; btn.disabled = true; }
-
-    google.script.run
-        .withSuccessHandler(res => {
-            if (btn) { btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>ตรวจสอบ SO'; btn.disabled = false; }
-            if (!res || !res.success) { showToast('❌ ' + (res?.message || ''), true); return; }
-            _tdValidResults = res.results;
-            _tdValidated    = true;
-
-            // อัพเดต UI แต่ละแถว
-            let allOk = true;
-            const rowEls = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
-            res.results.forEach((r, i) => {
-                const row    = rowEls[i];
-                if (!row) return;
-                const nameEl = row.querySelector('.td-name');
-                const statEl = row.querySelector('.td-status');
-                if (r.ok) {
-                    const remTxt = r.cwRem > 0 ? ` [ค้าง ${Number(r.cwRem).toLocaleString('th-TH')}]` : '';
-                    const shipTxt = r.shipDate ? ` ส่ง ${r.shipDate}` : '';
-                    if (nameEl) {
-                        nameEl.textContent = (r.name || r.sku) + remTxt + shipTxt;
-                        nameEl.className = 'td-name text-emerald-400 text-[10px] truncate px-1 font-bold';
-                        nameEl.title = `${r.company} | ${r.name} | ยอดค้างส่ง: ${r.cwRem} เส้น`;
-                    }
-                    if (statEl) { statEl.textContent = '✓ ผ่าน'; statEl.className = 'td-status text-[10px] text-center text-emerald-400 font-black'; }
-                    row.dataset.company     = r.company      || '';
-                    row.dataset.deliveryName= r.deliveryName || '';
-                    row.dataset.name        = r.name         || '';
-                    row.dataset.cwRem       = r.cwRem        || 0;
-                } else {
-                    allOk = false;
-                    if (nameEl) { nameEl.textContent = r.error; nameEl.className = 'td-name text-red-400 text-[10px] truncate px-1'; }
-                    if (statEl) { statEl.textContent = '✗ ไม่ผ่าน'; statEl.className = 'td-status text-[10px] text-center text-red-400 font-black'; }
-                }
-            });
-
-            tdUpdateSummary();
-
-            if (allOk) {
-                document.getElementById('btn-td-save').disabled = false;
-                showToast('✅ ตรวจสอบผ่านทุกรายการ — กดบันทึกได้เลย');
-            } else {
-                document.getElementById('btn-td-save').disabled = true;
-                showToast('⚠️ มีรายการที่ไม่ผ่าน — แก้ไขแล้วตรวจใหม่', true);
-            }
-        })
-        .withFailureHandler(err => {
-            if (btn) { btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>ตรวจสอบ SO'; btn.disabled = false; }
-            showToast('❌ ' + (err?.message || String(err)), true);
-        })
-        .validateSOLines(lines);
 };
 
 // ── Save ──────────────────────────────────────────────────────
 window.tdSave = function() {
-    if (!_tdValidated) { showToast('⚠️ กรุณาตรวจสอบ SO ก่อนบันทึก', true); return; }
-    const date   = document.getElementById('td-date')?.value || '';
-    const truck  = document.getElementById('td-truck')?.value?.trim() || '';
-    const driver = document.getElementById('td-driver')?.value?.trim() || '';
-    const emp    = document.getElementById('td-emp')?.value?.trim() || '';
+    if (!_tdCurrentSale) { showToast('⚠️ กรุณาเลือก Sale ก่อน', true); return; }
+    const date   = document.getElementById('td-date')?.value  || '';
+    const truck  = (document.getElementById('td-truck')?.value || '').trim();
+    const driver = (document.getElementById('td-driver')?.value|| '').trim();
     if (!truck) { showToast('⚠️ กรุณาระบุทะเบียนรถ', true); return; }
-    if (!emp)   { showToast('⚠️ กรุณาระบุรหัสพนักงาน', true); return; }
 
-    const rowEls = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
-    const lines  = Array.from(rowEls).map((row, i) => ({
-        company: row.dataset.company || '',
-        so:      (row.querySelector('.td-so')?.value  || '').trim().toUpperCase(),
-        sku:     (row.querySelector('.td-sku')?.value || '').trim().toUpperCase(),
-        name:    row.dataset.name || (_tdValidResults[i]?.name || ''),
-        qty:     parseInt(row.querySelector('.td-qty')?.value || '0'),
-        weightTon: 0
-    }));
+    // เก็บเฉพาะแถวที่กรอกจำนวน > 0
+    const rows    = document.getElementById('td-so-rows')?.querySelectorAll('[data-so]') || [];
+    const lines   = [];
+    let hasError  = false;
+
+    Array.from(rows).forEach((row, i) => {
+        const qtyEl = document.getElementById('td-qty-' + i);
+        const qty   = parseInt(qtyEl?.value || '0');
+        if (qty <= 0) return;
+
+        const so      = row.dataset.so      || '';
+        const sku     = row.dataset.sku     || '';
+        const name    = row.dataset.name    || '';
+        const company = row.dataset.company || '';
+
+        // ตรวจสอบ: SO ต้องมีในรายการ
+        const soLine = _tdSOLines.find(l => l.so === so && l.sku === sku);
+        if (!soLine) { hasError = true; showToast(`❌ SO ${so} รหัส ${sku} ไม่พบในระบบ`, true); return; }
+        // ตรวจสอบ: SO ต้องมียอดค้างส่ง
+        if (soLine.cwRem <= 0) { hasError = true; showToast(`❌ SO ${so} ไม่มียอดค้างส่งแล้ว`, true); return; }
+
+        lines.push({ so, sku, name, company, qty, weightTon: 0 });
+    });
+
+    if (hasError) return;
+    if (lines.length === 0) { showToast('⚠️ กรุณากรอกจำนวนสินค้าที่ต้องการจัดรถ', true); return; }
 
     const btn = document.getElementById('btn-td-save');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
@@ -29522,59 +29503,68 @@ window.tdSave = function() {
     google.script.run
         .withSuccessHandler(res => {
             btn.innerHTML = '<i class="fas fa-save mr-2"></i>บันทึกจัดรถ';
+            btn.disabled  = false;
             if (res?.success) {
-                showToast('✅ บันทึกจัดรถ ' + res.dispatchId + ' สำเร็จ');
+                showToast(`✅ บันทึกจัดรถ ${res.dispatchId} สำเร็จ — ${lines.length} รายการ`);
                 tdReset();
             } else {
-                btn.disabled = false;
-                showToast('❌ ' + (res?.message || ''), true);
+                showToast('❌ ' + (res?.message||''), true);
             }
         })
         .withFailureHandler(err => {
             btn.innerHTML = '<i class="fas fa-save mr-2"></i>บันทึกจัดรถ';
             btn.disabled  = false;
-            showToast('❌ ' + (err?.message || String(err)), true);
+            showToast('❌ ' + (err?.message||String(err)), true);
         })
-        .saveTruckDispatch({ dispatchDate: date, truckPlate: truck, driver, recordedBy: emp, lines });
+        .saveTruckDispatch({
+            dispatchDate: date, truckPlate: truck, driver,
+            recordedBy: _tdCurrentSale,  // ← ใช้ชื่อ Sale เป็น recordedBy
+            lines
+        });
 };
 
 // ── Reset ─────────────────────────────────────────────────────
 window.tdReset = function() {
-    document.getElementById('td-rows').innerHTML = '';
-    _tdRowCount = 0; _tdValidated = false; _tdValidResults = [];
-    document.getElementById('btn-td-save').disabled = true;
-    document.getElementById('td-summary')?.classList.add('hidden');
+    document.getElementById('td-sale-select').value = '';
+    document.getElementById('td-customer-select').value = '';
+    document.getElementById('td-step2')?.classList.add('hidden');
+    document.getElementById('td-step3')?.classList.add('hidden');
     document.getElementById('td-history-box')?.classList.add('hidden');
-    ['td-truck','td-driver','td-emp'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    tdAddRow();
+    document.getElementById('btn-td-history')?.classList.add('hidden');
+    document.getElementById('td-so-rows').innerHTML = '';
+    document.getElementById('td-no-data')?.classList.add('hidden');
+    ['td-truck','td-driver'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    _tdCurrentSale = ''; _tdSOLines = [];
+    _tdInitDate();
 };
 
-// ── History ───────────────────────────────────────────────────
+// ── History (เฉพาะ Sale นั้น) ─────────────────────────────────
 window.tdLoadHistory = function() {
-    const box = document.getElementById('td-history-box');
+    if (!_tdCurrentSale) return;
+    const box  = document.getElementById('td-history-box');
+    const rows = document.getElementById('td-history-rows');
     box?.classList.remove('hidden');
-    document.getElementById('td-history-rows').innerHTML = '<p class="text-slate-500 text-xs text-center py-2">กำลังโหลด...</p>';
+    if (rows) rows.innerHTML = '<p class="text-slate-500 text-xs text-center py-2">กำลังโหลด...</p>';
     google.script.run
         .withSuccessHandler(res => {
-            const el = document.getElementById('td-history-rows');
-            if (!el) return;
-            if (!res?.rows?.length) { el.innerHTML = '<p class="text-slate-600 text-xs text-center py-2">ไม่มีประวัติ</p>'; return; }
-            // Group by dispatchId
+            if (!rows) return;
+            if (!res?.rows?.length) { rows.innerHTML = '<p class="text-slate-600 text-xs text-center py-2">ยังไม่มีประวัติ</p>'; return; }
             const groups = {};
             res.rows.forEach(r => {
                 if (!groups[r.dispatchId]) groups[r.dispatchId] = { ...r, items: [] };
                 groups[r.dispatchId].items.push(r);
             });
-            el.innerHTML = Object.values(groups).slice(0, 30).map(g =>
+            rows.innerHTML = Object.values(groups).slice(0, 30).map(g =>
                 `<div class="bg-slate-700/30 rounded-xl p-3 mb-2">
                   <div class="flex items-center justify-between mb-1">
                     <span class="text-amber-300 font-black text-xs">${g.dispatchId}</span>
                     <span class="text-slate-500 text-[9px]">${g.timestamp}</span>
                   </div>
-                  <div class="flex gap-3 text-[10px] text-slate-400 mb-1">
+                  <div class="flex gap-3 text-[10px] text-slate-400 mb-1 flex-wrap">
                     <span><i class="fas fa-truck mr-1"></i>${g.truckPlate}</span>
-                    <span><i class="fas fa-user mr-1"></i>${g.driver || '-'}</span>
+                    <span><i class="fas fa-user mr-1"></i>${g.driver||'-'}</span>
                     <span><i class="fas fa-calendar mr-1"></i>${g.dispatchDate}</span>
+                    <span><i class="fas fa-building mr-1"></i>${g.company||'-'}</span>
                   </div>
                   ${g.items.map(i => `<div class="flex justify-between text-[9px] border-t border-slate-700/50 pt-0.5 mt-0.5">
                     <span class="text-slate-400">${i.so} | <span class="text-white font-bold">${i.sku}</span></span>
@@ -29583,12 +29573,11 @@ window.tdLoadHistory = function() {
                 </div>`
             ).join('');
         })
-        .withFailureHandler(err => showToast('❌ ' + (err?.message || String(err)), true))
-        .getTruckDispatchLog({});
+        .withFailureHandler(err => showToast('❌ ' + (err?.message||String(err)), true))
+        .getTruckDispatchLog({ saleName: _tdCurrentSale });
 };
 
 // ── Auto-init เมื่อเข้าหน้า ───────────────────────────────────
-// (จะถูกเรียกจาก switchView)
 
 // ══════════════════════════════════════════════════════════════
 // WAREHOUSE MAP — sub-tab switcher

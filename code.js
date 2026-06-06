@@ -46,6 +46,7 @@ function _handleApiPost(e) {
       'probeProdBlockSheet','getProductionPlanData',
       'saveWarehouseMove','getWarehouseMoveLog',
       'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
+      'getSaleAndCustomerList','getSOLinesByCustomer',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -224,6 +225,7 @@ function doGet(e) {
           'probeProdBlockSheet','getProductionPlanData',
           'saveWarehouseMove','getWarehouseMoveLog',
           'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
+      'getSaleAndCustomerList','getSOLinesByCustomer',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -8916,10 +8918,12 @@ function _loadSOData() {
     var iStatus  = colIdx('line status');
     var iDelName = colIdx('delivery name');
     var iShip    = colIdx('ship date');
+    var iSaleTkr = colIdx('sales taker');
 
     if (iSO < 0 || iSKU < 0) {
-      // fallback: ใช้ index ตาม Excel structure ที่รู้
-      iSO = 22; iSKU = 7; iCust = 1; iName = 8; iCWqty = 10; iCWrem = 15; iStatus = 2; iDelName = 3; iShip = 6;
+      // fallback: ใช้ index ตาม SO.xlsx structure
+      iSO = 22; iSKU = 7; iCust = 1; iName = 8; iCWqty = 10;
+      iCWrem = 15; iStatus = 2; iDelName = 3; iShip = 6; iSaleTkr = 5;
     }
 
     var data  = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
@@ -8937,7 +8941,8 @@ function _loadSOData() {
       var shipDate= iShip >= 0 ? row[iShip] : '';
 
       if (!so || !sku) return;
-      if (!soMap[so]) soMap[so] = { company: company, deliveryName: delName, so: so, lines: [] };
+      var salesTaker = iSaleTkr >= 0 ? String(row[iSaleTkr] || '').trim() : '';
+      if (!soMap[so]) soMap[so] = { company: company, deliveryName: delName, so: so, salesTaker: salesTaker, lines: [] };
 
       soMap[so].lines.push({
         sku:      sku,
@@ -8957,6 +8962,59 @@ function _loadSOData() {
   } catch(e) {
     Logger.log('_loadSOData error: ' + e.toString());
     return {};
+  }
+}
+
+// ── ดึง Sale list + Customer ──────────────────────────────────
+function getSaleAndCustomerList() {
+  try {
+    var soMap = _loadSOData();
+    var salesSet = {};
+    Object.values(soMap).forEach(function(so) {
+      // หา sales taker จากแต่ละ SO (เก็บใน soMap.salesTaker ถ้ามี)
+      if (so.salesTaker) {
+        if (!salesSet[so.salesTaker]) salesSet[so.salesTaker] = {};
+        salesSet[so.salesTaker][so.company] = true;
+      }
+    });
+    var result = Object.keys(salesSet).sort().map(function(s) {
+      return { sale: s, customers: Object.keys(salesSet[s]).sort() };
+    });
+    return { success: true, sales: result };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── ดึง SO lines กรองตาม Sale + Customer ─────────────────────
+function getSOLinesByCustomer(params) {
+  try {
+    var saleName = String(params.saleName || '').trim();
+    var customer = String(params.customer || '').trim();
+    var soMap    = _loadSOData();
+    var lines    = [];
+    Object.values(soMap).forEach(function(so) {
+      if (customer && so.company !== customer) return;
+      if (saleName && so.salesTaker && so.salesTaker !== saleName) return;
+      so.lines.forEach(function(l) {
+        if (l.cwRem <= 0) return; // ไม่มียอดค้างส่งแล้ว
+        lines.push({
+          so:           so.so,
+          company:      so.company,
+          deliveryName: so.deliveryName || so.company,
+          salesTaker:   so.salesTaker   || '',
+          sku:          l.sku,
+          name:         l.name,
+          cwQty:        l.cwQty,
+          cwRem:        l.cwRem,
+          status:       l.status,
+          shipDate:     l.shipDate
+        });
+      });
+    });
+    return { success: true, lines: lines };
+  } catch(e) {
+    return { success: false, message: e.toString() };
   }
 }
 
@@ -9064,7 +9122,11 @@ function getTruckDispatchLog(params) {
     if (!sheet || sheet.getLastRow() < 2) return { success: true, rows: [] };
     var numRows = sheet.getLastRow() - 1;
     var data    = sheet.getRange(2, 1, numRows, 12).getValues();
-    var rows    = data.map(function(r) { return {
+    var filterSale = params && params.saleName ? String(params.saleName).trim() : '';
+    var rows    = data.filter(function(r) {
+      if (!filterSale) return true;
+      return String(r[11] || '').trim() === filterSale; // col 12 = SaleName
+    }).map(function(r) { return {
       dispatchId:   String(r[0] || ''),
       timestamp:    r[1] instanceof Date ? Utilities.formatDate(r[1],'GMT+7','dd/MM/yyyy HH:mm') : String(r[1]||''),
       dispatchDate: String(r[2] || ''),
