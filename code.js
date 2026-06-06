@@ -8622,8 +8622,19 @@ function probeProdBlockSheet(params) {
   try {
     var ss = SpreadsheetApp.openById(PROD_BLOCK_SPREADSHEET_ID);
     var sheetNames = ss.getSheets().map(function(s) { return s.getName(); });
-    var targetSheet = (params && params.sheetName) ? ss.getSheetByName(params.sheetName) : null;
-    if (!targetSheet) targetSheet = ss.getSheets()[0];
+    // ค้นหาชีตโดย trim whitespace
+    var targetSheet = null;
+    if (params && params.sheetName) {
+      var target = params.sheetName.trim();
+      targetSheet = ss.getSheets().find(function(s) { return s.getName().trim() === target; }) || null;
+    }
+    // ถ้าไม่ระบุ ให้หาชีตรายเดือนล่าสุดอัตโนมัติ
+    if (!targetSheet) {
+      var monthlySheet = ss.getSheets().find(function(s) {
+        return THAI_MONTHS_TH.some(function(m) { return s.getName().trim().indexOf(m) === 0; });
+      });
+      targetSheet = monthlySheet || ss.getSheets()[0];
+    }
     var sheetName = targetSheet.getName();
     var lastRow = targetSheet.getLastRow();
     var lastCol = targetSheet.getLastColumn();
@@ -8658,8 +8669,14 @@ function getProductionPlanData(params) {
     var beYear2   = String((year + 543) % 100).padStart(2, '0');
     var sheetName = THAI_MONTHS_TH[month - 1] + ' ' + beYear2;
     var ss    = SpreadsheetApp.openById(PROD_BLOCK_SPREADSHEET_ID);
-    var sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return { success: false, message: 'ไม่พบชีต: ' + sheetName };
+    // ค้นหาชีตโดย trim whitespace (ชีตอาจมี space นำหน้า/หลัง)
+    var sheet = ss.getSheets().find(function(s) {
+      return s.getName().trim() === sheetName.trim();
+    }) || null;
+    if (!sheet) {
+      var available = ss.getSheets().map(function(s) { return '"' + s.getName() + '"'; }).join(', ');
+      return { success: false, message: 'ไม่พบชีต: "' + sheetName + '" | ชีตที่มี: ' + available };
+    }
     var lastRow = sheet.getLastRow();
     var lastCol = sheet.getLastColumn();
     if (lastRow < 2) return { success: true, machines: [], dates: [], inventory: {} };
