@@ -4923,9 +4923,10 @@ thead.sticky {
       </div>
       <!-- Table header -->
       <div class="grid gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-700 pb-2 mb-2"
-           style="grid-template-columns:120px 145px 1fr 80px 110px 90px">
+           style="grid-template-columns:115px 140px 1fr 75px 105px 80px 1fr">
         <span>SO</span><span>รหัสสินค้า</span><span>ชื่อสินค้า</span>
-        <span class="text-right">ค้างส่ง</span><span class="text-right">จัดรถ (เส้น)</span><span class="text-center">วันส่ง</span>
+        <span class="text-right">ค้างส่ง</span><span class="text-right">จัดรถ (เส้น)</span>
+        <span class="text-center">วันส่ง</span><span class="text-amber-400">หมายเหตุ</span>
       </div>
       <div id="td-so-rows" class="space-y-1.5 max-h-80 overflow-y-auto"></div>
       <div id="td-no-data" class="hidden text-center py-8">
@@ -29434,8 +29435,8 @@ function _tdRenderSOLines(lines) {
     }
     noData?.classList.add('hidden');
     rowsEl.innerHTML = lines.map((l, i) =>
-        `<div class="grid items-center gap-2 py-1 border-b border-slate-700/40 last:border-0 hover:bg-slate-700/20 rounded-lg px-1"
-              style="grid-template-columns:120px 145px 1fr 80px 110px 90px"
+        `<div class="grid items-center gap-2 py-1.5 border-b border-slate-700/40 last:border-0 hover:bg-slate-700/20 rounded-lg px-1"
+              style="grid-template-columns:115px 140px 1fr 75px 105px 80px 1fr"
               data-so="${l.so}" data-sku="${l.sku}" data-name="${(l.name||'').replace(/"/g,'')}" data-company="${(l.company||'').replace(/"/g,'')}">
           <span class="text-amber-300 font-black text-[10px]">${l.so}</span>
           <span class="text-white font-black text-[10px]">${l.sku}</span>
@@ -29445,6 +29446,8 @@ function _tdRenderSOLines(lines) {
             class="bg-slate-700 border-2 border-slate-500 text-white rounded-lg px-2 py-1 text-xs font-black text-right focus:outline-none focus:border-emerald-400 w-full"
             oninput="this.style.borderColor=this.value>0?'#10b981':'#475569'">
           <span class="text-slate-500 text-[9px] text-center">${l.shipDate||'—'}</span>
+          <input type="text" id="td-note-${i}" placeholder="หมายเหตุ..."
+            class="bg-slate-700/60 border border-slate-600 text-slate-300 rounded-lg px-2 py-1 text-[10px] focus:outline-none focus:border-amber-400 w-full placeholder-slate-600">
         </div>`
     ).join('');
 }
@@ -29490,7 +29493,8 @@ window.tdSave = function() {
         // ตรวจสอบ: SO ต้องมียอดค้างส่ง
         if (soLine.cwRem <= 0) { hasError = true; showToast(`❌ SO ${so} ไม่มียอดค้างส่งแล้ว`, true); return; }
 
-        lines.push({ so, sku, name, company, qty, weightTon: 0 });
+        const note = (document.getElementById('td-note-' + i)?.value || '').trim();
+        lines.push({ so, sku, name, company, qty, weightTon: 0, note });
     });
 
     if (hasError) return;

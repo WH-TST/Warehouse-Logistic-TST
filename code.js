@@ -9079,12 +9079,12 @@ function saveTruckDispatch(data) {
     var sheet = ss.getSheetByName(TRUCK_DISPATCH_SHEET);
     if (!sheet) {
       sheet = ss.insertSheet(TRUCK_DISPATCH_SHEET);
-      sheet.getRange(1, 1, 1, 12).setValues([[
+      sheet.getRange(1, 1, 1, 13).setValues([[
         'DispatchID','Timestamp','DispatchDate','TruckPlate','Driver',
-        'Company','SO','SKU','ProductName','QtyLine','WeightTon','RecordedBy'
+        'Company','SO','SKU','ProductName','QtyLine','WeightTon','RecordedBy','Note'
       ]]);
       sheet.setFrozenRows(1);
-      sheet.getRange(1,1,1,12).setBackground('#1e293b').setFontColor('#94a3b8').setFontWeight('bold');
+      sheet.getRange(1,1,1,13).setBackground('#1e293b').setFontColor('#94a3b8').setFontWeight('bold');
     }
     var now        = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
     var dispatchId = 'DS' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
@@ -9100,10 +9100,11 @@ function saveTruckDispatch(data) {
       String(l.name             || ''),
       Number(l.qty              || 0),
       Number(l.weightTon        || 0),
-      String(data.recordedBy    || '')
+      String(data.recordedBy    || ''),
+      String(l.note             || '')
     ]; });
     if (rows.length > 0) {
-      sheet.getRange(sheet.getLastRow()+1, 1, rows.length, 12).setValues(rows);
+      sheet.getRange(sheet.getLastRow()+1, 1, rows.length, 13).setValues(rows);
     }
     saveAuditLog('Truck Dispatch','SAVE',
       'DispatchID:' + dispatchId + ' | รถ:' + data.truckPlate +
