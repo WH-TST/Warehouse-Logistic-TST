@@ -941,6 +941,9 @@ thead.sticky {
             <button onclick="switchView('logistic-plan')" id="nav-logistic-plan" class="nav-btn" data-tip="วางแผนส่งมอบ">
                 <span class="nav-icon"><i class="fas fa-route"></i></span> วางแผนส่งมอบ
             </button>
+            <button onclick="switchView('truck-dispatch')" id="nav-truck-dispatch" class="nav-btn" data-tip="จัดรถส่งสินค้า">
+                <span class="nav-icon"><i class="fas fa-truck-loading"></i></span> จัดรถ
+            </button>
 
             <!-- ─── SUPERVISOR ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
@@ -4838,6 +4841,144 @@ thead.sticky {
     </div>
   </div>
 </div>
+
+<!-- ============================================================ -->
+<!-- VIEW: จัดรถส่งสินค้า — Truck Dispatch                       -->
+<!-- ============================================================ -->
+<div id="view-truck-dispatch-content" class="hidden space-y-5">
+
+  <!-- Header -->
+  <div class="rounded-2xl p-5 shadow-sm" style="background:#f4f6f9;border:1px solid #bec8d8;border-left:4px solid #f59e0b;">
+    <div class="flex items-center justify-between gap-5 flex-wrap">
+      <div class="flex items-center gap-5">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl flex-shrink-0" style="background:linear-gradient(135deg,#92400e,#f59e0b);">
+          <i class="fas fa-truck-loading"></i>
+        </div>
+        <div>
+          <h2 class="text-2xl font-black tracking-tight" style="color:#0f1923;">จัดรถส่งสินค้า</h2>
+          <p class="text-sm font-bold mt-0.5 uppercase tracking-widest" style="color:#d97706;">Truck Dispatch — Sales กรอกรายการส่ง + ตรวจสอบ SO</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="tdLoadHistory()" class="bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
+          <i class="fas fa-history"></i> ประวัติ
+        </button>
+        <button onclick="tdProbeSOSheet()" class="bg-slate-600 hover:bg-slate-500 text-slate-300 px-3 py-2 rounded-xl font-bold text-sm transition-all" title="ตรวจ SO Database">
+          <i class="fas fa-database"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Probe result -->
+  <div id="td-probe-box" class="hidden bg-slate-900 border border-slate-600 rounded-xl p-4">
+    <div class="flex justify-between mb-2"><span class="text-slate-300 font-black text-xs uppercase">SO Database Probe</span>
+      <button onclick="document.getElementById('td-probe-box').classList.add('hidden')" class="text-slate-500 hover:text-white text-xs">ปิด</button>
+    </div>
+    <pre id="td-probe-text" class="text-[10px] text-green-400 font-mono overflow-auto max-h-48 whitespace-pre-wrap"></pre>
+  </div>
+
+  <!-- Form: ข้อมูลรถ -->
+  <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
+    <p class="text-slate-300 font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
+      <i class="fas fa-truck text-amber-400"></i> ข้อมูลรถและพนักงาน
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">วันที่ส่ง</label>
+        <input type="date" id="td-date"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400">
+      </div>
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">ทะเบียนรถ</label>
+        <input type="text" id="td-truck" placeholder="กข-0000"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400 uppercase">
+      </div>
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">คนขับ</label>
+        <input type="text" id="td-driver" placeholder="ชื่อคนขับ"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400">
+      </div>
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">รหัสพนักงาน (Sale)</label>
+        <input type="text" id="td-emp" placeholder="รหัสพนักงาน"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-amber-400">
+      </div>
+    </div>
+  </div>
+
+  <!-- Form: รายการสินค้า -->
+  <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-slate-300 font-black text-sm uppercase tracking-widest flex items-center gap-2">
+        <i class="fas fa-list text-amber-400"></i> รายการสินค้าที่จัดรถ
+      </p>
+      <button onclick="tdAddRow()"
+        class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all">
+        <i class="fas fa-plus"></i> เพิ่มแถว
+      </button>
+    </div>
+
+    <!-- Table header -->
+    <div class="grid gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-700 pb-2 mb-2"
+         style="grid-template-columns:40px 160px 150px 1fr 100px 80px 32px">
+      <span class="text-center">#</span>
+      <span>SO</span>
+      <span>รหัสสินค้า</span>
+      <span>ชื่อสินค้า (auto)</span>
+      <span class="text-right">จำนวน (เส้น)</span>
+      <span class="text-center">สถานะ</span>
+      <span></span>
+    </div>
+
+    <!-- Table body -->
+    <div id="td-rows" class="space-y-1.5"></div>
+
+    <!-- Summary -->
+    <div id="td-summary" class="hidden mt-4 pt-4 border-t border-slate-700">
+      <div class="grid grid-cols-3 gap-4 text-center">
+        <div class="bg-slate-700/40 rounded-xl p-3">
+          <p class="text-slate-500 text-xs font-bold mb-1">รายการทั้งหมด</p>
+          <p id="td-sum-lines" class="text-white font-black text-xl">0</p>
+        </div>
+        <div class="bg-emerald-900/30 rounded-xl p-3">
+          <p class="text-emerald-400 text-xs font-bold mb-1">ผ่าน</p>
+          <p id="td-sum-ok" class="text-emerald-300 font-black text-xl">0</p>
+        </div>
+        <div class="bg-red-900/30 rounded-xl p-3">
+          <p class="text-red-400 text-xs font-bold mb-1">ไม่ผ่าน</p>
+          <p id="td-sum-err" class="text-red-300 font-black text-xl">0</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="flex gap-3">
+    <button onclick="tdValidate()"
+      class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+      <i class="fas fa-check-circle"></i> ตรวจสอบ SO
+    </button>
+    <button onclick="tdSave()" id="btn-td-save" disabled
+      class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-black text-sm flex items-center gap-2 transition-all shadow">
+      <i class="fas fa-save"></i> บันทึกจัดรถ
+    </button>
+    <button onclick="tdReset()"
+      class="bg-slate-600 hover:bg-slate-500 text-slate-300 px-4 py-3 rounded-xl font-bold text-sm transition-all">
+      <i class="fas fa-redo"></i> เริ่มใหม่
+    </button>
+  </div>
+
+  <!-- History -->
+  <div id="td-history-box" class="hidden bg-slate-800/60 border border-slate-700 rounded-2xl p-5">
+    <p class="text-slate-300 font-black text-sm uppercase tracking-widest mb-3 flex items-center gap-2">
+      <i class="fas fa-history text-amber-400"></i> ประวัติการจัดรถล่าสุด
+    </p>
+    <div id="td-history-rows" class="space-y-1 max-h-72 overflow-y-auto text-[10px]"></div>
+  </div>
+
+</div><!-- end view-truck-dispatch-content -->
+
 
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
 <!-- ============================================================ -->
@@ -9260,7 +9401,7 @@ let currentAnalysis = null;
  * ฟังก์ชันหลักในการสลับ View ใหญ่
  */
 window.switchView = function switchView(view) {
-    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'warehouse-map', 'logistic-plan', 'kpi-wh', 'kpi-stock'];
+    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'warehouse-map', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -9286,6 +9427,7 @@ window.switchView = function switchView(view) {
             'logistic-plan': 'Logistic — วางแผนส่งมอบ',
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
+            'truck-dispatch': 'จัดรถส่งสินค้า — Truck Dispatch',
             'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ'
         }[view] || 'WL Management';
     }
@@ -9338,6 +9480,11 @@ window.switchView = function switchView(view) {
     // ผังคลัง — โหลดครั้งแรกอัตโนมัติ
     if (view === 'warehouse-map' && !_wmLoaded) {
         loadWarehouseMap();
+    }
+
+    // จัดรถ — init เมื่อเข้าครั้งแรก
+    if (view === 'truck-dispatch') {
+        _tdInitDate();
     }
 }
 
@@ -29187,6 +29334,255 @@ window.closeKpiEmpModal = function() {
 };
 
 // ── Save: ยืนยัน (validate final + empId → send payload เฉพาะ type) ─
+// ══════════════════════════════════════════════════════════════
+// TRUCK DISPATCH — จัดรถส่งสินค้า
+// ══════════════════════════════════════════════════════════════
+
+let _tdRowCount = 0;
+let _tdValidated = false;
+let _tdValidResults = [];
+
+// ── Init: เพิ่มแถวแรกอัตโนมัติเมื่อเข้าหน้า ──────────────────
+(function() {
+    const today = new Date();
+    const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    document.addEventListener('DOMContentLoaded', () => {
+        const dateEl = document.getElementById('td-date');
+        if (dateEl) dateEl.value = fmt(today);
+    });
+})();
+
+function _tdInitDate() {
+    const dateEl = document.getElementById('td-date');
+    if (dateEl && !dateEl.value) {
+        const t = new Date();
+        dateEl.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+    }
+    if (document.getElementById('td-rows').children.length === 0) tdAddRow();
+}
+
+// ── เพิ่มแถว ──────────────────────────────────────────────────
+window.tdAddRow = function() {
+    _tdRowCount++;
+    _tdValidated = false;
+    document.getElementById('btn-td-save').disabled = true;
+    const rowId = 'td-row-' + _tdRowCount;
+    const idx   = _tdRowCount;
+    const div   = document.createElement('div');
+    div.id = rowId;
+    div.className = 'grid items-center gap-2';
+    div.style.gridTemplateColumns = '40px 160px 150px 1fr 100px 80px 32px';
+    div.innerHTML = `
+      <span class="text-slate-600 text-xs text-center font-bold">${idx}</span>
+      <input type="text" placeholder="1SO26-XXXXX" oninput="tdOnChange()"
+        class="td-so bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:border-amber-400 w-full uppercase">
+      <input type="text" placeholder="0XXX000.0000" oninput="tdOnChange()"
+        class="td-sku bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:border-amber-400 w-full uppercase">
+      <span class="td-name text-slate-500 text-[10px] truncate px-1">—</span>
+      <input type="number" min="1" placeholder="0" oninput="tdOnChange()"
+        class="td-qty bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-xs font-black text-right focus:outline-none focus:border-amber-400 w-full">
+      <span class="td-status text-[10px] text-center text-slate-600">—</span>
+      <button onclick="tdRemoveRow('${rowId}')" class="text-red-500 hover:text-red-400 text-sm w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-900/20 transition-all">
+        <i class="fas fa-times"></i>
+      </button>`;
+    document.getElementById('td-rows').appendChild(div);
+};
+
+window.tdRemoveRow = function(rowId) {
+    document.getElementById(rowId)?.remove();
+    _tdValidated = false;
+    document.getElementById('btn-td-save').disabled = true;
+    tdUpdateSummary();
+};
+
+window.tdOnChange = function() {
+    _tdValidated = false;
+    document.getElementById('btn-td-save').disabled = true;
+    // ล้าง validation status
+    document.querySelectorAll('.td-status').forEach(el => { el.textContent = '—'; el.className = 'td-status text-[10px] text-center text-slate-600'; });
+    document.querySelectorAll('.td-name').forEach(el => { el.textContent = '—'; el.className = 'td-name text-slate-500 text-[10px] truncate px-1'; });
+};
+
+function tdUpdateSummary() {
+    const rows = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
+    const sumBox = document.getElementById('td-summary');
+    if (rows.length === 0) { sumBox?.classList.add('hidden'); return; }
+    sumBox?.classList.remove('hidden');
+    document.getElementById('td-sum-lines').textContent = rows.length;
+    const ok  = document.querySelectorAll('.td-status.text-emerald-400').length;
+    const err = document.querySelectorAll('.td-status.text-red-400').length;
+    document.getElementById('td-sum-ok').textContent  = ok;
+    document.getElementById('td-sum-err').textContent  = err;
+}
+
+// ── Probe SO Sheet ────────────────────────────────────────────
+window.tdProbeSOSheet = function() {
+    const box = document.getElementById('td-probe-box');
+    const pre = document.getElementById('td-probe-text');
+    box?.classList.remove('hidden');
+    if (pre) pre.textContent = 'กำลังตรวจ...';
+    google.script.run
+        .withSuccessHandler(res => { if (pre) pre.textContent = JSON.stringify(res, null, 2); })
+        .withFailureHandler(err => { if (pre) pre.textContent = 'Error: ' + (err?.message || String(err)); })
+        .probeSOSheet();
+};
+
+// ── Validate ──────────────────────────────────────────────────
+window.tdValidate = function() {
+    const rows = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
+    if (rows.length === 0) { showToast('⚠️ กรุณาเพิ่มรายการก่อน', true); return; }
+
+    const lines = Array.from(rows).map(row => ({
+        so:  (row.querySelector('.td-so')?.value  || '').trim().toUpperCase(),
+        sku: (row.querySelector('.td-sku')?.value || '').trim().toUpperCase(),
+        qty: parseInt(row.querySelector('.td-qty')?.value || '0')
+    })).filter(l => l.so || l.sku);
+
+    if (lines.length === 0) { showToast('⚠️ กรุณากรอก SO และรหัสสินค้า', true); return; }
+
+    const btn = document.querySelector('button[onclick="tdValidate()"]');
+    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังตรวจ...'; btn.disabled = true; }
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if (btn) { btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>ตรวจสอบ SO'; btn.disabled = false; }
+            if (!res || !res.success) { showToast('❌ ' + (res?.message || ''), true); return; }
+            _tdValidResults = res.results;
+            _tdValidated    = true;
+
+            // อัพเดต UI แต่ละแถว
+            let allOk = true;
+            const rowEls = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
+            res.results.forEach((r, i) => {
+                const row    = rowEls[i];
+                if (!row) return;
+                const nameEl = row.querySelector('.td-name');
+                const statEl = row.querySelector('.td-status');
+                if (r.ok) {
+                    if (nameEl) { nameEl.textContent = r.name || r.sku; nameEl.className = 'td-name text-emerald-400 text-[10px] truncate px-1 font-bold'; }
+                    if (statEl) { statEl.textContent = '✓ ผ่าน'; statEl.className = 'td-status text-[10px] text-center text-emerald-400 font-black'; }
+                    // set company name hidden
+                    row.dataset.company = r.company || '';
+                    row.dataset.name    = r.name    || '';
+                } else {
+                    allOk = false;
+                    if (nameEl) { nameEl.textContent = r.error; nameEl.className = 'td-name text-red-400 text-[10px] truncate px-1'; }
+                    if (statEl) { statEl.textContent = '✗ ไม่ผ่าน'; statEl.className = 'td-status text-[10px] text-center text-red-400 font-black'; }
+                }
+            });
+
+            tdUpdateSummary();
+
+            if (allOk) {
+                document.getElementById('btn-td-save').disabled = false;
+                showToast('✅ ตรวจสอบผ่านทุกรายการ — กดบันทึกได้เลย');
+            } else {
+                document.getElementById('btn-td-save').disabled = true;
+                showToast('⚠️ มีรายการที่ไม่ผ่าน — แก้ไขแล้วตรวจใหม่', true);
+            }
+        })
+        .withFailureHandler(err => {
+            if (btn) { btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>ตรวจสอบ SO'; btn.disabled = false; }
+            showToast('❌ ' + (err?.message || String(err)), true);
+        })
+        .validateSOLines(lines);
+};
+
+// ── Save ──────────────────────────────────────────────────────
+window.tdSave = function() {
+    if (!_tdValidated) { showToast('⚠️ กรุณาตรวจสอบ SO ก่อนบันทึก', true); return; }
+    const date   = document.getElementById('td-date')?.value || '';
+    const truck  = document.getElementById('td-truck')?.value?.trim() || '';
+    const driver = document.getElementById('td-driver')?.value?.trim() || '';
+    const emp    = document.getElementById('td-emp')?.value?.trim() || '';
+    if (!truck) { showToast('⚠️ กรุณาระบุทะเบียนรถ', true); return; }
+    if (!emp)   { showToast('⚠️ กรุณาระบุรหัสพนักงาน', true); return; }
+
+    const rowEls = document.getElementById('td-rows').querySelectorAll('[id^="td-row-"]');
+    const lines  = Array.from(rowEls).map((row, i) => ({
+        company: row.dataset.company || '',
+        so:      (row.querySelector('.td-so')?.value  || '').trim().toUpperCase(),
+        sku:     (row.querySelector('.td-sku')?.value || '').trim().toUpperCase(),
+        name:    row.dataset.name || (_tdValidResults[i]?.name || ''),
+        qty:     parseInt(row.querySelector('.td-qty')?.value || '0'),
+        weightTon: 0
+    }));
+
+    const btn = document.getElementById('btn-td-save');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
+    btn.disabled  = true;
+
+    google.script.run
+        .withSuccessHandler(res => {
+            btn.innerHTML = '<i class="fas fa-save mr-2"></i>บันทึกจัดรถ';
+            if (res?.success) {
+                showToast('✅ บันทึกจัดรถ ' + res.dispatchId + ' สำเร็จ');
+                tdReset();
+            } else {
+                btn.disabled = false;
+                showToast('❌ ' + (res?.message || ''), true);
+            }
+        })
+        .withFailureHandler(err => {
+            btn.innerHTML = '<i class="fas fa-save mr-2"></i>บันทึกจัดรถ';
+            btn.disabled  = false;
+            showToast('❌ ' + (err?.message || String(err)), true);
+        })
+        .saveTruckDispatch({ dispatchDate: date, truckPlate: truck, driver, recordedBy: emp, lines });
+};
+
+// ── Reset ─────────────────────────────────────────────────────
+window.tdReset = function() {
+    document.getElementById('td-rows').innerHTML = '';
+    _tdRowCount = 0; _tdValidated = false; _tdValidResults = [];
+    document.getElementById('btn-td-save').disabled = true;
+    document.getElementById('td-summary')?.classList.add('hidden');
+    document.getElementById('td-history-box')?.classList.add('hidden');
+    ['td-truck','td-driver','td-emp'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    tdAddRow();
+};
+
+// ── History ───────────────────────────────────────────────────
+window.tdLoadHistory = function() {
+    const box = document.getElementById('td-history-box');
+    box?.classList.remove('hidden');
+    document.getElementById('td-history-rows').innerHTML = '<p class="text-slate-500 text-xs text-center py-2">กำลังโหลด...</p>';
+    google.script.run
+        .withSuccessHandler(res => {
+            const el = document.getElementById('td-history-rows');
+            if (!el) return;
+            if (!res?.rows?.length) { el.innerHTML = '<p class="text-slate-600 text-xs text-center py-2">ไม่มีประวัติ</p>'; return; }
+            // Group by dispatchId
+            const groups = {};
+            res.rows.forEach(r => {
+                if (!groups[r.dispatchId]) groups[r.dispatchId] = { ...r, items: [] };
+                groups[r.dispatchId].items.push(r);
+            });
+            el.innerHTML = Object.values(groups).slice(0, 30).map(g =>
+                `<div class="bg-slate-700/30 rounded-xl p-3 mb-2">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-amber-300 font-black text-xs">${g.dispatchId}</span>
+                    <span class="text-slate-500 text-[9px]">${g.timestamp}</span>
+                  </div>
+                  <div class="flex gap-3 text-[10px] text-slate-400 mb-1">
+                    <span><i class="fas fa-truck mr-1"></i>${g.truckPlate}</span>
+                    <span><i class="fas fa-user mr-1"></i>${g.driver || '-'}</span>
+                    <span><i class="fas fa-calendar mr-1"></i>${g.dispatchDate}</span>
+                  </div>
+                  ${g.items.map(i => `<div class="flex justify-between text-[9px] border-t border-slate-700/50 pt-0.5 mt-0.5">
+                    <span class="text-slate-400">${i.so} | <span class="text-white font-bold">${i.sku}</span></span>
+                    <span class="text-sky-300 font-black">${Number(i.qty).toLocaleString('th-TH')} เส้น</span>
+                  </div>`).join('')}
+                </div>`
+            ).join('');
+        })
+        .withFailureHandler(err => showToast('❌ ' + (err?.message || String(err)), true))
+        .getTruckDispatchLog({});
+};
+
+// ── Auto-init เมื่อเข้าหน้า ───────────────────────────────────
+// (จะถูกเรียกจาก switchView)
+
 // ══════════════════════════════════════════════════════════════
 // WAREHOUSE MAP — sub-tab switcher
 // ══════════════════════════════════════════════════════════════

@@ -45,6 +45,7 @@ function _handleApiPost(e) {
       'getWarehouseMapData','saveWarehouseMapSlots',
       'probeProdBlockSheet','getProductionPlanData',
       'saveWarehouseMove','getWarehouseMoveLog',
+      'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -97,6 +98,9 @@ const INVENTORY_KPI_LOG_SHEET = 'Inventory KPI Log';
 const WAREHOUSE_MAP_SHEET          = 'Warehouse_Map';
 const WAREHOUSE_MOVE_SHEET         = 'Warehouse_Move_Log';
 const PROD_BLOCK_SPREADSHEET_ID    = '1TXsmafvd-QPhFakvm7yOuyPgAyztaDzzRd1SHUIRWrY';
+const SO_SPREADSHEET_ID            = '16XdhpeNlfZ__3cHH7nE8a5lPdZd3ks6s-60nVBHIn1Y';
+const SO_SHEET_NAME                = 'Order lines';
+const TRUCK_DISPATCH_SHEET         = 'Truck_Dispatch';
 const THAI_MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
     'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const AUDIT_LOG_HEADERS = ['Timestamp','User','Module','Action','Detail','Status'];
@@ -219,6 +223,7 @@ function doGet(e) {
           'getWarehouseMapData','saveWarehouseMapSlots',
           'probeProdBlockSheet','getProductionPlanData',
           'saveWarehouseMove','getWarehouseMoveLog',
+          'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -8870,6 +8875,159 @@ function getWarehouseMoveLog() {
 
     return { success: true, moves: moves, summary: summary };
   } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// =====================================================================
+// TRUCK DISPATCH — ระบบจัดรถส่งสินค้า (Sales)
+// =====================================================================
+
+// ── โหลด SO database เข้า cache ──────────────────────────────
+var _soCache = null;
+var _soCacheTime = 0;
+
+function _loadSOData() {
+  var now = new Date().getTime();
+  if (_soCache && (now - _soCacheTime) < 300000) return _soCache; // cache 5 min
+  try {
+    var ss    = SpreadsheetApp.openById(SO_SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SO_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) { _soCache = {}; return {}; }
+    var data  = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+    var soMap = {}; // { soNumber: { company, lines: [{sku, name, qty}] } }
+    data.forEach(function(row) {
+      var company = String(row[0] || '').trim();
+      var so      = String(row[1] || '').trim();
+      var sku     = String(row[2] || '').trim();
+      var name    = String(row[3] || '').trim();
+      var qty     = Number(row[4]) || 0;
+      if (!so || !sku) return;
+      if (!soMap[so]) soMap[so] = { company: company, so: so, lines: [] };
+      soMap[so].lines.push({ sku: sku, name: name, qty: qty });
+    });
+    _soCache = soMap;
+    _soCacheTime = now;
+    return soMap;
+  } catch(e) {
+    return {};
+  }
+}
+
+// ── Probe: ดูโครงสร้าง SO sheet ──────────────────────────────
+function probeSOSheet() {
+  try {
+    var ss    = SpreadsheetApp.openById(SO_SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(SO_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต: ' + SO_SHEET_NAME };
+    var numRows = Math.min(6, sheet.getLastRow());
+    var numCols = Math.min(10, sheet.getLastColumn());
+    var sample  = sheet.getRange(1, 1, numRows, numCols).getValues();
+    return {
+      success: true, totalRows: sheet.getLastRow(),
+      totalCols: sheet.getLastColumn(), sample: sample
+    };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── Validate SO lines ─────────────────────────────────────────
+// รับ [{so, sku}] ตรวจสอบแต่ละแถว
+function validateSOLines(lines) {
+  try {
+    var soMap   = _loadSOData();
+    var results = lines.map(function(line) {
+      var so  = String(line.so  || '').trim();
+      var sku = String(line.sku || '').trim();
+      if (!so)  return { so: so, sku: sku, ok: false, error: 'ไม่ระบุเลข SO' };
+      if (!soMap[so]) return { so: so, sku: sku, ok: false, error: 'ไม่พบ SO: ' + so };
+      var soLines = soMap[so].lines;
+      var found   = soLines.find(function(l) { return l.sku === sku; });
+      if (!found) return {
+        so: so, sku: sku, ok: false,
+        error: 'รหัสสินค้า ' + sku + ' ไม่อยู่ใน SO ' + so,
+        soItems: soLines.map(function(l) { return l.sku; }).join(', ')
+      };
+      return {
+        so: so, sku: sku, ok: true,
+        company: soMap[so].company,
+        name: found.name,
+        soQty: found.qty
+      };
+    });
+    return { success: true, results: results };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── Save Truck Dispatch ───────────────────────────────────────
+function saveTruckDispatch(data) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(TRUCK_DISPATCH_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(TRUCK_DISPATCH_SHEET);
+      sheet.getRange(1, 1, 1, 12).setValues([[
+        'DispatchID','Timestamp','DispatchDate','TruckPlate','Driver',
+        'Company','SO','SKU','ProductName','QtyLine','WeightTon','RecordedBy'
+      ]]);
+      sheet.setFrozenRows(1);
+      sheet.getRange(1,1,1,12).setBackground('#1e293b').setFontColor('#94a3b8').setFontWeight('bold');
+    }
+    var now        = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    var dispatchId = 'DS' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+    var lines      = data.lines || [];
+    var rows       = lines.map(function(l) { return [
+      dispatchId, now,
+      String(data.dispatchDate  || ''),
+      String(data.truckPlate    || ''),
+      String(data.driver        || ''),
+      String(l.company          || ''),
+      String(l.so               || ''),
+      String(l.sku              || ''),
+      String(l.name             || ''),
+      Number(l.qty              || 0),
+      Number(l.weightTon        || 0),
+      String(data.recordedBy    || '')
+    ]; });
+    if (rows.length > 0) {
+      sheet.getRange(sheet.getLastRow()+1, 1, rows.length, 12).setValues(rows);
+    }
+    saveAuditLog('Truck Dispatch','SAVE',
+      'DispatchID:' + dispatchId + ' | รถ:' + data.truckPlate +
+      ' | ' + rows.length + ' รายการ | ' + data.recordedBy, 'success');
+    return { success: true, dispatchId: dispatchId };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── Get Truck Dispatch Log ────────────────────────────────────
+function getTruckDispatchLog(params) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(TRUCK_DISPATCH_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, rows: [] };
+    var numRows = sheet.getLastRow() - 1;
+    var data    = sheet.getRange(2, 1, numRows, 12).getValues();
+    var rows    = data.map(function(r) { return {
+      dispatchId:   String(r[0] || ''),
+      timestamp:    r[1] instanceof Date ? Utilities.formatDate(r[1],'GMT+7','dd/MM/yyyy HH:mm') : String(r[1]||''),
+      dispatchDate: String(r[2] || ''),
+      truckPlate:   String(r[3] || ''),
+      driver:       String(r[4] || ''),
+      company:      String(r[5] || ''),
+      so:           String(r[6] || ''),
+      sku:          String(r[7] || ''),
+      name:         String(r[8] || ''),
+      qty:          Number(r[9] || 0),
+      weightTon:    Number(r[10]|| 0),
+      recordedBy:   String(r[11]|| '')
+    }; }).reverse();
+    return { success: true, rows: rows };
+  } catch(e) {
     return { success: false, message: e.toString() };
   }
 }
