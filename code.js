@@ -8414,18 +8414,20 @@ function saveInventoryKPI(data) {
       return rowIdx;
     }
 
+    const saveType = data.saveType; // 'FG', 'SEMI', or undefined (both)
     const fg   = data.fg   || {};
     const semi = data.semi || {};
-    upsertRow('FG',   buildRow('FG',   fg,   data.finalAdjustFG));
-    upsertRow('SEMI', buildRow('SEMI', semi, data.finalAdjustSEMI));
+    if (!saveType || saveType === 'FG')   upsertRow('FG',   buildRow('FG',   fg,   data.finalAdjustFG));
+    if (!saveType || saveType === 'SEMI') upsertRow('SEMI', buildRow('SEMI', semi, data.finalAdjustSEMI));
 
     saveAuditLog('Inventory KPI', 'SAVE',
       'วันที่นับ: ' + dateStr + ' | พนักงาน: ' + empId +
-      ' | FG Checker: ' + n(fg.checkerKPI).toFixed(1) + '%' +
-      ' | SEMI Checker: ' + n(semi.checkerKPI).toFixed(1) + '%',
+      (saveType === 'FG'   ? ' | FG Checker: '   + n(fg.checkerKPI).toFixed(1)   + '%' : '') +
+      (saveType === 'SEMI' ? ' | SEMI Checker: ' + n(semi.checkerKPI).toFixed(1) + '%' : '') +
+      (!saveType ? ' | FG: ' + n(fg.checkerKPI).toFixed(1) + '% | SEMI: ' + n(semi.checkerKPI).toFixed(1) + '%' : ''),
       'success');
 
-    return { success: true, message: 'บันทึกข้อมูลเรียบร้อย (FG + SEMI)' };
+    return { success: true, message: 'บันทึกข้อมูลเรียบร้อย (' + (saveType || 'FG + SEMI') + ')' };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

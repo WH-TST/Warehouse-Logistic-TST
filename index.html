@@ -3912,9 +3912,9 @@ thead.sticky {
 
         <!-- Save button -->
         <div class="flex justify-center">
-          <button onclick="saveInventoryKPIResult()" id="btn-save-inv-kpi"
+          <button onclick="saveInventoryKPIResult('fg')" id="btn-save-inv-kpi"
             class="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-3 rounded-xl font-black text-base shadow-lg transition-all flex items-center gap-2 w-full justify-center">
-            <i class="fas fa-save"></i> บันทึกผลลงชีต
+            <i class="fas fa-save"></i> บันทึก FG ลงชีต
           </button>
         </div>
 
@@ -4229,9 +4229,9 @@ thead.sticky {
 
         <!-- Save button -->
         <div class="flex justify-center">
-          <button onclick="saveInventoryKPIResult()" id="btn-save-semi-kpi"
+          <button onclick="saveInventoryKPIResult('semi')" id="btn-save-semi-kpi"
             class="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-3 rounded-xl font-black text-base shadow-lg transition-all flex items-center gap-2 w-full justify-center">
-            <i class="fas fa-save"></i> บันทึกผลลงชีต
+            <i class="fas fa-save"></i> บันทึก SEMI ลงชีต
           </button>
         </div>
 
@@ -4269,12 +4269,12 @@ thead.sticky {
 
       <!-- KPI FINAL Adjust (required) -->
       <div class="bg-slate-700/40 border border-slate-600 rounded-xl p-4 space-y-3">
-        <p class="text-slate-300 font-black text-xs uppercase tracking-widest flex items-center gap-1.5">
-          <i class="fas fa-star text-yellow-400"></i> KPI FINAL (กรอกทั้ง 2 ช่อง — บังคับ)
+        <p id="kpi-modal-final-label" class="text-slate-300 font-black text-xs uppercase tracking-widest flex items-center gap-1.5">
+          <i class="fas fa-star text-yellow-400"></i> KPI FINAL — บังคับ
         </p>
-        <div class="grid grid-cols-2 gap-3">
+        <div id="kpi-modal-final-grid" class="grid grid-cols-1 gap-3">
           <!-- FG Final -->
-          <div>
+          <div id="kpi-modal-final-fg-row">
             <label class="block text-emerald-300 font-black text-xs uppercase tracking-widest mb-1.5">
               <i class="fas fa-box mr-1"></i>FG Final %
             </label>
@@ -4289,7 +4289,7 @@ thead.sticky {
             </p>
           </div>
           <!-- SEMI Final -->
-          <div>
+          <div id="kpi-modal-final-semi-row">
             <label class="block text-sky-300 font-black text-xs uppercase tracking-widest mb-1.5">
               <i class="fas fa-stream mr-1"></i>SEMI Final %
             </label>
@@ -28626,30 +28626,42 @@ window.kpiFormatFinal = function(id) {
     if (v > 100) el.value = 100;
 };
 
-// ── Save: เปิด Modal ──────────────────────────────────────────
-window.saveInventoryKPIResult = function() {
-    const fgOk   = !!_lastInvKPIResult;
-    const semiOk = !!_lastSemiKPIResult;
-    if (!fgOk || !semiOk) {
-        const missing = !fgOk ? 'FG' : 'SEMI';
-        showToast(`⚠️ กรุณากรอกข้อมูลแท็บ ${missing} (Section A) ก่อนบันทึก`, true); return;
+// ── Save: เปิด Modal (type = 'fg' | 'semi') ──────────────────
+let _saveKpiType = 'fg';
+window.saveInventoryKPIResult = function(type) {
+    _saveKpiType = type || 'fg';
+    const isFG  = _saveKpiType === 'fg';
+    const result = isFG ? _lastInvKPIResult : _lastSemiKPIResult;
+    if (!result) {
+        showToast(`⚠️ กรุณากรอกข้อมูลแท็บ ${isFG ? 'FG' : 'SEMI'} (Section A) ก่อนบันทึก`, true);
+        return;
     }
-    const fmt  = v => Number(v).toFixed(1) + '%';
-    const fmtN = v => Number(v).toLocaleString('th-TH');
-    const fg   = _lastInvKPIResult;
-    const semi = _lastSemiKPIResult;
-    const dateVal = (fg || semi)?.countDate || '';
+    const fmt = v => Number(v).toFixed(1) + '%';
+    const dateVal = result.countDate || '';
     let dateStr = 'ไม่ระบุ';
     if (dateVal) { const [y,m,d] = dateVal.split('-'); dateStr = `${d}/${m}/${y}`; }
 
+    // แสดงเฉพาะ final field ที่ตรงกับ type
+    const fgRow   = document.getElementById('kpi-modal-final-fg-row');
+    const semiRow = document.getElementById('kpi-modal-final-semi-row');
+    if (fgRow)   fgRow.classList.toggle('hidden', !isFG);
+    if (semiRow) semiRow.classList.toggle('hidden', isFG);
+
+    const labelEl = document.getElementById('kpi-modal-final-label');
+    if (labelEl) labelEl.innerHTML =
+        `<i class="fas fa-star text-yellow-400"></i> KPI FINAL ${isFG ? 'FG' : 'SEMI'} — บังคับ`;
+
+    const color = isFG ? 'text-emerald-300' : 'text-sky-300';
     document.getElementById('kpi-modal-summary').innerHTML = `
       <p class="text-slate-400 text-xs uppercase tracking-widest font-black mb-2">สรุปผลที่จะบันทึก</p>
       <div class="grid grid-cols-2 gap-1 text-sm">
-        <span class="text-slate-400">วันที่นับ</span>         <span class="text-white font-bold">${dateStr}</span>
-        <span class="text-emerald-300 font-bold">FG Checker</span>  <span class="text-white font-bold">${fg ? fmt(fg.checkerKPI) : '—'}</span>
-        <span class="text-emerald-300/70">FG Prod</span>      <span class="text-white font-bold">${(fg && fg.prodSKU > 0) ? fmt(fg.prodKPI) : '—'}</span>
-        <span class="text-sky-300 font-bold">SEMI Checker</span> <span class="text-white font-bold">${semi ? fmt(semi.checkerKPI) : '—'}</span>
-        <span class="text-sky-300/70">SEMI Prod</span>        <span class="text-white font-bold">${(semi && semi.prodSKU > 0) ? fmt(semi.prodKPI) : '—'}</span>
+        <span class="text-slate-400">วันที่นับ</span><span class="text-white font-bold">${dateStr}</span>
+        <span class="${color} font-bold">${isFG ? 'FG' : 'SEMI'} Checker</span>
+        <span class="text-white font-bold">${fmt(result.checkerKPI)}</span>
+        ${result.prodSKU > 0
+            ? `<span class="${color}/70">${isFG ? 'FG' : 'SEMI'} Prod</span>
+               <span class="text-white font-bold">${fmt(result.prodKPI)}</span>`
+            : ''}
       </div>`;
 
     document.getElementById('kpi-emp-id-input').value = '';
@@ -28657,32 +28669,28 @@ window.saveInventoryKPIResult = function() {
     document.getElementById('kpi-final-fg-error')?.classList.add('hidden');
     document.getElementById('kpi-final-semi-error')?.classList.add('hidden');
     document.getElementById('kpi-emp-modal').classList.remove('hidden');
-    setTimeout(() => document.getElementById('kpi-final-fg').focus(), 100);
+    setTimeout(() => document.getElementById(isFG ? 'kpi-final-fg' : 'kpi-final-semi')?.focus(), 100);
 };
 
 window.closeKpiEmpModal = function() {
     document.getElementById('kpi-emp-modal').classList.add('hidden');
 };
 
-// ── Save: ยืนยัน (validate finals + empId → send combined payload) ─
+// ── Save: ยืนยัน (validate final + empId → send payload เฉพาะ type) ─
 window.confirmSaveInvKPI = function() {
-    const finalFGEl   = document.getElementById('kpi-final-fg');
-    const finalSEMIEl = document.getElementById('kpi-final-semi');
-    const empIdEl     = document.getElementById('kpi-emp-id-input');
-    const finalFG     = finalFGEl?.value.trim();
-    const finalSEMI   = finalSEMIEl?.value.trim();
-    const empId       = empIdEl?.value.trim();
+    const isFG       = _saveKpiType === 'fg';
+    const finalId    = isFG ? 'kpi-final-fg'    : 'kpi-final-semi';
+    const finalErrId = isFG ? 'kpi-final-fg-error' : 'kpi-final-semi-error';
+    const finalEl    = document.getElementById(finalId);
+    const empIdEl    = document.getElementById('kpi-emp-id-input');
+    const finalVal   = finalEl?.value.trim();
+    const empId      = empIdEl?.value.trim();
 
     let valid = true;
-    if (!finalFG || finalFG === '') {
-        document.getElementById('kpi-final-fg-error')?.classList.remove('hidden');
+    if (!finalVal || finalVal === '') {
+        document.getElementById(finalErrId)?.classList.remove('hidden');
         valid = false;
-    } else { document.getElementById('kpi-final-fg-error')?.classList.add('hidden'); }
-
-    if (!finalSEMI || finalSEMI === '') {
-        document.getElementById('kpi-final-semi-error')?.classList.remove('hidden');
-        valid = false;
-    } else { document.getElementById('kpi-final-semi-error')?.classList.add('hidden'); }
+    } else { document.getElementById(finalErrId)?.classList.add('hidden'); }
 
     if (!empId) {
         document.getElementById('kpi-emp-id-error')?.classList.remove('hidden');
@@ -28695,14 +28703,16 @@ window.confirmSaveInvKPI = function() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
     btn.disabled  = true;
 
-    const sharedDate = document.getElementById('kpi-shared-date')?.value || '';
+    const sharedDate  = document.getElementById('kpi-shared-date')?.value || '';
+    const typeLabel   = isFG ? 'FG' : 'SEMI';
     const payload = {
-        employeeId:    empId,
-        countDate:     sharedDate,
-        finalAdjustFG:   parseFloat(finalFG),
-        finalAdjustSEMI: parseFloat(finalSEMI),
-        fg:   _lastInvKPIResult  ? Object.assign({}, _lastInvKPIResult)  : null,
-        semi: _lastSemiKPIResult ? Object.assign({}, _lastSemiKPIResult) : null
+        employeeId:      empId,
+        countDate:       sharedDate,
+        saveType:        typeLabel,
+        finalAdjustFG:   isFG  ? parseFloat(finalVal) : undefined,
+        finalAdjustSEMI: !isFG ? parseFloat(finalVal) : undefined,
+        fg:   isFG  ? (_lastInvKPIResult  ? Object.assign({}, _lastInvKPIResult)  : null) : null,
+        semi: !isFG ? (_lastSemiKPIResult ? Object.assign({}, _lastSemiKPIResult) : null) : null
     };
 
     google.script.run
@@ -28711,10 +28721,12 @@ window.confirmSaveInvKPI = function() {
             btn.disabled  = false;
             if (res && res.success) {
                 closeKpiEmpModal();
-                showToast(`✅ บันทึกสำเร็จ (รหัส: ${empId}) — KPI Final FG: ${finalFG}% / SEMI: ${finalSEMI}%`);
-                document.getElementById('kpi-edit-banner')?.classList.remove('hidden');
+                showToast(`✅ บันทึก ${typeLabel} สำเร็จ (รหัส: ${empId}) — KPI Final: ${finalVal}%`);
                 const b = document.getElementById('kpi-edit-banner');
-                if (b) b.querySelector('p').textContent = 'บันทึกสำเร็จ — ข้อมูลวันนี้ถูกอัปเดตแล้ว';
+                if (b) {
+                    b.classList.remove('hidden');
+                    b.querySelector('p').textContent = `บันทึก ${typeLabel} สำเร็จ — ข้อมูลวันนี้ถูกอัปเดตแล้ว`;
+                }
             } else {
                 showToast('❌ บันทึกไม่สำเร็จ: ' + (res?.message || 'unknown'), true);
             }
