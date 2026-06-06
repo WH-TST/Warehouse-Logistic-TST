@@ -918,6 +918,9 @@ thead.sticky {
             <button onclick="switchView('whactivity')" id="nav-whactivity" class="nav-btn" data-tip="WH ACTIVITY LOG">
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> WH ACTIVITY LOG
             </button>
+            <button onclick="switchView('warehouse-map')" id="nav-warehouse-map" class="nav-btn" data-tip="ผังคลังสินค้า">
+                <span class="nav-icon"><i class="fas fa-th-large"></i></span> ผังคลัง
+            </button>
 
             <!-- ─── INVENTORY ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
@@ -1667,6 +1670,204 @@ thead.sticky {
 
 </div><!-- end view-whactivity-content -->
 
+
+<!-- ============================================================ -->
+<!-- VIEW: ผังคลังสินค้า — Warehouse Storage Map                  -->
+<!-- ============================================================ -->
+<div id="view-warehouse-map-content" class="hidden space-y-5">
+
+  <!-- Header -->
+  <div class="rounded-2xl p-5 shadow-sm" style="background:#f4f6f9;border:1px solid #bec8d8;border-left:4px solid #2563eb;">
+    <div class="flex flex-wrap items-center gap-5 justify-between">
+      <div class="flex items-center gap-5">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl flex-shrink-0" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
+          <i class="fas fa-th-large"></i>
+        </div>
+        <div>
+          <h2 class="text-2xl font-black tracking-tight" style="color:#0f1923;">ผังคลังสินค้า</h2>
+          <p class="text-sm font-bold mt-0.5 uppercase tracking-widest" style="color:#2563eb;">จำลองพื้นที่จัดเก็บ — Warehouse Storage Map</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="loadWarehouseMap(true)" class="bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
+          <i class="fas fa-sync-alt"></i> รีเฟรช
+        </button>
+        <button onclick="openWmZoneConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow">
+          <i class="fas fa-cog"></i> ตั้งค่าโซน
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="wm-loading" class="hidden flex items-center justify-center py-20">
+    <div class="text-center">
+      <i class="fas fa-spinner fa-spin text-4xl text-blue-400 mb-3 block"></i>
+      <p class="text-slate-400 font-bold">กำลังโหลดข้อมูลผังคลัง...</p>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div id="wm-main">
+
+    <!-- Stats strip -->
+    <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+      <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">โซน</p>
+        <p id="wm-stat-zones" class="text-2xl font-black text-white">0</p>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">ช่องทั้งหมด</p>
+        <p id="wm-stat-slots" class="text-2xl font-black text-white">0</p>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">มี SKU</p>
+        <p id="wm-stat-assign" class="text-2xl font-black text-emerald-400">0/0</p>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Capacity</p>
+        <p id="wm-stat-cap" class="text-lg font-black text-sky-300">0 PCS</p>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">ใช้งานจริง</p>
+        <p id="wm-stat-used" class="text-lg font-black text-amber-300">0 PCS</p>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
+        <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">รวม %</p>
+        <p id="wm-stat-pct" class="text-2xl font-black text-white">0%</p>
+      </div>
+    </div>
+
+    <!-- Overall utilization bar -->
+    <div class="bg-slate-800/60 border border-slate-700 rounded-2xl px-5 py-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-slate-300 font-black text-sm uppercase tracking-widest">ภาพรวมการใช้พื้นที่คลัง</span>
+        <span id="wm-overall-pct" class="text-white font-black text-base">0%</span>
+      </div>
+      <div class="w-full bg-slate-700 rounded-full h-4 overflow-hidden">
+        <div id="wm-overall-bar" class="h-4 rounded-full bg-emerald-500 transition-all duration-700" style="width:0%"></div>
+      </div>
+      <!-- Legend -->
+      <div class="flex flex-wrap gap-4 mt-3 text-xs font-bold text-slate-400">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-600 inline-block"></span>ว่าง/ไม่ได้กำหนด</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-700 inline-block"></span>&lt; 60% — ปกติ</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-700 inline-block"></span>60–84% — ระวัง</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-orange-700 inline-block"></span>85–94% — เกือบเต็ม</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-700 inline-block"></span>≥ 95% — เต็ม/เกิน</span>
+      </div>
+    </div>
+
+    <!-- Zones grid -->
+    <div id="wm-zones-container" class="space-y-5"></div>
+
+  </div><!-- end wm-main -->
+
+</div><!-- end view-warehouse-map-content -->
+
+
+<!-- MODAL: ตั้งค่าโซน -->
+<div id="wm-zone-modal" class="fixed inset-0 bg-black/80 hidden z-[95] flex items-start justify-center pt-10 px-4 pb-4 backdrop-blur-sm overflow-y-auto">
+  <div class="bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-600">
+    <div class="bg-gradient-to-r from-blue-800 to-blue-600 px-6 py-4 flex items-center gap-3 rounded-t-2xl">
+      <i class="fas fa-cog text-white text-xl"></i>
+      <h3 class="text-white font-black text-lg flex-1">ตั้งค่าโซนคลังสินค้า</h3>
+      <button onclick="closeWmZoneModal()" class="text-white/60 hover:text-white text-xl"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <!-- Existing zones list -->
+      <div id="wm-zone-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+
+      <!-- Add zone form -->
+      <div class="bg-slate-700/40 border border-slate-600 rounded-xl p-4 space-y-3">
+        <p class="text-slate-300 font-black text-xs uppercase tracking-widest">เพิ่มโซนใหม่</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-400 font-bold mb-1 block">ID โซน (A-Z)</label>
+            <input type="text" id="wm-new-zone-id" maxlength="2" placeholder="A"
+              class="w-full bg-slate-800 border border-slate-500 text-white rounded-lg px-3 py-2 font-black text-lg text-center focus:outline-none focus:border-blue-400 uppercase">
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 font-bold mb-1 block">ชื่อโซน</label>
+            <input type="text" id="wm-new-zone-name" placeholder="เช่น โซน A หน้าโกดัง"
+              class="w-full bg-slate-800 border border-slate-500 text-white rounded-lg px-3 py-2 font-bold text-sm focus:outline-none focus:border-blue-400">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-400 font-bold mb-1 block">จำนวนแถว (Row)</label>
+            <input type="number" id="wm-new-zone-rows" min="1" max="20" value="3"
+              class="w-full bg-slate-800 border border-slate-500 text-white rounded-lg px-3 py-2 font-black text-xl text-center focus:outline-none focus:border-blue-400">
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 font-bold mb-1 block">จำนวนช่อง/แถว (Col)</label>
+            <input type="number" id="wm-new-zone-cols" min="1" max="20" value="4"
+              class="w-full bg-slate-800 border border-slate-500 text-white rounded-lg px-3 py-2 font-black text-xl text-center focus:outline-none focus:border-blue-400">
+          </div>
+        </div>
+        <p class="text-xs text-slate-500">ตัวอย่าง: 3 แถว × 4 ช่อง = 12 ช่องวาง</p>
+        <button onclick="addWmZone()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-black text-sm transition-all">
+          <i class="fas fa-plus mr-2"></i>เพิ่มโซน
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL: กำหนด SKU ให้ช่อง -->
+<div id="wm-slot-modal" class="fixed inset-0 bg-black/80 hidden z-[95] flex items-center justify-center px-4 backdrop-blur-sm">
+  <div class="bg-slate-800 w-full max-w-sm rounded-2xl shadow-2xl border border-slate-600">
+    <div id="wm-slot-modal-header" class="bg-gradient-to-r from-slate-700 to-slate-600 px-5 py-4 flex items-center gap-3 rounded-t-2xl">
+      <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-sm" id="wm-slot-modal-zone-badge">A</div>
+      <div class="flex-1">
+        <h3 class="text-white font-black text-base" id="wm-slot-modal-title">ช่อง A-1-1</h3>
+        <p class="text-slate-400 text-xs" id="wm-slot-modal-sub">กำหนด SKU และ Capacity</p>
+      </div>
+      <button onclick="closeWmSlotModal()" class="text-white/60 hover:text-white text-xl"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <!-- Current inventory display -->
+      <div id="wm-slot-inv-info" class="hidden bg-slate-700/50 rounded-xl p-3 text-sm">
+        <p class="text-slate-400 font-bold text-xs uppercase tracking-widest mb-1.5">สต็อกปัจจุบัน</p>
+        <div class="flex justify-between">
+          <span class="text-slate-300">PCS/เส้น</span>
+          <span id="wm-slot-inv-pcs" class="text-white font-black">—</span>
+        </div>
+        <div class="flex justify-between mt-1">
+          <span class="text-slate-300">น้ำหนัก</span>
+          <span id="wm-slot-inv-weight" class="text-white font-black">—</span>
+        </div>
+      </div>
+
+      <!-- SKU input -->
+      <div>
+        <label class="text-slate-300 font-black text-xs uppercase tracking-widest mb-2 block">รหัสสินค้า (SKU)</label>
+        <input type="text" id="wm-slot-sku-input" list="wm-sku-datalist" placeholder="พิมพ์หรือเลือก SKU..."
+          oninput="wmSlotSkuChange(this.value)"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-2.5 font-bold text-base focus:outline-none focus:border-blue-400">
+        <datalist id="wm-sku-datalist"></datalist>
+        <p id="wm-slot-sku-name" class="text-emerald-400 text-xs font-bold mt-1 min-h-[16px]"></p>
+      </div>
+
+      <!-- Capacity -->
+      <div>
+        <label class="text-slate-300 font-black text-xs uppercase tracking-widest mb-2 block">ความจุช่อง (PCS)</label>
+        <input type="number" id="wm-slot-capacity" min="0" placeholder="0"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-2.5 font-black text-xl text-center focus:outline-none focus:border-blue-400">
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex gap-3">
+        <button onclick="saveWmSlot()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2">
+          <i class="fas fa-save"></i> บันทึก
+        </button>
+        <button onclick="clearWmSlot()" class="bg-slate-600 hover:bg-slate-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all" title="ล้างการกำหนด SKU">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 
 <!-- ============================================ -->
@@ -8756,7 +8957,7 @@ let currentAnalysis = null;
  * ฟังก์ชันหลักในการสลับ View ใหญ่
  */
 window.switchView = function switchView(view) {
-    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'kpi-wh', 'kpi-stock'];
+    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'warehouse-map', 'logistic-plan', 'kpi-wh', 'kpi-stock'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -8781,7 +8982,8 @@ window.switchView = function switchView(view) {
             'whactivity': 'WH Activity Log — บันทึกข้อมูลจริงจากหน้างาน',
             'logistic-plan': 'Logistic — วางแผนส่งมอบ',
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
-            'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก'
+            'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
+            'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ'
         }[view] || 'WL Management';
     }
 
@@ -8828,6 +9030,11 @@ window.switchView = function switchView(view) {
         loadLogiMaster(function() {
             whaPrepareStaffList();
         });
+    }
+
+    // ผังคลัง — โหลดครั้งแรกอัตโนมัติ
+    if (view === 'warehouse-map' && !_wmLoaded) {
+        loadWarehouseMap();
     }
 }
 
@@ -28677,6 +28884,433 @@ window.closeKpiEmpModal = function() {
 };
 
 // ── Save: ยืนยัน (validate final + empId → send payload เฉพาะ type) ─
+// ══════════════════════════════════════════════════════════════
+// WAREHOUSE MAP — ผังจำลองพื้นที่วางภายในคลังสินค้า
+// ══════════════════════════════════════════════════════════════
+
+let _wmSlots     = [];
+let _wmInventory = {};
+let _wmSkuNames  = {};
+let _wmLoaded    = false;
+let _wmEditSlot  = null;
+let _wmPendingZones = []; // zones being configured in modal
+
+// ── Load ──────────────────────────────────────────────────────
+window.loadWarehouseMap = function(force) {
+    if (_wmLoaded && !force) { _wmRender(); return; }
+    const el   = document.getElementById('wm-loading');
+    const main = document.getElementById('wm-main');
+    if (el)   el.classList.remove('hidden');
+    if (main) main.classList.add('hidden');
+    google.script.run
+        .withSuccessHandler(res => {
+            if (el)   el.classList.add('hidden');
+            if (main) main.classList.remove('hidden');
+            if (!res || !res.success) { showToast('❌ โหลดผังคลังไม่สำเร็จ', true); return; }
+            _wmSlots     = res.slots     || [];
+            _wmInventory = res.inventory || {};
+            _wmSkuNames  = res.skuNames  || {};
+            _wmLoaded    = true;
+            _wmBuildDatalist();
+            _wmRender();
+        })
+        .withFailureHandler(err => {
+            if (el)   el.classList.add('hidden');
+            if (main) main.classList.remove('hidden');
+            showToast('❌ ' + (err?.message || String(err)), true);
+        })
+        .getWarehouseMapData();
+};
+
+function _wmBuildDatalist() {
+    const dl = document.getElementById('wm-sku-datalist');
+    if (!dl) return;
+    const skus = Object.keys(_wmInventory).sort();
+    dl.innerHTML = skus.map(s =>
+        `<option value="${s}">${s}${_wmSkuNames[s] ? ' — ' + _wmSkuNames[s] : ''}</option>`
+    ).join('');
+}
+
+// ── Render ────────────────────────────────────────────────────
+function _wmRender() {
+    _wmRenderSummary();
+    _wmRenderZones();
+}
+
+function _wmFillStyle(pct, assigned) {
+    if (!assigned) return { bg:'bg-slate-700', border:'border-slate-600/60', bar:'bg-slate-500', text:'text-slate-500' };
+    if (pct === 0) return { bg:'bg-slate-700/80', border:'border-slate-500', bar:'bg-slate-400', text:'text-slate-400' };
+    if (pct < 60)  return { bg:'bg-emerald-900/70', border:'border-emerald-600', bar:'bg-emerald-500', text:'text-emerald-300' };
+    if (pct < 85)  return { bg:'bg-amber-900/70', border:'border-amber-600', bar:'bg-amber-500', text:'text-amber-300' };
+    if (pct < 95)  return { bg:'bg-orange-900/70', border:'border-orange-600', bar:'bg-orange-500', text:'text-orange-300' };
+    return               { bg:'bg-red-900/70', border:'border-red-600', bar:'bg-red-500', text:'text-red-300' };
+}
+
+function _wmSlotUtil(slot) {
+    if (!slot.assignedSKU || !slot.capacityPCS) return { pcs: 0, pct: 0 };
+    const inv = _wmInventory[slot.assignedSKU] || {};
+    const pcs = inv.pcs || 0;
+    const pct = slot.capacityPCS > 0 ? Math.min((pcs / slot.capacityPCS) * 100, 999) : 0;
+    return { pcs, pct };
+}
+
+function _wmRenderSummary() {
+    const totalSlots  = _wmSlots.length;
+    const assigned    = _wmSlots.filter(s => s.assignedSKU).length;
+    const totalCap    = _wmSlots.reduce((s, x) => s + (x.capacityPCS || 0), 0);
+    const totalUsed   = _wmSlots.reduce((s, x) => {
+        if (!x.assignedSKU) return s;
+        const inv = _wmInventory[x.assignedSKU] || {};
+        return s + Math.min(inv.pcs || 0, x.capacityPCS || 0);
+    }, 0);
+    const overallPct  = totalCap > 0 ? Math.min((totalUsed / totalCap) * 100, 100) : 0;
+    const zones       = new Set(_wmSlots.map(s => s.zoneId)).size;
+    const fmtN        = v => Number(v).toLocaleString('th-TH');
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('wm-stat-zones',  zones);
+    set('wm-stat-slots',  totalSlots);
+    set('wm-stat-assign', assigned + '/' + totalSlots);
+    set('wm-stat-cap',    fmtN(totalCap) + ' PCS');
+    set('wm-stat-used',   fmtN(totalUsed) + ' PCS');
+    set('wm-stat-pct',    overallPct.toFixed(1) + '%');
+    set('wm-overall-pct', overallPct.toFixed(1) + '%');
+
+    const bar = document.getElementById('wm-overall-bar');
+    if (bar) {
+        bar.style.width = overallPct.toFixed(1) + '%';
+        bar.className = 'h-4 rounded-full transition-all duration-700 ' +
+            (overallPct < 60 ? 'bg-emerald-500' : overallPct < 85 ? 'bg-amber-500' : overallPct < 95 ? 'bg-orange-500' : 'bg-red-500');
+    }
+}
+
+function _wmRenderZones() {
+    const zonesMap = {};
+    _wmSlots.forEach(s => {
+        if (!zonesMap[s.zoneId]) zonesMap[s.zoneId] = {
+            zoneId: s.zoneId, zoneName: s.zoneName,
+            numRows: s.numRows, numCols: s.numCols, slots: []
+        };
+        zonesMap[s.zoneId].slots.push(s);
+    });
+    const zoneList = Object.values(zonesMap).sort((a, b) => a.zoneId.localeCompare(b.zoneId));
+    const container = document.getElementById('wm-zones-container');
+    if (!container) return;
+
+    if (zoneList.length === 0) {
+        container.innerHTML = `
+          <div class="flex flex-col items-center justify-center py-24 text-center">
+            <i class="fas fa-warehouse text-6xl text-slate-600 mb-4 block"></i>
+            <p class="text-slate-400 font-bold text-xl">ยังไม่มีโซนในคลัง</p>
+            <p class="text-slate-500 text-sm mt-1 mb-5">กด "ตั้งค่าโซน" เพื่อเพิ่มพื้นที่คลังสินค้า</p>
+            <button onclick="openWmZoneConfig()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-black text-sm">
+              <i class="fas fa-plus mr-2"></i>เพิ่มโซนแรก
+            </button>
+          </div>`;
+        return;
+    }
+
+    const fmtN = v => Number(v).toLocaleString('th-TH');
+
+    container.innerHTML = zoneList.map(zone => {
+        // Build slot grid
+        const grid = Array.from({ length: zone.numRows }, (_, r) =>
+            Array.from({ length: zone.numCols }, (_, c) => {
+                const slotId = `${zone.zoneId}-${r + 1}-${c + 1}`;
+                return zone.slots.find(s => s.slotRow === r && s.slotCol === c) ||
+                    { slotId, zoneId: zone.zoneId, zoneName: zone.zoneName,
+                      numRows: zone.numRows, numCols: zone.numCols,
+                      slotRow: r, slotCol: c, assignedSKU: '', capacityPCS: 0 };
+            })
+        );
+
+        const cells = grid.flat().map(slot => {
+            const { pcs, pct } = _wmSlotUtil(slot);
+            const col = _wmFillStyle(pct, !!slot.assignedSKU);
+            const slotLabel = `${slot.zoneId}-${slot.slotRow+1}-${slot.slotCol+1}`;
+            const skuShort = slot.assignedSKU || '';
+            const nameShort = skuShort ? ((_wmSkuNames[skuShort] || '').substring(0, 14) || skuShort) : '';
+            const pctTxt = (slot.assignedSKU && slot.capacityPCS > 0) ? pct.toFixed(0) + '%' : '';
+            const bottomTxt = slot.assignedSKU
+                ? fmtN(pcs) + ' / ' + fmtN(slot.capacityPCS)
+                : 'ว่าง';
+
+            return `<div onclick="openWmSlotEdit('${slot.slotId || slotLabel}','${zone.zoneId}',${slot.slotRow},${slot.slotCol})"
+              class="relative cursor-pointer rounded-xl border-2 ${col.bg} ${col.border} p-2 min-h-[90px] flex flex-col justify-between transition-all hover:brightness-125 select-none">
+              <div class="flex items-start justify-between gap-1">
+                <span class="text-[9px] font-black text-slate-500 leading-none">${slotLabel}</span>
+                ${pctTxt ? `<span class="text-[11px] font-black ${col.text} leading-none">${pctTxt}</span>` : ''}
+              </div>
+              <div class="flex-1 flex flex-col justify-center py-1">
+                ${slot.assignedSKU
+                    ? `<p class="text-[11px] font-black text-white leading-tight truncate">${skuShort}</p>
+                       <p class="text-[9px] ${col.text} leading-tight truncate">${nameShort}</p>`
+                    : `<p class="text-xs text-slate-600 text-center mt-1">—</p>`}
+              </div>
+              <div>
+                <p class="text-[9px] text-slate-500 text-center leading-tight">${bottomTxt}</p>
+                ${(slot.assignedSKU && slot.capacityPCS > 0)
+                    ? `<div class="w-full bg-slate-700 rounded-full h-1 mt-1 overflow-hidden">
+                         <div class="${col.bar} h-1 rounded-full" style="width:${Math.min(pct, 100).toFixed(0)}%"></div>
+                       </div>`
+                    : ''}
+              </div>
+            </div>`;
+        }).join('');
+
+        // Zone summary
+        const zCap  = zone.slots.reduce((s, x) => s + (x.capacityPCS || 0), 0);
+        const zUsed = zone.slots.reduce((s, x) => {
+            if (!x.assignedSKU) return s;
+            const inv = _wmInventory[x.assignedSKU] || {};
+            return s + Math.min(inv.pcs || 0, x.capacityPCS || 0);
+        }, 0);
+        const zPct  = zCap > 0 ? (zUsed / zCap * 100).toFixed(1) : '0.0';
+        const zAsgn = zone.slots.filter(s => s.assignedSKU).length;
+        const zTotal = zone.numRows * zone.numCols;
+        const zCol   = _wmFillStyle(parseFloat(zPct), zCap > 0);
+
+        return `<div class="bg-slate-800/60 border border-slate-700 rounded-2xl overflow-hidden">
+          <div class="bg-slate-700/50 px-5 py-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-base flex-shrink-0">${zone.zoneId}</div>
+              <div>
+                <h3 class="text-white font-black text-base">${zone.zoneName}</h3>
+                <p class="text-slate-400 text-xs">${zone.numRows} แถว × ${zone.numCols} ช่อง | กำหนดแล้ว ${zAsgn}/${zTotal}</p>
+              </div>
+            </div>
+            <div class="text-right flex-shrink-0">
+              <div class="font-black text-xl ${zCol.text}">${zPct}%</div>
+              <div class="text-slate-400 text-xs">${fmtN(zUsed)} / ${fmtN(zCap)} PCS</div>
+            </div>
+          </div>
+          <div class="p-4">
+            <div class="grid gap-2" style="grid-template-columns:repeat(${zone.numCols},minmax(80px,1fr))">
+              ${cells}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+}
+
+// ── Zone Config Modal ─────────────────────────────────────────
+window.openWmZoneConfig = function() {
+    // Clone current zones from slots
+    const zonesMap = {};
+    _wmSlots.forEach(s => {
+        if (!zonesMap[s.zoneId]) zonesMap[s.zoneId] = {
+            zoneId: s.zoneId, zoneName: s.zoneName,
+            numRows: s.numRows, numCols: s.numCols
+        };
+    });
+    _wmPendingZones = Object.values(zonesMap).sort((a, b) => a.zoneId.localeCompare(b.zoneId));
+    _wmRenderZoneList();
+    document.getElementById('wm-zone-modal').classList.remove('hidden');
+};
+
+window.closeWmZoneModal = function() {
+    document.getElementById('wm-zone-modal').classList.add('hidden');
+};
+
+function _wmRenderZoneList() {
+    const el = document.getElementById('wm-zone-list');
+    if (!el) return;
+    if (_wmPendingZones.length === 0) {
+        el.innerHTML = '<p class="text-slate-500 text-sm text-center py-3">ยังไม่มีโซน</p>';
+        return;
+    }
+    el.innerHTML = _wmPendingZones.map((z, i) => `
+      <div class="flex items-center gap-3 bg-slate-700/50 rounded-xl px-4 py-2.5">
+        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-sm">${z.zoneId}</div>
+        <div class="flex-1">
+          <p class="text-white font-bold text-sm">${z.zoneName}</p>
+          <p class="text-slate-400 text-xs">${z.numRows} × ${z.numCols} = ${z.numRows * z.numCols} ช่อง</p>
+        </div>
+        <button onclick="removeWmPendingZone(${i})" class="text-red-400 hover:text-red-300 text-sm px-2 py-1">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>`).join('');
+}
+
+window.addWmZone = function() {
+    const id   = (document.getElementById('wm-new-zone-id')?.value || '').toUpperCase().trim();
+    const name = (document.getElementById('wm-new-zone-name')?.value || '').trim();
+    const rows = parseInt(document.getElementById('wm-new-zone-rows')?.value) || 0;
+    const cols = parseInt(document.getElementById('wm-new-zone-cols')?.value) || 0;
+
+    if (!id)   { showToast('⚠️ กรุณาใส่ ID โซน', true); return; }
+    if (!name) { showToast('⚠️ กรุณาใส่ชื่อโซน', true); return; }
+    if (rows < 1 || rows > 20) { showToast('⚠️ จำนวนแถว 1-20', true); return; }
+    if (cols < 1 || cols > 20) { showToast('⚠️ จำนวนช่อง 1-20', true); return; }
+    if (_wmPendingZones.find(z => z.zoneId === id)) { showToast(`⚠️ โซน ${id} มีอยู่แล้ว`, true); return; }
+
+    _wmPendingZones.push({ zoneId: id, zoneName: name, numRows: rows, numCols: cols });
+    _wmPendingZones.sort((a, b) => a.zoneId.localeCompare(b.zoneId));
+    _wmRenderZoneList();
+
+    // Clear form
+    ['wm-new-zone-id','wm-new-zone-name'].forEach(i => { const el = document.getElementById(i); if (el) el.value = ''; });
+    document.getElementById('wm-new-zone-rows').value = 3;
+    document.getElementById('wm-new-zone-cols').value = 4;
+
+    // Save immediately
+    _wmSaveZone({ zoneId: id, zoneName: name, numRows: rows, numCols: cols });
+};
+
+window.removeWmPendingZone = function(idx) {
+    const z = _wmPendingZones[idx];
+    if (!z) return;
+    if (!confirm(`ลบโซน ${z.zoneId} — ${z.zoneName}?\n(ช่องทั้งหมดและการกำหนด SKU ในโซนนี้จะถูกลบ)`)) return;
+    _wmPendingZones.splice(idx, 1);
+    _wmRenderZoneList();
+    _wmDeleteZone(z.zoneId);
+};
+
+function _wmSaveZone(zone) {
+    // Build slots for this zone
+    const slots = [];
+    for (let r = 0; r < zone.numRows; r++) {
+        for (let c = 0; c < zone.numCols; c++) {
+            const slotId = `${zone.zoneId}-${r+1}-${c+1}`;
+            // Preserve existing assignments
+            const existing = _wmSlots.find(s => s.zoneId === zone.zoneId && s.slotRow === r && s.slotCol === c);
+            slots.push({
+                slotId, zoneId: zone.zoneId, zoneName: zone.zoneName,
+                numRows: zone.numRows, numCols: zone.numCols,
+                slotRow: r, slotCol: c,
+                assignedSKU:  existing?.assignedSKU  || '',
+                capacityPCS:  existing?.capacityPCS  || 0
+            });
+        }
+    }
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res?.success) {
+                showToast(`✅ บันทึกโซน ${zone.zoneId} สำเร็จ`);
+                loadWarehouseMap(true);
+            } else {
+                showToast('❌ บันทึกไม่สำเร็จ: ' + (res?.message || ''), true);
+            }
+        })
+        .withFailureHandler(err => showToast('❌ ' + (err?.message || String(err)), true))
+        .saveWarehouseMapSlots({ zoneId: zone.zoneId, slots });
+}
+
+function _wmDeleteZone(zoneId) {
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res?.success) {
+                showToast(`✅ ลบโซน ${zoneId} สำเร็จ`);
+                loadWarehouseMap(true);
+            } else {
+                showToast('❌ ' + (res?.message || ''), true);
+            }
+        })
+        .withFailureHandler(err => showToast('❌ ' + (err?.message || String(err)), true))
+        .saveWarehouseMapSlots({ zoneId, slots: [] }); // empty = delete all
+}
+
+// ── Slot Edit Modal ───────────────────────────────────────────
+window.openWmSlotEdit = function(slotId, zoneId, slotRow, slotCol) {
+    const slot = _wmSlots.find(s => s.slotId === slotId || (s.zoneId === zoneId && s.slotRow === slotRow && s.slotCol === slotCol))
+        || { slotId: `${zoneId}-${slotRow+1}-${slotCol+1}`, zoneId, slotRow, slotCol, assignedSKU: '', capacityPCS: 0 };
+
+    // Find zone info
+    const zm = _wmSlots.find(s => s.zoneId === zoneId);
+    const zoneName = zm?.zoneName || ('โซน ' + zoneId);
+    const numRows  = zm?.numRows  || 1;
+    const numCols  = zm?.numCols  || 1;
+    slot.zoneName = zoneName;
+    slot.numRows  = numRows;
+    slot.numCols  = numCols;
+    _wmEditSlot = slot;
+
+    const label = `${zoneId}-${slotRow+1}-${slotCol+1}`;
+    document.getElementById('wm-slot-modal-zone-badge').textContent = zoneId;
+    document.getElementById('wm-slot-modal-title').textContent = 'ช่อง ' + label;
+    document.getElementById('wm-slot-modal-sub').textContent = zoneName;
+    document.getElementById('wm-slot-sku-input').value = slot.assignedSKU || '';
+    document.getElementById('wm-slot-capacity').value  = slot.capacityPCS || '';
+    document.getElementById('wm-slot-sku-name').textContent = slot.assignedSKU ? (_wmSkuNames[slot.assignedSKU] || '') : '';
+
+    _wmShowSlotInv(slot.assignedSKU);
+    document.getElementById('wm-slot-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('wm-slot-sku-input')?.focus(), 100);
+};
+
+window.closeWmSlotModal = function() {
+    document.getElementById('wm-slot-modal').classList.add('hidden');
+    _wmEditSlot = null;
+};
+
+window.wmSlotSkuChange = function(val) {
+    const sku = val.trim().toUpperCase();
+    const nameEl = document.getElementById('wm-slot-sku-name');
+    if (nameEl) nameEl.textContent = sku ? (_wmSkuNames[sku] || _wmSkuNames[val.trim()] || '') : '';
+    _wmShowSlotInv(sku || val.trim());
+};
+
+function _wmShowSlotInv(sku) {
+    const box    = document.getElementById('wm-slot-inv-info');
+    const pcsEl  = document.getElementById('wm-slot-inv-pcs');
+    const wtEl   = document.getElementById('wm-slot-inv-weight');
+    const inv    = sku ? _wmInventory[sku] : null;
+    if (box) box.classList.toggle('hidden', !inv);
+    if (inv) {
+        if (pcsEl) pcsEl.textContent = Number(inv.pcs || 0).toLocaleString('th-TH') + ' เส้น';
+        if (wtEl)  wtEl.textContent  = Number(inv.weight || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }) + ' ตัน';
+    }
+}
+
+window.saveWmSlot = function() {
+    if (!_wmEditSlot) return;
+    const sku  = (document.getElementById('wm-slot-sku-input')?.value || '').trim();
+    const cap  = parseInt(document.getElementById('wm-slot-capacity')?.value) || 0;
+
+    const updSlot = Object.assign({}, _wmEditSlot, { assignedSKU: sku, capacityPCS: cap });
+    // Update local state
+    const idx = _wmSlots.findIndex(s => s.slotId === updSlot.slotId ||
+        (s.zoneId === updSlot.zoneId && s.slotRow === updSlot.slotRow && s.slotCol === updSlot.slotCol));
+    if (idx >= 0) _wmSlots[idx] = updSlot; else _wmSlots.push(updSlot);
+
+    // Rebuild all slots for this zone to send full zone
+    const zone = { zoneId: updSlot.zoneId, zoneName: updSlot.zoneName, numRows: updSlot.numRows, numCols: updSlot.numCols };
+    const zoneSlots = [];
+    for (let r = 0; r < zone.numRows; r++) {
+        for (let c = 0; c < zone.numCols; c++) {
+            const found = _wmSlots.find(s => s.zoneId === zone.zoneId && s.slotRow === r && s.slotCol === c);
+            const sId = `${zone.zoneId}-${r+1}-${c+1}`;
+            zoneSlots.push(found || {
+                slotId: sId, zoneId: zone.zoneId, zoneName: zone.zoneName,
+                numRows: zone.numRows, numCols: zone.numCols,
+                slotRow: r, slotCol: c, assignedSKU: '', capacityPCS: 0
+            });
+        }
+    }
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res?.success) {
+                showToast(`✅ บันทึกช่อง ${updSlot.slotId} สำเร็จ`);
+                closeWmSlotModal();
+                _wmRender();
+            } else {
+                showToast('❌ ' + (res?.message || ''), true);
+            }
+        })
+        .withFailureHandler(err => showToast('❌ ' + (err?.message || String(err)), true))
+        .saveWarehouseMapSlots({ zoneId: zone.zoneId, slots: zoneSlots });
+};
+
+window.clearWmSlot = function() {
+    document.getElementById('wm-slot-sku-input').value = '';
+    document.getElementById('wm-slot-capacity').value  = '';
+    document.getElementById('wm-slot-sku-name').textContent = '';
+    document.getElementById('wm-slot-inv-info')?.classList.add('hidden');
+};
+
+// ══════════════════════════════════════════════════════════════
+
 window.confirmSaveInvKPI = function() {
     const isFG       = _saveKpiType === 'fg';
     const finalId    = isFG ? 'kpi-final-fg'    : 'kpi-final-semi';

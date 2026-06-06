@@ -42,6 +42,7 @@ function _handleApiPost(e) {
       'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
       'saveWHActivityRows','getWHActivityLog',
       'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
+      'getWarehouseMapData','saveWarehouseMapSlots',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -91,6 +92,7 @@ const RECHECK_LOG_SHEET  = 'ReCheck_Log';
 const ROOT_CAUSE_SHEET   = 'RootCause_Log';
 const AUDIT_LOG_SHEET   = 'Audit_Log';
 const INVENTORY_KPI_LOG_SHEET = 'Inventory KPI Log';
+const WAREHOUSE_MAP_SHEET     = 'Warehouse_Map';
 const AUDIT_LOG_HEADERS = ['Timestamp','User','Module','Action','Detail','Status'];
 
 // ══════════════════════════════════════════════════════════════════════
@@ -208,6 +210,7 @@ function doGet(e) {
           'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
           'saveWHActivityRows','getWHActivityLog',
           'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
+          'getWarehouseMapData','saveWarehouseMapSlots',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -8498,6 +8501,106 @@ function getInventoryKPILog() {
     const ncols = Math.min(sheet.getLastColumn(), INV_KPI_HEADERS.length);
     const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, ncols).getValues();
     return { success: true, data: rows.reverse() };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// WAREHOUSE MAP — ผังจำลองพื้นที่คลังสินค้า
+// ══════════════════════════════════════════════════════════════
+
+function getWarehouseMapData() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // ── โหลด Slots จาก Warehouse_Map sheet ──────────────────
+    const slots = [];
+    const mapSheet = ss.getSheetByName(WAREHOUSE_MAP_SHEET);
+    if (mapSheet && mapSheet.getLastRow() > 1) {
+      const rows = mapSheet.getRange(2, 1, mapSheet.getLastRow() - 1, 10).getValues();
+      rows.forEach(function(r) {
+        if (!r[0]) return;
+        slots.push({
+          slotId:      String(r[0]),
+          zoneId:      String(r[1]),
+          zoneName:    String(r[2]),
+          numRows:     Number(r[3]) || 1,
+          numCols:     Number(r[4]) || 1,
+          slotRow:     Number(r[5]),
+          slotCol:     Number(r[6]),
+          assignedSKU: String(r[7] || ''),
+          capacityPCS: Number(r[8]) || 0,
+          updatedAt:   r[9] ? String(r[9]) : ''
+        });
+      });
+    }
+
+    // ── โหลด Inventory FG (Col A=SKU, B=PCS, C=Weight) ──────
+    const inventory = {};
+    const invSheet = ss.getSheetByName(INVENTORY_FG_SHEET);
+    if (invSheet && invSheet.getLastRow() > 1) {
+      const invRows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, 3).getValues();
+      invRows.forEach(function(r) {
+        const sku = String(r[0]).trim();
+        if (sku) inventory[sku] = { pcs: Number(r[1]) || 0, weight: Number(r[2]) || 0 };
+      });
+    }
+
+    // ── โหลด Product names ───────────────────────────────────
+    const skuNames = {};
+    const prodSheet = ss.getSheetByName('Product');
+    if (prodSheet && prodSheet.getLastRow() > 1) {
+      const pRows = prodSheet.getRange(2, 1, prodSheet.getLastRow() - 1, 2).getValues();
+      pRows.forEach(function(r) {
+        const sku = String(r[0]).trim();
+        if (sku) skuNames[sku] = String(r[1] || '');
+      });
+    }
+
+    return { success: true, slots: slots, inventory: inventory, skuNames: skuNames };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function saveWarehouseMapSlots(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(WAREHOUSE_MAP_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(WAREHOUSE_MAP_SHEET);
+      sheet.getRange(1, 1, 1, 10).setValues([[
+        'SlotID','ZoneID','ZoneName','NumRows','NumCols',
+        'SlotRow','SlotCol','AssignedSKU','CapacityPCS','UpdatedAt'
+      ]]);
+      sheet.setFrozenRows(1);
+    }
+
+    var zoneId = String(data.zoneId || '');
+    var slots  = data.slots || [];
+    var now    = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+
+    // ลบแถวเก่าของโซนนี้ (ย้อนหลังเพื่อ index ไม่เลื่อน)
+    if (zoneId && sheet.getLastRow() > 1) {
+      var colB = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
+      for (var i = colB.length - 1; i >= 0; i--) {
+        if (String(colB[i][0]) === zoneId) sheet.deleteRow(i + 2);
+      }
+    }
+
+    // เพิ่มแถวใหม่
+    if (slots.length > 0) {
+      var rows = slots.map(function(s) {
+        return [
+          s.slotId, s.zoneId, s.zoneName, s.numRows, s.numCols,
+          s.slotRow, s.slotCol, s.assignedSKU || '', s.capacityPCS || 0, now
+        ];
+      });
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 10).setValues(rows);
+    }
+
+    return { success: true };
   } catch (e) {
     return { success: false, message: e.toString() };
   }
