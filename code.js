@@ -8952,9 +8952,29 @@ function _loadSOData() {
         status:   status,
         shipDate: shipDate instanceof Date
                   ? Utilities.formatDate(shipDate, 'GMT+7', 'dd/MM/yyyy')
-                  : String(shipDate || '')
+                  : String(shipDate || ''),
+        weightPerPcs: 0  // จะ fill จาก Product master ภายหลัง
       });
     });
+
+    // ดึงน้ำหนักต่อเส้นจาก Product master (col A=SKU, D=น้ำหนัก)
+    try {
+      var mainSS   = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var prodSheet = mainSS.getSheetByName('Product');
+      if (prodSheet && prodSheet.getLastRow() > 1) {
+        var prodRows = prodSheet.getRange(2, 1, prodSheet.getLastRow()-1, 4).getValues();
+        var weightMap = {};
+        prodRows.forEach(function(pr) {
+          var pSku = String(pr[0]).trim();
+          if (pSku) weightMap[pSku] = Number(pr[3]) || 0; // col D = น้ำหนัก
+        });
+        Object.values(soMap).forEach(function(so) {
+          so.lines.forEach(function(l) {
+            if (weightMap[l.sku]) l.weightPerPcs = weightMap[l.sku];
+          });
+        });
+      }
+    } catch(we) { Logger.log('weight lookup: ' + we); }
 
     _soCache = soMap;
     _soCacheTime = now;
@@ -9066,7 +9086,8 @@ function validateSOLines(lines) {
         cwQty:       found.cwQty,
         cwRem:       found.cwRem,
         status:      found.status,
-        shipDate:    found.shipDate
+        shipDate:    found.shipDate,
+        weightPerPcs: found.weightPerPcs || 0
       };
     });
     return { success: true, results: results };
