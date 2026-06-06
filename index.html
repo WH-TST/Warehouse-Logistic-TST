@@ -1864,16 +1864,30 @@ thead.sticky {
             <span class="text-purple-400 font-black text-xs">GRADE C</span>
           </div>
 
-          <!-- ══ C5 — คาบ row 2, col 3-5 (ข้ามประตู 2 เพราะเครื่องใหญ่) ══ -->
+          <!-- ══ C5 ฝั่งซ้าย — row 2, col 3 (ข้างP1 / ฝั่งซ้ายประตู2) ══ -->
           <div id="wm-zone-C5" data-machine="C5" onclick="wmOpenMachineDetail('C5')"
             class="wm-machine-card rounded-xl border-2 border-slate-600 bg-slate-800 p-3 flex flex-col cursor-pointer hover:brightness-110 transition-all"
-            style="grid-area:2/3/3/6">
-            <div class="flex items-center justify-between mb-2">
+            style="grid-area:2/3">
+            <div class="flex items-center justify-between mb-1">
               <span class="text-base font-black text-white">C5</span>
               <span id="wm-badge-C5" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-700 text-slate-400">—</span>
             </div>
-            <div id="wm-info-C5" class="flex-1 text-[10px] text-slate-500 grid grid-cols-2 gap-x-4">ยังไม่โหลด</div>
+            <div class="text-[9px] text-slate-600 font-bold mb-1">ฝั่งซ้าย (ประตู 2)</div>
+            <div id="wm-info-C5" class="flex-1 text-[10px] text-slate-500">ยังไม่โหลด</div>
             <div id="wm-plan-C5" class="text-xs font-black text-slate-400 mt-1 text-right"></div>
+          </div>
+
+          <!-- ══ C5 ฝั่งขวา — row 2, col 5 (ข้างP2 / ฝั่งขวาประตู2) ══ -->
+          <div id="wm-zone-C5b" data-machine="C5" onclick="wmOpenMachineDetail('C5')"
+            class="wm-machine-card rounded-xl border-2 border-slate-600 bg-slate-800 p-3 flex flex-col cursor-pointer hover:brightness-110 transition-all"
+            style="grid-area:2/5">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-base font-black text-white">C5</span>
+              <span id="wm-badge-C5b" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-700 text-slate-400">—</span>
+            </div>
+            <div class="text-[9px] text-slate-600 font-bold mb-1">ฝั่งขวา (ประตู 2)</div>
+            <div id="wm-info-C5b" class="flex-1 text-[10px] text-slate-500">ยังไม่โหลด</div>
+            <div id="wm-plan-C5b" class="text-xs font-black text-slate-400 mt-1 text-right"></div>
           </div>
 
           <!-- ══ COL 6: ประตู 3 ══ -->
@@ -29200,7 +29214,9 @@ window.loadProductionPlan = function() {
 };
 
 // ── Fill Floor Plan with Production Data ──────────────────────
-const _wmMachineIds = ['P1','P2','P3','P4','C4','C5']; // เครื่องที่มีข้อมูลใน Production Block
+const _wmMachineIds = ['P1','P2','P3','P4','C4','C5'];
+// C5 มี 2 block (C5 = ซ้าย, C5b = ขวา) แต่ข้อมูลเดียวกัน
+const _wmMirrorIds  = { 'C5b': 'C5' };
 
 function _wmRenderMachines(data) {
     const { machines, dates, today, inventory } = data;
@@ -29277,6 +29293,23 @@ function _wmRenderMachines(data) {
                 + (todayPD > 0 ? `<span class="text-slate-600 text-[9px] ml-2">${todayPD}ชม.</span>` : '')
                 : '';
         }
+    });
+
+    // ── Mirror blocks (C5b คัดลอกข้อมูลจาก C5) ──────────────
+    Object.entries(_wmMirrorIds).forEach(([mirrorId, srcId]) => {
+        const srcZone  = document.getElementById('wm-zone-' + srcId);
+        const srcBadge = document.getElementById('wm-badge-' + srcId);
+        const srcInfo  = document.getElementById('wm-info-' + srcId);
+        const srcPlan  = document.getElementById('wm-plan-' + srcId);
+        const zone     = document.getElementById('wm-zone-' + mirrorId);
+        const badge    = document.getElementById('wm-badge-' + mirrorId);
+        const info     = document.getElementById('wm-info-' + mirrorId);
+        const plan     = document.getElementById('wm-plan-' + mirrorId);
+        if (!zone || !srcZone) return;
+        zone.style.borderColor = srcZone.style.borderColor || '#334155';
+        if (badge && srcBadge) { badge.textContent = srcBadge.textContent; badge.className = srcBadge.className; }
+        if (info  && srcInfo)  info.innerHTML  = srcInfo.innerHTML;
+        if (plan  && srcPlan)  plan.innerHTML  = srcPlan.innerHTML;
     });
 
     // แสดง toast ถ้าไม่พบ machine ใดเลย
