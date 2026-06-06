@@ -43,6 +43,7 @@ function _handleApiPost(e) {
       'saveWHActivityRows','getWHActivityLog',
       'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
       'getWarehouseMapData','saveWarehouseMapSlots',
+      'probeProdBlockSheet','getProductionPlanData',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -92,7 +93,10 @@ const RECHECK_LOG_SHEET  = 'ReCheck_Log';
 const ROOT_CAUSE_SHEET   = 'RootCause_Log';
 const AUDIT_LOG_SHEET   = 'Audit_Log';
 const INVENTORY_KPI_LOG_SHEET = 'Inventory KPI Log';
-const WAREHOUSE_MAP_SHEET     = 'Warehouse_Map';
+const WAREHOUSE_MAP_SHEET          = 'Warehouse_Map';
+const PROD_BLOCK_SPREADSHEET_ID    = '1TXsmafvd-QPhFakvm7yOuyPgAyztaDzzRd1SHUIRWrY';
+const THAI_MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+    'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const AUDIT_LOG_HEADERS = ['Timestamp','User','Module','Action','Detail','Status'];
 
 // ══════════════════════════════════════════════════════════════════════
@@ -211,6 +215,7 @@ function doGet(e) {
           'saveWHActivityRows','getWHActivityLog',
           'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
           'getWarehouseMapData','saveWarehouseMapSlots',
+          'probeProdBlockSheet','getProductionPlanData',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -8601,6 +8606,148 @@ function saveWarehouseMapSlots(data) {
     }
 
     return { success: true };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// =====================================================================
+// PRODUCTION BLOCK — อ่านแผนผลิตจาก Spreadsheet แยก
+// =====================================================================
+
+function probeProdBlockSheet(params) {
+  try {
+    var ss = SpreadsheetApp.openById(PROD_BLOCK_SPREADSHEET_ID);
+    var sheetNames = ss.getSheets().map(function(s) { return s.getName(); });
+    var targetSheet = (params && params.sheetName) ? ss.getSheetByName(params.sheetName) : null;
+    if (!targetSheet) targetSheet = ss.getSheets()[0];
+    var sheetName = targetSheet.getName();
+    var lastRow = targetSheet.getLastRow();
+    var lastCol = targetSheet.getLastColumn();
+    var numRows = Math.min(6, lastRow);
+    var numCols = Math.min(40, lastCol);
+    var sample = targetSheet.getRange(1, 1, numRows, numCols).getValues();
+    var cleanSample = sample.map(function(row) {
+      return row.map(function(cell) {
+        return (cell instanceof Date) ? Utilities.formatDate(cell, 'GMT+7', 'yyyy-MM-dd') : cell;
+      });
+    });
+    var allData = targetSheet.getRange(1, 1, lastRow, Math.min(7, lastCol)).getValues();
+    var patternRows = [];
+    for (var r = 0; r < allData.length; r++) {
+      var rowStr = allData[r].join('|');
+      if (rowStr.indexOf('PD Time') > -1 || rowStr.indexOf('Plan') > -1 ||
+          rowStr.indexOf('Downtime') > -1 || rowStr.indexOf('Setup') > -1) {
+        patternRows.push({ rowIndex: r + 1, preview: allData[r].slice(0, 7) });
+      }
+    }
+    return { success: true, sheetNames: sheetNames, sheetUsed: sheetName,
+             totalRows: lastRow, totalCols: lastCol, sampleRows: cleanSample, patternRows: patternRows };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function getProductionPlanData(params) {
+  try {
+    var month = params.month;
+    var year  = params.year;
+    var beYear2   = String((year + 543) % 100).padStart(2, '0');
+    var sheetName = THAI_MONTHS_TH[month - 1] + ' ' + beYear2;
+    var ss    = SpreadsheetApp.openById(PROD_BLOCK_SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต: ' + sheetName };
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow < 2) return { success: true, machines: [], dates: [], inventory: {} };
+    var data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var headerRow   = data[0];
+    var dateColumns = [];
+    for (var c = 6; c < headerRow.length; c++) {
+      var cell = headerRow[c];
+      var dateStr = '';
+      if (cell instanceof Date) {
+        dateStr = Utilities.formatDate(cell, 'GMT+7', 'yyyy-MM-dd');
+      } else if (typeof cell === 'string' && cell.indexOf('/') > -1) {
+        var parts = cell.split('/');
+        if (parts.length >= 2) {
+          var dd = parseInt(parts[0]);
+          var mm = parseInt(parts[1]);
+          var yy = parts[2] ? parseInt(parts[2]) : year;
+          if (yy > 2400) yy = yy - 543;
+          else if (yy < 100) yy = (yy < 50 ? 2000 : 1900) + yy;
+          dateStr = yy + '-' + String(mm).padStart(2,'0') + '-' + String(dd).padStart(2,'0');
+        }
+      } else if (typeof cell === 'number' && cell > 40000) {
+        var d2 = new Date((cell - 25569) * 86400 * 1000);
+        dateStr = Utilities.formatDate(d2, 'GMT+7', 'yyyy-MM-dd');
+      }
+      if (dateStr) dateColumns.push({ col: c, dateStr: dateStr });
+    }
+    var machines    = [];
+    var currentMach = null;
+    var summaryPhase = 0;
+    for (var r = 1; r < data.length; r++) {
+      var row  = data[r];
+      var colA = String(row[0] || '').trim();
+      var colB = String(row[1] || '').trim();
+      var colF = String(row[5] || '').trim();
+      if (colA && isNaN(parseFloat(colA)) && (!currentMach || colA !== currentMach.machineId)) {
+        summaryPhase = 0;
+        currentMach = { machineId: colA, products: [], pdTime: {}, pmSetup: {}, downtime: {}, planPerDay: {} };
+        machines.push(currentMach);
+      }
+      if (!currentMach) continue;
+      if (colF.indexOf('PD Time') > -1 || colF.indexOf('PD time') > -1) {
+        summaryPhase = 1;
+        dateColumns.forEach(function(dc) { currentMach.pdTime[dc.dateStr] = Number(row[dc.col]) || 0; });
+        continue;
+      }
+      if (summaryPhase >= 1 && (colF.indexOf('PM') > -1 || colF.indexOf('Setup') > -1)) {
+        summaryPhase = 2;
+        dateColumns.forEach(function(dc) { currentMach.pmSetup[dc.dateStr] = Number(row[dc.col]) || 0; });
+        continue;
+      }
+      if (summaryPhase >= 1 && colF.indexOf('Downtime') > -1) {
+        summaryPhase = 3;
+        dateColumns.forEach(function(dc) { currentMach.downtime[dc.dateStr] = Number(row[dc.col]) || 0; });
+        continue;
+      }
+      if (summaryPhase >= 3 || (summaryPhase >= 1 && colF.indexOf('Plan') > -1) ||
+          (colA && !isNaN(parseFloat(colA)) && parseFloat(colA) < 2 && summaryPhase >= 1)) {
+        if (summaryPhase < 4) summaryPhase = 4;
+        dateColumns.forEach(function(dc) {
+          var val = row[dc.col];
+          if (typeof val === 'number' && val > 0) currentMach.planPerDay[dc.dateStr] = val;
+          else if (typeof val === 'string' && val.indexOf('%') === -1 && parseFloat(val) > 0)
+            currentMach.planPerDay[dc.dateStr] = parseFloat(val);
+        });
+        continue;
+      }
+      if (summaryPhase === 0 && colB) {
+        var product = { sku: colB, name: colF, weight: Number(row[3]) || 0, speed: Number(row[4]) || 0, daily: {} };
+        dateColumns.forEach(function(dc) {
+          var val = row[dc.col];
+          if (val && typeof val === 'number' && val > 0) product.daily[dc.dateStr] = val;
+        });
+        currentMach.products.push(product);
+      }
+    }
+    var allSKUs = {};
+    machines.forEach(function(m) { m.products.forEach(function(p) { allSKUs[p.sku] = true; }); });
+    var inventory = {};
+    var mainSS   = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var invSheet = mainSS.getSheetByName(INVENTORY_FG_SHEET);
+    if (invSheet && invSheet.getLastRow() > 1) {
+      var invRows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, 3).getValues();
+      invRows.forEach(function(ir) {
+        var sku = String(ir[0]).trim();
+        if (allSKUs[sku]) inventory[sku] = { pcs: Number(ir[1]) || 0, weight: Number(ir[2]) || 0 };
+      });
+    }
+    var today = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+    return { success: true, sheetName: sheetName, machines: machines,
+             dates: dateColumns.map(function(d) { return d.dateStr; }), today: today, inventory: inventory };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

@@ -1699,6 +1699,18 @@ thead.sticky {
     </div>
   </div>
 
+  <!-- Sub-tabs: FG Storage | Production Plan -->
+  <div class="flex gap-2 p-1 bg-slate-800/60 border border-slate-700 rounded-2xl w-fit">
+    <button onclick="switchWmTab('storage')" id="wm-tab-storage"
+      class="px-6 py-2 rounded-xl font-black text-sm transition-all bg-emerald-600 text-white shadow">
+      <i class="fas fa-boxes mr-2"></i>พื้นที่คลัง FG
+    </button>
+    <button onclick="switchWmTab('production')" id="wm-tab-production"
+      class="px-6 py-2 rounded-xl font-black text-sm transition-all text-slate-400 hover:text-white">
+      <i class="fas fa-industry mr-2"></i>แผนผลิต
+    </button>
+  </div>
+
   <!-- Loading -->
   <div id="wm-loading" class="hidden flex items-center justify-center py-20">
     <div class="text-center">
@@ -1706,6 +1718,54 @@ thead.sticky {
       <p class="text-slate-400 font-bold">กำลังโหลดข้อมูลผังคลัง...</p>
     </div>
   </div>
+
+  <!-- Production Plan Panel -->
+  <div id="wm-prod-panel" class="hidden space-y-4">
+
+    <!-- Controls -->
+    <div class="bg-slate-800/60 border border-slate-700 rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-calendar-alt text-blue-400 text-xl"></i>
+        <select id="wm-prod-month" class="bg-slate-700 border border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-blue-400">
+          <option value="1">มกราคม</option><option value="2">กุมภาพันธ์</option>
+          <option value="3">มีนาคม</option><option value="4">เมษายน</option>
+          <option value="5">พฤษภาคม</option><option value="6">มิถุนายน</option>
+          <option value="7">กรกฎาคม</option><option value="8">สิงหาคม</option>
+          <option value="9">กันยายน</option><option value="10">ตุลาคม</option>
+          <option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+        </select>
+        <select id="wm-prod-year" class="bg-slate-700 border border-slate-500 text-white rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-blue-400"></select>
+      </div>
+      <button onclick="loadProductionPlan()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
+        <i class="fas fa-search"></i> โหลดแผน
+      </button>
+      <button onclick="probeProdSheet()" class="bg-slate-600 hover:bg-slate-500 text-slate-300 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all" title="ตรวจโครงสร้าง Sheet">
+        <i class="fas fa-bug"></i> Probe
+      </button>
+      <div id="wm-prod-sheet-label" class="text-slate-400 text-xs font-bold ml-auto"></div>
+    </div>
+
+    <!-- Probe result -->
+    <div id="wm-probe-result" class="hidden bg-slate-900 border border-slate-600 rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-slate-300 font-black text-sm uppercase tracking-widest">Probe Result</p>
+        <button onclick="document.getElementById('wm-probe-result').classList.add('hidden')" class="text-slate-500 hover:text-white text-xs">ปิด</button>
+      </div>
+      <pre id="wm-probe-text" class="text-xs text-green-400 font-mono overflow-auto max-h-60 whitespace-pre-wrap"></pre>
+    </div>
+
+    <!-- Loading -->
+    <div id="wm-prod-loading" class="hidden flex items-center justify-center py-16">
+      <div class="text-center">
+        <i class="fas fa-spinner fa-spin text-4xl text-blue-400 mb-3 block"></i>
+        <p class="text-slate-400 font-bold">กำลังโหลดแผนผลิต...</p>
+      </div>
+    </div>
+
+    <!-- Machine blocks -->
+    <div id="wm-prod-machines" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+
+  </div><!-- end wm-prod-panel -->
 
   <!-- Main content -->
   <div id="wm-main">
@@ -28884,6 +28944,211 @@ window.closeKpiEmpModal = function() {
 };
 
 // ── Save: ยืนยัน (validate final + empId → send payload เฉพาะ type) ─
+// ══════════════════════════════════════════════════════════════
+// WAREHOUSE MAP — sub-tab switcher
+// ══════════════════════════════════════════════════════════════
+
+window.switchWmTab = function(tab) {
+    const isStorage = tab === 'storage';
+    document.getElementById('wm-main')?.classList.toggle('hidden', !isStorage);
+    document.getElementById('wm-prod-panel')?.classList.toggle('hidden', isStorage);
+    const tStorage = document.getElementById('wm-tab-storage');
+    const tProd    = document.getElementById('wm-tab-production');
+    if (tStorage) {
+        tStorage.classList.toggle('bg-emerald-600', isStorage);
+        tStorage.classList.toggle('text-white', isStorage);
+        tStorage.classList.toggle('shadow', isStorage);
+        tStorage.classList.toggle('text-slate-400', !isStorage);
+    }
+    if (tProd) {
+        tProd.classList.toggle('bg-emerald-600', !isStorage);
+        tProd.classList.toggle('text-white', !isStorage);
+        tProd.classList.toggle('shadow', !isStorage);
+        tProd.classList.toggle('text-slate-400', isStorage);
+    }
+    if (!isStorage && !_wmProdLoaded) _wmInitProdControls();
+};
+
+// ── Production Plan init controls ────────────────────────────
+let _wmProdLoaded   = false;
+let _wmProdData     = null;
+
+function _wmInitProdControls() {
+    const today   = new Date();
+    const yearEl  = document.getElementById('wm-prod-year');
+    const monthEl = document.getElementById('wm-prod-month');
+    if (yearEl && !yearEl.options.length) {
+        const baseYear = today.getFullYear();
+        for (let y = baseYear - 1; y <= baseYear + 1; y++) {
+            const opt = document.createElement('option');
+            opt.value = y; opt.textContent = y;
+            if (y === baseYear) opt.selected = true;
+            yearEl.appendChild(opt);
+        }
+    }
+    if (monthEl) monthEl.value = today.getMonth() + 1;
+}
+
+// ── Probe: ทดสอบโครงสร้าง Sheet ──────────────────────────────
+window.probeProdSheet = function() {
+    const box = document.getElementById('wm-probe-result');
+    const pre = document.getElementById('wm-probe-text');
+    if (box) box.classList.remove('hidden');
+    if (pre) pre.textContent = 'กำลังอ่าน...';
+    google.script.run
+        .withSuccessHandler(res => {
+            if (pre) pre.textContent = JSON.stringify(res, null, 2);
+        })
+        .withFailureHandler(err => {
+            if (pre) pre.textContent = 'Error: ' + (err?.message || String(err));
+        })
+        .probeProdBlockSheet({});
+};
+
+// ── Load Production Plan ──────────────────────────────────────
+window.loadProductionPlan = function() {
+    const month = parseInt(document.getElementById('wm-prod-month')?.value) || new Date().getMonth() + 1;
+    const year  = parseInt(document.getElementById('wm-prod-year')?.value)  || new Date().getFullYear();
+    const loadEl = document.getElementById('wm-prod-loading');
+    const machEl = document.getElementById('wm-prod-machines');
+    if (loadEl) loadEl.classList.remove('hidden');
+    if (machEl) machEl.innerHTML = '';
+    google.script.run
+        .withSuccessHandler(res => {
+            if (loadEl) loadEl.classList.add('hidden');
+            if (!res || !res.success) { showToast('❌ ' + (res?.message || 'โหลดไม่สำเร็จ'), true); return; }
+            _wmProdData   = res;
+            _wmProdLoaded = true;
+            const lbl = document.getElementById('wm-prod-sheet-label');
+            if (lbl) lbl.textContent = 'ชีต: ' + res.sheetName;
+            _wmRenderMachines(res);
+        })
+        .withFailureHandler(err => {
+            if (loadEl) loadEl.classList.add('hidden');
+            showToast('❌ ' + (err?.message || String(err)), true);
+        })
+        .getProductionPlanData({ month, year });
+};
+
+// ── Render Machine Blocks ─────────────────────────────────────
+function _wmRenderMachines(data) {
+    const container = document.getElementById('wm-prod-machines');
+    if (!container) return;
+    const { machines, dates, today, inventory } = data;
+
+    if (!machines || machines.length === 0) {
+        container.innerHTML = `<div class="col-span-full text-center py-20">
+          <i class="fas fa-industry text-5xl text-slate-600 mb-4 block"></i>
+          <p class="text-slate-400 font-bold text-lg">ไม่พบข้อมูลแผนผลิต</p>
+        </div>`;
+        return;
+    }
+
+    // หา next 5 working dates จาก today
+    const todayIdx = dates.indexOf(today);
+    const upcoming = todayIdx >= 0
+        ? dates.slice(todayIdx, todayIdx + 6)
+        : dates.slice(0, 6);
+
+    const fmtDate = d => { const [,m,dd] = d.split('-'); return dd + '/' + m; };
+    const fmtN    = v => Number(v).toLocaleString('th-TH');
+
+    container.innerHTML = machines.map(mach => {
+        // สินค้าที่วางแผนผลิตใน upcoming dates
+        const activeProducts = mach.products.filter(p =>
+            upcoming.some(d => p.daily[d] > 0)
+        );
+        // สินค้าที่ผลิตวันนี้
+        const todayProducts = mach.products.filter(p => today && p.daily[today] > 0);
+
+        // PD Time วันนี้ + Plan
+        const todayPD   = mach.pdTime[today]     || 0;
+        const todayPlan = mach.planPerDay[today]  || 0;
+        const todayPM   = mach.pmSetup[today]     || 0;
+
+        // สี header ตาม status
+        const isRunning = todayProducts.length > 0 || todayPlan > 0;
+        const headerBg  = isRunning ? 'from-emerald-800 to-emerald-700' : 'from-slate-700 to-slate-600';
+        const statusTxt = isRunning ? 'กำลังผลิต' : 'ไม่มีแผนวันนี้';
+        const statusCol = isRunning ? 'text-emerald-300' : 'text-slate-400';
+
+        // Mini timeline (upcoming 5 days)
+        const timelineCells = upcoming.slice(0, 6).map(d => {
+            const planQty = mach.planPerDay[d] || 0;
+            const isToday = d === today;
+            const hasProd = mach.products.some(p => p.daily[d] > 0);
+            const bg = isToday ? 'bg-blue-600' : hasProd ? 'bg-emerald-700' : 'bg-slate-700';
+            const border = isToday ? 'border-blue-400' : 'border-transparent';
+            return `<div class="flex flex-col items-center gap-0.5 ${bg} border ${border} rounded-lg px-1.5 py-1.5 min-w-[38px]">
+              <span class="text-[9px] font-bold text-slate-300">${fmtDate(d)}</span>
+              <span class="text-[10px] font-black text-white">${planQty > 0 ? fmtN(planQty) : '—'}</span>
+            </div>`;
+        }).join('');
+
+        // Product rows (สินค้าที่ active ใน upcoming)
+        const productRows = (activeProducts.length > 0 ? activeProducts : mach.products.slice(0, 5)).map(p => {
+            const inv   = inventory[p.sku] || {};
+            const invPCS = inv.pcs || 0;
+            const todayQty = p.daily[today] || 0;
+            const sku7 = p.sku.length > 14 ? p.sku.substring(0, 14) + '…' : p.sku;
+            const name8 = (p.name || '').length > 20 ? p.name.substring(0, 20) + '…' : (p.name || '');
+            const hasToday = todayQty > 0;
+            return `<div class="flex items-center gap-2 py-1.5 border-b border-slate-700/50 last:border-0">
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-black text-white truncate">${sku7}</p>
+                <p class="text-[10px] text-slate-400 truncate">${name8}</p>
+              </div>
+              ${hasToday ? `<span class="text-[11px] font-black text-emerald-300 flex-shrink-0">+${fmtN(todayQty)}</span>` : ''}
+              <div class="text-right flex-shrink-0">
+                <p class="text-[10px] text-slate-400">คลัง</p>
+                <p class="text-xs font-black ${invPCS > 0 ? 'text-sky-300' : 'text-slate-500'}">${fmtN(invPCS)}</p>
+              </div>
+            </div>`;
+        }).join('');
+
+        const moreCount = mach.products.length - activeProducts.length;
+
+        return `<div class="bg-slate-800/60 border border-slate-700 rounded-2xl overflow-hidden">
+          <!-- Header -->
+          <div class="bg-gradient-to-r ${headerBg} px-4 py-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white font-black text-xl flex-shrink-0">
+                ${mach.machineId}
+              </div>
+              <div>
+                <p class="text-white font-black text-base">เครื่อง ${mach.machineId}</p>
+                <p class="${statusCol} text-xs font-bold">${statusTxt}</p>
+              </div>
+            </div>
+            <div class="text-right flex-shrink-0">
+              ${todayPlan > 0 ? `<p class="text-white font-black text-lg">${fmtN(todayPlan)}</p>
+              <p class="text-slate-300 text-[10px]">แผน/วัน</p>` : ''}
+            </div>
+          </div>
+
+          <!-- Mini timeline -->
+          <div class="px-4 py-3 border-b border-slate-700">
+            <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">แผน 6 วัน (PCS/วัน)</p>
+            <div class="flex gap-1.5 flex-wrap">${timelineCells}</div>
+          </div>
+
+          <!-- Products -->
+          <div class="px-4 py-2">
+            <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">สินค้าที่ผลิต</p>
+            ${productRows || '<p class="text-slate-500 text-xs py-2">ไม่มีแผนในช่วงนี้</p>'}
+            ${moreCount > 0 ? `<p class="text-slate-500 text-[10px] mt-1">+ ${moreCount} รายการอื่นๆ</p>` : ''}
+          </div>
+
+          <!-- Footer: PD Time -->
+          ${(todayPD > 0 || todayPM > 0) ? `
+          <div class="px-4 py-2 bg-slate-900/40 flex gap-4 text-xs text-slate-400 border-t border-slate-700">
+            ${todayPD > 0 ? `<span><i class="fas fa-clock mr-1 text-emerald-500/60"></i>PD ${todayPD} ชม.</span>` : ''}
+            ${todayPM > 0 ? `<span><i class="fas fa-tools mr-1 text-amber-500/60"></i>PM/Setup ${todayPM} ชม.</span>` : ''}
+          </div>` : ''}
+        </div>`;
+    }).join('');
+}
+
 // ══════════════════════════════════════════════════════════════
 // WAREHOUSE MAP — ผังจำลองพื้นที่วางภายในคลังสินค้า
 // ══════════════════════════════════════════════════════════════
