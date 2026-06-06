@@ -44,6 +44,7 @@ function _handleApiPost(e) {
       'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
       'getWarehouseMapData','saveWarehouseMapSlots',
       'probeProdBlockSheet','getProductionPlanData',
+      'saveWarehouseMove','getWarehouseMoveLog',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -94,6 +95,7 @@ const ROOT_CAUSE_SHEET   = 'RootCause_Log';
 const AUDIT_LOG_SHEET   = 'Audit_Log';
 const INVENTORY_KPI_LOG_SHEET = 'Inventory KPI Log';
 const WAREHOUSE_MAP_SHEET          = 'Warehouse_Map';
+const WAREHOUSE_MOVE_SHEET         = 'Warehouse_Move_Log';
 const PROD_BLOCK_SPREADSHEET_ID    = '1TXsmafvd-QPhFakvm7yOuyPgAyztaDzzRd1SHUIRWrY';
 const THAI_MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
     'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -216,6 +218,7 @@ function doGet(e) {
           'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPILog','getInventoryKPIByDate',
           'getWarehouseMapData','saveWarehouseMapSlots',
           'probeProdBlockSheet','getProductionPlanData',
+          'saveWarehouseMove','getWarehouseMoveLog',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -8748,6 +8751,107 @@ function getProductionPlanData(params) {
     var today = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
     return { success: true, sheetName: sheetName, machines: machines,
              dates: dateColumns.map(function(d) { return d.dateStr; }), today: today, inventory: inventory };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// =====================================================================
+// WAREHOUSE MOVE LOG — บันทึกการย้ายสินค้าระหว่างพื้นที่
+// =====================================================================
+
+function _getOrCreateMoveSheet(ss) {
+  var sheet = ss.getSheetByName(WAREHOUSE_MOVE_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(WAREHOUSE_MOVE_SHEET);
+    var headers = ['MoveID','Timestamp','Date','FromZone','ToZone','SKU','SKUName','QtyMoved','RecordedBy','Note'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, headers.length)
+         .setBackground('#1e293b').setFontColor('#94a3b8').setFontWeight('bold');
+  }
+  return sheet;
+}
+
+function saveWarehouseMove(data) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = _getOrCreateMoveSheet(ss);
+    var now   = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    var date  = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+    var moveId = 'MV' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+
+    var row = [
+      moveId,
+      now,
+      date,
+      String(data.fromZone  || ''),
+      String(data.toZone    || ''),
+      String(data.sku       || ''),
+      String(data.skuName   || ''),
+      Number(data.qty       || 0),
+      String(data.recordedBy|| ''),
+      String(data.note      || '')
+    ];
+    sheet.appendRow(row);
+
+    saveAuditLog('Warehouse Move', 'MOVE',
+      data.fromZone + ' → ' + data.toZone + ' | ' + data.sku + ' | ' + data.qty + ' PCS | ' + data.recordedBy,
+      'success');
+
+    return { success: true, moveId: moveId };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function getWarehouseMoveLog() {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(WAREHOUSE_MOVE_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, moves: [], summary: {} };
+
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
+
+    // สร้าง summary: toZone → sku → netQty (inbound - outbound)
+    var summary = {};  // { 'RE1': { '0CGI30.1000': { qty, skuName, fromZones } } }
+
+    rows.forEach(function(r) {
+      var fromZone = String(r[3] || '').trim();
+      var toZone   = String(r[4] || '').trim();
+      var sku      = String(r[5] || '').trim();
+      var skuName  = String(r[6] || '').trim();
+      var qty      = Number(r[7] || 0);
+      if (!sku || qty <= 0) return;
+
+      // Inbound ไป toZone
+      if (!summary[toZone]) summary[toZone] = {};
+      if (!summary[toZone][sku]) summary[toZone][sku] = { qty: 0, skuName: skuName, fromZones: {} };
+      summary[toZone][sku].qty += qty;
+      summary[toZone][sku].fromZones[fromZone] = (summary[toZone][sku].fromZones[fromZone] || 0) + qty;
+
+      // Outbound จาก fromZone (ลดสต็อกที่แสดงใน production zone)
+      if (!summary[fromZone]) summary[fromZone] = {};
+      if (!summary[fromZone][sku]) summary[fromZone][sku] = { qty: 0, skuName: skuName, fromZones: {} };
+      summary[fromZone][sku].qty -= qty; // negative = ส่งออก
+    });
+
+    var moves = rows.map(function(r) {
+      return {
+        moveId:     String(r[0] || ''),
+        timestamp:  r[1] instanceof Date ? Utilities.formatDate(r[1], 'GMT+7', 'dd/MM/yyyy HH:mm') : String(r[1] || ''),
+        date:       r[2] instanceof Date ? Utilities.formatDate(r[2], 'GMT+7', 'yyyy-MM-dd')        : String(r[2] || ''),
+        fromZone:   String(r[3] || ''),
+        toZone:     String(r[4] || ''),
+        sku:        String(r[5] || ''),
+        skuName:    String(r[6] || ''),
+        qty:        Number(r[7] || 0),
+        recordedBy: String(r[8] || ''),
+        note:       String(r[9] || '')
+      };
+    }).reverse(); // ล่าสุดก่อน
+
+    return { success: true, moves: moves, summary: summary };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

@@ -1742,6 +1742,9 @@ thead.sticky {
       <button onclick="probeProdSheet()" class="bg-slate-600 hover:bg-slate-500 text-slate-300 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all" title="ตรวจโครงสร้าง Sheet">
         <i class="fas fa-bug"></i> Probe
       </button>
+      <button onclick="openWmMoveModal()" class="bg-amber-600 hover:bg-amber-500 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow">
+        <i class="fas fa-exchange-alt"></i> ย้ายสินค้า
+      </button>
       <div id="wm-prod-sheet-label" class="text-slate-400 text-xs font-bold ml-auto"></div>
     </div>
 
@@ -1794,8 +1797,16 @@ thead.sticky {
             <div id="wm-info-C4" class="flex-1 text-[9px] text-slate-500 overflow-hidden">ยังไม่โหลด</div>
             <div id="wm-plan-C4" class="text-[9px] font-black text-slate-400 text-right mt-1"></div>
           </div>
-          <div class="rounded-lg border-2 border-dashed border-slate-600 bg-slate-800/30 flex flex-col items-center justify-center gap-0.5" style="grid-area:3/1">
-            <i class="fas fa-archive text-slate-600 text-sm"></i><span class="text-slate-600 font-black text-[10px]">RE4</span><span class="text-slate-700 text-[9px]">สำรอง</span>
+          <div id="wm-zone-RE4" onclick="wmOpenMachineDetail('RE4')"
+            class="rounded-lg border-2 border-dashed border-slate-600 bg-slate-800/30 p-2 flex flex-col cursor-pointer hover:brightness-110 transition-all" style="grid-area:3/1">
+            <div class="flex items-center justify-between mb-0.5">
+              <span class="text-slate-500 font-black text-[10px]">RE4</span>
+              <span id="wm-badge-RE4" class="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-600">สำรอง</span>
+            </div>
+            <div id="wm-info-RE4" class="flex-1 text-[9px] overflow-hidden flex items-center justify-center">
+              <i class="fas fa-archive text-slate-700 text-sm"></i>
+            </div>
+            <div id="wm-plan-RE4" class="text-[8px] text-slate-600 text-right"></div>
           </div>
           <div style="grid-area:1/2/4/3;position:relative;">
             <div style="position:absolute;left:18px;top:0;bottom:0;border-left:2px dashed #475569;"></div>
@@ -1839,10 +1850,16 @@ thead.sticky {
             <div id="wm-info-P3" class="flex-1 text-[9px] text-slate-500 overflow-hidden">ยังไม่โหลด</div>
             <div id="wm-plan-P3" class="text-[9px] font-black text-slate-400 text-right mt-1"></div>
           </div>
-          <div style="grid-area:2/7;display:flex;align-items:center;justify-content:center;">
-            <div class="rounded-lg border-2 border-dashed border-slate-600 bg-slate-800/30 flex flex-col items-center justify-center gap-0.5" style="width:82%;height:82%;">
-              <i class="fas fa-archive text-slate-600 text-sm"></i><span class="text-slate-600 font-black text-[10px]">RE1</span><span class="text-slate-700 text-[9px]">สำรอง</span>
+          <div id="wm-zone-RE1" onclick="wmOpenMachineDetail('RE1')"
+            class="rounded-lg border-2 border-dashed border-slate-600 bg-slate-800/30 p-2 flex flex-col cursor-pointer hover:brightness-110 transition-all" style="grid-area:2/7">
+            <div class="flex items-center justify-between mb-0.5">
+              <span class="text-slate-500 font-black text-[10px]">RE1</span>
+              <span id="wm-badge-RE1" class="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-600">สำรอง</span>
             </div>
+            <div id="wm-info-RE1" class="flex-1 text-[9px] overflow-hidden flex items-center justify-center">
+              <i class="fas fa-archive text-slate-700 text-sm"></i>
+            </div>
+            <div id="wm-plan-RE1" class="text-[8px] text-slate-600 text-right"></div>
           </div>
           <div style="grid-area:3/7;"></div>
           <div style="grid-area:1/8/4/9;position:relative;">
@@ -1852,6 +1869,15 @@ thead.sticky {
           </div>
         </div><!-- end grid floorplan -->
       </div><!-- end floor plan box -->
+
+      <!-- Move Log: รายการย้ายสินค้าล่าสุด -->
+      <div id="wm-move-log" class="hidden bg-slate-800/60 border border-slate-700 rounded-2xl p-4 mt-2">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-slate-300 font-black text-sm flex items-center gap-2"><i class="fas fa-history text-amber-400"></i>ประวัติย้ายสินค้าล่าสุด</p>
+          <button onclick="document.getElementById('wm-move-log').classList.add('hidden')" class="text-slate-500 hover:text-white text-sm"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="wm-move-log-rows" class="space-y-1 max-h-48 overflow-y-auto text-[10px]"></div>
+      </div>
 
       <!-- Machine Detail Panel (แสดงเมื่อคลิก) -->
       <div id="wm-machine-detail" class="hidden bg-slate-800/80 border border-slate-600 rounded-2xl p-5 mt-4">
@@ -1881,7 +1907,94 @@ thead.sticky {
 
   </div><!-- end wm-prod-panel -->
 
-  <!-- Main content -->
+<!-- MODAL: ย้ายสินค้าระหว่างพื้นที่ (global — outside view) -->
+<div id="wm-move-modal" class="fixed inset-0 bg-black/80 hidden z-[95] flex items-center justify-center px-4 backdrop-blur-sm">
+  <div class="bg-slate-800 w-full max-w-sm rounded-2xl shadow-2xl border border-amber-600/50">
+    <div class="bg-gradient-to-r from-amber-800 to-amber-600 px-5 py-4 flex items-center gap-3 rounded-t-2xl">
+      <i class="fas fa-exchange-alt text-white text-xl"></i>
+      <h3 class="text-white font-black text-base flex-1">ย้ายสินค้าระหว่างพื้นที่</h3>
+      <button onclick="closeWmMoveModal()" class="text-white/60 hover:text-white text-xl"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+
+      <!-- From / To -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">จาก (ต้นทาง)</label>
+          <select id="wm-move-from" onchange="wmMoveFromChange()"
+            class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2.5 font-bold text-sm focus:outline-none focus:border-amber-400">
+            <option value="">-- เลือก --</option>
+            <option value="P1">P1</option>
+            <option value="P2">P2</option>
+            <option value="P3">P3</option>
+            <option value="P4">P4</option>
+            <option value="C4">C4</option>
+            <option value="C5">C5</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">ไปยัง (ปลายทาง)</label>
+          <select id="wm-move-to"
+            class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-3 py-2.5 font-bold text-sm focus:outline-none focus:border-amber-400">
+            <option value="">-- เลือก --</option>
+            <option value="RE1">RE1 — พื้นที่สำรอง 1</option>
+            <option value="RE4">RE4 — พื้นที่สำรอง 4</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- SKU -->
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">SKU สินค้า</label>
+        <input type="text" id="wm-move-sku" list="wm-move-sku-list" placeholder="พิมพ์หรือเลือก SKU..."
+          oninput="wmMoveSkuChange(this.value)"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-2.5 font-bold text-sm focus:outline-none focus:border-amber-400">
+        <datalist id="wm-move-sku-list"></datalist>
+        <div class="flex justify-between mt-1 text-[10px]">
+          <span id="wm-move-sku-name" class="text-slate-400"></span>
+          <span id="wm-move-inv-avail" class="text-sky-300 font-black"></span>
+        </div>
+      </div>
+
+      <!-- Qty -->
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">จำนวน (PCS)</label>
+        <input type="number" id="wm-move-qty" min="1" placeholder="0"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-2.5 font-black text-xl text-center focus:outline-none focus:border-amber-400">
+      </div>
+
+      <!-- รหัสพนักงาน -->
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">รหัสพนักงาน</label>
+        <input type="text" id="wm-move-emp" placeholder="รหัสพนักงาน"
+          class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-2.5 font-bold text-base focus:outline-none focus:border-amber-400">
+      </div>
+
+      <!-- หมายเหตุ (optional) -->
+      <div>
+        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">หมายเหตุ (ไม่บังคับ)</label>
+        <input type="text" id="wm-move-note" placeholder="เหตุผลที่ย้าย..."
+          class="w-full bg-slate-700 border border-slate-600 text-white rounded-xl px-4 py-2 font-bold text-sm focus:outline-none focus:border-slate-400">
+      </div>
+
+      <!-- Error -->
+      <p id="wm-move-error" class="hidden text-red-400 text-xs font-bold"><i class="fas fa-exclamation-circle mr-1"></i><span id="wm-move-error-txt"></span></p>
+
+      <!-- Buttons -->
+      <div class="flex gap-3">
+        <button onclick="confirmWmMove()" id="btn-confirm-wm-move"
+          class="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 shadow">
+          <i class="fas fa-exchange-alt"></i> ยืนยันย้ายสินค้า
+        </button>
+        <button onclick="closeWmMoveModal()" class="bg-slate-600 hover:bg-slate-500 text-white px-4 rounded-xl font-bold text-sm transition-all">
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <!-- Main content (wm-main — inside view-warehouse-map-content) -->
   <div id="wm-main">
 
     <!-- Stats strip -->
@@ -29135,7 +29248,11 @@ window.loadProductionPlan = function() {
             _wmProdLoaded = true;
             const lbl = document.getElementById('wm-prod-sheet-label');
             if (lbl) lbl.textContent = 'ชีต: ' + res.sheetName;
-            _wmRenderMachines(res);
+            // โหลด move log แล้ว render พร้อมกัน
+            _wmLoadMoveLog(() => {
+                res.moveSummary = _wmMoveSummary;
+                _wmRenderMachines(res);
+            });
         })
         .withFailureHandler(err => {
             if (loadEl) loadEl.classList.add('hidden');
@@ -29144,23 +29261,17 @@ window.loadProductionPlan = function() {
         .getProductionPlanData({ month, year });
 };
 
-// ── Fill Floor Plan with Production Data ──────────────────────
+// ── Fill Floor Plan — Inventory Primary, Production Secondary ──
 const _wmMachineIds = ['P1','P2','P3','P4','C4','C5'];
-// C5 มี 2 block (C5 = ซ้าย, C5b = ขวา) แต่ข้อมูลเดียวกัน
 const _wmMirrorIds  = { 'C5b': 'C5' };
 
 function _wmRenderMachines(data) {
     const { machines, dates, today, inventory } = data;
-    const todayIdx = dates.indexOf(today);
-    const upcoming = todayIdx >= 0 ? dates.slice(todayIdx, todayIdx + 7) : dates.slice(0, 7);
-    const fmtDate  = d => { const [,m,dd] = d.split('-'); return dd + '/' + m; };
-    const fmtN     = v => Number(v).toLocaleString('th-TH');
+    const fmtN = v => Number(v).toLocaleString('th-TH');
 
-    // สร้าง map machineId → data
     const machMap = {};
     (machines || []).forEach(m => { machMap[m.machineId] = m; });
 
-    // ── ใส่ข้อมูลแต่ละเครื่องใน floor plan ──
     _wmMachineIds.forEach(mid => {
         const zone  = document.getElementById('wm-zone-' + mid);
         const badge = document.getElementById('wm-badge-' + mid);
@@ -29170,59 +29281,83 @@ function _wmRenderMachines(data) {
 
         const mach = machMap[mid];
         if (!mach) {
-            // ไม่พบข้อมูลเครื่องนี้ใน sheet
             zone.style.borderColor = '#334155';
-            if (badge) { badge.textContent = 'N/A'; badge.className = 'text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-700 text-slate-500'; }
-            if (info)  info.innerHTML = '<span class="text-slate-600">ไม่พบข้อมูล</span>';
+            if (badge) { badge.textContent = 'N/A'; badge.className = 'text-[9px] font-black px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-500'; }
+            if (info)  info.innerHTML = '<span class="text-slate-600 text-[9px]">ไม่พบข้อมูล</span>';
             if (plan)  plan.textContent = '';
             return;
         }
 
-        const todayPlan    = mach.planPerDay[today] || 0;
-        const todayPD      = mach.pdTime[today]     || 0;
-        const todayProducts = mach.products.filter(p => p.daily[today] > 0);
-        const isRunning    = todayProducts.length > 0 || todayPlan > 0;
+        // ── สินค้าคงคลัง (PRIMARY) ─────────────────────────────
+        // รวมทุก SKU ของเครื่องนี้ที่มีสต็อก > 0
+        const invItems = mach.products
+            .map(p => ({ sku: p.sku, name: p.name, pcs: (inventory[p.sku] || {}).pcs || 0, todayQty: p.daily[today] || 0 }))
+            .filter(p => p.pcs > 0)
+            .sort((a, b) => b.pcs - a.pcs);
 
-        // สีขอบ + badge
-        const borderCol = isRunning ? '#10b981' : '#475569';
-        const badgeCls  = isRunning
-            ? 'text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700'
-            : 'text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-700 text-slate-400';
+        const totalInvPCS = invItems.reduce((s, p) => s + p.pcs, 0);
+        const todayPlan   = mach.planPerDay[today] || 0;
+        const todayPD     = mach.pdTime[today]     || 0;
+        const isRunning   = mach.products.some(p => p.daily[today] > 0) || todayPlan > 0;
+        const hasInv      = totalInvPCS > 0;
+
+        // ── Border & Badge ──────────────────────────────────────
+        let borderCol, badgeTxt, badgeCls;
+        if (isRunning && hasInv) {
+            borderCol = '#10b981'; // เขียว — ผลิต + มีสต็อก
+            badgeTxt  = 'ผลิต';
+            badgeCls  = 'text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700';
+        } else if (isRunning) {
+            borderCol = '#059669'; // เขียวเข้ม — ผลิต ยังไม่มีสต็อก
+            badgeTxt  = 'ผลิต';
+            badgeCls  = 'text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700';
+        } else if (hasInv) {
+            borderCol = '#0ea5e9'; // ฟ้า — มีสต็อกแต่ไม่ผลิตวันนี้
+            badgeTxt  = fmtN(invItems.length) + ' SKU';
+            badgeCls  = 'text-[9px] font-black px-1.5 py-0.5 rounded-full bg-sky-900/60 text-sky-300 border border-sky-700';
+        } else {
+            borderCol = '#334155'; // เทา — ว่างเปล่า
+            badgeTxt  = 'ว่าง';
+            badgeCls  = 'text-[9px] font-black px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-500';
+        }
         zone.style.borderColor = borderCol;
-        if (badge) { badge.textContent = isRunning ? 'ผลิต' : 'ว่าง'; badge.className = badgeCls; }
+        if (badge) { badge.textContent = badgeTxt; badge.className = badgeCls; }
 
-        // info: แสดงสินค้าวันนี้ (สูงสุด 3 รายการ)
+        // ── Info: สินค้าคงคลัง (หลัก) + ผลิตวันนี้ (รอง) ───────
         if (info) {
-            if (todayProducts.length === 0) {
-                const next = mach.products.find(p => upcoming.some(d => p.daily[d] > 0));
-                info.innerHTML = next
-                    ? `<span class="text-slate-500">ต่อไป: <span class="text-slate-400">${next.sku}</span></span>`
-                    : '<span class="text-slate-600 italic">ไม่มีแผน</span>';
+            const maxRows = mid === 'C5' ? 6 : 4;
+            if (invItems.length === 0 && !isRunning) {
+                info.innerHTML = '<span class="text-slate-600 italic text-[9px]">ไม่มีสต็อก</span>';
             } else {
-                const isCols = mid === 'C5'; // C5 ใช้ 2 col layout
-                info.className = isCols
-                    ? 'flex-1 text-[10px] text-slate-400 grid grid-cols-2 gap-x-3 gap-y-0.5 content-start'
-                    : 'flex-1 text-[10px] text-slate-400 space-y-0.5';
-                info.innerHTML = todayProducts.slice(0, isCols ? 8 : 4).map(p => {
-                    const qty = p.daily[today] || 0;
-                    const inv = (inventory[p.sku] || {}).pcs || 0;
-                    return `<div class="leading-tight">
-                      <span class="font-black text-white">${p.sku}</span>
-                      <span class="text-emerald-400 ml-1">+${fmtN(qty)}</span>
-                      <span class="text-sky-500/70 ml-1">[${fmtN(inv)}]</span>
+                const rows = invItems.slice(0, maxRows).map(p => {
+                    const prodBadge = p.todayQty > 0
+                        ? `<span class="text-emerald-400 text-[8px] ml-1">+${fmtN(p.todayQty)}</span>`
+                        : '';
+                    return `<div class="flex items-baseline justify-between gap-1 leading-tight">
+                      <span class="text-white font-black text-[9px] truncate flex-1">${p.sku}</span>
+                      <span class="text-sky-300 font-black text-[9px] flex-shrink-0">${fmtN(p.pcs)}</span>${prodBadge}
                     </div>`;
-                }).join('') +
-                (todayProducts.length > (isCols ? 8 : 4)
-                    ? `<div class="text-slate-600 col-span-2">+${todayProducts.length - (isCols ? 8 : 4)} อื่นๆ</div>` : '');
+                }).join('');
+                const more = invItems.length > maxRows
+                    ? `<div class="text-slate-600 text-[8px]">+${invItems.length - maxRows} SKU อื่นๆ</div>` : '';
+                // SKU ที่ผลิตวันนี้แต่ยังไม่มีสต็อก
+                const newProd = mach.products
+                    .filter(p => p.daily[today] > 0 && !invItems.find(i => i.sku === p.sku))
+                    .slice(0, 2)
+                    .map(p => `<div class="flex items-baseline justify-between gap-1 leading-tight opacity-60">
+                      <span class="text-emerald-300 font-black text-[9px] truncate flex-1">${p.sku}</span>
+                      <span class="text-emerald-400 text-[8px] flex-shrink-0">+${fmtN(p.daily[today])}</span>
+                    </div>`).join('');
+                info.innerHTML = rows + more + newProd;
             }
         }
 
-        // plan: PD Time + plan qty
+        // ── Plan footer: รวม PCS สต็อก + ผลิตวันนี้ ────────────
         if (plan) {
-            plan.innerHTML = todayPlan > 0
-                ? `<span class="text-emerald-400 font-black">${fmtN(todayPlan)}</span><span class="text-slate-500 text-[9px] ml-1">PCS/วัน</span>`
-                + (todayPD > 0 ? `<span class="text-slate-600 text-[9px] ml-2">${todayPD}ชม.</span>` : '')
-                : '';
+            const parts = [];
+            if (hasInv)      parts.push(`<span class="text-sky-300 font-black">${fmtN(totalInvPCS)}</span><span class="text-slate-600 text-[8px] ml-0.5">PCS คลัง</span>`);
+            if (todayPlan>0) parts.push(`<span class="text-emerald-400 font-black ml-2">${fmtN(todayPlan)}</span><span class="text-slate-600 text-[8px] ml-0.5">ผลิต/วัน</span>`);
+            plan.innerHTML = parts.join('');
         }
     });
 
@@ -29243,10 +29378,186 @@ function _wmRenderMachines(data) {
         if (plan  && srcPlan)  plan.innerHTML  = srcPlan.innerHTML;
     });
 
-    // แสดง toast ถ้าไม่พบ machine ใดเลย
+    // ── RE Zones: แสดงข้อมูลจาก move log ──────────────────────
+    if (data.moveSummary) _wmRenderREZones(data.moveSummary, fmtN);
+
     if (Object.keys(machMap).length === 0) {
         showToast('⚠️ ไม่พบข้อมูลเครื่องจาก Sheet — ลอง Probe เพื่อตรวจสอบ', true);
     }
+}
+
+function _wmRenderREZones(moveSummary, fmtN) {
+    ['RE1','RE4'].forEach(zoneId => {
+        const zone  = document.getElementById('wm-zone-' + zoneId);
+        const badge = document.getElementById('wm-badge-' + zoneId);
+        const info  = document.getElementById('wm-info-' + zoneId);
+        const plan  = document.getElementById('wm-plan-' + zoneId);
+        if (!zone) return;
+
+        const zoneData = moveSummary[zoneId] || {};
+        const items = Object.entries(zoneData)
+            .map(([sku, d]) => ({ sku, qty: d.qty, skuName: d.skuName || '' }))
+            .filter(x => x.qty > 0)
+            .sort((a, b) => b.qty - a.qty);
+
+        const totalPCS = items.reduce((s, x) => s + x.qty, 0);
+
+        if (items.length === 0) {
+            zone.style.borderColor = '';
+            zone.style.borderStyle = 'dashed';
+            if (badge) { badge.textContent = 'สำรอง'; badge.className = 'text-[8px] font-black px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-600'; }
+            if (info)  info.innerHTML = '<i class="fas fa-archive text-slate-700 text-sm"></i>';
+            if (plan)  plan.textContent = '';
+            return;
+        }
+
+        zone.style.borderColor = '#0ea5e9';
+        zone.style.borderStyle = 'solid';
+        if (badge) {
+            badge.textContent = items.length + ' SKU';
+            badge.className = 'text-[8px] font-black px-1.5 py-0.5 rounded-full bg-sky-900/60 text-sky-300 border border-sky-700';
+        }
+        if (info) {
+            info.innerHTML = items.slice(0, 4).map(x =>
+                `<div class="flex items-baseline justify-between gap-1 leading-tight">
+                  <span class="text-white font-black text-[9px] truncate flex-1">${x.sku}</span>
+                  <span class="text-sky-300 font-black text-[9px] flex-shrink-0">${fmtN(x.qty)}</span>
+                 </div>`
+            ).join('') + (items.length > 4 ? `<div class="text-slate-600 text-[8px]">+${items.length-4} อื่นๆ</div>` : '');
+        }
+        if (plan) {
+            plan.innerHTML = `<span class="text-sky-300 font-black">${fmtN(totalPCS)}</span><span class="text-slate-600 text-[8px] ml-0.5">PCS</span>`;
+        }
+    });
+}
+
+// ── Load Move Log ────────────────────────────────────────────
+let _wmMoveSummary = {};
+let _wmMoveList    = [];
+
+function _wmLoadMoveLog(callback) {
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res && res.success) {
+                _wmMoveSummary = res.summary || {};
+                _wmMoveList    = res.moves   || [];
+            }
+            if (callback) callback();
+        })
+        .withFailureHandler(() => { if (callback) callback(); })
+        .getWarehouseMoveLog();
+}
+
+// ── Move Modal ───────────────────────────────────────────────
+window.openWmMoveModal = function() {
+    if (!_wmProdData) {
+        showToast('⚠️ โหลดแผนผลิตก่อน แล้วค่อยย้ายสินค้า', true); return;
+    }
+    // reset form
+    ['wm-move-from','wm-move-to','wm-move-sku','wm-move-qty','wm-move-emp','wm-move-note'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('wm-move-error')?.classList.add('hidden');
+    document.getElementById('wm-move-inv-avail').textContent = '';
+    document.getElementById('wm-move-sku-name').textContent  = '';
+    document.getElementById('wm-move-modal').classList.remove('hidden');
+};
+
+window.closeWmMoveModal = function() {
+    document.getElementById('wm-move-modal').classList.add('hidden');
+};
+
+window.wmMoveFromChange = function() {
+    const fromZone = document.getElementById('wm-move-from')?.value;
+    const dl = document.getElementById('wm-move-sku-list');
+    if (!dl || !fromZone || !_wmProdData) return;
+    const mach = (_wmProdData.machines || []).find(m => m.machineId === fromZone);
+    dl.innerHTML = (mach ? mach.products : []).map(p => {
+        const inv = (_wmProdData.inventory || {})[p.sku] || {};
+        return `<option value="${p.sku}">${p.sku} — ${p.name || ''} [${(inv.pcs||0).toLocaleString('th-TH')} PCS]</option>`;
+    }).join('');
+};
+
+window.wmMoveSkuChange = function(val) {
+    const sku      = val.trim();
+    const fromZone = document.getElementById('wm-move-from')?.value;
+    const nameEl   = document.getElementById('wm-move-sku-name');
+    const availEl  = document.getElementById('wm-move-inv-avail');
+    if (!sku || !_wmProdData) { if (nameEl) nameEl.textContent=''; if (availEl) availEl.textContent=''; return; }
+    const mach = (_wmProdData.machines||[]).find(m=>m.machineId===fromZone);
+    const prod = (mach?.products||[]).find(p=>p.sku===sku);
+    if (nameEl) nameEl.textContent = prod?.name || '';
+    const inv = (_wmProdData.inventory||{})[sku] || {};
+    if (availEl) availEl.textContent = inv.pcs ? 'สต็อก: ' + Number(inv.pcs).toLocaleString('th-TH') + ' PCS' : '';
+};
+
+window.confirmWmMove = function() {
+    const fromZone = document.getElementById('wm-move-from')?.value?.trim();
+    const toZone   = document.getElementById('wm-move-to')?.value?.trim();
+    const sku      = document.getElementById('wm-move-sku')?.value?.trim();
+    const qty      = parseInt(document.getElementById('wm-move-qty')?.value) || 0;
+    const emp      = document.getElementById('wm-move-emp')?.value?.trim();
+    const note     = document.getElementById('wm-move-note')?.value?.trim() || '';
+
+    const errEl = document.getElementById('wm-move-error');
+    const errTxt = document.getElementById('wm-move-error-txt');
+    const showErr = msg => { if (errEl) errEl.classList.remove('hidden'); if (errTxt) errTxt.textContent = msg; };
+
+    if (!fromZone) return showErr('กรุณาเลือกต้นทาง');
+    if (!toZone)   return showErr('กรุณาเลือกปลายทาง');
+    if (!sku)      return showErr('กรุณาระบุ SKU');
+    if (qty <= 0)  return showErr('กรุณาระบุจำนวน > 0');
+    if (!emp)      return showErr('กรุณาระบุรหัสพนักงาน');
+    errEl?.classList.add('hidden');
+
+    const mach = (_wmProdData?.machines||[]).find(m=>m.machineId===fromZone);
+    const prod = (mach?.products||[]).find(p=>p.sku===sku);
+
+    const btn = document.getElementById('btn-confirm-wm-move');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
+    btn.disabled  = true;
+
+    google.script.run
+        .withSuccessHandler(res => {
+            btn.innerHTML = '<i class="fas fa-exchange-alt mr-2"></i>ยืนยันย้ายสินค้า';
+            btn.disabled  = false;
+            if (res?.success) {
+                closeWmMoveModal();
+                showToast(`✅ ย้าย ${qty.toLocaleString('th-TH')} PCS จาก ${fromZone} → ${toZone} สำเร็จ`);
+                // Reload move log and update RE zones
+                _wmLoadMoveLog(() => {
+                    if (_wmProdData) {
+                        _wmProdData.moveSummary = _wmMoveSummary;
+                        _wmRenderREZones(_wmMoveSummary, v => Number(v).toLocaleString('th-TH'));
+                        _wmShowMoveLog();
+                    }
+                });
+            } else {
+                showErr(res?.message || 'บันทึกไม่สำเร็จ');
+            }
+        })
+        .withFailureHandler(err => {
+            btn.innerHTML = '<i class="fas fa-exchange-alt mr-2"></i>ยืนยันย้ายสินค้า';
+            btn.disabled  = false;
+            showErr(err?.message || String(err));
+        })
+        .saveWarehouseMove({ fromZone, toZone, sku, skuName: prod?.name||'', qty, recordedBy: emp, note });
+};
+
+function _wmShowMoveLog() {
+    const box  = document.getElementById('wm-move-log');
+    const rows = document.getElementById('wm-move-log-rows');
+    if (!box || !rows) return;
+    box.classList.remove('hidden');
+    rows.innerHTML = _wmMoveList.slice(0, 20).map(m =>
+        `<div class="flex items-center gap-2 py-1 border-b border-slate-700/40 last:border-0">
+          <span class="text-slate-500 text-[9px] w-28 flex-shrink-0">${m.timestamp}</span>
+          <span class="font-black text-amber-300 text-[9px]">${m.fromZone}→${m.toZone}</span>
+          <span class="text-white text-[9px] flex-1 truncate">${m.sku}</span>
+          <span class="text-sky-300 font-black text-[9px] flex-shrink-0">${Number(m.qty).toLocaleString('th-TH')} PCS</span>
+          <span class="text-slate-500 text-[9px] flex-shrink-0">${m.recordedBy}</span>
+        </div>`
+    ).join('') || '<p class="text-slate-600 text-[10px] text-center py-2">ยังไม่มีประวัติย้าย</p>';
 }
 
 // ── คลิกที่เครื่อง → แสดง Detail Panel ───────────────────────
