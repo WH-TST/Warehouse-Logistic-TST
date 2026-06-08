@@ -1993,7 +1993,7 @@ thead.sticky {
   </div><!-- end wm-prod-panel -->
 
 <!-- MODAL: Machine Detail (fixed overlay) -->
-<div id="wm-machine-detail" class="fixed inset-0 bg-black/70 hidden z-[96] flex items-start justify-center pt-12 px-4 pb-4 backdrop-blur-sm overflow-y-auto">
+<div id="wm-machine-detail" class="fixed inset-0 bg-black/70 hidden z-[96] flex items-start justify-center pt-8 px-4 pb-4 backdrop-blur-sm overflow-y-auto">
   <div class="bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-600">
     <!-- Header -->
     <div id="wmd-header-bar" class="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center gap-4 rounded-t-2xl border-b border-slate-600">
@@ -2008,7 +2008,40 @@ thead.sticky {
       </button>
     </div>
     <!-- Body -->
-    <div class="p-6 space-y-6">
+    <div class="p-6 space-y-5">
+
+      <!-- Zone Capacity -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+        <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+          <i class="fas fa-warehouse text-amber-400"></i> พื้นที่จัดเก็บ
+        </p>
+        <div id="wmd-zone-capacity" class="space-y-2"></div>
+      </div>
+
+      <!-- Flow (in/out/net) -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+        <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+          <i class="fas fa-exchange-alt text-sky-400"></i> สรุปเคลื่อนไหววันนี้
+        </p>
+        <div id="wmd-flow" class="grid grid-cols-3 gap-3 text-center">
+          <div class="bg-slate-900 rounded-lg p-3">
+            <p class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">เข้า (ผลิต)</p>
+            <p id="wmd-flow-in" class="text-emerald-400 font-black text-lg">—</p>
+            <p class="text-[10px] text-slate-500">PCS</p>
+          </div>
+          <div class="bg-slate-900 rounded-lg p-3">
+            <p class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">ออก (ย้าย/ขาย)</p>
+            <p id="wmd-flow-out" class="text-rose-400 font-black text-lg">—</p>
+            <p class="text-[10px] text-slate-500">PCS</p>
+          </div>
+          <div class="bg-slate-900 rounded-lg p-3">
+            <p class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">สุทธิ</p>
+            <p id="wmd-flow-net" class="text-yellow-300 font-black text-lg">—</p>
+            <p class="text-[10px] text-slate-500">PCS</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Timeline -->
       <div>
         <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -2016,12 +2049,92 @@ thead.sticky {
         </p>
         <div id="wmd-timeline" class="flex gap-2 flex-wrap"></div>
       </div>
+
       <!-- Products table -->
       <div>
         <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
           <i class="fas fa-boxes text-emerald-400"></i> รายการสินค้าที่ผลิต
         </p>
         <div id="wmd-products" class="max-h-72 overflow-y-auto rounded-xl border border-slate-700"></div>
+      </div>
+
+      <!-- Move Log -->
+      <div>
+        <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+          <i class="fas fa-history text-purple-400"></i> ประวัติย้ายกอง (ล่าสุด 5 รายการ)
+        </p>
+        <div id="wmd-move-log" class="space-y-1.5"></div>
+      </div>
+
+    </div>
+    <!-- Footer Action Buttons -->
+    <div class="px-6 pb-5 flex gap-3">
+      <button id="wmd-btn-move" onclick="wmOpenMoveFromDetail()"
+              class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-black rounded-xl py-3 flex items-center justify-center gap-2 transition-all shadow-lg">
+        <i class="fas fa-exchange-alt"></i> ย้ายกอง
+      </button>
+      <button id="wmd-btn-print" onclick="wmPrintMoveOrder()"
+              class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-black rounded-xl py-3 flex items-center justify-center gap-2 transition-all shadow-lg border border-slate-600">
+        <i class="fas fa-print"></i> พิมพ์ใบสั่งย้าย
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- PRINT TEMPLATE: ใบสั่งย้ายกอง -->
+<div id="wm-print-move-order" class="hidden">
+  <style>
+    @media print {
+      body > *:not(#wm-print-move-order) { display: none !important; }
+      #wm-print-move-order { display: block !important; }
+      @page { size: A4; margin: 15mm; }
+    }
+  </style>
+  <div style="font-family:'Sarabun',sans-serif;font-size:13px;color:#000;padding:0;">
+    <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px;">
+      <div style="font-size:18px;font-weight:900;">บริษัท ที.สแตนดาร์ด สตีล จำกัด</div>
+      <div style="font-size:22px;font-weight:900;margin-top:4px;">ใบสั่งย้ายกองสินค้า</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+      <div>
+        <span style="font-weight:700;">เลขที่: </span><span id="wm-print-doc-no">—</span>
+      </div>
+      <div>
+        <span style="font-weight:700;">วันที่: </span><span id="wm-print-date">—</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div style="border:1px solid #999;border-radius:6px;padding:10px;">
+        <div style="font-weight:900;font-size:11px;color:#555;margin-bottom:4px;">จากพื้นที่</div>
+        <div id="wm-print-from" style="font-size:22px;font-weight:900;">—</div>
+      </div>
+      <div style="border:1px solid #999;border-radius:6px;padding:10px;">
+        <div style="font-weight:900;font-size:11px;color:#555;margin-bottom:4px;">ไปพื้นที่</div>
+        <div id="wm-print-to" style="font-size:22px;font-weight:900;">—</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
+      <thead>
+        <tr style="background:#f0f0f0;">
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">#</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">รหัสสินค้า</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">ชื่อสินค้า</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;">จำนวน (มัด)</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;">PCS/มัด</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;">รวม (เส้น)</th>
+        </tr>
+      </thead>
+      <tbody id="wm-print-items"></tbody>
+    </table>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:32px;">
+      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;">
+        <div style="font-size:11px;color:#555;">ผู้สั่งย้าย</div>
+      </div>
+      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;">
+        <div style="font-size:11px;color:#555;">ผู้ย้ายสินค้า</div>
+      </div>
+      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;">
+        <div style="font-size:11px;color:#555;">ผู้รับสินค้า</div>
       </div>
     </div>
   </div>
@@ -30392,8 +30505,11 @@ function _wmShowMoveLog() {
 }
 
 // ── คลิกที่เครื่อง → แสดง Detail Panel ───────────────────────
+let _wmdCurrentMachineId = null;
+
 window.wmOpenMachineDetail = function(machineId) {
     if (!_wmProdData) return;
+    _wmdCurrentMachineId = machineId;
     const { machines, dates, today, inventory } = _wmProdData;
     const todayIdx = dates.indexOf(today);
     const upcoming = todayIdx >= 0 ? dates.slice(todayIdx, todayIdx + 7) : dates.slice(0, 7);
@@ -30406,11 +30522,14 @@ window.wmOpenMachineDetail = function(machineId) {
     panel.classList.remove('hidden');
     panel.scrollTop = 0;
 
-    const badge  = document.getElementById('wmd-badge');
-    const title  = document.getElementById('wmd-title');
-    const status = document.getElementById('wmd-status');
-    const tlEl   = document.getElementById('wmd-timeline');
-    const prEl   = document.getElementById('wmd-products');
+    const badge   = document.getElementById('wmd-badge');
+    const title   = document.getElementById('wmd-title');
+    const status  = document.getElementById('wmd-status');
+    const tlEl    = document.getElementById('wmd-timeline');
+    const prEl    = document.getElementById('wmd-products');
+    const capEl   = document.getElementById('wmd-zone-capacity');
+    const flowEl  = document.getElementById('wmd-flow');
+    const logEl   = document.getElementById('wmd-move-log');
 
     if (badge) badge.textContent = machineId;
     if (title) title.textContent = 'เครื่อง ' + machineId;
@@ -30419,6 +30538,7 @@ window.wmOpenMachineDetail = function(machineId) {
         if (status) status.textContent = 'ไม่พบข้อมูลใน Production Block Sheet';
         if (tlEl)   tlEl.innerHTML = '';
         if (prEl)   prEl.innerHTML = '<p class="text-slate-500 text-sm">ไม่มีข้อมูล</p>';
+        if (capEl)  capEl.innerHTML = '<p class="text-slate-500 text-xs">ไม่มีข้อมูลพื้นที่</p>';
         return;
     }
 
@@ -30431,7 +30551,78 @@ window.wmOpenMachineDetail = function(machineId) {
         ? `กำลังผลิต — แผน ${fmtN(todayPlan)} PCS/วัน | PD Time ${mach.pdTime[today] || 0} ชม.`
         : 'ไม่มีแผนผลิตวันนี้';
 
-    // Timeline 7 วัน
+    // ── Zone Capacity ─────────────────────────────────────────
+    if (capEl) {
+        const zoneCfg = WM_ZONE_CONFIG[machineId];
+        if (zoneCfg) {
+            const moveSummary = _wmProdData.moveSummary || {};
+            const { pct, usedCm, totalCm } = _wmCalcZoneUsage(machineId, mach, moveSummary);
+            const pctClamped = Math.min(pct, 100);
+            const barColor   = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
+            const totalM     = (totalCm / 100).toFixed(1);
+            const usedM      = (usedCm / 100).toFixed(1);
+
+            const rowBars = zoneCfg.rows.map(r => {
+                const rowM = (r.w / 100).toFixed(1);
+                return `<div class="flex items-center gap-2 text-xs">
+                  <span class="text-slate-400 w-14 flex-shrink-0">แถว ${r.id}</span>
+                  <div class="flex-1 bg-slate-700 rounded-full h-1.5">
+                    <div class="h-1.5 rounded-full bg-slate-500" style="width:100%"></div>
+                  </div>
+                  <span class="text-slate-400 w-10 text-right">${rowM} ม.</span>
+                </div>`;
+            }).join('');
+
+            capEl.innerHTML = `
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-white font-black text-lg">${pctClamped.toFixed(0)}%</span>
+                <span class="text-slate-400 text-xs">${usedM} / ${totalM} ม.</span>
+              </div>
+              <div class="w-full bg-slate-700 rounded-full h-3 mb-3 overflow-hidden">
+                <div class="h-3 rounded-full transition-all" style="width:${pctClamped}%;background:${barColor}"></div>
+              </div>
+              <div class="space-y-1.5">${rowBars}</div>`;
+        } else {
+            capEl.innerHTML = '<p class="text-slate-500 text-xs">ไม่มีข้อมูล WM_ZONE_CONFIG</p>';
+        }
+    }
+
+    // ── Flow วันนี้ ────────────────────────────────────────────
+    const moveSummary = (_wmProdData.moveSummary || {})[machineId] || {};
+    const flowIn  = todayPlan;
+    const flowOut = (moveSummary.outPcs || 0);
+    const flowNet = flowIn - flowOut;
+    const safeSet = (id, val, cls) => { const el = document.getElementById(id); if (el) { el.textContent = fmtN(Math.abs(val)); el.className = cls + ' font-black text-lg'; } };
+    safeSet('wmd-flow-in',  flowIn,  'text-emerald-400');
+    safeSet('wmd-flow-out', flowOut, 'text-rose-400');
+    safeSet('wmd-flow-net', flowNet, flowNet >= 0 ? 'text-yellow-300' : 'text-rose-300');
+
+    // ── Move Log (ล่าสุด 5) ────────────────────────────────────
+    if (logEl) {
+        const moveLog = (_wmProdData.moveLog || [])
+            .filter(r => r.fromZone === machineId || r.toZone === machineId)
+            .slice(-5).reverse();
+        if (moveLog.length === 0) {
+            logEl.innerHTML = '<p class="text-slate-600 text-xs">ยังไม่มีประวัติย้ายกอง</p>';
+        } else {
+            logEl.innerHTML = moveLog.map(r => {
+                const dir     = r.fromZone === machineId ? `<span class="text-rose-400">→ ${r.toZone}</span>` : `<span class="text-emerald-400">← ${r.fromZone}</span>`;
+                const dateStr = (r.date || '').slice(0, 10);
+                return `<div class="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2 text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    ${dir}
+                    <span class="text-slate-300 truncate">${r.sku} ${r.skuName ? '· ' + r.skuName : ''}</span>
+                  </div>
+                  <div class="flex items-center gap-2 flex-shrink-0 ml-2">
+                    <span class="text-white font-black">${fmtN(r.bundles || 0)} มัด</span>
+                    <span class="text-slate-500">${dateStr}</span>
+                  </div>
+                </div>`;
+            }).join('');
+        }
+    }
+
+    // ── Timeline 7 วัน ────────────────────────────────────────
     if (tlEl) {
         tlEl.innerHTML = upcoming.map(d => {
             const qty     = mach.products.reduce((s, p) => s + (p.daily[d] || 0), 0);
@@ -30446,11 +30637,11 @@ window.wmOpenMachineDetail = function(machineId) {
         }).join('');
     }
 
-    // Products table — แสดงทุก SKU (active ก่อน, ที่เหลือตาม)
+    // ── Products table ─────────────────────────────────────────
     if (prEl) {
-        const activeProd  = mach.products.filter(p => upcoming.some(d => p.daily[d] > 0));
+        const activeProd   = mach.products.filter(p => upcoming.some(d => p.daily[d] > 0));
         const inactiveProd = mach.products.filter(p => !upcoming.some(d => p.daily[d] > 0));
-        const showList    = [...activeProd, ...inactiveProd];
+        const showList     = [...activeProd, ...inactiveProd];
         prEl.innerHTML =
           `<div class="grid text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-800 px-4 py-2.5 rounded-t-xl border-b border-slate-700 sticky top-0"
                style="grid-template-columns:1fr 72px 72px 72px">
@@ -30482,6 +30673,68 @@ window.wmOpenMachineDetail = function(machineId) {
               </div>
             </div>`;
           }).join('');
+    }
+};
+
+// เปิด Move Modal โดย pre-fill fromZone จาก modal detail
+window.wmOpenMoveFromDetail = function() {
+    const machId = _wmdCurrentMachineId;
+    document.getElementById('wm-machine-detail').classList.add('hidden');
+    const fromSel = document.getElementById('wm-move-from');
+    if (fromSel && machId) {
+        fromSel.value = machId;
+        if (typeof wmMoveZoneChange === 'function') wmMoveZoneChange();
+    }
+    const moveModal = document.getElementById('wm-move-modal');
+    if (moveModal) moveModal.classList.remove('hidden');
+};
+
+// พิมพ์ใบสั่งย้ายกอง
+window.wmPrintMoveOrder = function() {
+    const machId = _wmdCurrentMachineId;
+    if (!machId || !_wmProdData) return;
+
+    const { machines, today, inventory } = _wmProdData;
+    const mach = (machines || []).find(m => m.machineId === machId);
+
+    // กรอกข้อมูลใบสั่ง
+    const docNo = 'MV-' + today.replace(/-/g,'') + '-' + machId;
+    const dateDisp = today.split('-').reverse().join('/');
+    const safeEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+    safeEl('wm-print-doc-no', docNo);
+    safeEl('wm-print-date',   dateDisp);
+    safeEl('wm-print-from',   machId);
+    safeEl('wm-print-to',     '');
+
+    // รายการสินค้า
+    const itemsEl = document.getElementById('wm-print-items');
+    if (itemsEl && mach) {
+        const todayProds = mach.products.filter(p => p.daily[today] > 0);
+        if (todayProds.length > 0) {
+            itemsEl.innerHTML = todayProds.map((p, i) => {
+                const ppb  = p.pcsPerBundle || 1;
+                const pcs  = p.daily[today] || 0;
+                const mads = ppb > 0 ? Math.round(pcs / ppb) : 0;
+                return `<tr>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${i+1}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;">${p.sku}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;">${p.name || ''}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${mads}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${ppb}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${Number(pcs).toLocaleString('th-TH')}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            itemsEl.innerHTML = '<tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:center;color:#999;">ไม่มีแผนผลิตวันนี้</td></tr>';
+        }
+    }
+
+    // แสดง template แล้วพิมพ์
+    const tpl = document.getElementById('wm-print-move-order');
+    if (tpl) {
+        tpl.classList.remove('hidden');
+        window.print();
+        tpl.classList.add('hidden');
     }
 };
 
