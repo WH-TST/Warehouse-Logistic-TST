@@ -30711,14 +30711,99 @@ window.wmOpenMachineDetail = function(machineId) {
     const flowEl  = document.getElementById('wmd-flow');
     const logEl   = document.getElementById('wmd-move-log');
 
-    if (badge) badge.textContent = machineId;
-    if (title) title.textContent = 'เครื่อง ' + machineId;
+    const isREZone = ['RE1','RE4','RE-C4','RE-C5','RE-1'].includes(machineId);
 
-    if (!mach) {
-        if (status) status.textContent = 'ไม่พบข้อมูลใน Production Block Sheet';
-        if (tlEl)   tlEl.innerHTML = '';
-        if (prEl)   prEl.innerHTML = '<p class="text-slate-500 text-sm">ไม่มีข้อมูล</p>';
-        if (capEl)  capEl.innerHTML = '<p class="text-slate-500 text-xs">ไม่มีข้อมูลพื้นที่</p>';
+    if (badge) { badge.textContent = machineId; badge.style.background = isREZone ? '#0369a1' : '#475569'; }
+    if (title) title.textContent = isREZone ? 'พื้นที่สำรอง ' + machineId : 'เครื่อง ' + machineId;
+
+    // ── RE Zone: แสดงสินค้าที่ถูกย้ายเข้ามา ──────────────────
+    if (isREZone || !mach) {
+        const zoneItems = Object.entries((_wmMoveSummary || {})[machineId] || {})
+            .map(([sku, d]) => ({ sku, pcs: d.pcs || 0, bundles: d.bundles || 0, skuName: d.skuName || '', pcsPerBundle: d.pcsPerBundle || 1 }))
+            .filter(x => x.pcs > 0)
+            .sort((a, b) => b.pcs - a.pcs);
+
+        const totalPCS = zoneItems.reduce((s, x) => s + x.pcs, 0);
+        const totalBundles = zoneItems.reduce((s, x) => s + x.bundles, 0);
+
+        if (status) status.textContent = zoneItems.length > 0
+            ? `มีสินค้า ${zoneItems.length} SKU · รวม ${fmtN(totalPCS)} PCS (${fmtN(totalBundles)} มัด)`
+            : 'ว่าง — ไม่มีสินค้า';
+        if (badge) badge.style.background = zoneItems.length > 0 ? '#0369a1' : '#475569';
+
+        // Zone Capacity
+        if (capEl) {
+            const zoneCfg = WM_ZONE_CONFIG[machineId];
+            if (zoneCfg) {
+                const totalM = (zoneCfg.rows.reduce((s,r)=>s+r.w,0)/100).toFixed(1);
+                const rowBars = zoneCfg.rows.map(r =>
+                    `<div class="flex items-center gap-2 text-xs">
+                      <span class="text-slate-500 w-12 flex-shrink-0">แถว ${r.id}</span>
+                      <div class="flex-1 bg-slate-700 rounded-full h-1"><div class="h-1 rounded-full bg-slate-500" style="width:100%"></div></div>
+                      <span class="text-slate-400 w-10 text-right">${(r.w/100).toFixed(1)} ม.</span>
+                    </div>`).join('');
+                capEl.innerHTML = `<div class="text-slate-400 text-xs mb-2">พื้นที่รวม <span class="text-white font-black">${totalM} ม.</span></div><div class="space-y-1.5">${rowBars}</div>`;
+            } else {
+                capEl.innerHTML = '<p class="text-slate-500 text-xs">ไม่มีข้อมูล WM_ZONE_CONFIG</p>';
+            }
+        }
+
+        // สินค้าที่อยู่ในพื้นที่สำรอง
+        if (tlEl) tlEl.innerHTML = '';
+        if (prEl) {
+            if (zoneItems.length === 0) {
+                prEl.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">ไม่มีสินค้าในพื้นที่นี้</p>';
+            } else {
+                prEl.innerHTML =
+                    `<div class="grid text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-800 px-4 py-2.5 rounded-t-xl border-b border-slate-700 sticky top-0"
+                         style="grid-template-columns:1fr 80px 80px">
+                      <span>SKU / ชื่อสินค้า</span>
+                      <span class="text-center">มัด</span>
+                      <span class="text-center">PCS</span>
+                    </div>` +
+                    zoneItems.map((x, i) => {
+                        const prod  = _wmFindProd(x.sku);
+                        const bw    = prod?.bundleWidth  || 0;
+                        const bh    = prod?.bundleHeight || 0;
+                        const stack = x.bundles > 0 && bw && bh ? _wmCalcStackInfo(x.bundles, bw, bh) : null;
+                        const rowBg = i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800/50';
+                        return `<div class="grid items-center px-4 py-3 ${rowBg} last:rounded-b-xl gap-2"
+                                    style="grid-template-columns:1fr 80px 80px">
+                          <div class="min-w-0">
+                            <p class="text-sm font-black text-white truncate">${x.sku}</p>
+                            <p class="text-xs text-slate-400 truncate mt-0.5">${x.skuName}</p>
+                            ${stack ? `<p class="text-[10px] text-slate-600">ฐาน ${stack.cols} × ${stack.layers} ชั้น · ${stack.heightCm.toFixed(0)} ซม.</p>` : ''}
+                          </div>
+                          <div class="text-center"><span class="text-amber-300 font-black text-sm">${fmtN(x.bundles)}</span></div>
+                          <div class="text-center"><span class="text-sky-300 font-black text-sm">${fmtN(x.pcs)}</span></div>
+                        </div>`;
+                    }).join('');
+            }
+        }
+
+        // Flow & Move Log สำหรับ RE zone
+        const flowOut = (_wmMoveList||[]).filter(r=>r.fromZone===machineId&&r.date===today).reduce((s,r)=>s+(r.totalPCS||0),0);
+        const flowIn  = (_wmMoveList||[]).filter(r=>r.toZone  ===machineId&&r.date===today).reduce((s,r)=>s+(r.totalPCS||0),0);
+        const safeSet = (id, val, cls) => { const el = document.getElementById(id); if (el) { el.textContent = fmtN(Math.abs(val)); el.className = cls + ' font-black text-lg'; } };
+        safeSet('wmd-flow-in',  flowIn,  'text-emerald-400');
+        safeSet('wmd-flow-out', flowOut, 'text-rose-400');
+        safeSet('wmd-flow-net', flowIn - flowOut, (flowIn-flowOut) >= 0 ? 'text-yellow-300' : 'text-rose-300');
+
+        if (logEl) {
+            const moveLog = (_wmMoveList||[]).filter(r=>r.fromZone===machineId||r.toZone===machineId).slice(0,5);
+            logEl.innerHTML = moveLog.length === 0
+                ? '<p class="text-slate-600 text-xs">ยังไม่มีประวัติย้ายกอง</p>'
+                : moveLog.map(r => {
+                    const dir = r.fromZone===machineId ? `<span class="text-rose-400">→ ${r.toZone}</span>` : `<span class="text-emerald-400">← ${r.fromZone}</span>`;
+                    return `<div class="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2 text-xs">
+                      <div class="flex items-center gap-2 min-w-0">${dir}<span class="text-slate-300 truncate">${r.sku}</span></div>
+                      <div class="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span class="text-white font-black">${fmtN(r.bundles||0)} มัด</span>
+                        <span class="text-slate-500">${(r.date||'').slice(0,10)}</span>
+                      </div>
+                    </div>`;
+                  }).join('');
+        }
         return;
     }
 
@@ -30851,58 +30936,60 @@ window.wmOpenMachineDetail = function(machineId) {
         const activeProd   = mach.products.filter(p => upcoming.some(d => p.daily[d] > 0));
         const inactiveProd = mach.products.filter(p => !upcoming.some(d => p.daily[d] > 0));
         const showList     = [...activeProd, ...inactiveProd];
+        // คำนวณ zone stock ต่อ SKU (หักย้ายแล้ว)
+        const zoneSkuBase = _wmBuildZoneSkuBase(machineId, { machines, inventory }, _wmMoveSummary);
+
         prEl.innerHTML =
           `<div class="grid text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-800 px-4 py-2.5 rounded-t-xl border-b border-slate-700 sticky top-0"
-               style="grid-template-columns:1fr 64px 64px 64px 110px">
+               style="grid-template-columns:1fr 60px 70px 70px 100px">
             <span>SKU / ชื่อสินค้า</span>
             <span class="text-center">วันนี้</span>
-            <span class="text-center">คลัง</span>
-            <span class="text-center">น้ำหนัก</span>
-            <span class="text-center">การจัดกอง</span>
+            <span class="text-center">ในโซนนี้</span>
+            <span class="text-center">คลังรวม</span>
+            <span class="text-center">จัดกอง</span>
           </div>` +
           showList.map((p, i) => {
             const inv      = inventory[p.sku] || {};
             const spQty    = spToday[p.sku] || 0;
             const todayQty = spQty > 0 ? spQty : (p.daily[today] || 0);
-            const invPCS   = inv.pcs    || 0;
+            const invPCS   = inv.pcs    || 0;   // คลังรวมทั้งหมด (Inventory FG)
             const invWt    = inv.weight || 0;
+            const zonePCS  = Math.max(0, (zoneSkuBase[p.sku] || {}).pcs || 0); // ในโซนนี้
             const rowBg    = i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800/50';
 
-            // คำนวณการจัดกอง
-            const ppb      = p.pcsPerBundle || 1;
-            const bw       = p.bundleWidth  || 0;
-            const bh       = p.bundleHeight || 0;
-            const bundles  = invPCS > 0 ? Math.ceil(invPCS / ppb) : 0;
-            const stack    = bundles > 0 && bw && bh ? _wmCalcStackInfo(bundles, bw, bh) : null;
-            let stackHtml  = '<span class="text-slate-600 text-xs">—</span>';
+            // คำนวณการจัดกอง (ใช้ zone PCS)
+            const ppb     = p.pcsPerBundle || 1;
+            const bw      = p.bundleWidth  || 0;
+            const bh      = p.bundleHeight || 0;
+            const bundles = zonePCS > 0 ? Math.ceil(zonePCS / ppb) : 0;
+            const stack   = bundles > 0 && bw && bh ? _wmCalcStackInfo(bundles, bw, bh) : null;
+            let stackHtml = '<span class="text-slate-600 text-[10px]">—</span>';
             if (stack) {
               const warnCls = stack.needsWideBase ? 'text-amber-400' : 'text-emerald-400';
-              const warn    = stack.needsWideBase
-                ? `<span class="text-amber-400 text-[9px] font-black">⚠ ต้องฐาน ${stack.cols} มัด</span>`
-                : '';
               stackHtml = `<div class="text-center leading-tight">
-                <span class="${warnCls} font-black text-xs">ฐาน ${stack.cols} × ${stack.layers} ชั้น</span>
-                <br><span class="text-slate-500 text-[10px]">${stack.heightCm.toFixed(0)} ซม. สูง</span>
-                ${warn ? '<br>' + warn : ''}
+                <span class="${warnCls} font-black text-[10px]">ฐาน ${stack.cols}×${stack.layers}</span>
+                <br><span class="text-slate-500 text-[9px]">${stack.heightCm.toFixed(0)} ซม.</span>
+                ${stack.needsWideBase ? `<br><span class="text-amber-400 text-[9px]">⚠ ฐาน>${stack.cols}มัด</span>` : ''}
               </div>`;
             }
 
-            return `<div class="grid items-center px-4 py-3 ${rowBg} last:rounded-b-xl gap-2"
-                        style="grid-template-columns:1fr 64px 64px 64px 110px">
+            return `<div class="grid items-center px-4 py-3 ${rowBg} last:rounded-b-xl gap-1"
+                        style="grid-template-columns:1fr 60px 70px 70px 100px">
               <div class="min-w-0">
                 <p class="text-sm font-black text-white truncate">${p.sku}</p>
                 <p class="text-xs text-slate-400 truncate mt-0.5">${p.name || ''}</p>
-                ${bh ? `<p class="text-[10px] text-slate-600">${ppb} เส้น/มัด · สูง ${bh}ซม. · กว้าง ${bw}ซม.</p>` : ''}
+                ${bh ? `<p class="text-[9px] text-slate-600">${ppb}/มัด · ${bh}×${bw}ซม.</p>` : ''}
               </div>
               <div class="text-center">
                 <span class="${todayQty > 0 ? 'text-emerald-400 font-black text-sm' : 'text-slate-600 text-sm'}">${todayQty > 0 ? '+' + fmtN(todayQty) : '—'}</span>
               </div>
               <div class="text-center">
-                <span class="${invPCS > 0 ? 'text-sky-300 font-black text-sm' : 'text-slate-600 text-sm'}">${fmtN(invPCS)}</span>
-                ${bundles > 0 ? `<br><span class="text-slate-500 text-[10px]">${fmtN(bundles)} มัด</span>` : ''}
+                <span class="${zonePCS > 0 ? 'text-amber-300 font-black text-sm' : 'text-slate-600 text-sm'}">${fmtN(zonePCS)}</span>
+                ${bundles > 0 ? `<br><span class="text-slate-500 text-[9px]">${fmtN(bundles)} มัด</span>` : ''}
               </div>
               <div class="text-center">
-                <span class="${invWt > 0 ? 'text-slate-300 text-sm' : 'text-slate-600 text-sm'}">${invWt > 0 ? invWt.toFixed(1) + 't' : '—'}</span>
+                <span class="${invPCS > 0 ? 'text-sky-300 text-sm' : 'text-slate-600 text-sm'}">${fmtN(invPCS)}</span>
+                ${invWt > 0 ? `<br><span class="text-slate-500 text-[9px]">${invWt.toFixed(1)}t</span>` : ''}
               </div>
               <div>${stackHtml}</div>
             </div>`;
