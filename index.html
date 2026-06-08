@@ -30467,41 +30467,46 @@ window.wmMoveFromChange = function() {
     }).join('');
 };
 
+// ค้นหา product จากทุก machine (fallback เมื่อ SKU ย้ายมาอยู่โซนอื่น)
+function _wmFindProd(sku) {
+    if (!_wmProdData) return null;
+    for (const m of (_wmProdData.machines || [])) {
+        const p = (m.products || []).find(p => p.sku === sku);
+        if (p) return p;
+    }
+    return null;
+}
+
 window.wmMoveSkuChange = function(val) {
-    const sku      = val.trim();
-    const fromZone = document.getElementById('wm-move-from')?.value;
-    const nameEl   = document.getElementById('wm-move-sku-name');
-    const availEl  = document.getElementById('wm-move-inv-avail');
-    const hintEl   = document.getElementById('wm-move-ppb-hint');
+    const sku    = val.trim();
+    const nameEl = document.getElementById('wm-move-sku-name');
+    const availEl= document.getElementById('wm-move-inv-avail');
+    const hintEl = document.getElementById('wm-move-ppb-hint');
     if (!sku || !_wmProdData) {
         if (nameEl) nameEl.textContent = '';
         if (availEl) availEl.textContent = '';
         if (hintEl) hintEl.textContent = '';
         return;
     }
-    const mach = (_wmProdData.machines||[]).find(m=>m.machineId===fromZone);
-    const prod = (mach?.products||[]).find(p=>p.sku===sku);
+    const prod = _wmFindProd(sku);
     if (nameEl) nameEl.textContent = prod?.name || '';
-    const inv = (_wmProdData.inventory||{})[sku] || {};
-    const ppb = prod?.pcsPerBundle || 1;
+    const inv  = (_wmProdData.inventory || {})[sku] || {};
+    const ppb  = prod?.pcsPerBundle || 1;
     const availBundles = inv.pcs ? Math.floor(inv.pcs / ppb) : 0;
     if (availEl) availEl.textContent = inv.pcs
         ? `สต็อก: ${Number(inv.pcs).toLocaleString('th-TH')} PCS (${availBundles.toLocaleString('th-TH')} มัด)`
         : '';
-    if (hintEl) hintEl.textContent = ppb > 1 ? `1 มัด = ${ppb} เส้น` : '';
-    // อัพเดต preview ถ้ากรอก qty ไว้แล้ว
+    if (hintEl) hintEl.textContent = `1 มัด = ${ppb} เส้น`;
     const qtyEl = document.getElementById('wm-move-qty');
     if (qtyEl?.value) wmMoveQtyChange(qtyEl.value);
 };
 
 window.wmMoveQtyChange = function(val) {
-    const bundles  = parseInt(val) || 0;
-    const sku      = document.getElementById('wm-move-sku')?.value?.trim();
-    const fromZone = document.getElementById('wm-move-from')?.value;
-    const preEl    = document.getElementById('wm-move-pcs-preview');
+    const bundles = parseInt(val) || 0;
+    const sku     = document.getElementById('wm-move-sku')?.value?.trim();
+    const preEl   = document.getElementById('wm-move-pcs-preview');
     if (!preEl) return;
-    const mach = (_wmProdData?.machines||[]).find(m=>m.machineId===fromZone);
-    const prod = (mach?.products||[]).find(p=>p.sku===sku);
+    const prod = _wmFindProd(sku);
     const ppb  = prod?.pcsPerBundle || 1;
     preEl.textContent = bundles > 0 ? `= ${(bundles * ppb).toLocaleString('th-TH')} เส้น` : '';
 };
