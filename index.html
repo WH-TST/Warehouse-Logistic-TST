@@ -29844,25 +29844,30 @@ window.loadProductionPlan = function() {
     const machEl = document.getElementById('wm-prod-machines');
     if (loadEl) loadEl.classList.remove('hidden');
     // ไม่ clear innerHTML — ผังโรงงาน hardcode อยู่ใน div นี้
-    google.script.run
-        .withSuccessHandler(res => {
-            if (loadEl) loadEl.classList.add('hidden');
-            if (!res || !res.success) { showToast('❌ ' + (res?.message || 'โหลดไม่สำเร็จ'), true); return; }
-            _wmProdData   = res;
-            _wmProdLoaded = true;
-            const lbl = document.getElementById('wm-prod-sheet-label');
-            if (lbl) lbl.textContent = 'ชีต: ' + res.sheetName;
-            // โหลด move log แล้ว render พร้อมกัน
-            _wmLoadMoveLog(() => {
-                res.moveSummary = _wmMoveSummary;
-                _wmRenderMachines(res);
-            });
-        })
-        .withFailureHandler(err => {
-            if (loadEl) loadEl.classList.add('hidden');
-            showToast('❌ ' + (err?.message || String(err)), true);
-        })
-        .getProductionPlanData({ month, year });
+    try {
+        google.script.run
+            .withSuccessHandler(res => {
+                if (loadEl) loadEl.classList.add('hidden');
+                if (!res || !res.success) { showToast('❌ ' + (res?.message || 'โหลดไม่สำเร็จ'), true); return; }
+                _wmProdData   = res;
+                _wmProdLoaded = true;
+                const lbl = document.getElementById('wm-prod-sheet-label');
+                if (lbl) lbl.textContent = 'ชีต: ' + res.sheetName;
+                // โหลด move log แล้ว render พร้อมกัน
+                _wmLoadMoveLog(() => {
+                    res.moveSummary = _wmMoveSummary;
+                    _wmRenderMachines(res);
+                });
+            })
+            .withFailureHandler(err => {
+                if (loadEl) loadEl.classList.add('hidden');
+                showToast('❌ ' + (err?.message || String(err)), true);
+            })
+            .getProductionPlanData({ month, year });
+    } catch (e) {
+        if (loadEl) loadEl.classList.add('hidden');
+        showToast('⚠️ ไม่สามารถเชื่อมต่อ GAS ได้ (Preview mode)', true);
+    }
 };
 
 // ── Fill Floor Plan — Inventory Primary, Production Secondary ──
