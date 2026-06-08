@@ -8786,8 +8786,29 @@ function getProductionPlanData(params) {
       });
     }
     var today = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+
+    // ── อ่านแผนวันนี้จาก Sheet Plan (แทน Production Block สำหรับวันปัจจุบัน) ──
+    var todaySheetPlan = {}; // { machineId: { sku: pcs } }
+    try {
+      var todayKey   = today.replace(/-/g, '');
+      var planSheet  = mainSS.getSheetByName(PLAN_SHEET_NAME);
+      if (planSheet && planSheet.getLastRow() > 1) {
+        var planRows = planSheet.getRange(2, 1, planSheet.getLastRow() - 1, 14).getValues();
+        planRows.forEach(function(r) {
+          if (String(r[0]).trim() !== todayKey) return;
+          var mid = String(r[1] || '').trim();
+          var sku = String(r[4] || '').trim();
+          var pcs = Number(r[13]) || 0;
+          if (!mid || !sku || pcs <= 0) return;
+          if (!todaySheetPlan[mid]) todaySheetPlan[mid] = {};
+          todaySheetPlan[mid][sku] = (todaySheetPlan[mid][sku] || 0) + pcs;
+        });
+      }
+    } catch(e) { /* ถ้าอ่านไม่ได้ก็ใช้ Production Block แทน */ }
+
     return { success: true, sheetName: sheetName, machines: machines,
-             dates: dateColumns.map(function(d) { return d.dateStr; }), today: today, inventory: inventory };
+             dates: dateColumns.map(function(d) { return d.dateStr; }), today: today,
+             inventory: inventory, todaySheetPlan: todaySheetPlan };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

@@ -30245,7 +30245,7 @@ const _wmMirrorIds  = {}; // ไม่มี mirror แล้ว
 const _wmREZones    = ['RE1','RE4','RE-C4','RE-C5']; // พื้นที่สำรองทั้งหมด
 
 function _wmRenderMachines(data) {
-    const { machines, dates, today, inventory } = data;
+    const { machines, dates, today, inventory, todaySheetPlan } = data;
     const fmtN = v => Number(v).toLocaleString('th-TH');
 
     const machMap = {};
@@ -30271,13 +30271,23 @@ function _wmRenderMachines(data) {
             return;
         }
 
+        // todayPlanPCS — จาก Sheet Plan (ถ้ามี) มิฉะนั้นใช้ Production Block
+        const spToday      = (todaySheetPlan || {})[mid] || {};
+        const spTotal      = Object.values(spToday).reduce((s, v) => s + v, 0);
+        const todayPlanPCS = spTotal > 0
+            ? spTotal
+            : mach.products.reduce((s, p) => s + (p.daily[today] || 0), 0);
+
         const invItems = mach.products
-            .map(p => ({ sku: p.sku, name: p.name, pcs: (inventory[p.sku] || {}).pcs || 0, todayQty: p.daily[today] || 0 }))
+            .map(p => {
+                const spQty = spToday[p.sku] || 0;
+                const pbQty = p.daily[today] || 0;
+                return { sku: p.sku, name: p.name, pcs: (inventory[p.sku] || {}).pcs || 0, todayQty: spQty > 0 ? spQty : pbQty };
+            })
             .filter(p => p.pcs > 0)
             .sort((a, b) => b.pcs - a.pcs);
 
         const totalInvPCS  = invItems.reduce((s, p) => s + p.pcs, 0);
-        const todayPlanPCS = mach.products.reduce((s, p) => s + (p.daily[today] || 0), 0);
         const isRunning    = todayPlanPCS > 0;
         const hasInv       = totalInvPCS > 0;
 
@@ -30637,13 +30647,19 @@ window.wmOpenMachineDetail = function(machineId) {
         return;
     }
 
-    const todayProducts = mach.products.filter(p => p.daily[today] > 0);
-    const todayPlan    = todayProducts.reduce((s, p) => s + (p.daily[today] || 0), 0);
-    const isRunning    = todayProducts.length > 0;
+    // todayPlan — จาก Sheet Plan (ถ้ามี) มิฉะนั้นใช้ Production Block
+    const spToday   = ((_wmProdData.todaySheetPlan || {})[machineId]) || {};
+    const spSKUs    = Object.keys(spToday);
+    const spTotal   = Object.values(spToday).reduce((s, v) => s + v, 0);
+    const todayPlan = spTotal > 0
+        ? spTotal
+        : mach.products.reduce((s, p) => s + (p.daily[today] || 0), 0);
+    const isRunning = todayPlan > 0;
+    const planSrc   = spTotal > 0 ? 'Sheet Plan' : 'Production Block';
 
     if (badge) badge.style.background = isRunning ? '#059669' : '#475569';
     if (status) status.textContent = isRunning
-        ? `กำลังผลิต — แผน ${fmtN(todayPlan)} PCS/วัน | PD Time ${mach.pdTime[today] || 0} ชม.`
+        ? `กำลังผลิต — แผน ${fmtN(todayPlan)} PCS/วัน (${planSrc})`
         : 'ไม่มีแผนผลิตวันนี้';
 
     // ── Zone Capacity + 7-day Projection ─────────────────────
@@ -30705,11 +30721,10 @@ window.wmOpenMachineDetail = function(machineId) {
     }
 
     // ── Flow วันนี้ ────────────────────────────────────────────
-    // flowOut = มัดที่ถูกย้ายออกจากโซนนี้วันนี้ (จาก move log)
     const flowOut = (_wmMoveList || [])
         .filter(r => r.fromZone === machineId && r.date === today)
         .reduce((s, r) => s + (r.totalPCS || 0), 0);
-    const flowIn  = todayPlan;
+    const flowIn  = todayPlan; // จาก Sheet Plan (หรือ Production Block ถ้าไม่มี)
     const flowNet = flowIn - flowOut;
     const safeSet = (id, val, cls) => { const el = document.getElementById(id); if (el) { el.textContent = fmtN(Math.abs(val)); el.className = cls + ' font-black text-lg'; } };
     safeSet('wmd-flow-in',  flowIn,  'text-emerald-400');
@@ -30772,7 +30787,8 @@ window.wmOpenMachineDetail = function(machineId) {
           </div>` +
           showList.map((p, i) => {
             const inv      = inventory[p.sku] || {};
-            const todayQty = p.daily[today] || 0;
+            const spQty    = spToday[p.sku] || 0;
+            const todayQty = spQty > 0 ? spQty : (p.daily[today] || 0);
             const invPCS   = inv.pcs    || 0;
             const invWt    = inv.weight || 0;
             const rowBg    = i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800/50';
