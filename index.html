@@ -2179,14 +2179,17 @@ thead.sticky {
       </div>
 
       <!-- SKU -->
-      <div>
+      <div class="relative">
         <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">SKU สินค้า</label>
-        <input type="text" id="wm-move-sku" list="wm-move-sku-list" placeholder="พิมพ์หรือเลือก SKU..."
-          oninput="wmMoveSkuChange(this.value)"
+        <input type="text" id="wm-move-sku" placeholder="พิมพ์ SKU หรือชื่อสินค้า..."
+          oninput="wmMoveSkuInput(this.value)"
+          onblur="setTimeout(()=>wmMoveSkuHideList(),150)"
+          autocomplete="off"
           class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-2.5 font-bold text-sm focus:outline-none focus:border-amber-400">
-        <datalist id="wm-move-sku-list"></datalist>
+        <!-- Autocomplete dropdown -->
+        <div id="wm-sku-dropdown" class="hidden absolute z-50 w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl max-h-52 overflow-y-auto"></div>
         <div class="flex justify-between mt-1 text-[10px]">
-          <span id="wm-move-sku-name" class="text-slate-400"></span>
+          <span id="wm-move-sku-name" class="text-slate-400 font-bold"></span>
           <span id="wm-move-inv-avail" class="text-sky-300 font-black"></span>
         </div>
       </div>
@@ -30505,6 +30508,73 @@ function _wmFindProd(sku) {
     }
     return null;
 }
+
+// รวม SKU ทั้งหมดจากทุก machine
+function _wmAllProducts() {
+    if (!_wmProdData) return [];
+    const seen = new Set();
+    const list = [];
+    for (const m of (_wmProdData.machines || [])) {
+        for (const p of (m.products || [])) {
+            if (!seen.has(p.sku)) {
+                seen.add(p.sku);
+                list.push({ sku: p.sku, name: p.name || '', machine: m.machineId });
+            }
+        }
+    }
+    return list;
+}
+
+window.wmMoveSkuInput = function(val) {
+    const q    = val.trim().toLowerCase();
+    const ddEl = document.getElementById('wm-sku-dropdown');
+    if (!ddEl) return;
+
+    if (!q) {
+        ddEl.classList.add('hidden');
+        wmMoveSkuChange('');
+        return;
+    }
+
+    const all     = _wmAllProducts();
+    const matches = all.filter(p =>
+        p.sku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
+    ).slice(0, 20);
+
+    if (matches.length === 0) {
+        ddEl.classList.add('hidden');
+        wmMoveSkuChange(val);
+        return;
+    }
+
+    ddEl.innerHTML = matches.map(p => `
+      <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 last:border-0"
+           onmousedown="wmMoveSkuSelect('${p.sku}')">
+        <div class="flex-1 min-w-0">
+          <div class="text-white font-black text-sm">${p.sku}</div>
+          <div class="text-slate-400 text-xs truncate">${p.name}</div>
+        </div>
+        <div class="text-slate-600 text-[10px] flex-shrink-0">${p.machine}</div>
+      </div>`).join('');
+    ddEl.classList.remove('hidden');
+
+    // ถ้าพิมพ์ตรงกับ SKU เป๊ะ ให้ trigger change ทันที
+    const exact = all.find(p => p.sku.toLowerCase() === q);
+    if (exact) wmMoveSkuChange(exact.sku);
+};
+
+window.wmMoveSkuSelect = function(sku) {
+    const input = document.getElementById('wm-move-sku');
+    if (input) input.value = sku;
+    const ddEl = document.getElementById('wm-sku-dropdown');
+    if (ddEl) ddEl.classList.add('hidden');
+    wmMoveSkuChange(sku);
+};
+
+window.wmMoveSkuHideList = function() {
+    const ddEl = document.getElementById('wm-sku-dropdown');
+    if (ddEl) ddEl.classList.add('hidden');
+};
 
 window.wmMoveSkuChange = function(val) {
     const sku    = val.trim();
