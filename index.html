@@ -30119,18 +30119,26 @@ function _wmRenderMachines(data) {
         }
 
         // ── Capacity gauge ──
+        const zoneCfg     = WM_ZONE_CONFIG[mid];
+        const totalWidthM = zoneCfg ? zoneCfg.rows.reduce((s, r) => s + r.w, 0) / 100 : 0;
+        const rowsDesc    = zoneCfg ? zoneCfg.rows.map(r => `แถว${r.id} ${(r.w/100).toFixed(1)}ม.`).join(' · ') : '';
+
         const cap = _wmCalcZoneUsage(mid, { machines, inventory }, _wmMoveSummary);
-        if (cap && cap.totalWidthCm > 0) {
+        if (cap && cap.totalWidthCm > 0 && cap.usedWidthCm > 0) {
             const pct    = cap.pct;
             const barCol = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
             const pctTxt = pct >= 90 ? `🔴 ${pct}%` : pct >= 70 ? `⚠️ ${pct}%` : `${pct}%`;
             if (capPct) { capPct.textContent = pctTxt; capPct.style.color = barCol; }
             if (capBar) { capBar.style.width = pct + '%'; capBar.style.background = barCol; }
-            if (capDet) capDet.textContent =
-                `ใช้ ${(cap.usedWidthCm/100).toFixed(1)}ม. / ${(cap.totalWidthCm/100).toFixed(1)}ม.`;
+            if (capDet) capDet.innerHTML =
+                `<span class="text-slate-400">ใช้ ${(cap.usedWidthCm/100).toFixed(1)}ม. / ${totalWidthM.toFixed(1)}ม.</span>` +
+                (rowsDesc ? `<br><span class="text-slate-600">${rowsDesc}</span>` : '');
         } else {
-            if (capPct) capPct.textContent = '—';
-            if (capDet) capDet.textContent = 'รอข้อมูลขนาดมัด';
+            if (capPct) { capPct.textContent = totalWidthM > 0 ? '—' : 'N/A'; capPct.style.color = '#64748b'; }
+            if (capBar) { capBar.style.width = '0%'; }
+            if (capDet && totalWidthM > 0) capDet.innerHTML =
+                `<span class="text-slate-400 font-black">รวม ${totalWidthM.toFixed(1)} ม.</span>` +
+                (rowsDesc ? `<br><span class="text-slate-600 text-[10px]">${rowsDesc}</span>` : '');
         }
 
         // ── Flow: เข้า / ออก / สุทธิ วันนี้ ──
