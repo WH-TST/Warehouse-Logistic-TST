@@ -30216,9 +30216,9 @@ window.wmOpenMachineDetail = function(machineId) {
         return;
     }
 
-    const todayPlan    = mach.planPerDay[today] || 0;
     const todayProducts = mach.products.filter(p => p.daily[today] > 0);
-    const isRunning    = todayProducts.length > 0 || todayPlan > 0;
+    const todayPlan    = todayProducts.reduce((s, p) => s + (p.daily[today] || 0), 0);
+    const isRunning    = todayProducts.length > 0;
 
     if (badge) badge.style.background = isRunning ? '#059669' : '#475569';
     if (status) status.textContent = isRunning
