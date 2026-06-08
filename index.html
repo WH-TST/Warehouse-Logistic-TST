@@ -30080,14 +30080,34 @@ function _wmBuildZoneSkuBase(zoneId, prodData, moveSummary) {
   return skuData;
 }
 
+// คำนวณข้อมูลการซ้อนกองจริงหน้างาน
+// กฎ: ฐานขั้นต่ำ 3 มัด, ความสูงไม่เกิน WM_MAX_HEIGHT_CM
+function _wmCalcStackInfo(bundles, bw, bh) {
+  if (!bw || !bh || bundles <= 0) return null;
+  const maxLayers  = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / bh));  // ซ้อนได้สูงสุดกี่ชั้น
+  const reqCols    = Math.ceil(bundles / maxLayers);                   // ฐานขั้นต่ำจากข้อจำกัดความสูง
+  const minBase    = Math.min(3, bundles);                             // ฐานขั้นต่ำตามกฎหน้างาน (3 มัด)
+  const cols       = Math.max(minBase, reqCols);                       // ฐานที่ใช้จริง
+  const layers     = Math.ceil(bundles / cols);                        // ชั้นที่ซ้อนจริง
+  const heightCm   = layers * bh;                                      // ความสูงจริง
+  return {
+    bundles,
+    cols,                         // ฐานกว้าง (มัด)
+    layers,                       // จำนวนชั้น
+    heightCm,                     // ความสูงจริง (cm)
+    maxLayers,                    // ซ้อนได้สูงสุด
+    needsWideBase: reqCols > 3,   // ต้องวางฐานเกิน 3 มัด
+    usedWidthCm: cols * bw
+  };
+}
+
 function _wmCalcWidthFromSku(skuData) {
   let usedWidthCm = 0;
   Object.values(skuData).forEach(d => {
     if (d.pcs <= 0 || !d.bw || !d.bh) return;
     const bundles = Math.ceil(d.pcs / d.pcsPerBundle);
-    const layers  = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / d.bh));
-    const cols    = Math.ceil(bundles / layers);
-    usedWidthCm  += cols * d.bw;
+    const info    = _wmCalcStackInfo(bundles, d.bw, d.bh);
+    if (info) usedWidthCm += info.usedWidthCm;
   });
   return usedWidthCm;
 }
@@ -30132,15 +30152,14 @@ function _wmCalcZoneProjection(zoneId, data, moveSummary, nDays) {
       });
     }
 
-    // คำนวณ usedWidthCm จาก cumPcs
+    // คำนวณ usedWidthCm จาก cumPcs (ใช้กฎฐาน 3 มัด)
     let usedW = 0;
     Object.entries(cumPcs).forEach(([sku, pcs]) => {
       const d2 = skuBase[sku];
       if (!d2 || pcs <= 0 || !d2.bw || !d2.bh) return;
       const bundles = Math.ceil(pcs / d2.pcsPerBundle);
-      const layers  = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / d2.bh));
-      const cols    = Math.ceil(bundles / layers);
-      usedW += cols * d2.bw;
+      const info    = _wmCalcStackInfo(bundles, d2.bw, d2.bh);
+      if (info) usedW += info.usedWidthCm;
     });
 
     const pct     = Math.min(100, Math.round(usedW / totalWidthCm * 100));
@@ -30744,11 +30763,12 @@ window.wmOpenMachineDetail = function(machineId) {
         const showList     = [...activeProd, ...inactiveProd];
         prEl.innerHTML =
           `<div class="grid text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-800 px-4 py-2.5 rounded-t-xl border-b border-slate-700 sticky top-0"
-               style="grid-template-columns:1fr 72px 72px 72px">
+               style="grid-template-columns:1fr 64px 64px 64px 110px">
             <span>SKU / ชื่อสินค้า</span>
             <span class="text-center">วันนี้</span>
             <span class="text-center">คลัง</span>
             <span class="text-center">น้ำหนัก</span>
+            <span class="text-center">การจัดกอง</span>
           </div>` +
           showList.map((p, i) => {
             const inv      = inventory[p.sku] || {};
@@ -30756,21 +30776,44 @@ window.wmOpenMachineDetail = function(machineId) {
             const invPCS   = inv.pcs    || 0;
             const invWt    = inv.weight || 0;
             const rowBg    = i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800/50';
+
+            // คำนวณการจัดกอง
+            const ppb      = p.pcsPerBundle || 1;
+            const bw       = p.bundleWidth  || 0;
+            const bh       = p.bundleHeight || 0;
+            const bundles  = invPCS > 0 ? Math.ceil(invPCS / ppb) : 0;
+            const stack    = bundles > 0 && bw && bh ? _wmCalcStackInfo(bundles, bw, bh) : null;
+            let stackHtml  = '<span class="text-slate-600 text-xs">—</span>';
+            if (stack) {
+              const warnCls = stack.needsWideBase ? 'text-amber-400' : 'text-emerald-400';
+              const warn    = stack.needsWideBase
+                ? `<span class="text-amber-400 text-[9px] font-black">⚠ ต้องฐาน ${stack.cols} มัด</span>`
+                : '';
+              stackHtml = `<div class="text-center leading-tight">
+                <span class="${warnCls} font-black text-xs">ฐาน ${stack.cols} × ${stack.layers} ชั้น</span>
+                <br><span class="text-slate-500 text-[10px]">${stack.heightCm.toFixed(0)} ซม. สูง</span>
+                ${warn ? '<br>' + warn : ''}
+              </div>`;
+            }
+
             return `<div class="grid items-center px-4 py-3 ${rowBg} last:rounded-b-xl gap-2"
-                        style="grid-template-columns:1fr 72px 72px 72px">
+                        style="grid-template-columns:1fr 64px 64px 64px 110px">
               <div class="min-w-0">
                 <p class="text-sm font-black text-white truncate">${p.sku}</p>
                 <p class="text-xs text-slate-400 truncate mt-0.5">${p.name || ''}</p>
+                ${bh ? `<p class="text-[10px] text-slate-600">${ppb} เส้น/มัด · สูง ${bh}ซม. · กว้าง ${bw}ซม.</p>` : ''}
               </div>
               <div class="text-center">
                 <span class="${todayQty > 0 ? 'text-emerald-400 font-black text-sm' : 'text-slate-600 text-sm'}">${todayQty > 0 ? '+' + fmtN(todayQty) : '—'}</span>
               </div>
               <div class="text-center">
                 <span class="${invPCS > 0 ? 'text-sky-300 font-black text-sm' : 'text-slate-600 text-sm'}">${fmtN(invPCS)}</span>
+                ${bundles > 0 ? `<br><span class="text-slate-500 text-[10px]">${fmtN(bundles)} มัด</span>` : ''}
               </div>
               <div class="text-center">
                 <span class="${invWt > 0 ? 'text-slate-300 text-sm' : 'text-slate-600 text-sm'}">${invWt > 0 ? invWt.toFixed(1) + 't' : '—'}</span>
               </div>
+              <div>${stackHtml}</div>
             </div>`;
           }).join('');
     }
