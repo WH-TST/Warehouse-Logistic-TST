@@ -1976,11 +1976,16 @@ thead.sticky {
         </div>
       </div>
 
-      <!-- Qty -->
+      <!-- Qty (มัด) -->
       <div>
-        <label class="text-slate-400 font-black text-xs uppercase tracking-widest mb-1.5 block">จำนวน (PCS)</label>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="text-slate-400 font-black text-xs uppercase tracking-widest">จำนวน (มัด)</label>
+          <span id="wm-move-pcs-preview" class="text-sky-300 text-xs font-black"></span>
+        </div>
         <input type="number" id="wm-move-qty" min="1" placeholder="0"
+          oninput="wmMoveQtyChange(this.value)"
           class="w-full bg-slate-700 border-2 border-slate-500 text-white rounded-xl px-4 py-2.5 font-black text-xl text-center focus:outline-none focus:border-amber-400">
+        <p id="wm-move-ppb-hint" class="text-slate-500 text-[11px] mt-1 text-center"></p>
       </div>
 
       <!-- รหัสพนักงาน -->
@@ -29811,6 +29816,62 @@ window.switchWmTab = function(tab) {
     if (!isStorage && !_wmProdLoaded) _wmInitProdControls();
 };
 
+// ── Zone Config (ความกว้างแต่ละแถวในโซน หน่วย: ซม.) ─────────
+const WM_ZONE_CONFIG = {
+  'P4':    { rows: [{id:1,w:830},{id:2,w:830},{id:3,w:1330}] },
+  'RE-C4': { rows: [{id:1,w:1330},{id:2,w:1330},{id:3,w:1330}] },
+  'RE4':   { rows: [{id:1,w:500}] },
+  'P1':    { rows: [{id:1,w:1650},{id:2,w:1600},{id:3,w:1300}] },
+  'C5':    { rows: [{id:1,w:500},{id:2,w:2100},{id:5,w:300},{id:6,w:300}] },
+  'RE-C5': { rows: [{id:3,w:2100},{id:4,w:2100}] },
+  'P2':    { rows: [{id:1,w:500},{id:2,w:1000},{id:3,w:1300}] },
+  'P3':    { rows: [{id:1,w:700},{id:2,w:700},{id:3,w:700},{id:4,w:250},{id:5,w:250}] },
+  'RE-1':  { rows: [{id:1,w:850}] }
+};
+const WM_MAX_HEIGHT_CM = 420; // ความสูงสูงสุด 4.2 เมตร
+
+// คำนวณความจุโซน (ซม.กว้าง) และการใช้งานจาก inventory + move log
+function _wmCalcZoneUsage(zoneId, prodData, moveSummary) {
+  const cfg = WM_ZONE_CONFIG[zoneId];
+  if (!cfg) return null;
+  const totalWidthCm = cfg.rows.reduce((s, r) => s + r.w, 0);
+
+  // รวม SKU ที่อยู่ในโซนนี้: ทั้ง native (ผลิตในเครื่องนี้) + moved in
+  const skuData = {}; // { sku: { pcs, pcsPerBundle, bundleWidth, bundleHeight } }
+
+  // native: machine ที่ผลิตใน zone นี้
+  if (prodData && prodData.machines) {
+    const mach = prodData.machines.find(m => m.machineId === zoneId);
+    if (mach) {
+      mach.products.forEach(p => {
+        const inv = (prodData.inventory || {})[p.sku] || {};
+        if (!skuData[p.sku]) skuData[p.sku] = { pcs: 0, pcsPerBundle: p.pcsPerBundle || 1, bw: p.bundleWidth || 0, bh: p.bundleHeight || 0 };
+        skuData[p.sku].pcs += inv.pcs || 0;
+      });
+    }
+  }
+
+  // หักออก/เพิ่มจาก move log
+  const zoneMoves = (moveSummary || {})[zoneId] || {};
+  Object.entries(zoneMoves).forEach(([sku, mv]) => {
+    if (!skuData[sku]) skuData[sku] = { pcs: 0, pcsPerBundle: mv.pcsPerBundle || 1, bw: 0, bh: 0 };
+    skuData[sku].pcs += mv.pcs || 0; // negative = moved out
+  });
+
+  // คำนวณความกว้างที่ใช้รวม
+  let usedWidthCm = 0;
+  Object.values(skuData).forEach(d => {
+    if (d.pcs <= 0 || !d.bw || !d.bh) return;
+    const bundles = Math.ceil(d.pcs / d.pcsPerBundle);
+    const layers  = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / d.bh));
+    const cols    = Math.ceil(bundles / layers);
+    usedWidthCm  += cols * d.bw;
+  });
+
+  const pct = totalWidthCm > 0 ? Math.min(100, Math.round(usedWidthCm / totalWidthCm * 100)) : 0;
+  return { totalWidthCm, usedWidthCm, pct };
+}
+
 // ── Production Plan init controls ────────────────────────────
 let _wmProdLoaded   = false;
 let _wmProdData     = null;
@@ -29977,12 +30038,24 @@ function _wmRenderMachines(data) {
             }
         }
 
-        // ── Plan footer: รวม PCS สต็อก + ผลิตวันนี้ ────────────
+        // ── Plan footer: รวม PCS สต็อก + ผลิตวันนี้ + capacity bar ──
         if (plan) {
             const parts = [];
             if (hasInv)      parts.push(`<span class="text-sky-300 font-black">${fmtN(totalInvPCS)}</span><span class="text-slate-600 text-[8px] ml-0.5">PCS คลัง</span>`);
             if (todayPlan>0) parts.push(`<span class="text-emerald-400 font-black ml-2">${fmtN(todayPlan)}</span><span class="text-slate-600 text-[8px] ml-0.5">ผลิต/วัน</span>`);
-            plan.innerHTML = parts.join('');
+
+            // capacity bar
+            const cap = _wmCalcZoneUsage(mid, { machines, inventory }, _wmMoveSummary);
+            if (cap) {
+                const pct    = cap.pct;
+                const barCol = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
+                parts.push(`<div class="w-full mt-1 bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                  <div style="width:${pct}%;background:${barCol};height:100%;border-radius:9999px;transition:width .4s"></div>
+                </div>
+                <span style="color:${barCol}" class="font-black text-[8px]">${pct}% พื้นที่</span>`);
+            }
+
+            plan.innerHTML = `<div class="w-full">${parts.join('')}</div>`;
         }
     });
 
@@ -30108,35 +30181,62 @@ window.wmMoveSkuChange = function(val) {
     const fromZone = document.getElementById('wm-move-from')?.value;
     const nameEl   = document.getElementById('wm-move-sku-name');
     const availEl  = document.getElementById('wm-move-inv-avail');
-    if (!sku || !_wmProdData) { if (nameEl) nameEl.textContent=''; if (availEl) availEl.textContent=''; return; }
+    const hintEl   = document.getElementById('wm-move-ppb-hint');
+    if (!sku || !_wmProdData) {
+        if (nameEl) nameEl.textContent = '';
+        if (availEl) availEl.textContent = '';
+        if (hintEl) hintEl.textContent = '';
+        return;
+    }
     const mach = (_wmProdData.machines||[]).find(m=>m.machineId===fromZone);
     const prod = (mach?.products||[]).find(p=>p.sku===sku);
     if (nameEl) nameEl.textContent = prod?.name || '';
     const inv = (_wmProdData.inventory||{})[sku] || {};
-    if (availEl) availEl.textContent = inv.pcs ? 'สต็อก: ' + Number(inv.pcs).toLocaleString('th-TH') + ' PCS' : '';
+    const ppb = prod?.pcsPerBundle || 1;
+    const availBundles = inv.pcs ? Math.floor(inv.pcs / ppb) : 0;
+    if (availEl) availEl.textContent = inv.pcs
+        ? `สต็อก: ${Number(inv.pcs).toLocaleString('th-TH')} PCS (${availBundles.toLocaleString('th-TH')} มัด)`
+        : '';
+    if (hintEl) hintEl.textContent = ppb > 1 ? `1 มัด = ${ppb} เส้น` : '';
+    // อัพเดต preview ถ้ากรอก qty ไว้แล้ว
+    const qtyEl = document.getElementById('wm-move-qty');
+    if (qtyEl?.value) wmMoveQtyChange(qtyEl.value);
+};
+
+window.wmMoveQtyChange = function(val) {
+    const bundles  = parseInt(val) || 0;
+    const sku      = document.getElementById('wm-move-sku')?.value?.trim();
+    const fromZone = document.getElementById('wm-move-from')?.value;
+    const preEl    = document.getElementById('wm-move-pcs-preview');
+    if (!preEl) return;
+    const mach = (_wmProdData?.machines||[]).find(m=>m.machineId===fromZone);
+    const prod = (mach?.products||[]).find(p=>p.sku===sku);
+    const ppb  = prod?.pcsPerBundle || 1;
+    preEl.textContent = bundles > 0 ? `= ${(bundles * ppb).toLocaleString('th-TH')} เส้น` : '';
 };
 
 window.confirmWmMove = function() {
     const fromZone = document.getElementById('wm-move-from')?.value?.trim();
     const toZone   = document.getElementById('wm-move-to')?.value?.trim();
     const sku      = document.getElementById('wm-move-sku')?.value?.trim();
-    const qty      = parseInt(document.getElementById('wm-move-qty')?.value) || 0;
+    const bundles  = parseInt(document.getElementById('wm-move-qty')?.value) || 0;
     const emp      = document.getElementById('wm-move-emp')?.value?.trim();
     const note     = document.getElementById('wm-move-note')?.value?.trim() || '';
 
-    const errEl = document.getElementById('wm-move-error');
+    const errEl  = document.getElementById('wm-move-error');
     const errTxt = document.getElementById('wm-move-error-txt');
     const showErr = msg => { if (errEl) errEl.classList.remove('hidden'); if (errTxt) errTxt.textContent = msg; };
 
-    if (!fromZone) return showErr('กรุณาเลือกต้นทาง');
-    if (!toZone)   return showErr('กรุณาเลือกปลายทาง');
-    if (!sku)      return showErr('กรุณาระบุ SKU');
-    if (qty <= 0)  return showErr('กรุณาระบุจำนวน > 0');
-    if (!emp)      return showErr('กรุณาระบุรหัสพนักงาน');
+    if (!fromZone)  return showErr('กรุณาเลือกต้นทาง');
+    if (!toZone)    return showErr('กรุณาเลือกปลายทาง');
+    if (!sku)       return showErr('กรุณาระบุ SKU');
+    if (bundles<=0) return showErr('กรุณาระบุจำนวนมัด > 0');
+    if (!emp)       return showErr('กรุณาระบุรหัสพนักงาน');
     errEl?.classList.add('hidden');
 
     const mach = (_wmProdData?.machines||[]).find(m=>m.machineId===fromZone);
     const prod = (mach?.products||[]).find(p=>p.sku===sku);
+    const ppb  = prod?.pcsPerBundle || 1;
 
     const btn = document.getElementById('btn-confirm-wm-move');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
@@ -30148,8 +30248,7 @@ window.confirmWmMove = function() {
             btn.disabled  = false;
             if (res?.success) {
                 closeWmMoveModal();
-                showToast(`✅ ย้าย ${qty.toLocaleString('th-TH')} PCS จาก ${fromZone} → ${toZone} สำเร็จ`);
-                // Reload move log and update RE zones
+                showToast(`✅ ย้าย ${bundles.toLocaleString('th-TH')} มัด (${(bundles*ppb).toLocaleString('th-TH')} เส้น) จาก ${fromZone} → ${toZone}`);
                 _wmLoadMoveLog(() => {
                     if (_wmProdData) {
                         _wmProdData.moveSummary = _wmMoveSummary;
@@ -30166,7 +30265,7 @@ window.confirmWmMove = function() {
             btn.disabled  = false;
             showErr(err?.message || String(err));
         })
-        .saveWarehouseMove({ fromZone, toZone, sku, skuName: prod?.name||'', qty, recordedBy: emp, note });
+        .saveWarehouseMove({ fromZone, toZone, sku, skuName: prod?.name||'', bundles, pcsPerBundle: ppb, recordedBy: emp, note });
 };
 
 function _wmShowMoveLog() {

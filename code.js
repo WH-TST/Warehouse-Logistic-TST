@@ -603,8 +603,10 @@ function getExternalProductMap() {
         const sku = String(data[i][1] || '').trim(); // Col B
         if (!sku) continue;
         map[sku] = {
-          productSize: String(data[i][72] || '').trim(), // Col BU
-          pcsPerBundle: Number(data[i][21]) || 1         // Col V
+          productSize:  String(data[i][72] || '').trim(), // Col BU
+          pcsPerBundle: Number(data[i][21]) || 1,         // Col V
+          bundleWidth:  Number(data[i][22]) || 0,         // Col W ความกว้างต่อมัด (cm)
+          bundleHeight: Number(data[i][23]) || 0          // Col X ความสูงต่อมัด (cm)
         };
       }
       return map;
@@ -8760,6 +8762,17 @@ function getProductionPlanData(params) {
         currentMach.products.push(product);
       }
     }
+    // เพิ่มข้อมูลมิติมัดจาก Product Master
+    var extMap = getExternalProductMap();
+    machines.forEach(function(m) {
+      m.products.forEach(function(p) {
+        var ext = extMap[p.sku] || {};
+        p.pcsPerBundle = ext.pcsPerBundle || 1;
+        p.bundleWidth  = ext.bundleWidth  || 0;
+        p.bundleHeight = ext.bundleHeight || 0;
+      });
+    });
+
     var allSKUs = {};
     machines.forEach(function(m) { m.products.forEach(function(p) { allSKUs[p.sku] = true; }); });
     var inventory = {};
@@ -8788,7 +8801,8 @@ function _getOrCreateMoveSheet(ss) {
   var sheet = ss.getSheetByName(WAREHOUSE_MOVE_SHEET);
   if (!sheet) {
     sheet = ss.insertSheet(WAREHOUSE_MOVE_SHEET);
-    var headers = ['MoveID','Timestamp','Date','FromZone','ToZone','SKU','SKUName','QtyMoved','RecordedBy','Note'];
+    var headers = ['MoveID','Timestamp','Date','FromZone','ToZone','SKU','SKUName',
+                   'Bundles','PcsPerBundle','TotalPCS','RecordedBy','Note'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
     sheet.getRange(1, 1, 1, headers.length)
@@ -8803,7 +8817,10 @@ function saveWarehouseMove(data) {
     var sheet = _getOrCreateMoveSheet(ss);
     var now   = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
     var date  = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
-    var moveId = 'MV' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+    var moveId   = 'MV' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+    var bundles  = Number(data.bundles     || 0);
+    var pcsPerB  = Number(data.pcsPerBundle|| 1);
+    var totalPCS = bundles * pcsPerB;
 
     var row = [
       moveId,
@@ -8813,17 +8830,20 @@ function saveWarehouseMove(data) {
       String(data.toZone    || ''),
       String(data.sku       || ''),
       String(data.skuName   || ''),
-      Number(data.qty       || 0),
+      bundles,
+      pcsPerB,
+      totalPCS,
       String(data.recordedBy|| ''),
       String(data.note      || '')
     ];
     sheet.appendRow(row);
 
     saveAuditLog('Warehouse Move', 'MOVE',
-      data.fromZone + ' → ' + data.toZone + ' | ' + data.sku + ' | ' + data.qty + ' PCS | ' + data.recordedBy,
+      data.fromZone + ' → ' + data.toZone + ' | ' + data.sku +
+      ' | ' + bundles + ' มัด (' + totalPCS + ' PCS) | ' + data.recordedBy,
       'success');
 
-    return { success: true, moveId: moveId };
+    return { success: true, moveId: moveId, bundles: bundles, totalPCS: totalPCS };
   } catch (e) {
     return { success: false, message: e.toString() };
   }
@@ -8832,48 +8852,55 @@ function saveWarehouseMove(data) {
 function getWarehouseMoveLog() {
   try {
     var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName(WAREHOUSE_MOVE_SHEET);
-    if (!sheet || sheet.getLastRow() < 2) return { success: true, moves: [], summary: {} };
+    var sheet = _getOrCreateMoveSheet(ss);
+    if (sheet.getLastRow() < 2) return { success: true, moves: [], summary: {} };
 
-    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 12).getValues();
 
-    // สร้าง summary: toZone → sku → netQty (inbound - outbound)
-    var summary = {};  // { 'RE1': { '0CGI30.1000': { qty, skuName, fromZones } } }
+    // summary[zone][sku] = { bundles, pcs, pcsPerBundle, skuName }
+    // bundles > 0 = เข้า, < 0 = ออก (net)
+    var summary = {};
 
     rows.forEach(function(r) {
-      var fromZone = String(r[3] || '').trim();
-      var toZone   = String(r[4] || '').trim();
-      var sku      = String(r[5] || '').trim();
-      var skuName  = String(r[6] || '').trim();
-      var qty      = Number(r[7] || 0);
-      if (!sku || qty <= 0) return;
+      var fromZone  = String(r[3] || '').trim();
+      var toZone    = String(r[4] || '').trim();
+      var sku       = String(r[5] || '').trim();
+      var skuName   = String(r[6] || '').trim();
+      var bundles   = Number(r[7] || 0);
+      var pcsPerB   = Number(r[8] || 1);
+      var totalPCS  = Number(r[9] || 0) || bundles * pcsPerB;
+      if (!sku || bundles <= 0) return;
 
-      // Inbound ไป toZone
-      if (!summary[toZone]) summary[toZone] = {};
-      if (!summary[toZone][sku]) summary[toZone][sku] = { qty: 0, skuName: skuName, fromZones: {} };
-      summary[toZone][sku].qty += qty;
-      summary[toZone][sku].fromZones[fromZone] = (summary[toZone][sku].fromZones[fromZone] || 0) + qty;
+      function addToZone(zone, sign) {
+        if (!summary[zone]) summary[zone] = {};
+        if (!summary[zone][sku]) summary[zone][sku] = { bundles: 0, pcs: 0, pcsPerBundle: pcsPerB, skuName: skuName };
+        summary[zone][sku].bundles += sign * bundles;
+        summary[zone][sku].pcs    += sign * totalPCS;
+      }
 
-      // Outbound จาก fromZone (ลดสต็อกที่แสดงใน production zone)
-      if (!summary[fromZone]) summary[fromZone] = {};
-      if (!summary[fromZone][sku]) summary[fromZone][sku] = { qty: 0, skuName: skuName, fromZones: {} };
-      summary[fromZone][sku].qty -= qty; // negative = ส่งออก
+      addToZone(toZone,   1);  // เข้า
+      addToZone(fromZone, -1); // ออก
     });
 
     var moves = rows.map(function(r) {
+      var bundles  = Number(r[7] || 0);
+      var pcsPerB  = Number(r[8] || 1);
+      var totalPCS = Number(r[9] || 0) || bundles * pcsPerB;
       return {
-        moveId:     String(r[0] || ''),
-        timestamp:  r[1] instanceof Date ? Utilities.formatDate(r[1], 'GMT+7', 'dd/MM/yyyy HH:mm') : String(r[1] || ''),
-        date:       r[2] instanceof Date ? Utilities.formatDate(r[2], 'GMT+7', 'yyyy-MM-dd')        : String(r[2] || ''),
-        fromZone:   String(r[3] || ''),
-        toZone:     String(r[4] || ''),
-        sku:        String(r[5] || ''),
-        skuName:    String(r[6] || ''),
-        qty:        Number(r[7] || 0),
-        recordedBy: String(r[8] || ''),
-        note:       String(r[9] || '')
+        moveId:      String(r[0]  || ''),
+        timestamp:   r[1] instanceof Date ? Utilities.formatDate(r[1], 'GMT+7', 'dd/MM/yyyy HH:mm') : String(r[1] || ''),
+        date:        r[2] instanceof Date ? Utilities.formatDate(r[2], 'GMT+7', 'yyyy-MM-dd')        : String(r[2] || ''),
+        fromZone:    String(r[3]  || ''),
+        toZone:      String(r[4]  || ''),
+        sku:         String(r[5]  || ''),
+        skuName:     String(r[6]  || ''),
+        bundles:     bundles,
+        pcsPerBundle:pcsPerB,
+        totalPCS:    totalPCS,
+        recordedBy:  String(r[10] || ''),
+        note:        String(r[11] || '')
       };
-    }).reverse(); // ล่าสุดก่อน
+    }).reverse();
 
     return { success: true, moves: moves, summary: summary };
   } catch (e) {
