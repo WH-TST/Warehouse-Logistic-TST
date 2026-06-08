@@ -1774,10 +1774,10 @@ thead.sticky {
         -->
         <div id="wm-floorplan" style="
           display:grid;
-          grid-template-columns: 140px 64px 210px 64px 210px 64px 155px 64px;
-          grid-template-rows: 200px 180px 110px;
-          gap:5px;
-          min-width:990px;
+          grid-template-columns: 190px 56px 270px 56px 270px 56px 210px 56px;
+          grid-template-rows: 220px 200px 110px;
+          gap:6px;
+          min-width:1200px;
         ">
 
           <div id="wm-zone-P4" data-machine="P4" onclick="wmOpenMachineDetail('P4')" class="wm-machine-card rounded-lg border-2 border-slate-600 bg-slate-800 p-2 flex flex-col cursor-pointer hover:brightness-110 transition-all" style="grid-area:1/1">
@@ -1886,33 +1886,44 @@ thead.sticky {
         <div id="wm-move-log-rows" class="space-y-1 max-h-48 overflow-y-auto text-[10px]"></div>
       </div>
 
-      <!-- Machine Detail Panel (แสดงเมื่อคลิก) -->
-      <div id="wm-machine-detail" class="hidden bg-slate-800/80 border border-slate-600 rounded-2xl p-5 mt-4">
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-3">
-            <div id="wmd-badge" class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-xl bg-blue-600"></div>
-            <div>
-              <h3 id="wmd-title" class="text-white font-black text-xl">เครื่อง —</h3>
-              <p id="wmd-status" class="text-slate-400 text-xs font-bold"></p>
-            </div>
-          </div>
-          <button onclick="document.getElementById('wm-machine-detail').classList.add('hidden')" class="text-slate-500 hover:text-white"><i class="fas fa-times text-xl"></i></button>
-        </div>
-        <!-- Timeline -->
-        <div class="mb-4">
-          <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">แผน 7 วัน (PCS/วัน)</p>
-          <div id="wmd-timeline" class="flex gap-2 flex-wrap"></div>
-        </div>
-        <!-- Products table -->
-        <div>
-          <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">รายการสินค้าที่ผลิต</p>
-          <div id="wmd-products" class="space-y-1 max-h-60 overflow-y-auto"></div>
-        </div>
-      </div>
-
     </div><!-- end wm-prod-machines -->
 
   </div><!-- end wm-prod-panel -->
+
+<!-- MODAL: Machine Detail (fixed overlay) -->
+<div id="wm-machine-detail" class="fixed inset-0 bg-black/70 hidden z-[96] flex items-start justify-center pt-12 px-4 pb-4 backdrop-blur-sm overflow-y-auto">
+  <div class="bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-600">
+    <!-- Header -->
+    <div id="wmd-header-bar" class="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center gap-4 rounded-t-2xl border-b border-slate-600">
+      <div id="wmd-badge" class="w-14 h-14 rounded-xl flex items-center justify-center text-white font-black text-2xl bg-blue-600 flex-shrink-0 shadow-lg"></div>
+      <div class="flex-1 min-w-0">
+        <h3 id="wmd-title" class="text-white font-black text-2xl leading-tight">เครื่อง —</h3>
+        <p id="wmd-status" class="text-slate-300 text-sm font-bold mt-0.5"></p>
+      </div>
+      <button onclick="document.getElementById('wm-machine-detail').classList.add('hidden')"
+              class="w-9 h-9 rounded-xl bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-slate-400 hover:text-white transition-all flex-shrink-0">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <!-- Body -->
+    <div class="p-6 space-y-6">
+      <!-- Timeline -->
+      <div>
+        <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+          <i class="fas fa-calendar-week text-blue-400"></i> แผน 7 วัน (PCS/วัน)
+        </p>
+        <div id="wmd-timeline" class="flex gap-2 flex-wrap"></div>
+      </div>
+      <!-- Products table -->
+      <div>
+        <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+          <i class="fas fa-boxes text-emerald-400"></i> รายการสินค้าที่ผลิต
+        </p>
+        <div id="wmd-products" class="max-h-72 overflow-y-auto rounded-xl border border-slate-700"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: ย้ายสินค้าระหว่างพื้นที่ (global — outside view) -->
 <div id="wm-move-modal" class="fixed inset-0 bg-black/80 hidden z-[95] flex items-center justify-center px-4 backdrop-blur-sm">
@@ -29936,17 +29947,20 @@ function _wmRenderMachines(data) {
 
         // ── Info: สินค้าคงคลัง (หลัก) + ผลิตวันนี้ (รอง) ───────
         if (info) {
-            const maxRows = mid === 'C5' ? 6 : 4;
+            const maxRows = mid === 'C5' ? 5 : 3;
             if (invItems.length === 0 && !isRunning) {
                 info.innerHTML = '<span class="text-slate-600 italic text-[9px]">ไม่มีสต็อก</span>';
             } else {
                 const rows = invItems.slice(0, maxRows).map(p => {
                     const prodBadge = p.todayQty > 0
-                        ? `<span class="text-emerald-400 text-[8px] ml-1">+${fmtN(p.todayQty)}</span>`
+                        ? `<span class="text-emerald-400 text-[8px]">+${fmtN(p.todayQty)}</span>`
                         : '';
-                    return `<div class="flex items-baseline justify-between gap-1 leading-tight">
-                      <span class="text-white font-black text-[9px] truncate flex-1">${p.sku}</span>
-                      <span class="text-sky-300 font-black text-[9px] flex-shrink-0">${fmtN(p.pcs)}</span>${prodBadge}
+                    return `<div class="leading-tight mb-0.5">
+                      <div class="flex items-baseline justify-between gap-1">
+                        <span class="text-white font-black text-[10px] truncate flex-1">${p.sku}</span>
+                        <span class="text-sky-300 font-black text-[10px] flex-shrink-0">${fmtN(p.pcs)}</span>${prodBadge}
+                      </div>
+                      ${p.name ? `<div class="text-slate-400 text-[9px] truncate">${p.name}</div>` : ''}
                     </div>`;
                 }).join('');
                 const more = invItems.length > maxRows
@@ -30184,7 +30198,7 @@ window.wmOpenMachineDetail = function(machineId) {
     const panel = document.getElementById('wm-machine-detail');
     if (!panel) return;
     panel.classList.remove('hidden');
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    panel.scrollTop = 0;
 
     const badge  = document.getElementById('wmd-badge');
     const title  = document.getElementById('wmd-title');
@@ -30217,10 +30231,11 @@ window.wmOpenMachineDetail = function(machineId) {
             const qty     = mach.planPerDay[d] || 0;
             const isToday = d === today;
             const hasProd = mach.products.some(p => p.daily[d] > 0);
-            const bg      = isToday ? 'bg-blue-600 border-blue-400' : hasProd ? 'bg-emerald-800 border-emerald-600' : 'bg-slate-700 border-slate-600';
-            return `<div class="flex flex-col items-center gap-0.5 ${bg} border rounded-lg px-2 py-2 min-w-[44px]">
-              <span class="text-[10px] font-bold text-slate-300">${fmtDate(d)}</span>
-              <span class="text-sm font-black text-white">${qty > 0 ? fmtN(qty) : '—'}</span>
+            const bg      = isToday ? 'bg-blue-600 border-blue-500' : hasProd ? 'bg-emerald-800 border-emerald-600' : 'bg-slate-800 border-slate-700';
+            const numCls  = isToday ? 'text-white text-base' : hasProd ? 'text-emerald-300 text-base' : 'text-slate-500 text-base';
+            return `<div class="flex flex-col items-center gap-1 ${bg} border rounded-xl px-3 py-2.5 min-w-[52px]">
+              <span class="text-[11px] font-bold text-slate-300">${fmtDate(d)}</span>
+              <span class="font-black ${numCls}">${qty > 0 ? fmtN(qty) : '—'}</span>
             </div>`;
         }).join('');
     }
@@ -30229,36 +30244,39 @@ window.wmOpenMachineDetail = function(machineId) {
     if (prEl) {
         const activeProd = mach.products.filter(p => upcoming.some(d => p.daily[d] > 0));
         const showList   = activeProd.length > 0 ? activeProd : mach.products.slice(0, 10);
-        prEl.innerHTML = `
-          <div class="grid text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-700 pb-1 mb-1"
-               style="grid-template-columns:1fr 60px 60px 60px">
-            <span>SKU / ชื่อสินค้า</span><span class="text-center">วันนี้</span>
-            <span class="text-center">คลัง</span><span class="text-center">น้ำหนัก</span>
+        prEl.innerHTML =
+          `<div class="grid text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-800 px-4 py-2.5 rounded-t-xl border-b border-slate-700 sticky top-0"
+               style="grid-template-columns:1fr 72px 72px 72px">
+            <span>SKU / ชื่อสินค้า</span>
+            <span class="text-center">วันนี้</span>
+            <span class="text-center">คลัง</span>
+            <span class="text-center">น้ำหนัก</span>
           </div>` +
-          showList.map(p => {
+          showList.map((p, i) => {
             const inv      = inventory[p.sku] || {};
             const todayQty = p.daily[today] || 0;
             const invPCS   = inv.pcs    || 0;
             const invWt    = inv.weight || 0;
-            return `<div class="grid items-center py-1.5 border-b border-slate-700/40 last:border-0 gap-1"
-                        style="grid-template-columns:1fr 60px 60px 60px">
+            const rowBg    = i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800/50';
+            return `<div class="grid items-center px-4 py-3 ${rowBg} last:rounded-b-xl gap-2"
+                        style="grid-template-columns:1fr 72px 72px 72px">
               <div class="min-w-0">
-                <p class="text-xs font-black text-white truncate">${p.sku}</p>
-                <p class="text-[9px] text-slate-500 truncate">${p.name || ''}</p>
+                <p class="text-sm font-black text-white truncate">${p.sku}</p>
+                <p class="text-xs text-slate-400 truncate mt-0.5">${p.name || ''}</p>
               </div>
               <div class="text-center">
-                <span class="${todayQty > 0 ? 'text-emerald-400 font-black' : 'text-slate-600'} text-xs">${todayQty > 0 ? '+' + fmtN(todayQty) : '—'}</span>
+                <span class="${todayQty > 0 ? 'text-emerald-400 font-black text-sm' : 'text-slate-600 text-sm'}">${todayQty > 0 ? '+' + fmtN(todayQty) : '—'}</span>
               </div>
               <div class="text-center">
-                <span class="${invPCS > 0 ? 'text-sky-300 font-black' : 'text-slate-600'} text-xs">${fmtN(invPCS)}</span>
+                <span class="${invPCS > 0 ? 'text-sky-300 font-black text-sm' : 'text-slate-600 text-sm'}">${fmtN(invPCS)}</span>
               </div>
               <div class="text-center">
-                <span class="text-slate-400 text-xs">${invWt > 0 ? invWt.toFixed(1) + 't' : '—'}</span>
+                <span class="${invWt > 0 ? 'text-slate-300 text-sm' : 'text-slate-600 text-sm'}">${invWt > 0 ? invWt.toFixed(1) + 't' : '—'}</span>
               </div>
             </div>`;
           }).join('') +
           (mach.products.length > showList.length
-            ? `<p class="text-slate-600 text-[10px] pt-1">+ ${mach.products.length - showList.length} รายการอื่น</p>` : '');
+            ? `<div class="px-4 py-2 text-slate-500 text-xs bg-slate-800 rounded-b-xl">+ ${mach.products.length - showList.length} รายการอื่น</div>` : '');
     }
 };
 
