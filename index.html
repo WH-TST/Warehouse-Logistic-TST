@@ -2224,12 +2224,16 @@ thead.sticky {
       <p id="wm-move-error" class="hidden text-red-400 text-xs font-bold"><i class="fas fa-exclamation-circle mr-1"></i><span id="wm-move-error-txt"></span></p>
 
       <!-- Buttons -->
-      <div class="flex gap-3">
+      <div class="flex gap-2">
+        <button onclick="wmPrintFromMoveForm()"
+          class="bg-slate-600 hover:bg-slate-500 text-white px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 flex-shrink-0 border border-slate-500">
+          <i class="fas fa-print"></i> พิมพ์
+        </button>
         <button onclick="confirmWmMove()" id="btn-confirm-wm-move"
           class="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 shadow">
-          <i class="fas fa-exchange-alt"></i> ยืนยันย้ายสินค้า
+          <i class="fas fa-exchange-alt"></i> ยืนยันย้าย
         </button>
-        <button onclick="closeWmMoveModal()" class="bg-slate-600 hover:bg-slate-500 text-white px-4 rounded-xl font-bold text-sm transition-all">
+        <button onclick="closeWmMoveModal()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 rounded-xl font-bold text-sm transition-all">
           ยกเลิก
         </button>
       </div>
@@ -30417,7 +30421,7 @@ function _wmRenderREZones(moveSummary, fmtN) {
 
         const zoneData = moveSummary[zoneId] || {};
         const items = Object.entries(zoneData)
-            .map(([sku, d]) => ({ sku, qty: d.qty, skuName: d.skuName || '' }))
+            .map(([sku, d]) => ({ sku, qty: d.pcs || 0, bundles: d.bundles || 0, skuName: d.skuName || '' }))
             .filter(x => x.qty > 0)
             .sort((a, b) => b.qty - a.qty);
 
@@ -30919,6 +30923,56 @@ window.wmOpenMoveFromDetail = function() {
 };
 
 // พิมพ์ใบสั่งย้ายกอง
+// พิมพ์ใบสั่งย้ายจากฟอร์ม (ก่อนหรือหลังยืนยันก็ได้)
+window.wmPrintFromMoveForm = function() {
+    const fromZone = document.getElementById('wm-move-from')?.value?.trim();
+    const toZone   = document.getElementById('wm-move-to')?.value?.trim();
+    const sku      = document.getElementById('wm-move-sku')?.value?.trim();
+    const bundles  = parseInt(document.getElementById('wm-move-qty')?.value) || 0;
+    const emp      = document.getElementById('wm-move-emp')?.value?.trim() || '';
+    const note     = document.getElementById('wm-move-note')?.value?.trim() || '';
+
+    if (!fromZone || !toZone || !sku || bundles <= 0) {
+        showToast('⚠️ กรอกข้อมูลให้ครบก่อนพิมพ์ (ต้นทาง / ปลายทาง / SKU / จำนวน)', true);
+        return;
+    }
+
+    const prod     = _wmFindProd(sku);
+    const ppb      = prod?.pcsPerBundle || 1;
+    const skuName  = prod?.name || '';
+    const totalPCS = bundles * ppb;
+    const today    = _wmProdData?.today || new Date().toISOString().slice(0,10);
+    const dateDisp = today.split('-').reverse().join('/');
+    const docNo    = 'MV-' + today.replace(/-/g,'') + '-' + fromZone;
+
+    const safeEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+    safeEl('wm-print-doc-no', docNo);
+    safeEl('wm-print-date',   dateDisp);
+    safeEl('wm-print-from',   fromZone);
+    safeEl('wm-print-to',     toZone);
+
+    const itemsEl = document.getElementById('wm-print-items');
+    if (itemsEl) {
+        itemsEl.innerHTML = `<tr>
+          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">1</td>
+          <td style="border:1px solid #ccc;padding:5px 8px;">${sku}</td>
+          <td style="border:1px solid #ccc;padding:5px 8px;">${skuName}</td>
+          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;font-weight:900;">${bundles}</td>
+          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${ppb}</td>
+          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${Number(totalPCS).toLocaleString('th-TH')}</td>
+        </tr>
+        ${note ? `<tr><td colspan="6" style="border:1px solid #ccc;padding:5px 8px;color:#555;">หมายเหตุ: ${note}</td></tr>` : ''}
+        ${emp  ? `<tr><td colspan="6" style="border:1px solid #ccc;padding:5px 8px;color:#555;">ผู้สั่งย้าย: ${emp}</td></tr>` : ''}`;
+    }
+
+    const tpl = document.getElementById('wm-print-move-order');
+    if (tpl) {
+        tpl.classList.remove('hidden');
+        window.print();
+        tpl.classList.add('hidden');
+    }
+};
+
 window.wmPrintMoveOrder = function() {
     const machId = _wmdCurrentMachineId;
     if (!machId || !_wmProdData) return;
