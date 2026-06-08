@@ -1702,17 +1702,7 @@ thead.sticky {
     </div>
   </div>
 
-  <!-- Sub-tabs: FG Storage | Production Plan -->
-  <div class="flex gap-2 p-1 bg-slate-800/60 border border-slate-700 rounded-2xl w-fit">
-    <button onclick="switchWmTab('storage')" id="wm-tab-storage"
-      class="px-6 py-2 rounded-xl font-black text-sm transition-all bg-emerald-600 text-white shadow">
-      <i class="fas fa-boxes mr-2"></i>พื้นที่คลัง FG
-    </button>
-    <button onclick="switchWmTab('production')" id="wm-tab-production"
-      class="px-6 py-2 rounded-xl font-black text-sm transition-all text-slate-400 hover:text-white">
-      <i class="fas fa-industry mr-2"></i>แผนผลิต
-    </button>
-  </div>
+  <!-- Production Plan แสดงตรง (ไม่มี sub-tab แล้ว) -->
 
   <!-- Loading -->
   <div id="wm-loading" class="hidden flex items-center justify-center py-20">
@@ -1723,7 +1713,7 @@ thead.sticky {
   </div>
 
   <!-- Production Plan Panel -->
-  <div id="wm-prod-panel" class="hidden space-y-4">
+  <div id="wm-prod-panel" class="space-y-4">
 
     <!-- Controls -->
     <div class="bg-slate-800/60 border border-slate-700 rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4">
@@ -2013,8 +2003,8 @@ thead.sticky {
   </div>
 </div>
 
-  <!-- Main content (wm-main — inside view-warehouse-map-content) -->
-  <div id="wm-main">
+  <!-- wm-main ถูก remove แล้ว — ผังโรงงาน (แผนผลิต) ครอบคลุมแล้ว -->
+  <div id="wm-main" class="hidden">
 
     <!-- Stats strip -->
     <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
@@ -9505,9 +9495,9 @@ window.switchView = function switchView(view) {
         });
     }
 
-    // ผังคลัง — โหลดครั้งแรกอัตโนมัติ
-    if (view === 'warehouse-map' && !_wmLoaded) {
-        loadWarehouseMap();
+    // ผังคลัง — init production plan อัตโนมัติ (ไม่มี FG zone แล้ว)
+    if (view === 'warehouse-map') {
+        _wmInitProdControls();
     }
 
     // จัดรถ — init เมื่อเข้า
