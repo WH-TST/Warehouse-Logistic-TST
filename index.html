@@ -31312,13 +31312,7 @@ window.confirmWmMove = function() {
                 _wmLoadMoveLog(() => { doneLog = true; tryRerender(); });
                 google.script.run
                     .withSuccessHandler(zRes => {
-                        if (zRes?.success && zRes.data) {
-                            _wmZoneStock = {};
-                            zRes.data.forEach(r => {
-                                if (!_wmZoneStock[r.zoneId]) _wmZoneStock[r.zoneId] = {};
-                                _wmZoneStock[r.zoneId][r.sku] = r;
-                            });
-                        }
+                        if (zRes?.success && zRes.data) _wmZoneStock = zRes.data;
                         doneStock = true; tryRerender();
                     })
                     .withFailureHandler(() => { doneStock = true; tryRerender(); })
