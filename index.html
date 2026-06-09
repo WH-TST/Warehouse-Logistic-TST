@@ -30716,7 +30716,13 @@ function _wmRenderMachines(data) {
 }
 
 function _wmRenderREZones(moveSummary, fmtN) {
-    const RE_ZONE_WIDTH = { 'RE-C4': 1500, 'RE-C5': 900, 'RE4': 1200, 'RE1': 900 };
+    // ดึง totalWidth จาก WM_ZONE_CONFIG (เหมือน production zones) แทน hardcode
+    const _reTotalW = zid => {
+        const cfg = WM_ZONE_CONFIG[zid];
+        if (cfg) return cfg.rows.reduce((s, r) => s + r.w, 0);
+        // fallback legacy
+        return { 'RE-C4': 3990, 'RE-C5': 4200, 'RE4': 500, 'RE1': 900 }[zid] || 1000;
+    };
 
     _wmREZones.forEach(zoneId => {
         const zone    = document.getElementById('wm-zone-' + zoneId);
@@ -30730,23 +30736,37 @@ function _wmRenderREZones(moveSummary, fmtN) {
         const info    = document.getElementById('wm-info-' + zoneId);
         if (!zone) return;
 
-        const zoneData = moveSummary[zoneId] || {};
-        const items = Object.entries(zoneData)
-            .map(([sku, d]) => ({ sku, pcs: d.pcs || 0, bundles: Math.abs(d.bundles || 0), skuName: d.skuName || '', ppb: d.pcsPerBundle || 1 }))
-            .filter(x => x.pcs > 0)
-            .sort((a, b) => b.pcs - a.pcs);
+        // ใช้ Zone_Stock ก่อน (แม่นยำ + มีมิติกล่อง) fallback → moveSummary
+        const zsData   = (_wmZoneStock && _wmZoneStock[zoneId]) || {};
+        const haZS     = Object.keys(zsData).length > 0;
+        const items = haZS
+            ? Object.entries(zsData)
+                .map(([sku, d]) => ({
+                    sku, pcs: d.pcs||0,
+                    bundles: d.pcsPerBundle > 0 ? Math.ceil(d.pcs / d.pcsPerBundle) : 0,
+                    skuName: d.skuName||'', ppb: d.pcsPerBundle||1,
+                    bw: d.bw||0, bh: d.bh||0
+                }))
+                .filter(x => x.pcs > 0).sort((a,b) => b.pcs - a.pcs)
+            : Object.entries(moveSummary[zoneId] || {})
+                .map(([sku, d]) => ({ sku, pcs: d.pcs||0, bundles: Math.abs(d.bundles||0), skuName: d.skuName||'', ppb: d.pcsPerBundle||1, bw:0, bh:0 }))
+                .filter(x => x.pcs > 0).sort((a,b) => b.pcs - a.pcs);
 
         const totalPCS     = items.reduce((s, x) => s + x.pcs, 0);
         const totalBundles = items.reduce((s, x) => s + x.bundles, 0);
-        const totalW       = RE_ZONE_WIDTH[zoneId] || 1000;
+        const totalW       = _reTotalW(zoneId);
         const isEmpty      = items.length === 0;
 
-        // คำนวณ usedWidth จาก stacking
+        // คำนวณ usedWidth จาก stacking — ใช้ bw/bh จาก Zone_Stock ก่อน แล้ว fallback → _wmFindProd
         let usedW = 0;
         items.forEach(item => {
-            const prod = _wmFindProd ? _wmFindProd(item.sku) : null;
-            const bw = prod?.bundleWidth || 0;
-            const bh = prod?.bundleHeight || 0;
+            let bw = item.bw || 0;
+            let bh = item.bh || 0;
+            if (!bw || !bh) {
+                const prod = _wmFindProd ? _wmFindProd(item.sku) : null;
+                bw = prod?.bundleWidth  || 0;
+                bh = prod?.bundleHeight || 0;
+            }
             if (!bw || !bh || item.bundles <= 0) { usedW += item.bundles * 30; return; }
             const maxL = Math.max(1, Math.floor(420 / bh));
             const minB = Math.min(3, item.bundles);
