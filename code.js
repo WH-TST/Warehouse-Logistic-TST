@@ -8980,10 +8980,31 @@ function syncZoneStockFromInventory(params) {
         // ดึงมิติจาก skuMeta (ครอบคลุมรายการเก่าที่ไม่มี bw/bh)
         var meta = skuMeta[sku] || { ppb: pcsPerB, bw: 0, bh: 0, name: skuName };
 
-        // หัก fromZone
+        // หัก fromZone — ถ้า fromZone มีไม่พอ ให้ดึงจาก zone อื่นที่มี SKU นั้น
         if (!zoneStock[fromZone]) zoneStock[fromZone] = {};
         if (!zoneStock[fromZone][sku]) {
           zoneStock[fromZone][sku] = { pcs: 0, ppb: meta.ppb, bw: meta.bw, bh: meta.bh, name: meta.name };
+        }
+        var available = zoneStock[fromZone][sku].pcs;
+        var shortfall = Math.max(0, totalPCS - available);
+        if (shortfall > 0) {
+          // หา donor zones เรียง lastProducedZone ก่อน แล้ว pcs มากสุด
+          var donors = Object.keys(zoneStock)
+            .filter(function(z) { return z !== fromZone && (zoneStock[z][sku]||{}).pcs > 0; })
+            .sort(function(a, b) {
+              if (a === lastZone[sku]) return -1;
+              if (b === lastZone[sku]) return  1;
+              return ((zoneStock[b][sku]||{}).pcs||0) - ((zoneStock[a][sku]||{}).pcs||0);
+            });
+          var remaining = shortfall;
+          for (var di = 0; di < donors.length && remaining > 0; di++) {
+            var donor = donors[di];
+            var take = Math.min(remaining, zoneStock[donor][sku].pcs);
+            zoneStock[donor][sku].pcs -= take;
+            remaining -= take;
+          }
+          // เติม fromZone เท่าที่ดึงได้
+          zoneStock[fromZone][sku].pcs += (shortfall - remaining);
         }
         zoneStock[fromZone][sku].pcs = Math.max(0, zoneStock[fromZone][sku].pcs - totalPCS);
 
