@@ -2246,51 +2246,73 @@ thead.sticky {
 <!-- PRINT TEMPLATE: ใบสั่งย้ายกอง (hidden data template only — print via new window) -->
 <div id="wm-print-move-order" class="hidden">
   <style></style>
-  <div style="font-family:'Sarabun',sans-serif;font-size:13px;color:#000;padding:0;">
-    <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px;">
-      <div style="font-size:18px;font-weight:900;">บริษัท ที.สแตนดาร์ด สตีล จำกัด</div>
-      <div style="font-size:22px;font-weight:900;margin-top:4px;">ใบสั่งย้ายกองสินค้า</div>
-    </div>
-    <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
-      <div>
-        <span style="font-weight:700;">เลขที่: </span><span id="wm-print-doc-no">—</span>
+  <div style="font-family:'Sarabun',Arial,sans-serif;font-size:13px;color:#000;padding:0;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;border-bottom:3px solid #000;padding-bottom:10px;margin-bottom:14px;gap:16px;">
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:900;letter-spacing:0.5px;">T.STANDARD STEEL CO., LTD.</div>
+        <div style="font-size:11px;color:#555;margin-top:2px;">Warehouse Management System</div>
       </div>
-      <div>
-        <span style="font-weight:700;">วันที่: </span><span id="wm-print-date">—</span>
+      <div style="text-align:center;">
+        <div style="font-size:20px;font-weight:900;letter-spacing:1px;border:2px solid #000;padding:4px 16px;border-radius:4px;">STOCK RELOCATION ORDER</div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-      <div style="border:1px solid #999;border-radius:6px;padding:10px;">
-        <div style="font-weight:900;font-size:11px;color:#555;margin-bottom:4px;">จากพื้นที่</div>
-        <div id="wm-print-from" style="font-size:22px;font-weight:900;">—</div>
+    <!-- Doc info -->
+    <div style="display:flex;justify-content:space-between;margin-bottom:14px;font-size:12px;">
+      <div><span style="font-weight:700;color:#555;">Doc No. </span><span id="wm-print-doc-no" style="font-weight:900;">—</span></div>
+      <div><span style="font-weight:700;color:#555;">Date: </span><span id="wm-print-date" style="font-weight:900;">—</span></div>
+      <div><span style="font-weight:700;color:#555;">Issued by: </span><span id="wm-print-issued-by" style="font-weight:900;">—</span></div>
+    </div>
+    <!-- From / To zones -->
+    <div style="display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;margin-bottom:14px;align-items:center;">
+      <div style="border:2px solid #1e40af;border-radius:8px;padding:10px;text-align:center;background:#eff6ff;">
+        <div style="font-weight:900;font-size:10px;color:#1e40af;letter-spacing:1px;margin-bottom:4px;">FROM ZONE</div>
+        <div id="wm-print-from" style="font-size:28px;font-weight:900;color:#1e3a8a;">—</div>
       </div>
-      <div style="border:1px solid #999;border-radius:6px;padding:10px;">
-        <div style="font-weight:900;font-size:11px;color:#555;margin-bottom:4px;">ไปพื้นที่</div>
-        <div id="wm-print-to" style="font-size:22px;font-weight:900;">—</div>
+      <div style="text-align:center;font-size:24px;font-weight:900;color:#555;">→</div>
+      <div style="border:2px solid #166534;border-radius:8px;padding:10px;text-align:center;background:#f0fdf4;">
+        <div style="font-weight:900;font-size:10px;color:#166534;letter-spacing:1px;margin-bottom:4px;">TO ZONE</div>
+        <div id="wm-print-to" style="font-size:28px;font-weight:900;color:#14532d;">—</div>
       </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
+    <!-- Items table -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px;">
       <thead>
-        <tr style="background:#f0f0f0;">
-          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">#</th>
-          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">รหัสสินค้า</th>
-          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">ชื่อสินค้า</th>
-          <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;">จำนวน (มัด)</th>
-          <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;">PCS/มัด</th>
-          <th style="border:1px solid #ccc;padding:6px 8px;text-align:center;">รวม (เส้น)</th>
+        <tr style="background:#1e293b;color:#fff;">
+          <th style="border:1px solid #334155;padding:7px 8px;text-align:center;width:32px;">#</th>
+          <th style="border:1px solid #334155;padding:7px 8px;text-align:left;">Item Code</th>
+          <th style="border:1px solid #334155;padding:7px 8px;text-align:left;">Product Name</th>
+          <th style="border:1px solid #334155;padding:7px 8px;text-align:center;">Bundles</th>
+          <th style="border:1px solid #334155;padding:7px 8px;text-align:center;">PCS/Bundle</th>
+          <th style="border:1px solid #334155;padding:7px 8px;text-align:center;">Total PCS</th>
         </tr>
       </thead>
       <tbody id="wm-print-items"></tbody>
     </table>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:32px;">
-      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;">
-        <div style="font-size:11px;color:#555;">ผู้สั่งย้าย</div>
+    <!-- Remark -->
+    <div style="border:1px solid #ccc;border-radius:6px;padding:8px 12px;margin-bottom:20px;min-height:40px;">
+      <span style="font-size:10px;font-weight:700;color:#555;">REMARK / NOTE: </span>
+      <span id="wm-print-remark" style="font-size:12px;"></span>
+    </div>
+    <!-- Signatures -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:28px;">
+      <div style="text-align:center;">
+        <div style="border-top:1.5px solid #000;padding-top:6px;">
+          <div style="font-size:10px;font-weight:700;color:#333;">AUTHORIZED BY</div>
+          <div style="font-size:10px;color:#777;margin-top:2px;">Name / Date</div>
+        </div>
       </div>
-      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;">
-        <div style="font-size:11px;color:#555;">ผู้ย้ายสินค้า</div>
+      <div style="text-align:center;">
+        <div style="border-top:1.5px solid #000;padding-top:6px;">
+          <div style="font-size:10px;font-weight:700;color:#333;">RELOCATED BY</div>
+          <div style="font-size:10px;color:#777;margin-top:2px;">Name / Date</div>
+        </div>
       </div>
-      <div style="border-top:1px solid #000;padding-top:6px;text-align:center;">
-        <div style="font-size:11px;color:#555;">ผู้รับสินค้า</div>
+      <div style="text-align:center;">
+        <div style="border-top:1.5px solid #000;padding-top:6px;">
+          <div style="font-size:10px;font-weight:700;color:#333;">RECEIVED BY</div>
+          <div style="font-size:10px;color:#777;margin-top:2px;">Name / Date</div>
+        </div>
       </div>
     </div>
   </div>
@@ -30332,8 +30354,9 @@ function _wmCalcZoneProjection(zoneId, data, moveSummary, nDays) {
 }
 
 // ── Production Plan init controls ────────────────────────────
-let _wmProdLoaded   = false;
-let _wmProdData     = null;
+let _wmProdLoaded    = false;
+let _wmProdData      = null;
+let _wmDeliveryPlan  = {}; // bySkuDate[sku][date] = plannedPcs
 
 function _wmInitProdControls() {
     const today   = new Date();
@@ -30384,10 +30407,19 @@ window.loadProductionPlan = function() {
                 _wmProdLoaded = true;
                 const lbl = document.getElementById('wm-prod-sheet-label');
                 if (lbl) lbl.textContent = 'ชีต: ' + res.sheetName;
-                // โหลด move log แล้ว render พร้อมกัน
+                // โหลด move log + delivery plan แล้ว render พร้อมกัน
                 _wmLoadMoveLog(() => {
                     res.moveSummary = _wmMoveSummary;
-                    _wmRenderMachines(res);
+                    // โหลดแผนส่งมอบ
+                    try {
+                        google.script.run
+                            .withSuccessHandler(dp => {
+                                if (dp && dp.success) _wmDeliveryPlan = dp.bySkuDate || {};
+                                _wmRenderMachines(res);
+                            })
+                            .withFailureHandler(() => _wmRenderMachines(res))
+                            .getDeliveryPlanByDate({ daysAhead: 14 });
+                    } catch(e) { _wmRenderMachines(res); }
                 });
             })
             .withFailureHandler(err => {
@@ -30441,14 +30473,38 @@ function _wmRenderMachines(data) {
             ? spTotal
             : mach.products.reduce((s, p) => s + (p.daily[today] || 0), 0);
 
+        // ── Zone Stock (สต็อคในโซนนี้) — ใช้ _wmBuildZoneSkuBase แทน inventory รวม ──
+        const zoneSkuBase  = _wmBuildZoneSkuBase(mid, data, moveSummary);
+        // delivery plan deduction (ถ้ามี _wmDeliveryPlan โหลดแล้ว)
+        const delivPlan    = (_wmDeliveryPlan || {}); // bySkuDate[sku][date] = pcs
+
         const invItems = mach.products
             .map(p => {
-                const spQty = spToday[p.sku] || 0;
-                const pbQty = p.daily[today] || 0;
-                return { sku: p.sku, name: p.name, pcs: (inventory[p.sku] || {}).pcs || 0, todayQty: spQty > 0 ? spQty : pbQty };
+                const spQty    = spToday[p.sku] || 0;
+                const pbQty    = p.daily[today] || 0;
+                const zonePcs  = (zoneSkuBase[p.sku] || {}).pcs || 0;
+                // รวม planned out ทุกวัน
+                const plannedOut = Object.values((delivPlan[p.sku] || {})).reduce((s,v)=>s+v, 0);
+                const availPcs  = Math.max(0, zonePcs - plannedOut);
+                return {
+                    sku: p.sku, name: p.name,
+                    pcs: zonePcs,          // สต็อคในโซนนี้
+                    availPcs,              // พร้อมจ่าย (หลังหักแผนส่ง)
+                    plannedOut,
+                    todayQty: spQty > 0 ? spQty : pbQty
+                };
             })
-            .filter(p => p.pcs > 0)
+            .filter(p => p.pcs > 0 || p.todayQty > 0)
             .sort((a, b) => b.pcs - a.pcs);
+
+        // เพิ่ม SKU ที่ถูกย้ายเข้ามา (ไม่ได้ผลิตในโซนนี้)
+        Object.entries(zoneSkuBase).forEach(([sku, d]) => {
+            if (!invItems.find(x => x.sku === sku) && d.pcs > 0) {
+                const plannedOut = Object.values((delivPlan[sku] || {})).reduce((s,v)=>s+v, 0);
+                invItems.push({ sku, name: '', pcs: d.pcs, availPcs: Math.max(0, d.pcs - plannedOut), plannedOut, todayQty: 0 });
+            }
+        });
+        invItems.sort((a, b) => b.pcs - a.pcs);
 
         const totalInvPCS  = invItems.reduce((s, p) => s + p.pcs, 0);
         const isRunning    = todayPlanPCS > 0;
@@ -30480,8 +30536,8 @@ function _wmRenderMachines(data) {
         // ── Status sub-text ──
         if (statusEl) {
             const parts = [];
-            if (hasInv)      parts.push(`คลัง ${fmtN(totalInvPCS)} PCS`);
-            if (isRunning)   parts.push(`ผลิตวันนี้ +${fmtN(todayPlanPCS)} PCS`);
+            if (totalInvPCS > 0) parts.push(`โซน ${fmtN(totalInvPCS)} PCS`);
+            if (isRunning)        parts.push(`ผลิตวันนี้ +${fmtN(todayPlanPCS)} PCS`);
             statusEl.textContent = parts.join('  ·  ');
         }
 
@@ -30517,19 +30573,19 @@ function _wmRenderMachines(data) {
                 (rowsDesc ? `<br><span class="text-slate-600 text-[10px]">${rowsDesc}</span>` : '');
         }
 
-        // ── Flow: เข้า / ออก / สุทธิ วันนี้ ──
+        // ── Flow: เข้า(ผลิตวันนี้) / ออก(แผนส่งมอบ) / สุทธิ ──
         if (flowEl) {
             const inPCS  = todayPlanPCS;
-            const outPCS = 0; // TODO: เชื่อมกับ SO/reservation ในอนาคต
+            const outPCS = invItems.reduce((s, p) => s + (p.plannedOut || 0), 0);
             const netPCS = inPCS - outPCS;
             flowEl.innerHTML = `
               <div>
                 <div class="text-emerald-400 font-black text-sm">${inPCS > 0 ? '+'+fmtN(inPCS) : '—'}</div>
-                <div class="text-slate-500 text-[10px] font-bold mt-0.5">↑ เข้า (PCS)</div>
+                <div class="text-slate-500 text-[10px] font-bold mt-0.5">↑ ผลิตวันนี้</div>
               </div>
               <div>
                 <div class="text-rose-400 font-black text-sm">${outPCS > 0 ? '-'+fmtN(outPCS) : '—'}</div>
-                <div class="text-slate-500 text-[10px] font-bold mt-0.5">↓ ออก (PCS)</div>
+                <div class="text-slate-500 text-[10px] font-bold mt-0.5">↓ แผนส่งมอบ</div>
               </div>
               <div>
                 <div class="font-black text-sm ${netPCS > 0 ? 'text-sky-300' : netPCS < 0 ? 'text-rose-300' : 'text-slate-500'}">${netPCS !== 0 ? (netPCS > 0 ? '+' : '') + fmtN(netPCS) : '—'}</div>
@@ -30537,7 +30593,7 @@ function _wmRenderMachines(data) {
               </div>`;
         }
 
-        // ── SKU list ──
+        // ── SKU list — แสดงสต็อคในโซน + planned out ──
         if (info) {
             if (invItems.length === 0 && !isRunning) {
                 info.innerHTML = '<span class="text-slate-600 italic text-xs">ไม่มีสต็อก</span>';
@@ -30549,8 +30605,9 @@ function _wmRenderMachines(data) {
                       ${p.name ? `<div class="text-slate-500 text-[10px] truncate">${p.name}</div>` : ''}
                     </div>
                     <div class="text-right flex-shrink-0">
-                      <div class="text-sky-300 font-black text-xs">${fmtN(p.pcs)}</div>
-                      ${p.todayQty > 0 ? `<div class="text-emerald-400 text-[10px] font-bold">+${fmtN(p.todayQty)}</div>` : ''}
+                      <div class="text-sky-300 font-black text-xs">${fmtN(p.pcs)} <span class="text-slate-500 font-normal text-[9px]">โซน</span></div>
+                      ${p.plannedOut > 0 ? `<div class="text-rose-400 text-[10px] font-bold">-${fmtN(p.plannedOut)} แผนส่ง</div>` : ''}
+                      ${p.todayQty > 0   ? `<div class="text-emerald-400 text-[10px] font-bold">+${fmtN(p.todayQty)} ผลิต</div>` : ''}
                     </div>
                   </div>`).join('');
                 const more = invItems.length > 5
@@ -31417,23 +31474,23 @@ window.wmPrintFromMoveForm = function() {
     const docNo    = 'MV-' + today.replace(/-/g,'') + '-' + fromZone;
 
     const safeEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-    safeEl('wm-print-doc-no', docNo);
-    safeEl('wm-print-date',   dateDisp);
-    safeEl('wm-print-from',   fromZone);
-    safeEl('wm-print-to',     toZone);
+    safeEl('wm-print-doc-no',    docNo);
+    safeEl('wm-print-date',      dateDisp);
+    safeEl('wm-print-from',      fromZone);
+    safeEl('wm-print-to',        toZone);
+    safeEl('wm-print-issued-by', emp || '—');
+    safeEl('wm-print-remark',    note || '');
 
     const itemsEl = document.getElementById('wm-print-items');
     if (itemsEl) {
         itemsEl.innerHTML = `<tr>
-          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">1</td>
-          <td style="border:1px solid #ccc;padding:5px 8px;">${sku}</td>
-          <td style="border:1px solid #ccc;padding:5px 8px;">${skuName}</td>
-          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;font-weight:900;">${bundles}</td>
-          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${ppb}</td>
-          <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${Number(totalPCS).toLocaleString('th-TH')}</td>
-        </tr>
-        ${note ? `<tr><td colspan="6" style="border:1px solid #ccc;padding:5px 8px;color:#555;">หมายเหตุ: ${note}</td></tr>` : ''}
-        ${emp  ? `<tr><td colspan="6" style="border:1px solid #ccc;padding:5px 8px;color:#555;">ผู้สั่งย้าย: ${emp}</td></tr>` : ''}`;
+          <td style="border:1px solid #334155;padding:6px 8px;text-align:center;">1</td>
+          <td style="border:1px solid #334155;padding:6px 8px;font-family:monospace;">${sku}</td>
+          <td style="border:1px solid #334155;padding:6px 8px;">${skuName}</td>
+          <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:900;font-size:14px;">${bundles}</td>
+          <td style="border:1px solid #334155;padding:6px 8px;text-align:center;">${ppb}</td>
+          <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:700;">${Number(totalPCS).toLocaleString()}</td>
+        </tr>`;
     }
 
     const tpl = document.getElementById('wm-print-move-order');
@@ -31453,10 +31510,12 @@ window.wmPrintMoveOrder = function() {
     const docNo = 'MV-' + today.replace(/-/g,'') + '-' + machId;
     const dateDisp = today.split('-').reverse().join('/');
     const safeEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-    safeEl('wm-print-doc-no', docNo);
-    safeEl('wm-print-date',   dateDisp);
-    safeEl('wm-print-from',   machId);
-    safeEl('wm-print-to',     '');
+    safeEl('wm-print-doc-no',    docNo);
+    safeEl('wm-print-date',      dateDisp);
+    safeEl('wm-print-from',      machId);
+    safeEl('wm-print-to',        '—');
+    safeEl('wm-print-issued-by', '—');
+    safeEl('wm-print-remark',    '');
 
     // รายการสินค้า
     const itemsEl = document.getElementById('wm-print-items');
@@ -31468,16 +31527,16 @@ window.wmPrintMoveOrder = function() {
                 const pcs  = p.daily[today] || 0;
                 const mads = ppb > 0 ? Math.round(pcs / ppb) : 0;
                 return `<tr>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${i+1}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;">${p.sku}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;">${p.name || ''}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${mads}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${ppb}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${Number(pcs).toLocaleString('th-TH')}</td>
+                  <td style="border:1px solid #334155;padding:6px 8px;text-align:center;">${i+1}</td>
+                  <td style="border:1px solid #334155;padding:6px 8px;font-family:monospace;">${p.sku}</td>
+                  <td style="border:1px solid #334155;padding:6px 8px;">${p.name || ''}</td>
+                  <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:900;font-size:14px;">${mads}</td>
+                  <td style="border:1px solid #334155;padding:6px 8px;text-align:center;">${ppb}</td>
+                  <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:700;">${Number(pcs).toLocaleString()}</td>
                 </tr>`;
             }).join('');
         } else {
-            itemsEl.innerHTML = '<tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:center;color:#999;">ไม่มีแผนผลิตวันนี้</td></tr>';
+            itemsEl.innerHTML = '<tr><td colspan="6" style="border:1px solid #334155;padding:10px;text-align:center;color:#999;">No production plan for today</td></tr>';
         }
     }
 
@@ -31490,18 +31549,22 @@ window.wmPrintMoveOrder = function() {
 
 // helper: เปิด new window พิมพ์ใบสั่งย้าย (แยกออกจาก Tag print CSS)
 function _wmOpenMoveOrderPrintWindow(bodyHtml) {
-    const w = window.open('', '_blank', 'width=850,height=700');
-    if (!w) { showToast('⚠️ กรุณาอนุญาต Popup เพื่อพิมพ์', true); return; }
+    const w = window.open('', '_blank', 'width=870,height=720');
+    if (!w) { showToast('⚠️ Please allow Popup to print', true); return; }
     w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;900&display=swap" rel="stylesheet">
+<title>Stock Relocation Order</title>
 <style>
-  @page { size: A4 portrait; margin: 15mm; }
-  body { font-family: 'Sarabun', sans-serif; font-size: 11pt; color: #000; background: #fff; margin: 0; }
+  @page { size: A4 portrait; margin: 14mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #000; background: #fff; margin: 0; padding: 0; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #bbb; padding: 5px 8px; font-size: 10pt; }
-  th { background: #1e293b; color: #fff; }
-  .no-print { display: none; }
-  @media print { .no-print { display: none !important; } }
+  th { background: #1e293b !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  td, th { border: 1px solid #334155; padding: 6px 8px; font-size: 10pt; }
+  .no-print { display: none !important; }
+  @media print {
+    body { margin: 0; }
+    .no-print { display: none !important; }
+  }
 </style>
 </head><body onload="window.print();">${bodyHtml}</body></html>`);
     w.document.close();
