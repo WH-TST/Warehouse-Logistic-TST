@@ -8897,7 +8897,7 @@ function syncZoneStockFromInventory(params) {
     var inventory = planData.inventory || {};
     var machines  = planData.machines  || [];
 
-    // หาเครื่องที่ผลิต SKU ล่าสุด
+    // ── Step 1: หาเครื่องที่ผลิต SKU ล่าสุด + มิติกล่อง ──
     var lastZone = {}, lastDate = {}, skuMeta = {};
     machines.forEach(function(m) {
       (m.products||[]).forEach(function(p) {
@@ -8907,58 +8907,93 @@ function syncZoneStockFromInventory(params) {
         if (!lastDate[p.sku] || ld > lastDate[p.sku]) {
           lastDate[p.sku] = ld;
           lastZone[p.sku] = m.machineId;
-          skuMeta[p.sku]  = { ppb: p.pcsPerBundle||1, bw: p.bundleWidth||0, bh: p.bundleHeight||0, name: p.name||'' };
+        }
+        // เก็บ meta ถ้ายังไม่มี หรือ bw/bh ดีกว่า
+        if (!skuMeta[p.sku] || (!skuMeta[p.sku].bw && p.bundleWidth)) {
+          skuMeta[p.sku] = { ppb: p.pcsPerBundle||1, bw: p.bundleWidth||0, bh: p.bundleHeight||0, name: p.name||'' };
         }
       });
     });
 
-    // อ่าน Zone_Stock เดิม — เก็บโซนที่ไม่ใช่ home zone (RE zones, etc.)
-    var sheet = _getOrCreateZoneStockSheet(ss);
-    var homeZones = {};
-    Object.keys(lastZone).forEach(function(sku){ homeZones[lastZone[sku]] = true; });
-
-    var preserved = {}; // โซนที่ user บริหารเอง (ไม่ใช่ production zone)
-    if (sheet.getLastRow() >= 2) {
-      var existRows = sheet.getRange(2,1,sheet.getLastRow()-1,8).getValues();
-      existRows.forEach(function(r) {
-        var z = String(r[0]||'').trim(), s = String(r[1]||'').trim();
-        if (!z||!s) return;
-        if (homeZones[z]) return; // จะ overwrite ด้วย inventory
-        if (!preserved[z]) preserved[z] = {};
-        preserved[z][s] = { name: String(r[2]||''), pcs: Number(r[3]||0), ppb: Number(r[4]||1), bw: Number(r[5]||0), bh: Number(r[6]||0) };
-      });
-    }
-
-    // สร้างข้อมูลใหม่
-    var writeRows = [];
-    var now = Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm');
-
-    // 1) production zones — กระจาย inventory ตาม lastProducedZone
+    // ── Step 2: สร้าง zoneStock map (in-memory) จาก Inventory FG ──
+    // { zoneId: { sku: { pcs, ppb, bw, bh, name } } }
+    var zoneStock = {};
     Object.keys(inventory).forEach(function(sku) {
       var zone = lastZone[sku];
       if (!zone) return;
       var pcs = Math.max(0, Number((inventory[sku]||{}).pcs||0));
       if (pcs <= 0) return;
       var m = skuMeta[sku] || { ppb:1, bw:0, bh:0, name:'' };
-      writeRows.push([zone, sku, m.name, pcs, m.ppb, m.bw, m.bh, now]);
+      if (!zoneStock[zone]) zoneStock[zone] = {};
+      zoneStock[zone][sku] = { pcs: pcs, ppb: m.ppb, bw: m.bw, bh: m.bh, name: m.name };
     });
 
-    // 2) preserved zones
-    Object.keys(preserved).forEach(function(zone) {
-      Object.keys(preserved[zone]).forEach(function(sku) {
-        var d = preserved[zone][sku];
-        if ((d.pcs||0) <= 0) return;
-        writeRows.push([zone, sku, d.name, d.pcs, d.ppb, d.bw, d.bh, now]);
+    // ── Step 3: Replay Move Log ทั้งหมด (เก่า→ใหม่) ──
+    // ดึง bw/bh จาก skuMeta ถ้า Move Log ไม่มีข้อมูลมิติ (รายการเก่า)
+    var moveSheet = _getOrCreateMoveSheet(ss);
+    if (moveSheet.getLastRow() >= 2) {
+      var moveRows = moveSheet.getRange(2,1,moveSheet.getLastRow()-1,12).getValues();
+      // เรียงจากเก่าสุด→ใหม่สุด (rows จาก sheet มาตามลำดับ)
+      moveRows.forEach(function(r) {
+        var fromZone = String(r[3]||'').trim();
+        var toZone   = String(r[4]||'').trim();
+        var sku      = String(r[5]||'').trim();
+        var skuName  = String(r[6]||'').trim();
+        var bundles  = Number(r[7]||0);
+        var pcsPerB  = Number(r[8]||1);
+        var totalPCS = Number(r[9]||0) || bundles * pcsPerB;
+        if (!sku || bundles <= 0 || !fromZone || !toZone) return;
+
+        // ดึงมิติจาก skuMeta (ครอบคลุมรายการเก่าที่ไม่มี bw/bh)
+        var meta = skuMeta[sku] || { ppb: pcsPerB, bw: 0, bh: 0, name: skuName };
+
+        // หัก fromZone
+        if (!zoneStock[fromZone]) zoneStock[fromZone] = {};
+        if (!zoneStock[fromZone][sku]) {
+          zoneStock[fromZone][sku] = { pcs: 0, ppb: meta.ppb, bw: meta.bw, bh: meta.bh, name: meta.name };
+        }
+        zoneStock[fromZone][sku].pcs = Math.max(0, zoneStock[fromZone][sku].pcs - totalPCS);
+
+        // เพิ่ม toZone
+        if (!zoneStock[toZone]) zoneStock[toZone] = {};
+        if (!zoneStock[toZone][sku]) {
+          zoneStock[toZone][sku] = { pcs: 0, ppb: meta.ppb, bw: meta.bw, bh: meta.bh, name: meta.name };
+        }
+        zoneStock[toZone][sku].pcs += totalPCS;
+        // เติม bw/bh ถ้า toZone ยังไม่มี
+        if (!zoneStock[toZone][sku].bw && meta.bw) zoneStock[toZone][sku].bw = meta.bw;
+        if (!zoneStock[toZone][sku].bh && meta.bh) zoneStock[toZone][sku].bh = meta.bh;
+      });
+    }
+
+    // ── Step 4: เขียนลง Zone_Stock sheet ──
+    var writeRows = [];
+    var now = Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm');
+    Object.keys(zoneStock).forEach(function(zone) {
+      Object.keys(zoneStock[zone]).forEach(function(sku) {
+        var d = zoneStock[zone][sku];
+        if ((d.pcs||0) <= 0) return; // ข้ามโซนที่ถูกย้ายออกจนหมด
+        writeRows.push([zone, sku, d.name||'', d.pcs, d.ppb||1, d.bw||0, d.bh||0, now]);
       });
     });
 
+    var sheet = _getOrCreateZoneStockSheet(ss);
     sheet.clearContents();
     sheet.appendRow(['ZoneId','SKU','SKUName','PCS','PCSPerBundle','BundleWidth','BundleHeight','UpdatedAt']);
     sheet.getRange(1,1,1,8).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
     if (writeRows.length > 0) {
       sheet.getRange(2,1,writeRows.length,8).setValues(writeRows);
     }
-    return { success: true, message: 'Synced '+writeRows.length+' records', count: writeRows.length };
+
+    var movedZones = Object.keys(zoneStock).filter(function(z){
+      return Object.keys(zoneStock[z]).some(function(s){ return (zoneStock[z][s].pcs||0)>0; });
+    }).length;
+
+    return {
+      success: true,
+      message: 'Synced '+writeRows.length+' SKU-zone records across '+movedZones+' zones (Move Log replayed)',
+      count: writeRows.length
+    };
   } catch(e) {
     return { success: false, message: e.toString() };
   }
