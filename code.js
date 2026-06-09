@@ -47,7 +47,7 @@ function _handleApiPost(e) {
       'saveWarehouseMove','getWarehouseMoveLog',
       'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
       'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
-      'getZoneStock','syncZoneStockFromInventory',
+      'getZoneStock','syncZoneStockFromInventory','getZoneConfig','saveZoneConfig',
       'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
       'saveAuditLog','getAuditLog',
@@ -230,7 +230,7 @@ function doGet(e) {
           'saveWarehouseMove','getWarehouseMoveLog',
           'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
       'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
-      'getZoneStock','syncZoneStockFromInventory',
+      'getZoneStock','syncZoneStockFromInventory','getZoneConfig','saveZoneConfig',
           'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
           'saveAuditLog','getAuditLog',
@@ -8844,6 +8844,39 @@ function _getOrCreateMoveSheet(ss) {
          .setBackground('#1e293b').setFontColor('#94a3b8').setFontWeight('bold');
   }
   return sheet;
+}
+
+// ── Zone Config — บันทึก/โหลดค่าความกว้างโซน + เกณฑ์การตั้งกอง ──
+function getZoneConfig() {
+  try {
+    var props       = PropertiesService.getScriptProperties();
+    var storedZone  = props.getProperty('WM_ZONE_CONFIG');
+    var storedStack = props.getProperty('WM_STACK_CONFIG');
+    return {
+      success:     true,
+      config:      storedZone  ? JSON.parse(storedZone)  : null,
+      stackConfig: storedStack ? JSON.parse(storedStack) : null
+    };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// รับ data = { zones: {...}, stack: {...} }
+// หรือ data = { ...zoneRows } (format เดิม — backward compat)
+function saveZoneConfig(data) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    if (data && data.zones !== undefined) {
+      props.setProperty('WM_ZONE_CONFIG',   JSON.stringify(data.zones  || {}));
+      if (data.stack) props.setProperty('WM_STACK_CONFIG', JSON.stringify(data.stack));
+    } else {
+      props.setProperty('WM_ZONE_CONFIG', JSON.stringify(data || {}));
+    }
+    return { success: true, message: 'Config saved' };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
 }
 
 // ── Zone_Stock sheet helper ──────────────────────────────────────────

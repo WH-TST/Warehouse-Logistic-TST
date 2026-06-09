@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbwg44kWrpGuHOmLck9kN_wmsCGOgH6seuqBO1qICZKjV3OQawk4H_5eMsiaPfecbtOX/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbxmLLGbSgM7bF6cTM49xx2ZHr42PnHizsITih6MlehOBSRiTPLOG_M_9zKkFrSYdKB9/exec';
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -2108,6 +2108,32 @@ thead.sticky {
     <div class="p-5 overflow-y-auto flex-1">
       <p class="text-slate-400 text-xs mb-4">กำหนดความกว้างแต่ละแถวในโซน (หน่วย: เมตร) — ระบบจะคำนวณ % พื้นที่จากค่าเหล่านี้</p>
       <div id="wm-zone-settings-body" class="space-y-3"></div>
+
+      <!-- Stacking Rules -->
+      <div class="mt-5 bg-slate-800 rounded-xl border border-amber-500/30 p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <i class="fas fa-layer-group text-amber-400 text-sm"></i>
+          <span class="text-white font-black text-sm">เกณฑ์การตั้งกอง</span>
+        </div>
+        <p class="text-slate-400 text-xs mb-3">กำหนดขนาดฐานตามจำนวนมัด — ระบบจะคำนวณการจัดวางตามเกณฑ์นี้</p>
+        <div class="space-y-2 text-sm">
+          <div class="flex items-center gap-3">
+            <span class="text-slate-300 w-48 flex-shrink-0">ไม่เกิน <input type="number" id="wm-st-tier1" min="1" max="20" value="3"
+              class="wm-st-input bg-slate-700 border border-slate-500 text-white font-bold rounded-lg px-2 py-1 w-14 text-center outline-none focus:border-amber-400 mx-1"> มัด</span>
+            <span class="text-amber-300 font-bold">→ ฐาน 1 มัด</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-slate-300 w-48 flex-shrink-0">ไม่เกิน <input type="number" id="wm-st-tier2" min="1" max="50" value="9"
+              class="wm-st-input bg-slate-700 border border-slate-500 text-white font-bold rounded-lg px-2 py-1 w-14 text-center outline-none focus:border-amber-400 mx-1"> มัด</span>
+            <span class="text-amber-300 font-bold">→ ฐาน 2 มัด</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-slate-300 w-48 flex-shrink-0">มากกว่านั้น → ฐานขั้นต่ำ <input type="number" id="wm-st-tier3" min="2" max="10" value="3"
+              class="wm-st-input bg-slate-700 border border-slate-500 text-white font-bold rounded-lg px-2 py-1 w-14 text-center outline-none focus:border-amber-400 mx-1"> มัด</span>
+            <span class="text-amber-300 font-bold">(หารลงตัว)</span>
+          </div>
+        </div>
+      </div>
     </div>
     <!-- Footer -->
     <div class="px-5 py-4 border-t border-slate-700 flex gap-3 justify-end flex-shrink-0">
@@ -30325,6 +30351,7 @@ let WM_ZONE_CONFIG = {
   'P3':    { rows: [{id:1,w:700},{id:2,w:700},{id:3,w:700},{id:4,w:250},{id:5,w:250}] },
   'RE1':   { rows: [{id:1,w:850}] }
 };
+let WM_STACK_CONFIG = { tier1Max: 3, tier2Max: 9, tier3MinBase: 3 };
 const WM_MAX_HEIGHT_CM = 420; // ความสูงสูงสุด 4.2 เมตร
 
 // คำนวณความจุโซน (ซม.กว้าง) และการใช้งานจาก inventory + move log
@@ -30384,46 +30411,43 @@ function _wmBuildZoneSkuBase(zoneId, prodData, moveSummary) {
 
 // คำนวณข้อมูลการซ้อนกองจริงหน้างาน
 // กฎ:
-//   < 10 มัด  → ฐาน 2 มัดเสมอ (ความปลอดภัย)
-//   ≥ 10 มัด  → หาฐานที่หารลงตัว + ฐาน ≥ ชั้น + ความสูง ≤ WM_MAX_HEIGHT_CM
-//              ถ้าไม่มีที่หารลงตัว → เลือกเศษน้อยที่สุด
+//   ≤ tier1  → ฐาน 1 (วางเรียง)
+//   ≤ tier2  → ฐาน 2
+//   > tier2  → หาฐาน min=tier3MinBase ที่ดีที่สุด:
+//              Priority 1: ซ้อน ≥ 2 ชั้น (ห้าม layer=1)
+//              Priority 2: เศษน้อยที่สุด
+//              Priority 3: ฐานแคบที่สุด (ประหยัดพื้นที่)
+//              Safety: ฐาน ≥ ชั้น, ความสูง ≤ WM_MAX_HEIGHT_CM
 function _wmCalcStackInfo(bundles, bw, bh) {
   if (!bw || !bh || bundles <= 0) return null;
-  const maxLayers = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / bh)); // สูงสุดจากความสูง
+  const maxLayers = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / bh));
+  const t1 = WM_STACK_CONFIG.tier1Max    || 3;
+  const t2 = WM_STACK_CONFIG.tier2Max    || 9;
+  const t3 = WM_STACK_CONFIG.tier3MinBase|| 3;
   let cols, layers;
 
-  if (bundles < 10) {
-    // --- กฎ: < 10 มัด ฐาน 2 มัดเสมอ ---
-    cols   = bundles <= 3 ? 1 : Math.min(2, bundles); // ≤3 มัด ฐาน 1, 4-9 มัด ฐาน 2
+  if (bundles <= t1) {
+    cols   = 1;
+    layers = bundles;
+    if (layers > maxLayers) { cols = Math.ceil(bundles / maxLayers); layers = Math.ceil(bundles / cols); }
+  } else if (bundles <= t2) {
+    cols   = Math.min(2, bundles);
     layers = Math.ceil(bundles / cols);
-    // ถ้าชั้นเกิน maxLayers ให้ขยายฐาน
     if (layers > maxLayers) { cols = Math.ceil(bundles / maxLayers); layers = Math.ceil(bundles / cols); }
   } else {
-    // --- กฎ: ≥ 10 มัด หาฐานเหมาะสม ---
-    let bestCols = 0, bestRem = Infinity;
-    for (let b = 3; b <= bundles; b++) {
-      const l = Math.ceil(bundles / b);
-      if (l > maxLayers) continue;           // สูงเกิน limit
-      if (b < l) continue;                   // ฐานแคบกว่าชั้น — ไม่ปลอดภัย
-      const rem = (b * l) - bundles;         // มัดว่างในชั้นบนสุด
-      if (rem < bestRem || (rem === bestRem && b < bestCols)) {
-        bestRem  = rem;
-        bestCols = b;
-      }
-      if (rem === 0 && bestCols > 0) break;  // เจอที่หารลงตัวแล้ว หยุด
-    }
-    cols   = bestCols || Math.ceil(bundles / maxLayers);
+    // ── ซ้อนสูงสุดก่อน แล้วคำนวณฐานขั้นต่ำ ──
+    cols   = Math.max(t3, Math.ceil(bundles / maxLayers));
     layers = Math.ceil(bundles / cols);
   }
 
   const heightCm = layers * bh;
   return {
     bundles,
-    cols,                              // ฐานกว้าง (มัด)
-    layers,                            // จำนวนชั้น
-    heightCm,                          // ความสูงจริง (cm)
-    maxLayers,                         // ซ้อนได้สูงสุด
-    remainder: (cols * layers) - bundles, // มัดว่างชั้นบนสุด
+    cols,
+    layers,
+    heightCm,
+    maxLayers,
+    remainder: (cols * layers) - bundles,
     usedWidthCm: cols * bw
   };
 }
@@ -30965,6 +30989,12 @@ window.wmOpenZoneSettings = function() {
         </div>`;
     }).join('');
 
+    // populate stack config inputs
+    const st = WM_STACK_CONFIG;
+    const t1el = document.getElementById('wm-st-tier1'); if (t1el) t1el.value = st.tier1Max    || 3;
+    const t2el = document.getElementById('wm-st-tier2'); if (t2el) t2el.value = st.tier2Max    || 9;
+    const t3el = document.getElementById('wm-st-tier3'); if (t3el) t3el.value = st.tier3MinBase|| 3;
+
     document.getElementById('wm-zone-settings-modal').classList.remove('hidden');
 };
 
@@ -31021,20 +31051,28 @@ window.wmSaveZoneSettings = function() {
         if (rows.length > 0) newConfig[zoneId] = { rows };
     });
 
+    // อ่าน stack config
+    const newStack = {
+        tier1Max:    parseInt(document.getElementById('wm-st-tier1')?.value)||3,
+        tier2Max:    parseInt(document.getElementById('wm-st-tier2')?.value)||9,
+        tier3MinBase:parseInt(document.getElementById('wm-st-tier3')?.value)||3,
+    };
+
     google.script.run
         .withSuccessHandler(res => {
             if (res && res.success) {
-                // อัพเดต WM_ZONE_CONFIG ใน memory ทันที
+                // อัพเดต WM_ZONE_CONFIG + WM_STACK_CONFIG ใน memory ทันที
                 Object.assign(WM_ZONE_CONFIG, newConfig);
+                Object.assign(WM_STACK_CONFIG, newStack);
                 document.getElementById('wm-zone-settings-modal').classList.add('hidden');
-                showToast('✅ บันทึกตั้งค่าโซนสำเร็จ — reload ผังคลัง...', false);
+                showToast('✅ บันทึกตั้งค่าสำเร็จ — reload ผังคลัง...', false);
                 setTimeout(() => { _wmProdLoaded = false; wmLoadProduction(); }, 1000);
             } else {
                 showToast('❌ บันทึกไม่สำเร็จ: '+(res?.message||''), true);
             }
         })
         .withFailureHandler(err => { showToast('❌ Error: '+err, true); })
-        .saveZoneConfig(newConfig);
+        .saveZoneConfig({ zones: newConfig, stack: newStack });
 };
 
 // โหลด Zone Config จาก GAS เมื่อเปิดหน้า WM
@@ -31042,8 +31080,9 @@ function _wmLoadZoneConfig(callback) {
     try {
         google.script.run
             .withSuccessHandler(res => {
-                if (res && res.success && res.config) {
-                    Object.assign(WM_ZONE_CONFIG, res.config);
+                if (res && res.success) {
+                    if (res.config)      Object.assign(WM_ZONE_CONFIG,   res.config);
+                    if (res.stackConfig) Object.assign(WM_STACK_CONFIG,  res.stackConfig);
                 }
                 if (callback) callback();
             })
