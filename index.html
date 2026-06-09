@@ -1988,9 +1988,103 @@ thead.sticky {
         <div id="wm-move-log-rows" class="space-y-1 max-h-48 overflow-y-auto text-[10px]"></div>
       </div>
 
+      <!-- Zone Alerts & Work Orders -->
+      <div class="mt-6">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <p class="text-slate-600 text-xs font-black uppercase tracking-widest flex items-center gap-2">
+            <i class="fas fa-clipboard-list text-amber-400"></i> ใบงาน (Work Orders)
+          </p>
+          <div class="flex gap-2 flex-wrap">
+            <button onclick="wmCheckAlerts()" class="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1">
+              <i class="fas fa-exclamation-triangle"></i> ตรวจพื้นที่เกิน
+            </button>
+            <button onclick="wmOpenCreateWorkOrder()" class="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1">
+              <i class="fas fa-plus"></i> สร้างใบงาน
+            </button>
+            <button onclick="wmLoadWorkOrders()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1">
+              <i class="fas fa-sync-alt"></i> รีเฟรช
+            </button>
+          </div>
+        </div>
+        <!-- Zone Alert Banner -->
+        <div id="wm-alert-banner" class="hidden mb-3"></div>
+        <!-- Work Order List -->
+        <div id="wm-workorder-list" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <div class="text-center text-slate-600 text-xs py-6">กด <b>รีเฟรช</b> เพื่อโหลดใบงาน</div>
+        </div>
+      </div>
+
     </div><!-- end wm-prod-machines -->
 
   </div><!-- end wm-prod-panel -->
+
+<!-- MODAL: Create Work Order -->
+<div id="wm-workorder-modal" class="fixed inset-0 bg-black/70 hidden z-[97] flex items-center justify-center px-4 backdrop-blur-sm">
+  <div class="bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-600">
+    <div class="bg-gradient-to-r from-slate-800 to-slate-700 px-5 py-4 flex items-center justify-between rounded-t-2xl border-b border-slate-600">
+      <h3 class="text-white font-black text-lg flex items-center gap-2"><i class="fas fa-clipboard-list text-amber-400"></i> สร้างใบงาน</h3>
+      <button onclick="document.getElementById('wm-workorder-modal').classList.add('hidden')" class="text-slate-400 hover:text-white text-lg"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-5 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">Zone ต้นทาง *</label>
+          <select id="wo-zone" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+            <option value="P4">P4</option><option value="P1">P1</option>
+            <option value="C5">C5</option><option value="P2">P2</option>
+            <option value="P3">P3</option><option value="RE-C4">RE-C4</option>
+            <option value="RE-C5">RE-C5</option><option value="RE4">RE4</option>
+            <option value="RE1">RE1</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">Zone ปลายทาง</label>
+          <select id="wo-tozone" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+            <option value="">-- ไม่ระบุ --</option>
+            <option value="RE-C4">RE-C4</option><option value="RE-C5">RE-C5</option>
+            <option value="RE4">RE4</option><option value="RE1">RE1</option>
+            <option value="P4">P4</option><option value="P1">P1</option>
+            <option value="C5">C5</option><option value="OUT">นำออกคลัง</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">SKU</label>
+          <input id="wo-sku" type="text" placeholder="รหัสสินค้า" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400" oninput="wmWoSkuInput(this.value)">
+          <div id="wo-sku-dropdown" class="hidden absolute z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-40 overflow-y-auto mt-1"></div>
+        </div>
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">จำนวน (มัด)</label>
+          <input id="wo-bundles" type="number" min="1" placeholder="0" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+        </div>
+      </div>
+      <div>
+        <label class="text-slate-400 text-xs font-bold mb-1 block">เหตุผล / ความเร่งด่วน</label>
+        <input id="wo-reason" type="text" placeholder="เช่น พื้นที่เกิน 90% | เตรียมส่งมอบ" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">กำหนดเสร็จ</label>
+          <input id="wo-duedate" type="date" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+        </div>
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">มอบหมายให้</label>
+          <input id="wo-assignedto" type="text" placeholder="ชื่อ/ทีม" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+        </div>
+      </div>
+      <div>
+        <label class="text-slate-400 text-xs font-bold mb-1 block">หมายเหตุ</label>
+        <input id="wo-note" type="text" placeholder="รายละเอียดเพิ่มเติม" class="w-full bg-slate-700 border border-slate-500 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+      </div>
+      <div id="wo-save-status" class="hidden text-xs font-bold text-center py-1 rounded-lg"></div>
+      <div class="flex gap-3 pt-1">
+        <button onclick="document.getElementById('wm-workorder-modal').classList.add('hidden')" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2.5 rounded-xl text-sm">ยกเลิก</button>
+        <button onclick="wmSaveWorkOrder()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-900 font-black py-2.5 rounded-xl text-sm">บันทึกใบงาน + แจ้ง LINE</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: Machine Detail (fixed overlay) -->
 <div id="wm-machine-detail" class="fixed inset-0 bg-black/70 hidden z-[96] flex items-start justify-center pt-8 px-4 pb-4 backdrop-blur-sm overflow-y-auto">
@@ -2085,8 +2179,10 @@ thead.sticky {
 <div id="wm-print-move-order" class="hidden">
   <style>
     @media print {
-      body > *:not(#wm-print-move-order) { display: none !important; }
-      #wm-print-move-order { display: block !important; }
+      body.print-move-order > *:not(#wm-print-move-order) { display: none !important; }
+      body.print-move-order #wm-print-move-order { display: block !important; }
+      body.print-move-order { background: white !important; }
+      body.print-move-order * { visibility: visible !important; }
       @page { size: A4; margin: 15mm; }
     }
   </style>
@@ -30684,6 +30780,131 @@ function _wmShowMoveLog() {
     ).join('') || '<p class="text-slate-600 text-[10px] text-center py-2">ยังไม่มีประวัติย้าย</p>';
 }
 
+// ── Work Orders ──────────────────────────────────────────────
+const _woStatusColor = { 'รอดำเนินการ':'text-amber-400','กำลังทำ':'text-sky-400','เสร็จแล้ว':'text-green-400','ยกเลิก':'text-slate-500' };
+
+window.wmLoadWorkOrders = function(filter) {
+    const listEl = document.getElementById('wm-workorder-list');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="text-center text-slate-500 text-xs py-4"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...</div>';
+    google.script.run
+        .withSuccessHandler(res => {
+            if (!res?.success) { listEl.innerHTML = `<div class="text-red-400 text-xs text-center py-4">${res?.message||'โหลดไม่สำเร็จ'}</div>`; return; }
+            const orders = res.orders || [];
+            if (!orders.length) { listEl.innerHTML = '<div class="text-slate-600 text-xs text-center py-6">ยังไม่มีใบงาน</div>'; return; }
+            listEl.innerHTML = orders.map(o => {
+                const sc = _woStatusColor[o.status] || 'text-slate-400';
+                return `<div class="bg-slate-800/70 border border-slate-700 rounded-xl px-3 py-2.5 flex items-start gap-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-amber-300 font-black text-xs">#${o.orderId}</span>
+                      <span class="bg-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-300">${o.zone}${o.toZone?'→'+o.toZone:''}</span>
+                      <span class="${sc} text-[10px] font-bold">${o.status}</span>
+                    </div>
+                    <div class="text-white text-xs font-bold mt-0.5 truncate">${o.sku} <span class="text-slate-400 font-normal">${o.skuName||''}</span> ${o.bundles?`<span class="text-sky-300">${o.bundles} มัด</span>`:''}</div>
+                    <div class="text-slate-500 text-[10px] mt-0.5">${o.reason||''} ${o.assignedTo?'· '+o.assignedTo:''} ${o.dueDate?'· กำหนด '+o.dueDate:''}</div>
+                  </div>
+                  <div class="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                    ${o.status!=='เสร็จแล้ว'&&o.status!=='ยกเลิก'?`<button onclick="wmUpdateWO('${o.orderId}','กำลังทำ')" class="bg-sky-700 hover:bg-sky-600 text-white text-[10px] px-2 py-1 rounded font-bold">กำลังทำ</button><button onclick="wmUpdateWO('${o.orderId}','เสร็จแล้ว')" class="bg-green-700 hover:bg-green-600 text-white text-[10px] px-2 py-1 rounded font-bold">เสร็จ</button>`:''}
+                  </div>
+                </div>`;
+            }).join('');
+        })
+        .withFailureHandler(err => {
+            if (listEl) listEl.innerHTML = `<div class="text-red-400 text-xs text-center py-4">${err?.message||String(err)}</div>`;
+        })
+        .getWorkOrders(filter || {});
+};
+
+window.wmUpdateWO = function(orderId, status) {
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res?.success) { showToast(status==='เสร็จแล้ว'?'✅ ใบงานเสร็จแล้ว':'🔄 อัปเดตสถานะแล้ว'); wmLoadWorkOrders(); }
+            else showToast('❌ ' + (res?.message||'ไม่สำเร็จ'), true);
+        })
+        .updateWorkOrder({ orderId, status });
+};
+
+window.wmOpenCreateWorkOrder = function(prefill) {
+    const modal = document.getElementById('wm-workorder-modal');
+    if (!modal) return;
+    if (prefill) {
+        const f = (id,v) => { const el=document.getElementById(id); if(el) el.value=v||''; };
+        f('wo-zone',prefill.zone); f('wo-sku',prefill.sku); f('wo-bundles',prefill.bundles||'');
+        f('wo-reason',prefill.reason||''); f('wo-tozone',prefill.toZone||'');
+    }
+    const st = document.getElementById('wo-save-status');
+    if (st) st.classList.add('hidden');
+    modal.classList.remove('hidden');
+};
+
+window.wmSaveWorkOrder = function() {
+    const g = id => document.getElementById(id)?.value?.trim()||'';
+    const zone = g('wo-zone'); const sku = g('wo-sku'); const bundles = parseInt(g('wo-bundles'))||0;
+    const st = document.getElementById('wo-save-status');
+    const showSt = (msg, ok) => { if(!st) return; st.textContent=msg; st.className='text-xs font-bold text-center py-1 rounded-lg '+(ok?'text-green-400':'text-red-400'); st.classList.remove('hidden'); };
+    if (!zone) return showSt('กรุณาเลือก Zone', false);
+    if (!sku)  return showSt('กรุณาระบุ SKU', false);
+    if (bundles<=0) return showSt('กรุณาระบุจำนวน', false);
+    const prod = _wmFindProd(sku);
+    showSt('กำลังบันทึก...', true);
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res?.success) {
+                showSt('✅ บันทึกสำเร็จ #' + res.orderId, true);
+                setTimeout(() => { document.getElementById('wm-workorder-modal')?.classList.add('hidden'); wmLoadWorkOrders(); }, 1200);
+            } else showSt('❌ ' + (res?.message||'ไม่สำเร็จ'), false);
+        })
+        .withFailureHandler(err => showSt('❌ ' + (err?.message||String(err)), false))
+        .createWorkOrder({ zone, sku, skuName: prod?.name||'', bundles, toZone: g('wo-tozone'),
+            reason: g('wo-reason'), dueDate: g('wo-duedate'), assignedTo: g('wo-assignedto'), note: g('wo-note'), createdBy: '' });
+};
+
+window.wmWoSkuInput = function(val) {
+    // simple autocomplete reuse from _wmAllProducts
+    const dd = document.getElementById('wo-sku-dropdown');
+    if (!dd) return;
+    if (!val || val.length < 2) { dd.classList.add('hidden'); return; }
+    const all = _wmAllProducts ? _wmAllProducts() : [];
+    const q = val.toUpperCase();
+    const matches = all.filter(p => p.sku.includes(q) || (p.name||'').toUpperCase().includes(q)).slice(0,8);
+    if (!matches.length) { dd.classList.add('hidden'); return; }
+    dd.innerHTML = matches.map(p =>
+        `<div onclick="document.getElementById('wo-sku').value='${p.sku}';document.getElementById('wo-sku-dropdown').classList.add('hidden')"
+          class="px-3 py-2 hover:bg-slate-700 cursor-pointer text-xs"><span class="text-amber-300 font-bold">${p.sku}</span> <span class="text-slate-400">${p.name||''}</span></div>`
+    ).join('');
+    dd.classList.remove('hidden');
+};
+
+window.wmCheckAlerts = function() {
+    const banner = document.getElementById('wm-alert-banner');
+    if (banner) { banner.innerHTML = '<div class="text-slate-500 text-xs text-center py-3"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังตรวจสอบ...</div>'; banner.classList.remove('hidden'); }
+    google.script.run
+        .withSuccessHandler(res => {
+            if (!banner) return;
+            if (!res?.success) { banner.innerHTML = `<div class="text-red-400 text-xs text-center py-2">${res?.message||'ตรวจสอบไม่สำเร็จ'}</div>`; return; }
+            const alerts = res.alerts || [];
+            if (!alerts.length) { banner.innerHTML = '<div class="text-green-400 text-xs text-center py-2 font-bold"><i class="fas fa-check-circle mr-1"></i>ทุก Zone ยังอยู่ในเกณฑ์ปกติ</div>'; return; }
+            banner.innerHTML = alerts.map(a =>
+                `<div class="bg-orange-950/60 border border-orange-700/50 rounded-xl px-3 py-2.5 flex items-center justify-between gap-3 mb-2">
+                  <div>
+                    <span class="text-orange-300 font-black text-xs">${a.zone}</span>
+                    <span class="text-orange-400 text-xs ml-2">${a.date} — <b>${a.pct}%</b></span>
+                    <div class="text-white text-xs mt-0.5">${a.sku} ควรย้ายออกประมาณ <b class="text-amber-300">${a.bundlesToMove} มัด</b></div>
+                  </div>
+                  <button onclick="wmOpenCreateWorkOrder({zone:'${a.zone}',sku:'${a.sku}',bundles:${a.bundlesToMove},reason:'พื้นที่เกิน ${a.pct}%'})"
+                    class="bg-amber-500 hover:bg-amber-400 text-slate-900 text-[10px] font-black px-2 py-1.5 rounded-lg flex-shrink-0">
+                    สร้างใบงาน
+                  </button>
+                </div>`
+            ).join('');
+        })
+        .withFailureHandler(err => {
+            if (banner) banner.innerHTML = `<div class="text-red-400 text-xs text-center py-2">${err?.message||String(err)}</div>`;
+        })
+        .checkZoneCapacityAlerts({ threshold: 85 });
+};
+
 // ── คลิกที่เครื่อง → แสดง Detail Panel ───────────────────────
 let _wmdCurrentMachineId = null;
 
@@ -31056,7 +31277,9 @@ window.wmPrintFromMoveForm = function() {
     const tpl = document.getElementById('wm-print-move-order');
     if (tpl) {
         tpl.classList.remove('hidden');
+        document.body.classList.add('print-move-order');
         window.print();
+        document.body.classList.remove('print-move-order');
         tpl.classList.add('hidden');
     }
 };
@@ -31104,7 +31327,9 @@ window.wmPrintMoveOrder = function() {
     const tpl = document.getElementById('wm-print-move-order');
     if (tpl) {
         tpl.classList.remove('hidden');
+        document.body.classList.add('print-move-order');
         window.print();
+        document.body.classList.remove('print-move-order');
         tpl.classList.add('hidden');
     }
 };

@@ -45,6 +45,7 @@ function _handleApiPost(e) {
       'getWarehouseMapData','saveWarehouseMapSlots',
       'probeProdBlockSheet','getProductionPlanData',
       'saveWarehouseMove','getWarehouseMoveLog',
+      'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
       'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
       'saveAuditLog','getAuditLog',
@@ -224,6 +225,7 @@ function doGet(e) {
           'getWarehouseMapData','saveWarehouseMapSlots',
           'probeProdBlockSheet','getProductionPlanData',
           'saveWarehouseMove','getWarehouseMoveLog',
+          'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
           'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
           'saveAuditLog','getAuditLog',
@@ -6151,6 +6153,13 @@ function getPreShipmentData(planId) {
 // doPost — API Entry Point (รับ POST จาก GitHub Pages)
 // ════════════════════════════════════════════════════════════════════════
 function doPost(e) {
+  try {
+    var body = JSON.parse(e.postData.contents);
+    // LINE Webhook มี field 'events' — แยกออกจาก API call
+    if (body.events && Array.isArray(body.events)) {
+      return _handleLineWebhook(body);
+    }
+  } catch(ex) {}
   return _handleApiPost(e);
 }
 
@@ -9214,6 +9223,291 @@ function getTruckDispatchLog(params) {
       recordedBy:   String(r[11]|| '')
     }; }).reverse();
     return { success: true, rows: rows };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// =====================================================================
+// LINE MESSAGING API — แจ้งเตือนผ่าน LINE Group
+// =====================================================================
+
+function _getLineToken() {
+  return PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_TOKEN') || '';
+}
+function _getLineGroupId() {
+  return PropertiesService.getScriptProperties().getProperty('LINE_GROUP_ID') || '';
+}
+
+// รันครั้งเดียวจาก GAS Editor เพื่อตั้งค่า token
+function initLineConfig() {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('LINE_CHANNEL_TOKEN',
+    'RuPRi5CkeaWWSuYksfyAEoS6tYowTc2SPirJrtaShoxyI7TPDyBIZ2ehUmTRzTziXhylb0wEEUojCwbeTV7VYMMlMnE2sIIJApEVKwYz5DPXHel0aHyeXgJ9Ao4gMJHxXi47SVfL5N5YQIe1H/coGAdB04t89/1O/w1cDnyilFU=');
+  Logger.log('✅ LINE token saved. Group ID จะถูก auto-save เมื่อมีข้อความในกลุ่ม');
+}
+
+function sendLineMessage(message) {
+  try {
+    var token   = _getLineToken();
+    var groupId = _getLineGroupId();
+    if (!token || !groupId) {
+      Logger.log('⚠️ LINE not configured — token:' + !!token + ' groupId:' + !!groupId);
+      return { success: false, message: 'LINE not configured' };
+    }
+    var options = {
+      method: 'post',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      payload: JSON.stringify({
+        to: groupId,
+        messages: [{ type: 'text', text: message }]
+      }),
+      muteHttpExceptions: true
+    };
+    var res  = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', options);
+    var code = res.getResponseCode();
+    Logger.log('LINE push → HTTP ' + code + ' ' + res.getContentText());
+    return { success: code === 200 };
+  } catch(e) {
+    Logger.log('❌ sendLineMessage: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// รับ Webhook จาก LINE → auto-capture Group ID
+function _handleLineWebhook(payload) {
+  try {
+    var ss       = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var logSheet = ss.getSheetByName('LINE_Webhook_Log');
+    if (!logSheet) {
+      logSheet = ss.insertSheet('LINE_Webhook_Log');
+      logSheet.appendRow(['Timestamp','EventType','GroupID','UserID','Message']);
+      logSheet.setFrozenRows(1);
+    }
+    (payload.events || []).forEach(function(ev) {
+      var src     = ev.source || {};
+      var groupId = src.groupId || '';
+      var userId  = src.userId  || '';
+      var msgText = (ev.message && ev.message.text) ? ev.message.text : '';
+      logSheet.appendRow([new Date(), src.type || '', groupId, userId, msgText]);
+      // Auto-save Group ID ครั้งแรกที่เจอ
+      if (groupId && !_getLineGroupId()) {
+        PropertiesService.getScriptProperties().setProperty('LINE_GROUP_ID', groupId);
+        Logger.log('✅ LINE Group ID saved: ' + groupId);
+      }
+    });
+    return ContentService.createTextOutput('OK');
+  } catch(e) {
+    Logger.log('❌ _handleLineWebhook: ' + e.toString());
+    return ContentService.createTextOutput('OK');
+  }
+}
+
+// =====================================================================
+// WH WORK ORDERS — ใบงานสั่งเคลียร์/ย้ายพื้นที่
+// =====================================================================
+var WH_WORK_ORDER_SHEET = 'WH_Work_Orders';
+
+function _getOrCreateWorkOrderSheet(ss) {
+  var sheet = ss.getSheetByName(WH_WORK_ORDER_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(WH_WORK_ORDER_SHEET);
+    var hdr = ['OrderID','CreatedAt','CreatedBy','Zone','SKU','SKUName',
+               'Bundles','ToZone','Reason','DueDate','Status','AssignedTo','UpdatedAt','Note'];
+    sheet.getRange(1,1,1,hdr.length).setValues([hdr]);
+    sheet.getRange(1,1,1,hdr.length).setBackground('#1e293b').setFontColor('#94a3b8').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    [110,140,100,70,120,200,70,80,200,100,110,120,140,200].forEach(function(w,i){
+      sheet.setColumnWidth(i+1, w);
+    });
+  }
+  return sheet;
+}
+
+function createWorkOrder(data) {
+  try {
+    var ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet   = _getOrCreateWorkOrderSheet(ss);
+    var now     = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    var orderId = 'WO' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+    var bundles = Number(data.bundles || 0);
+    sheet.appendRow([
+      orderId, now, String(data.createdBy||''), String(data.zone||''),
+      String(data.sku||''), String(data.skuName||''), bundles,
+      String(data.toZone||''), String(data.reason||''), String(data.dueDate||''),
+      'รอดำเนินการ', String(data.assignedTo||''), now, String(data.note||'')
+    ]);
+    // LINE แจ้งเตือน
+    var msg = '📋 ใบงานใหม่ #' + orderId + '\n' +
+              '📦 Zone: ' + data.zone + (data.toZone ? ' → ' + data.toZone : '') + '\n' +
+              '🔖 SKU: ' + data.sku + (data.skuName ? ' · ' + data.skuName : '') + '\n' +
+              '📊 จำนวน: ' + bundles + ' มัด\n' +
+              '📝 เหตุผล: ' + (data.reason||'-') + '\n' +
+              '📅 กำหนด: ' + (data.dueDate||'-') + '\n' +
+              '👷 มอบหมาย: ' + (data.assignedTo||'ยังไม่ระบุ');
+    sendLineMessage(msg);
+    saveAuditLog('WorkOrder', 'CREATE', orderId + ' | ' + data.zone + ' | ' + data.sku, 'success');
+    return { success: true, orderId: orderId };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function getWorkOrders(params) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = _getOrCreateWorkOrderSheet(ss);
+    if (sheet.getLastRow() < 2) return { success: true, orders: [] };
+    var rows   = sheet.getRange(2,1,sheet.getLastRow()-1,14).getValues();
+    var status = params && params.status ? params.status : null;
+    var zone   = params && params.zone   ? params.zone   : null;
+    var orders = rows.map(function(r) {
+      return {
+        orderId:    String(r[0]||''),
+        createdAt:  r[1] instanceof Date ? Utilities.formatDate(r[1],'GMT+7','dd/MM/yyyy HH:mm') : String(r[1]||''),
+        createdBy:  String(r[2]||''),
+        zone:       String(r[3]||''),
+        sku:        String(r[4]||''),
+        skuName:    String(r[5]||''),
+        bundles:    Number(r[6]||0),
+        toZone:     String(r[7]||''),
+        reason:     String(r[8]||''),
+        dueDate:    String(r[9]||''),
+        status:     String(r[10]||''),
+        assignedTo: String(r[11]||''),
+        updatedAt:  r[12] instanceof Date ? Utilities.formatDate(r[12],'GMT+7','dd/MM/yyyy HH:mm') : String(r[12]||''),
+        note:       String(r[13]||'')
+      };
+    }).filter(function(o) {
+      if (!o.orderId) return false;
+      if (status && o.status !== status) return false;
+      if (zone   && o.zone   !== zone)   return false;
+      return true;
+    }).reverse();
+    return { success: true, orders: orders };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function updateWorkOrder(data) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = _getOrCreateWorkOrderSheet(ss);
+    if (sheet.getLastRow() < 2) return { success: false, message: 'ไม่พบข้อมูล' };
+    var rows = sheet.getRange(2,1,sheet.getLastRow()-1,1).getValues();
+    var rowIdx = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(data.orderId)) { rowIdx = i+2; break; }
+    }
+    if (rowIdx === -1) return { success: false, message: 'ไม่พบ OrderID: ' + data.orderId };
+    var now = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    if (data.status)     sheet.getRange(rowIdx,11).setValue(data.status);
+    if (data.assignedTo !== undefined) sheet.getRange(rowIdx,12).setValue(data.assignedTo);
+    sheet.getRange(rowIdx,13).setValue(now);
+    if (data.note !== undefined) sheet.getRange(rowIdx,14).setValue(data.note);
+    // LINE แจ้งเตือน
+    var emoji = data.status === 'เสร็จแล้ว' ? '✅' : data.status === 'กำลังทำ' ? '🔄' : '📋';
+    var zoneVal = sheet.getRange(rowIdx,4).getValue();
+    var msg = emoji + ' อัปเดตใบงาน #' + data.orderId + '\n' +
+              'Zone: ' + zoneVal + '\n' +
+              'สถานะ: ' + (data.status||'-') + '\n' +
+              (data.assignedTo ? 'ผู้ดำเนินการ: ' + data.assignedTo + '\n' : '') +
+              (data.note ? 'หมายเหตุ: ' + data.note : '');
+    sendLineMessage(msg);
+    return { success: true };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ตรวจ zone alerts อัตโนมัติ — ใช้เรียกจาก time-trigger หรือ frontend
+function checkZoneCapacityAlerts(params) {
+  try {
+    var threshold = (params && params.threshold) ? Number(params.threshold) : 85;
+    var data = getProductionPlanData(params || { month: new Date().getMonth()+1, year: new Date().getFullYear() });
+    if (!data.success) return { success: false, message: data.message };
+    var alerts = [];
+    var zoneIds = ['P1','P2','P3','P4','C5'];
+    // โหลด move log summary
+    var moveLogData = getWarehouseMoveLog();
+    var moveSummary = moveLogData.success ? moveLogData.summary : {};
+    var inventory   = data.inventory || {};
+    var machines    = data.machines  || [];
+    var dates       = data.dates     || [];
+    var today       = data.today;
+    var todayIdx    = dates.indexOf(today);
+    var upcoming    = todayIdx >= 0 ? dates.slice(todayIdx, todayIdx+7) : dates.slice(0,7);
+
+    zoneIds.forEach(function(zoneId) {
+      var WM_ZONE_CONFIG_DATA = {
+        'P4':  [830,830,1330], 'P1': [1650,1600,1300],
+        'C5':  [500,2100,300,300], 'P2': [500,1000,1300], 'P3': [700,700,700,250,250]
+      };
+      var cols    = WM_ZONE_CONFIG_DATA[zoneId] || [];
+      var totalW  = cols.reduce(function(s,w){return s+w;},0);
+      if (!totalW) return;
+
+      var mach = machines.find(function(m){return m.machineId===zoneId;});
+      if (!mach) return;
+
+      // base stock
+      var skuStock = {};
+      mach.products.forEach(function(p) {
+        var basePcs = ((inventory[p.sku]||{}).pcs||0);
+        var movPcs  = ((moveSummary[zoneId]||{})[p.sku]||{}).pcs||0;
+        skuStock[p.sku] = {
+          pcs: Math.max(0, basePcs + movPcs),
+          ppb: p.pcsPerBundle||1, bw: p.bundleWidth||0, bh: p.bundleHeight||0
+        };
+      });
+
+      // running projection
+      var cumPcs = {};
+      Object.keys(skuStock).forEach(function(s){ cumPcs[s] = skuStock[s].pcs; });
+
+      upcoming.forEach(function(d, i) {
+        if (i > 0) {
+          mach.products.forEach(function(p) {
+            if ((p.daily[d]||0) > 0) {
+              if (!cumPcs[p.sku]) cumPcs[p.sku]=0;
+              cumPcs[p.sku] += p.daily[d];
+            }
+          });
+        }
+        // calc used width
+        var usedW = 0;
+        Object.keys(cumPcs).forEach(function(sku) {
+          var d2 = skuStock[sku]; if (!d2||!d2.bw||!d2.bh||cumPcs[sku]<=0) return;
+          var bun = Math.ceil(cumPcs[sku]/d2.ppb);
+          var maxL= Math.max(1,Math.floor(420/d2.bh));
+          var minB= Math.min(3,bun);
+          var c   = Math.max(minB, Math.ceil(bun/maxL));
+          usedW  += c * d2.bw;
+        });
+        var pct = Math.min(100, Math.round(usedW/totalW*100));
+        if (pct >= threshold) {
+          // คำนวณต้องย้ายออกกี่มัด
+          var excessW = usedW - totalW * threshold/100;
+          // เลือก SKU ที่มีเยอะสุดในโซนย้ายออกก่อน
+          var bigSku = Object.keys(cumPcs).reduce(function(best, sku) {
+            return (cumPcs[sku]||0) > (cumPcs[best]||0) ? sku : best;
+          }, Object.keys(cumPcs)[0] || '');
+          var bigD = skuStock[bigSku]||{};
+          var bundlesToMove = bigD.bw ? Math.ceil(excessW/bigD.bw) : 0;
+          alerts.push({
+            zone: zoneId, date: d, pct: pct,
+            sku: bigSku, skuName: (bigD.skuName||bigSku),
+            bundlesToMove: bundlesToMove,
+            excessWidthCm: Math.round(excessW)
+          });
+        }
+      });
+    });
+    return { success: true, alerts: alerts, threshold: threshold };
   } catch(e) {
     return { success: false, message: e.toString() };
   }
