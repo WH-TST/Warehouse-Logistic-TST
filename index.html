@@ -1743,6 +1743,10 @@ thead.sticky {
         class="bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg font-black text-xs flex items-center gap-1.5 transition-all border border-teal-500/50">
         <i class="fas fa-sync-alt"></i> Sync Zone Stock
       </button>
+      <button onclick="wmOpenZoneSettings()"
+        class="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg font-black text-xs flex items-center gap-1.5 transition-all border border-slate-500/50">
+        <i class="fas fa-cog"></i> ตั้งค่าโซน
+      </button>
     </div>
 
     <!-- Probe result -->
@@ -2090,6 +2094,35 @@ thead.sticky {
 
   </div><!-- end wm-prod-panel -->
 
+<!-- MODAL: Zone Settings -->
+<div id="wm-zone-settings-modal" class="fixed inset-0 bg-black/70 hidden z-[98] flex items-center justify-center px-4 backdrop-blur-sm">
+  <div class="bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-600 max-h-[90vh] flex flex-col">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-slate-800 to-slate-700 px-5 py-4 flex items-center justify-between rounded-t-2xl border-b border-slate-600 flex-shrink-0">
+      <h3 class="text-white font-black text-lg flex items-center gap-2">
+        <i class="fas fa-cog text-amber-400"></i> ตั้งค่าพื้นที่โซน
+      </h3>
+      <button onclick="document.getElementById('wm-zone-settings-modal').classList.add('hidden')" class="text-slate-400 hover:text-white text-lg"><i class="fas fa-times"></i></button>
+    </div>
+    <!-- Body -->
+    <div class="p-5 overflow-y-auto flex-1">
+      <p class="text-slate-400 text-xs mb-4">กำหนดความกว้างแต่ละแถวในโซน (หน่วย: เมตร) — ระบบจะคำนวณ % พื้นที่จากค่าเหล่านี้</p>
+      <div id="wm-zone-settings-body" class="space-y-3"></div>
+    </div>
+    <!-- Footer -->
+    <div class="px-5 py-4 border-t border-slate-700 flex gap-3 justify-end flex-shrink-0">
+      <button onclick="document.getElementById('wm-zone-settings-modal').classList.add('hidden')"
+        class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-xl font-black text-sm transition-all">
+        ยกเลิก
+      </button>
+      <button onclick="wmSaveZoneSettings()"
+        class="bg-amber-600 hover:bg-amber-500 text-white px-5 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all">
+        <i class="fas fa-save"></i> บันทึก
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Create Work Order -->
 <div id="wm-workorder-modal" class="fixed inset-0 bg-black/70 hidden z-[97] flex items-center justify-center px-4 backdrop-blur-sm">
   <div class="bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-600">
@@ -2290,6 +2323,7 @@ thead.sticky {
           <th style="border:1px solid #334155;padding:7px 8px;text-align:center;">Bundles</th>
           <th style="border:1px solid #334155;padding:7px 8px;text-align:center;">PCS/Bundle</th>
           <th style="border:1px solid #334155;padding:7px 8px;text-align:center;">Total PCS</th>
+          <th style="border:1px solid #334155;padding:7px 8px;text-align:center;">Stacking</th>
         </tr>
       </thead>
       <tbody id="wm-print-items"></tbody>
@@ -30279,7 +30313,8 @@ window.switchWmTab = function(tab) {
 };
 
 // ── Zone Config (ความกว้างแต่ละแถวในโซน หน่วย: ซม.) ─────────
-const WM_ZONE_CONFIG = {
+// ค่า default — จะถูก override ด้วยค่าจาก GAS (Script Properties) เมื่อโหลด
+let WM_ZONE_CONFIG = {
   'P4':    { rows: [{id:1,w:830},{id:2,w:830},{id:3,w:1330}] },
   'RE-C4': { rows: [{id:1,w:1330},{id:2,w:1330},{id:3,w:1330}] },
   'RE4':   { rows: [{id:1,w:500}] },
@@ -30288,7 +30323,7 @@ const WM_ZONE_CONFIG = {
   'RE-C5': { rows: [{id:3,w:2100},{id:4,w:2100}] },
   'P2':    { rows: [{id:1,w:500},{id:2,w:1000},{id:3,w:1300}] },
   'P3':    { rows: [{id:1,w:700},{id:2,w:700},{id:3,w:700},{id:4,w:250},{id:5,w:250}] },
-  'RE-1':  { rows: [{id:1,w:850}] }
+  'RE1':   { rows: [{id:1,w:850}] }
 };
 const WM_MAX_HEIGHT_CM = 420; // ความสูงสูงสุด 4.2 เมตร
 
@@ -30478,9 +30513,9 @@ window.loadProductionPlan = function() {
     const month = parseInt(document.getElementById('wm-prod-month')?.value) || new Date().getMonth() + 1;
     const year  = parseInt(document.getElementById('wm-prod-year')?.value)  || new Date().getFullYear();
     const loadEl = document.getElementById('wm-prod-loading');
-    const machEl = document.getElementById('wm-prod-machines');
     if (loadEl) loadEl.classList.remove('hidden');
-    // ไม่ clear innerHTML — ผังโรงงาน hardcode อยู่ใน div นี้
+    // โหลด Zone Config ก่อน แล้วค่อย load production data
+    _wmLoadZoneConfig(() => {
     try {
         google.script.run
             .withSuccessHandler(res => {
@@ -30522,6 +30557,7 @@ window.loadProductionPlan = function() {
         if (loadEl) loadEl.classList.add('hidden');
         showToast('⚠️ ไม่สามารถเชื่อมต่อ GAS ได้ (Preview mode)', true);
     }
+    }); // end _wmLoadZoneConfig
 };
 
 // ── Fill Floor Plan — Inventory Primary, Production Secondary ──
@@ -30855,6 +30891,141 @@ window.wmSyncZoneStock = function() {
         })
         .syncZoneStockFromInventory({});
 };
+
+// ── Zone Settings Modal ───────────────────────────────────────
+window.wmOpenZoneSettings = function() {
+    const body = document.getElementById('wm-zone-settings-body');
+    if (!body) return;
+
+    // Zone labels
+    const ZONE_LABEL = {
+        'P1':'P1 (เครื่องผลิต)', 'P2':'P2 (เครื่องผลิต)', 'P3':'P3 (เครื่องผลิต)',
+        'P4':'P4 (เครื่องผลิต)', 'C5':'C5 (เครื่องผลิต)',
+        'RE-C4':'C4 สำรอง', 'RE-C5':'C5 สำรอง', 'RE4':'RE4 สำรอง', 'RE1':'RE1 สำรอง'
+    };
+
+    body.innerHTML = Object.entries(WM_ZONE_CONFIG).map(([zoneId, cfg]) => {
+        const label = ZONE_LABEL[zoneId] || zoneId;
+        const totalM = cfg.rows.reduce((s,r)=>s+r.w,0) / 100;
+        const rowsHtml = cfg.rows.map((r,i) => `
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-slate-400 text-xs w-14 flex-shrink-0">แถว ${r.id}</span>
+                <input type="number" step="0.1" min="0.5" max="100"
+                    class="wm-zs-input bg-slate-700 border border-slate-500 text-white text-sm font-bold rounded-lg px-3 py-1.5 w-24 outline-none focus:border-amber-400"
+                    data-zone="${zoneId}" data-row="${i}" value="${(r.w/100).toFixed(1)}"
+                    onchange="wmZoneSettingsCalcTotal('${zoneId}')">
+                <span class="text-slate-500 text-xs">ม.</span>
+                <button onclick="wmZoneSettingsRemoveRow('${zoneId}',${i})"
+                    class="text-slate-600 hover:text-rose-400 text-xs ml-1 transition-colors" title="ลบแถวนี้">
+                    <i class="fas fa-minus-circle"></i>
+                </button>
+            </div>`).join('');
+        return `
+        <div class="bg-slate-800 rounded-xl border border-slate-700 p-4" id="wm-zs-card-${zoneId}">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="bg-amber-500/20 text-amber-300 font-black text-xs px-2 py-0.5 rounded">${zoneId}</span>
+                    <span class="text-white font-bold text-sm">${label}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-400 text-xs">รวม: </span>
+                    <span id="wm-zs-total-${zoneId}" class="text-amber-400 font-black text-sm">${totalM.toFixed(1)} ม.</span>
+                    <button onclick="wmZoneSettingsAddRow('${zoneId}')"
+                        class="text-teal-400 hover:text-teal-300 text-xs transition-colors" title="เพิ่มแถว">
+                        <i class="fas fa-plus-circle"></i> เพิ่มแถว
+                    </button>
+                </div>
+            </div>
+            <div id="wm-zs-rows-${zoneId}">${rowsHtml}</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('wm-zone-settings-modal').classList.remove('hidden');
+};
+
+window.wmZoneSettingsCalcTotal = function(zoneId) {
+    const inputs = document.querySelectorAll(`.wm-zs-input[data-zone="${zoneId}"]`);
+    let total = 0;
+    inputs.forEach(inp => { total += parseFloat(inp.value)||0; });
+    const el = document.getElementById('wm-zs-total-'+zoneId);
+    if (el) el.textContent = total.toFixed(1) + ' ม.';
+};
+
+window.wmZoneSettingsAddRow = function(zoneId) {
+    const container = document.getElementById('wm-zs-rows-'+zoneId);
+    if (!container) return;
+    const existing = container.querySelectorAll('.wm-zs-input').length;
+    const newId = existing + 1;
+    const div = document.createElement('div');
+    div.className = 'flex items-center gap-2 mb-1';
+    div.innerHTML = `
+        <span class="text-slate-400 text-xs w-14 flex-shrink-0">แถว ${newId}</span>
+        <input type="number" step="0.1" min="0.5" max="100"
+            class="wm-zs-input bg-slate-700 border border-slate-500 text-white text-sm font-bold rounded-lg px-3 py-1.5 w-24 outline-none focus:border-amber-400"
+            data-zone="${zoneId}" data-row="${existing}" value="5.0"
+            onchange="wmZoneSettingsCalcTotal('${zoneId}')">
+        <span class="text-slate-500 text-xs">ม.</span>
+        <button onclick="this.parentElement.remove();wmZoneSettingsCalcTotal('${zoneId}')"
+            class="text-slate-600 hover:text-rose-400 text-xs ml-1 transition-colors">
+            <i class="fas fa-minus-circle"></i>
+        </button>`;
+    container.appendChild(div);
+    wmZoneSettingsCalcTotal(zoneId);
+};
+
+window.wmZoneSettingsRemoveRow = function(zoneId, rowIndex) {
+    const container = document.getElementById('wm-zs-rows-'+zoneId);
+    if (!container) return;
+    const rows = container.querySelectorAll('.flex.items-center');
+    if (rows.length <= 1) { showToast('⚠️ ต้องมีอย่างน้อย 1 แถว', true); return; }
+    rows[rowIndex]?.remove();
+    wmZoneSettingsCalcTotal(zoneId);
+};
+
+window.wmSaveZoneSettings = function() {
+    // อ่านค่าจาก inputs สร้าง config ใหม่
+    const newConfig = {};
+    document.querySelectorAll('[id^="wm-zs-rows-"]').forEach(container => {
+        const zoneId = container.id.replace('wm-zs-rows-','');
+        const inputs = container.querySelectorAll('.wm-zs-input');
+        const rows = [];
+        inputs.forEach((inp, i) => {
+            const wM = parseFloat(inp.value)||0;
+            if (wM > 0) rows.push({ id: i+1, w: Math.round(wM*100) });
+        });
+        if (rows.length > 0) newConfig[zoneId] = { rows };
+    });
+
+    google.script.run
+        .withSuccessHandler(res => {
+            if (res && res.success) {
+                // อัพเดต WM_ZONE_CONFIG ใน memory ทันที
+                Object.assign(WM_ZONE_CONFIG, newConfig);
+                document.getElementById('wm-zone-settings-modal').classList.add('hidden');
+                showToast('✅ บันทึกตั้งค่าโซนสำเร็จ — reload ผังคลัง...', false);
+                setTimeout(() => { _wmProdLoaded = false; wmLoadProduction(); }, 1000);
+            } else {
+                showToast('❌ บันทึกไม่สำเร็จ: '+(res?.message||''), true);
+            }
+        })
+        .withFailureHandler(err => { showToast('❌ Error: '+err, true); })
+        .saveZoneConfig(newConfig);
+};
+
+// โหลด Zone Config จาก GAS เมื่อเปิดหน้า WM
+function _wmLoadZoneConfig(callback) {
+    try {
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res && res.success && res.config) {
+                    Object.assign(WM_ZONE_CONFIG, res.config);
+                }
+                if (callback) callback();
+            })
+            .withFailureHandler(() => { if (callback) callback(); })
+            .getZoneConfig();
+    } catch(e) { if (callback) callback(); }
+}
 
 function _wmLoadMoveLog(callback) {
     google.script.run
@@ -31628,6 +31799,12 @@ window.wmPrintFromMoveForm = function() {
     safeEl('wm-print-issued-by', emp || '—');
     safeEl('wm-print-remark',    note || '');
 
+    // คำนวณการจัดกอง
+    const stackInfo = _wmCalcStackInfo(bundles, prod?.bundleWidth||0, prod?.bundleHeight||0);
+    const stackTxt  = stackInfo
+        ? `Base ${stackInfo.cols}×${stackInfo.layers} layers / H=${stackInfo.heightCm}cm`
+        : '—';
+
     const itemsEl = document.getElementById('wm-print-items');
     if (itemsEl) {
         itemsEl.innerHTML = `<tr>
@@ -31637,6 +31814,7 @@ window.wmPrintFromMoveForm = function() {
           <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:900;font-size:14px;">${bundles}</td>
           <td style="border:1px solid #334155;padding:6px 8px;text-align:center;">${ppb}</td>
           <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:700;">${Number(totalPCS).toLocaleString()}</td>
+          <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-size:10px;color:#1e40af;font-weight:700;">${stackTxt}</td>
         </tr>`;
     }
 
@@ -31670,9 +31848,11 @@ window.wmPrintMoveOrder = function() {
         const todayProds = mach.products.filter(p => p.daily[today] > 0);
         if (todayProds.length > 0) {
             itemsEl.innerHTML = todayProds.map((p, i) => {
-                const ppb  = p.pcsPerBundle || 1;
-                const pcs  = p.daily[today] || 0;
-                const mads = ppb > 0 ? Math.round(pcs / ppb) : 0;
+                const ppb   = p.pcsPerBundle || 1;
+                const pcs   = p.daily[today] || 0;
+                const mads  = ppb > 0 ? Math.round(pcs / ppb) : 0;
+                const si    = _wmCalcStackInfo(mads, p.bundleWidth||0, p.bundleHeight||0);
+                const stk   = si ? `Base ${si.cols}×${si.layers} layers / H=${si.heightCm}cm` : '—';
                 return `<tr>
                   <td style="border:1px solid #334155;padding:6px 8px;text-align:center;">${i+1}</td>
                   <td style="border:1px solid #334155;padding:6px 8px;font-family:monospace;">${p.sku}</td>
@@ -31680,10 +31860,11 @@ window.wmPrintMoveOrder = function() {
                   <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:900;font-size:14px;">${mads}</td>
                   <td style="border:1px solid #334155;padding:6px 8px;text-align:center;">${ppb}</td>
                   <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-weight:700;">${Number(pcs).toLocaleString()}</td>
+                  <td style="border:1px solid #334155;padding:6px 8px;text-align:center;font-size:10px;color:#1e40af;font-weight:700;">${stk}</td>
                 </tr>`;
             }).join('');
         } else {
-            itemsEl.innerHTML = '<tr><td colspan="6" style="border:1px solid #334155;padding:10px;text-align:center;color:#999;">No production plan for today</td></tr>';
+            itemsEl.innerHTML = '<tr><td colspan="7" style="border:1px solid #334155;padding:10px;text-align:center;color:#999;">No production plan for today</td></tr>';
         }
     }
 
