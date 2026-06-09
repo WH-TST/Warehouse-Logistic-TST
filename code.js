@@ -8790,14 +8790,24 @@ function getProductionPlanData(params) {
     var allSKUs = {};
     machines.forEach(function(m) { m.products.forEach(function(p) { allSKUs[p.sku] = true; }); });
     var inventory = {};
-    var mainSS   = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var invSheet = mainSS.getSheetByName(INVENTORY_FG_SHEET);
-    if (invSheet && invSheet.getLastRow() > 1) {
-      var invRows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, 3).getValues();
-      invRows.forEach(function(ir) {
-        var sku = String(ir[0]).trim();
-        if (allSKUs[sku]) inventory[sku] = { pcs: Number(ir[1]) || 0, weight: Number(ir[2]) || 0 };
-      });
+    // ── ดึง Inventory จาก On-hand sheet (FG-BP และ QC เท่านั้น) ──
+    try {
+      var invSS    = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
+      var invSheet = invSS.getSheetByName('On-hand');
+      if (invSheet && invSheet.getLastRow() > 1) {
+        var invRows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, 14).getValues();
+        invRows.forEach(function(ir) {
+          var sku       = String(ir[1]  || '').trim();  // Col B = รหัสสินค้า
+          var qty       = Number(ir[4]  || 0);          // Col E = จำนวน
+          var warehouse = String(ir[13] || '').trim();  // Col N = คลังสินค้า
+          if (!sku || qty <= 0) return;
+          if (warehouse !== 'FG-BP' && warehouse !== 'QC') return;
+          if (!inventory[sku]) inventory[sku] = { pcs: 0, weight: 0 };
+          inventory[sku].pcs += qty;
+        });
+      }
+    } catch(e) {
+      Logger.log('inventory On-hand error: ' + e.toString());
     }
     var today = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
 
