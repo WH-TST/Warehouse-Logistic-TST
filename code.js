@@ -8931,11 +8931,13 @@ function syncZoneStockFromInventory(params) {
     var machines  = planData.machines  || [];
 
     // ── Step 1: หาเครื่องที่ผลิต SKU ล่าสุด + มิติกล่อง ──
+    var today = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
     var lastZone = {}, lastDate = {}, skuMeta = {};
     machines.forEach(function(m) {
       (m.products||[]).forEach(function(p) {
         if (!p.sku) return;
-        var dates = Object.keys(p.daily||{}).filter(function(d){ return (p.daily[d]||0)>0; }).sort();
+        // กรองเฉพาะวันที่ผ่านมาแล้ว (≤ วันนี้) ไม่นับแผนอนาคต
+        var dates = Object.keys(p.daily||{}).filter(function(d){ return (p.daily[d]||0)>0 && d<=today; }).sort();
         var ld = dates.length ? dates[dates.length-1] : '0000-00-00';
         if (!lastDate[p.sku] || ld > lastDate[p.sku]) {
           lastDate[p.sku] = ld;
