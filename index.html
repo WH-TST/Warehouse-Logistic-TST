@@ -30675,13 +30675,13 @@ function _wmRenderMachines(data) {
                 const spQty    = spToday[p.sku] || 0;
                 const pbQty    = p.daily[today] || 0;
                 const zonePcs  = (zoneSkuBase[p.sku] || {}).pcs || 0;
-                // รวม planned out ทุกวัน
-                const plannedOut = Object.values((delivPlan[p.sku] || {})).reduce((s,v)=>s+v, 0);
+                // แผนส่งมอบวันนี้เท่านั้น (ไม่รวมวันอื่น)
+                const plannedOut = (delivPlan[p.sku] || {})[today] || 0;
                 const availPcs  = Math.max(0, zonePcs - plannedOut);
                 return {
                     sku: p.sku, name: p.name,
                     pcs: zonePcs,          // สต็อคในโซนนี้
-                    availPcs,              // พร้อมจ่าย (หลังหักแผนส่ง)
+                    availPcs,              // พร้อมจ่าย (หลังหักแผนส่งวันนี้)
                     plannedOut,
                     todayQty: spQty > 0 ? spQty : pbQty
                 };
@@ -30692,7 +30692,7 @@ function _wmRenderMachines(data) {
         // เพิ่ม SKU ที่ถูกย้ายเข้ามา (ไม่ได้ผลิตในโซนนี้)
         Object.entries(zoneSkuBase).forEach(([sku, d]) => {
             if (!invItems.find(x => x.sku === sku) && d.pcs > 0) {
-                const plannedOut = Object.values((delivPlan[sku] || {})).reduce((s,v)=>s+v, 0);
+                const plannedOut = (delivPlan[sku] || {})[today] || 0;
                 invItems.push({ sku, name: '', pcs: d.pcs, availPcs: Math.max(0, d.pcs - plannedOut), plannedOut, todayQty: 0 });
             }
         });
@@ -31723,20 +31723,18 @@ window.wmOpenMachineDetail = function(machineId) {
         const dp = (_wmDeliveryPlan || {})[sku] || {};
         return s + (dp[today] || 0);
     }, 0);
-    const flowOut = moveOut + delivToday;
+    // แผนส่งมอบ = delivery plan เท่านั้น (ไม่รวมการย้ายกองภายใน)
+    const flowOut = delivToday;
     const flowIn  = todayPlan; // จาก Sheet Plan
     const flowNet = flowIn - flowOut;
     const safeSet = (id, val, cls) => { const el = document.getElementById(id); if (el) { el.textContent = fmtN(Math.abs(val)); el.className = cls + ' font-black text-lg'; } };
     safeSet('wmd-flow-in',  flowIn,  'text-emerald-400');
     safeSet('wmd-flow-out', flowOut, 'text-rose-400');
     safeSet('wmd-flow-net', flowNet, flowNet >= 0 ? 'text-yellow-300' : 'text-rose-300');
-    // แสดงรายละเอียด ออก
+    // แสดงรายละเอียด: ย้ายออกวันนี้ (แยกจากแผนส่งมอบ)
     const subEl = document.getElementById('wmd-flow-out-sub');
     if (subEl) {
-        const parts = [];
-        if (moveOut > 0)   parts.push(`ย้าย ${fmtN(moveOut)}`);
-        if (delivToday > 0) parts.push(`ส่ง ${fmtN(delivToday)}`);
-        subEl.textContent = parts.length ? parts.join(' + ') : '';
+        subEl.textContent = moveOut > 0 ? `ย้ายออกวันนี้ ${fmtN(moveOut)} PCS` : '';
     }
 
     // ── Move Log (ล่าสุด 5) ────────────────────────────────────
