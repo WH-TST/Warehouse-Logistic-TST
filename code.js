@@ -8815,11 +8815,20 @@ function getProductionPlanData(params) {
     var todaySheetPlan = {}; // { machineId: { sku: pcs } }
     try {
       var todayKey   = today.replace(/-/g, '');
+      var mainSS     = SpreadsheetApp.openById(SPREADSHEET_ID);
       var planSheet  = mainSS.getSheetByName(PLAN_SHEET_NAME);
       if (planSheet && planSheet.getLastRow() > 1) {
         var planRows = planSheet.getRange(2, 1, planSheet.getLastRow() - 1, 14).getValues();
         planRows.forEach(function(r) {
-          if (String(r[0]).trim() !== todayKey) return;
+          // Col A อาจเป็น Date object หรือ string ก็ได้ — แปลงให้เป็น yyyyMMdd เสมอ
+          var dateVal = r[0];
+          var rowKey  = '';
+          if (dateVal instanceof Date) {
+            rowKey = Utilities.formatDate(dateVal, 'GMT+7', 'yyyyMMdd');
+          } else {
+            rowKey = String(dateVal || '').trim().replace(/-/g, '').replace(/\//g, '');
+          }
+          if (rowKey !== todayKey) return;
           var mid = String(r[1] || '').trim();
           var sku = String(r[4] || '').trim();
           var pcs = Number(r[13]) || 0;
@@ -8828,7 +8837,27 @@ function getProductionPlanData(params) {
           todaySheetPlan[mid][sku] = (todaySheetPlan[mid][sku] || 0) + pcs;
         });
       }
-    } catch(e) { /* ถ้าอ่านไม่ได้ก็ใช้ Production Block แทน */ }
+    } catch(e) { Logger.log('planSheet error: ' + e.toString()); }
+
+    // ── DEBUG: log ข้อมูล C5 เพื่อตรวจสอบ ──
+    Logger.log('=== DEBUG C5 today plan ===');
+    Logger.log('today: ' + today + ' | todayKey: ' + today.replace(/-/g, ''));
+    Logger.log('todaySheetPlan keys: ' + JSON.stringify(Object.keys(todaySheetPlan)));
+    Logger.log('todaySheetPlan[C5]: ' + JSON.stringify(todaySheetPlan['C5'] || null));
+    var c5mach = machines.filter(function(m){ return m.machineId === 'C5'; })[0];
+    if (c5mach) {
+      var c5dates = c5mach.products.reduce(function(acc, p) {
+        Object.keys(p.daily).forEach(function(d){ if (acc.indexOf(d) === -1) acc.push(d); });
+        return acc;
+      }, []).sort();
+      Logger.log('C5 product dates: ' + JSON.stringify(c5dates));
+      Logger.log('C5 products count: ' + c5mach.products.length);
+      Logger.log('C5 today daily sum: ' + c5mach.products.reduce(function(s,p){ return s + (p.daily[today]||0); }, 0));
+    } else {
+      Logger.log('C5 NOT FOUND in machines array');
+      Logger.log('All machine IDs: ' + JSON.stringify(machines.map(function(m){ return m.machineId; })));
+    }
+    Logger.log('=== END DEBUG ===');
 
     return { success: true, sheetName: sheetName, machines: machines,
              dates: dateColumns.map(function(d) { return d.dateStr; }), today: today,
@@ -9904,7 +9933,7 @@ function getZoneStockSummary(params) {
     // คำนวณสต็อคต่อโซน
     // step 1: assign base stock ตาม lastProducedZone
     var zones = {};
-    var WM_ZONE_IDS = ['P1','P2','P3','P4','C5','RE-C4','RE-C5','RE4','RE1'];
+    var WM_ZONE_IDS = ['P1','P2','P3','P4','C5','C4','RE-C5','RE4','RE1'];
     WM_ZONE_IDS.forEach(function(z){ zones[z] = {}; });
 
     // สต็อคพื้นฐานต่อ SKU จาก Inventory FG
@@ -10024,7 +10053,7 @@ function calcSmartMoveRecommendations(params) {
       'C5': [500,2100,300,300], 'P2': [500,1000,1300], 'P3': [700,700,700,250,250]
     };
     var RE_ZONE_CONFIG = {
-      'RE-C4': 1500, 'RE-C5': 900, 'RE4': 1200, 'RE1': 900
+      'C4': 1500, 'RE-C5': 900, 'RE4': 1200, 'RE1': 900
     };
 
     var stockData = getZoneStockSummary({ month: month, year: year });
@@ -10060,7 +10089,7 @@ function calcSmartMoveRecommendations(params) {
         var free = w ? (w.totalW - w.usedW) : RE_ZONE_CONFIG[z];
         if (free > bestFree) { bestFree = free; best = z; }
       });
-      return best || 'RE-C4';
+      return best || 'C4';
     }
 
     var recommendations = [];
