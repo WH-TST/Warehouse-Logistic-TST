@@ -2175,17 +2175,9 @@ thead.sticky {
   </div>
 </div>
 
-<!-- PRINT TEMPLATE: ใบสั่งย้ายกอง -->
+<!-- PRINT TEMPLATE: ใบสั่งย้ายกอง (hidden data template only — print via new window) -->
 <div id="wm-print-move-order" class="hidden">
-  <style>
-    @media print {
-      body.print-move-order > *:not(#wm-print-move-order) { display: none !important; }
-      body.print-move-order #wm-print-move-order { display: block !important; }
-      body.print-move-order { background: white !important; }
-      body.print-move-order * { visibility: visible !important; }
-      @page { size: A4; margin: 15mm; }
-    }
-  </style>
+  <style></style>
   <div style="font-family:'Sarabun',sans-serif;font-size:13px;color:#000;padding:0;">
     <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px;">
       <div style="font-size:18px;font-weight:900;">บริษัท ที.สแตนดาร์ด สตีล จำกัด</div>
@@ -31276,11 +31268,7 @@ window.wmPrintFromMoveForm = function() {
 
     const tpl = document.getElementById('wm-print-move-order');
     if (tpl) {
-        tpl.classList.remove('hidden');
-        document.body.classList.add('print-move-order');
-        window.print();
-        document.body.classList.remove('print-move-order');
-        tpl.classList.add('hidden');
+        _wmOpenMoveOrderPrintWindow(tpl.innerHTML);
     }
 };
 
@@ -31323,16 +31311,31 @@ window.wmPrintMoveOrder = function() {
         }
     }
 
-    // แสดง template แล้วพิมพ์
+    // แสดง template แล้วพิมพ์ผ่าน new window
     const tpl = document.getElementById('wm-print-move-order');
     if (tpl) {
-        tpl.classList.remove('hidden');
-        document.body.classList.add('print-move-order');
-        window.print();
-        document.body.classList.remove('print-move-order');
-        tpl.classList.add('hidden');
+        _wmOpenMoveOrderPrintWindow(tpl.innerHTML);
     }
 };
+
+// helper: เปิด new window พิมพ์ใบสั่งย้าย (แยกออกจาก Tag print CSS)
+function _wmOpenMoveOrderPrintWindow(bodyHtml) {
+    const w = window.open('', '_blank', 'width=850,height=700');
+    if (!w) { showToast('⚠️ กรุณาอนุญาต Popup เพื่อพิมพ์', true); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4 portrait; margin: 15mm; }
+  body { font-family: 'Sarabun', sans-serif; font-size: 11pt; color: #000; background: #fff; margin: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #bbb; padding: 5px 8px; font-size: 10pt; }
+  th { background: #1e293b; color: #fff; }
+  .no-print { display: none; }
+  @media print { .no-print { display: none !important; } }
+</style>
+</head><body onload="window.print();">${bodyHtml}</body></html>`);
+    w.document.close();
+}
 
 // ══════════════════════════════════════════════════════════════
 // WAREHOUSE MAP — ผังจำลองพื้นที่วางภายในคลังสินค้า
