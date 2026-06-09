@@ -31299,14 +31299,30 @@ window.confirmWmMove = function() {
             if (res?.success) {
                 closeWmMoveModal();
                 showToast(`✅ ย้าย ${bundles.toLocaleString('th-TH')} มัด (${(bundles*ppb).toLocaleString('th-TH')} เส้น) จาก ${fromZone} → ${toZone}`);
-                _wmLoadMoveLog(() => {
+                // reload ทั้ง MoveLog และ ZoneStock แล้ว re-render
+                let doneLog = false, doneStock = false;
+                const tryRerender = () => {
+                    if (!doneLog || !doneStock) return;
                     if (_wmProdData) {
                         _wmProdData.moveSummary = _wmMoveSummary;
-                        // re-render ทุก zone ทั้ง main + RE
                         _wmRenderMachines(_wmProdData);
                         _wmShowMoveLog();
                     }
-                });
+                };
+                _wmLoadMoveLog(() => { doneLog = true; tryRerender(); });
+                google.script.run
+                    .withSuccessHandler(zRes => {
+                        if (zRes?.success && zRes.data) {
+                            _wmZoneStock = {};
+                            zRes.data.forEach(r => {
+                                if (!_wmZoneStock[r.zoneId]) _wmZoneStock[r.zoneId] = {};
+                                _wmZoneStock[r.zoneId][r.sku] = r;
+                            });
+                        }
+                        doneStock = true; tryRerender();
+                    })
+                    .withFailureHandler(() => { doneStock = true; tryRerender(); })
+                    .getZoneStock();
             } else {
                 showErr(res?.message || 'บันทึกไม่สำเร็จ');
             }
