@@ -46,6 +46,7 @@ function _handleApiPost(e) {
       'probeProdBlockSheet','getProductionPlanData',
       'saveWarehouseMove','getWarehouseMoveLog',
       'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
+      'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
       'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
       'saveAuditLog','getAuditLog',
@@ -226,6 +227,7 @@ function doGet(e) {
           'probeProdBlockSheet','getProductionPlanData',
           'saveWarehouseMove','getWarehouseMoveLog',
           'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
+      'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
           'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
           'saveAuditLog','getAuditLog',
@@ -9508,6 +9510,374 @@ function checkZoneCapacityAlerts(params) {
       });
     });
     return { success: true, alerts: alerts, threshold: threshold };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// =====================================================================
+// ZONE STOCK LOGIC — ตรรกะสต็อคแม่นยำต่อโซน
+// =====================================================================
+
+/**
+ * getDeliveryPlanByDate — ดึงแผนส่งมอบจาก Logistic_Plan_Item
+ * จัดกลุ่มเป็น { sku: { date: plannedPcs } }
+ * กรอง: date >= today, status ไม่ใช่ ยกเลิก/สำเร็จ
+ */
+function getDeliveryPlanByDate(params) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(LOGI_ITEM_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, bySkuDate: {}, byDate: {} };
+
+    var rows = sheet.getRange(2, 1, sheet.getLastRow()-1, 18).getValues();
+    var today = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+    var daysAhead = (params && params.daysAhead) ? Number(params.daysAhead) : 14;
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() + daysAhead);
+
+    // bySkuDate[sku][dateStr] = totalPcs (เส้น)
+    var bySkuDate = {};
+    // byDate[dateStr][sku] = { pcs, skuName, planIds[] }
+    var byDate = {};
+
+    var SKIP_STATUS = ['ยกเลิก','cancelled','cancel','สำเร็จ','delivered','done'];
+
+    rows.forEach(function(r) {
+      var planId  = String(r[0]||'');
+      var sku     = String(r[1]||'').trim();
+      var skuName = String(r[2]||'');
+      var pcs     = Number(r[3]||0);
+      var rawDate = r[9]; // col J = วันที่
+      var status  = String(r[10]||'').toLowerCase().trim();
+
+      if (!sku || pcs <= 0 || !rawDate) return;
+      var SKIP_LOWER = SKIP_STATUS.map(function(s){return s.toLowerCase();});
+      if (SKIP_LOWER.indexOf(status) >= 0) return;
+
+      var d;
+      if (rawDate instanceof Date) {
+        d = rawDate;
+      } else {
+        d = new Date(rawDate);
+      }
+      if (isNaN(d.getTime())) return;
+
+      var dateStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+      if (dateStr < today || d > cutoff) return;
+
+      if (!bySkuDate[sku]) bySkuDate[sku] = {};
+      bySkuDate[sku][dateStr] = (bySkuDate[sku][dateStr]||0) + pcs;
+
+      if (!byDate[dateStr]) byDate[dateStr] = {};
+      if (!byDate[dateStr][sku]) byDate[dateStr][sku] = { pcs:0, skuName:skuName, planIds:[] };
+      byDate[dateStr][sku].pcs += pcs;
+      if (byDate[dateStr][sku].planIds.indexOf(planId)<0) byDate[dateStr][sku].planIds.push(planId);
+    });
+
+    return { success: true, bySkuDate: bySkuDate, byDate: byDate };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * getZoneStockSummary — ยอดสต็อคต่อโซนที่แม่นยำ
+ * รวม: Inventory FG + Move Log + Logistic Plan (deduct)
+ * Return:
+ *   zones[zoneId][sku] = {
+ *     pcs, bundles, pcsPerBundle, bw, bh, skuName,
+ *     plannedOutPcs,   // รวมทุกวันที่มีแผนส่ง
+ *     availablePcs,    // pcs - plannedOutPcs
+ *     availableBundles
+ *   }
+ *   lastProducedZone[sku] = zoneId  // เครื่องที่ผลิตล่าสุด
+ */
+function getZoneStockSummary(params) {
+  try {
+    var month = params && params.month ? Number(params.month) : new Date().getMonth()+1;
+    var year  = params && params.year  ? Number(params.year)  : new Date().getFullYear();
+
+    // โหลดข้อมูลหลัก
+    var planData   = getProductionPlanData({ month: month, year: year });
+    if (!planData.success) return { success: false, message: planData.message };
+
+    var moveLog    = getWarehouseMoveLog();
+    var moveSummary= moveLog.success ? moveLog.summary : {};
+    var inventory  = planData.inventory || {};
+    var machines   = planData.machines  || [];
+
+    // โหลดแผนส่งมอบ
+    var deliveryData = getDeliveryPlanByDate({ daysAhead: 14 });
+    var bySkuDate    = deliveryData.success ? deliveryData.bySkuDate : {};
+
+    // หาเครื่องที่ผลิต SKU ล่าสุด
+    // machines[].products[].lastDate = วันที่ผลิตล่าสุดใน Production Block
+    var lastProducedZone = {};
+    var lastProducedDate = {};
+    machines.forEach(function(m) {
+      (m.products||[]).forEach(function(p) {
+        if (!p.sku) return;
+        // หาวันสุดท้ายที่มีการผลิต
+        var latestDate = '';
+        Object.keys(p.daily||{}).forEach(function(d) {
+          if ((p.daily[d]||0) > 0 && d > latestDate) latestDate = d;
+        });
+        if (!latestDate) return;
+        if (!lastProducedDate[p.sku] || latestDate > lastProducedDate[p.sku]) {
+          lastProducedDate[p.sku] = latestDate;
+          lastProducedZone[p.sku] = m.machineId;
+        }
+      });
+    });
+
+    // คำนวณสต็อคต่อโซน
+    // step 1: assign base stock ตาม lastProducedZone
+    var zones = {};
+    var WM_ZONE_IDS = ['P1','P2','P3','P4','C5','RE-C4','RE-C5','RE4','RE1'];
+    WM_ZONE_IDS.forEach(function(z){ zones[z] = {}; });
+
+    // สต็อคพื้นฐานต่อ SKU จาก Inventory FG
+    Object.keys(inventory).forEach(function(sku) {
+      var inv  = inventory[sku] || {};
+      var pcs  = Number(inv.pcs||0);
+      if (pcs <= 0) return;
+      var zone = lastProducedZone[sku];
+      if (!zone || !zones[zone]) return; // ไม่รู้โซน ข้ามไป
+
+      // ข้อมูลจาก Product Master ผ่าน machines
+      var prodInfo = null;
+      machines.forEach(function(m) {
+        (m.products||[]).forEach(function(p) {
+          if (p.sku === sku && !prodInfo) prodInfo = p;
+        });
+      });
+      var ppb = prodInfo ? (prodInfo.pcsPerBundle||1) : 1;
+      var bw  = prodInfo ? (prodInfo.bundleWidth||0)  : 0;
+      var bh  = prodInfo ? (prodInfo.bundleHeight||0) : 0;
+
+      zones[zone][sku] = {
+        pcs: pcs, pcsPerBundle: ppb, bw: bw, bh: bh,
+        skuName: (prodInfo ? (prodInfo.name||sku) : sku)
+      };
+    });
+
+    // step 2: ปรับด้วย Move Log (net ต่อโซน)
+    Object.keys(moveSummary).forEach(function(zone) {
+      if (!zones[zone]) return;
+      Object.keys(moveSummary[zone]).forEach(function(sku) {
+        var mv = moveSummary[zone][sku];
+        var netPcs = Number(mv.pcs||0); // + = เข้า, - = ออก
+        if (!zones[zone][sku]) {
+          // สินค้าที่ย้ายเข้ามาแต่ไม่ได้ผลิตในโซนนี้
+          var ppb = Number(mv.pcsPerBundle||1);
+          zones[zone][sku] = {
+            pcs: Math.max(0, netPcs), pcsPerBundle: ppb, bw:0, bh:0,
+            skuName: mv.skuName || sku
+          };
+        } else {
+          zones[zone][sku].pcs = Math.max(0, zones[zone][sku].pcs + netPcs);
+        }
+      });
+    });
+
+    // step 3: หักแผนส่งมอบ
+    // หักจากโซนที่ lastProducedZone ก่อน ถ้าไม่พอค่อยหักโซนอื่น
+    Object.keys(bySkuDate).forEach(function(sku) {
+      var totalPlannedPcs = 0;
+      Object.keys(bySkuDate[sku]).forEach(function(d) {
+        totalPlannedPcs += Number(bySkuDate[sku][d]||0);
+      });
+      if (totalPlannedPcs <= 0) return;
+
+      var primaryZone = lastProducedZone[sku];
+      var remaining   = totalPlannedPcs;
+
+      // หักจาก primary zone ก่อน
+      if (primaryZone && zones[primaryZone] && zones[primaryZone][sku]) {
+        var avail = zones[primaryZone][sku].pcs;
+        var deduct = Math.min(avail, remaining);
+        zones[primaryZone][sku].plannedOutPcs = (zones[primaryZone][sku].plannedOutPcs||0) + deduct;
+        remaining -= deduct;
+      }
+
+      // ถ้ายังเหลือ → หักจากโซนอื่นที่มีสินค้า
+      if (remaining > 0) {
+        WM_ZONE_IDS.forEach(function(z) {
+          if (z === primaryZone || remaining <= 0) return;
+          if (zones[z] && zones[z][sku] && zones[z][sku].pcs > 0) {
+            var avail2 = zones[z][sku].pcs;
+            var deduct2 = Math.min(avail2, remaining);
+            zones[z][sku].plannedOutPcs = (zones[z][sku].plannedOutPcs||0) + deduct2;
+            remaining -= deduct2;
+          }
+        });
+      }
+    });
+
+    // step 4: คำนวณ availablePcs / availableBundles / bundles
+    WM_ZONE_IDS.forEach(function(zone) {
+      Object.keys(zones[zone]||{}).forEach(function(sku) {
+        var s = zones[zone][sku];
+        s.plannedOutPcs    = s.plannedOutPcs || 0;
+        s.availablePcs     = Math.max(0, s.pcs - s.plannedOutPcs);
+        s.bundles          = s.pcsPerBundle > 0 ? Math.ceil(s.pcs / s.pcsPerBundle) : 0;
+        s.availableBundles = s.pcsPerBundle > 0 ? Math.ceil(s.availablePcs / s.pcsPerBundle) : 0;
+      });
+    });
+
+    return {
+      success: true,
+      zones: zones,
+      lastProducedZone: lastProducedZone,
+      deliveryPlan: bySkuDate
+    };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * calcSmartMoveRecommendations — คำนวณ SKU ที่ควรย้าย
+ * หลักการ "ย้ายน้อย แต่ได้พื้นที่มาก"
+ *   Efficiency = bundleWidth / bundlesToDropOneColumn
+ *   เลือก SKU ที่มี Efficiency สูงสุดก่อน
+ */
+function calcSmartMoveRecommendations(params) {
+  try {
+    var threshold = (params && params.threshold) ? Number(params.threshold) : 85;
+    var month = params && params.month ? Number(params.month) : new Date().getMonth()+1;
+    var year  = params && params.year  ? Number(params.year)  : new Date().getFullYear();
+
+    var WM_ZONE_CONFIG_DATA = {
+      'P4': [830,830,1330], 'P1': [1650,1600,1300],
+      'C5': [500,2100,300,300], 'P2': [500,1000,1300], 'P3': [700,700,700,250,250]
+    };
+    var RE_ZONE_CONFIG = {
+      'RE-C4': 1500, 'RE-C5': 900, 'RE4': 1200, 'RE1': 900
+    };
+
+    var stockData = getZoneStockSummary({ month: month, year: year });
+    if (!stockData.success) return { success: false, message: stockData.message };
+    var zones = stockData.zones;
+
+    // คำนวณ usedWidth ต่อโซน
+    function calcZoneWidth(zoneId) {
+      var totalW = 0;
+      var cols   = WM_ZONE_CONFIG_DATA[zoneId];
+      if (cols) totalW = cols.reduce(function(s,w){return s+w;},0);
+      else if (RE_ZONE_CONFIG[zoneId]) totalW = RE_ZONE_CONFIG[zoneId];
+      if (!totalW) return null;
+
+      var usedW = 0;
+      Object.keys(zones[zoneId]||{}).forEach(function(sku) {
+        var s = zones[zoneId][sku];
+        if (!s.bw || !s.bh || s.bundles <= 0) return;
+        var maxL = Math.max(1, Math.floor(420/s.bh));
+        var minB = Math.min(3, s.bundles);
+        var c    = Math.max(minB, Math.ceil(s.bundles/maxL));
+        usedW   += c * s.bw;
+      });
+      return { totalW: totalW, usedW: usedW, pct: Math.min(100, Math.round(usedW/totalW*100)) };
+    }
+
+    // หา RE zones ที่มีพื้นที่ว่าง
+    function findBestDestination(excludeZone) {
+      var best = null; var bestFree = 0;
+      Object.keys(RE_ZONE_CONFIG).forEach(function(z) {
+        if (z === excludeZone) return;
+        var w = calcZoneWidth(z);
+        var free = w ? (w.totalW - w.usedW) : RE_ZONE_CONFIG[z];
+        if (free > bestFree) { bestFree = free; best = z; }
+      });
+      return best || 'RE-C4';
+    }
+
+    var recommendations = [];
+
+    Object.keys(WM_ZONE_CONFIG_DATA).forEach(function(zoneId) {
+      var w = calcZoneWidth(zoneId);
+      if (!w || w.pct < threshold) return;
+
+      var excessW = w.usedW - w.totalW * threshold / 100;
+      if (excessW <= 0) return;
+
+      // คำนวณ efficiency ต่อ SKU
+      var candidates = [];
+      Object.keys(zones[zoneId]||{}).forEach(function(sku) {
+        var s = zones[zoneId][sku];
+        if (!s.bw || !s.bh || s.bundles <= 0) return;
+        var maxL = Math.max(1, Math.floor(420/s.bh));
+        var minB = Math.min(3, s.bundles);
+        var curCols = Math.max(minB, Math.ceil(s.bundles/maxL));
+
+        // จำนวนมัดที่ต้องย้ายเพื่อลด 1 column
+        var bundlesAtOneLessCol = (curCols-1) > 0 ? (curCols-1) * maxL : 0;
+        var bundlesToDrop1Col   = s.bundles - bundlesAtOneLessCol;
+        if (bundlesToDrop1Col <= 0 || curCols <= 1) return;
+
+        var widthFreedPerMove = s.bw; // ลด 1 col = ได้ bundleWidth กลับมา
+        var efficiency = s.bw / bundlesToDrop1Col; // cm freed per bundle moved
+
+        candidates.push({
+          sku: sku, skuName: s.skuName,
+          bundles: s.bundles, availableBundles: s.availableBundles,
+          bw: s.bw, bh: s.bh, maxLayers: maxL,
+          curCols: curCols,
+          bundlesToDrop1Col: bundlesToDrop1Col,
+          widthFreedPerCol: s.bw,
+          efficiency: efficiency
+        });
+      });
+
+      // เรียง Efficiency สูงสุดก่อน
+      candidates.sort(function(a,b){ return b.efficiency - a.efficiency; });
+
+      // เลือก SKU ย้ายจนพื้นที่พอ
+      var movedWidth = 0;
+      var moves = [];
+      candidates.forEach(function(c) {
+        if (movedWidth >= excessW) return;
+        // คำนวณว่าต้องย้ายกี่คอลัมน์
+        var colsToMove = Math.ceil((excessW - movedWidth) / c.bw);
+        var bundlesToMove = colsToMove * c.bundlesToDrop1Col;
+        // ไม่เกิน availableBundles (ไม่ย้ายของที่จะส่งมอบ)
+        bundlesToMove = Math.min(bundlesToMove, c.availableBundles);
+        if (bundlesToMove <= 0) return;
+
+        var actualWidthFreed = Math.floor(bundlesToMove / c.bundlesToDrop1Col) * c.bw;
+        movedWidth += actualWidthFreed;
+
+        moves.push({
+          zone: zoneId,
+          sku: c.sku,
+          skuName: c.skuName,
+          bundlesToMove: bundlesToMove,
+          toZone: findBestDestination(zoneId),
+          widthFreedCm: actualWidthFreed,
+          efficiency: Math.round(c.efficiency*100)/100,
+          currentBundles: c.bundles,
+          availableBundles: c.availableBundles,
+          reason: 'Zone ' + zoneId + ' ใช้งาน ' + w.pct + '% (เกิน ' + threshold + '%)'
+        });
+      });
+
+      recommendations = recommendations.concat(moves);
+    });
+
+    return {
+      success: true,
+      recommendations: recommendations,
+      threshold: threshold,
+      zoneStatus: (function(){
+        var s = {};
+        Object.keys(WM_ZONE_CONFIG_DATA).forEach(function(z){
+          var w = calcZoneWidth(z);
+          if (w) s[z] = w;
+        });
+        return s;
+      })()
+    };
   } catch(e) {
     return { success: false, message: e.toString() };
   }
