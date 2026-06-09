@@ -1739,6 +1739,10 @@ thead.sticky {
         <i class="fas fa-exchange-alt"></i> ย้ายสินค้า
       </button>
       <div id="wm-prod-sheet-label" class="text-slate-400 text-xs font-bold ml-auto"></div>
+      <button onclick="wmSyncZoneStock()" id="wm-sync-zone-btn"
+        class="bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg font-black text-xs flex items-center gap-1.5 transition-all border border-teal-500/50">
+        <i class="fas fa-sync-alt"></i> Sync Zone Stock
+      </button>
     </div>
 
     <!-- Probe result -->
@@ -30290,36 +30294,56 @@ const WM_MAX_HEIGHT_CM = 420; // ความสูงสูงสุด 4.2 เ
 
 // คำนวณความจุโซน (ซม.กว้าง) และการใช้งานจาก inventory + move log
 function _wmBuildZoneSkuBase(zoneId, prodData, moveSummary) {
-  // สร้าง map { sku: { pcs, pcsPerBundle, bw, bh } } ของโซนนี้
-  // base = inventory ที่ผลิตในโซนนี้ + net moves
-  const skuData = {};
-  const inventory   = (prodData && prodData.inventory) || {};
-  const zoneMoves   = (moveSummary || {})[zoneId] || {};
+  // ถ้ามี Zone_Stock — ใช้โดยตรง (แม่นยำ, มิติกล่องถูกต้อง)
+  if (_wmZoneStock && _wmZoneStock[zoneId]) {
+    const zs = _wmZoneStock[zoneId];
+    const result = {};
+    Object.keys(zs).forEach(sku => {
+      const d = zs[sku];
+      if ((d.pcs||0) > 0) {
+        result[sku] = { pcs: d.pcs, pcsPerBundle: d.pcsPerBundle||1, bw: d.bw||0, bh: d.bh||0 };
+      }
+    });
+    // ถ้า Zone_Stock ไม่มี bw/bh ให้เติมจาก prodData
+    if (prodData && prodData.machines) {
+      const mach = prodData.machines.find(m => m.machineId === zoneId);
+      if (mach) {
+        mach.products.forEach(p => {
+          if (result[p.sku]) {
+            if (!result[p.sku].bw) result[p.sku].bw = p.bundleWidth||0;
+            if (!result[p.sku].bh) result[p.sku].bh = p.bundleHeight||0;
+            result[p.sku].pcsPerBundle = p.pcsPerBundle||result[p.sku].pcsPerBundle||1;
+          }
+        });
+      }
+    }
+    return result;
+  }
 
-  // native SKUs (ผลิตในเครื่อง/โซนนี้)
+  // Fallback: ถ้าไม่มี Zone_Stock (ยังไม่ได้ Sync) — ใช้ inventory + moveSummary
+  const skuData = {};
+  const inventory = (prodData && prodData.inventory) || {};
+  const zoneMoves = (moveSummary || {})[zoneId] || {};
   if (prodData && prodData.machines) {
     const mach = prodData.machines.find(m => m.machineId === zoneId);
     if (mach) {
       mach.products.forEach(p => {
-        const basePcs  = (inventory[p.sku] || {}).pcs || 0;
-        const movePcs  = (zoneMoves[p.sku] || {}).pcs || 0;
+        const basePcs = (inventory[p.sku] || {}).pcs || 0;
+        const movePcs = (zoneMoves[p.sku] || {}).pcs || 0;
         skuData[p.sku] = {
-          pcs:          Math.max(0, basePcs + movePcs),
+          pcs: Math.max(0, basePcs + movePcs),
           pcsPerBundle: p.pcsPerBundle || 1,
-          bw:           p.bundleWidth  || 0,
-          bh:           p.bundleHeight || 0
+          bw: p.bundleWidth  || 0,
+          bh: p.bundleHeight || 0
         };
       });
     }
   }
-
-  // SKU ที่ถูกย้ายเข้ามา (ไม่ได้ผลิตในโซนนี้)
   Object.entries(zoneMoves).forEach(([sku, mv]) => {
     if (!skuData[sku] && (mv.pcs || 0) > 0) {
       skuData[sku] = { pcs: mv.pcs, pcsPerBundle: mv.pcsPerBundle || 1, bw: 0, bh: 0 };
     }
   });
-
   return skuData;
 }
 
@@ -30415,6 +30439,7 @@ function _wmCalcZoneProjection(zoneId, data, moveSummary, nDays) {
 let _wmProdLoaded    = false;
 let _wmProdData      = null;
 let _wmDeliveryPlan  = {}; // bySkuDate[sku][date] = plannedPcs
+let _wmZoneStock = {}; // Zone_Stock data: { zoneId: { sku: { pcs, pcsPerBundle, bw, bh } } }
 
 function _wmInitProdControls() {
     const today   = new Date();
@@ -30468,16 +30493,24 @@ window.loadProductionPlan = function() {
                 // โหลด move log + delivery plan แล้ว render พร้อมกัน
                 _wmLoadMoveLog(() => {
                     res.moveSummary = _wmMoveSummary;
-                    // โหลดแผนส่งมอบ
+                    let _dpDone = false, _zsDone = false;
+                    const _tryRender = () => { if (_dpDone && _zsDone) _wmRenderMachines(res); };
                     try {
                         google.script.run
                             .withSuccessHandler(dp => {
                                 if (dp && dp.success) _wmDeliveryPlan = dp.bySkuDate || {};
-                                _wmRenderMachines(res);
+                                _dpDone = true; _tryRender();
                             })
-                            .withFailureHandler(() => _wmRenderMachines(res))
+                            .withFailureHandler(() => { _dpDone = true; _tryRender(); })
                             .getDeliveryPlanByDate({ daysAhead: 14 });
-                    } catch(e) { _wmRenderMachines(res); }
+                        google.script.run
+                            .withSuccessHandler(zs => {
+                                if (zs && zs.success) _wmZoneStock = zs.data || {};
+                                _zsDone = true; _tryRender();
+                            })
+                            .withFailureHandler(() => { _zsDone = true; _tryRender(); })
+                            .getZoneStock();
+                    } catch(e) { _dpDone = true; _zsDone = true; _wmRenderMachines(res); }
                 });
             })
             .withFailureHandler(err => {
@@ -30782,6 +30815,26 @@ function _wmRenderREZones(moveSummary, fmtN) {
 // ── Load Move Log ────────────────────────────────────────────
 let _wmMoveSummary = {};
 let _wmMoveList    = [];
+
+window.wmSyncZoneStock = function() {
+    const btn = document.getElementById('wm-sync-zone-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...'; }
+    google.script.run
+        .withSuccessHandler(res => {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sync Zone Stock'; }
+            if (res && res.success) {
+                showToast('✅ Sync สำเร็จ ' + res.count + ' records — กำลัง reload...', false);
+                setTimeout(() => { _wmProdLoaded = false; wmLoadProduction(); }, 1200);
+            } else {
+                showToast('❌ Sync ไม่สำเร็จ: ' + (res?.message||''), true);
+            }
+        })
+        .withFailureHandler(err => {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sync Zone Stock'; }
+            showToast('❌ Error: ' + err, true);
+        })
+        .syncZoneStockFromInventory({});
+};
 
 function _wmLoadMoveLog(callback) {
     google.script.run

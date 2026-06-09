@@ -47,6 +47,7 @@ function _handleApiPost(e) {
       'saveWarehouseMove','getWarehouseMoveLog',
       'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
       'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
+      'getZoneStock','syncZoneStockFromInventory',
       'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
       'saveAuditLog','getAuditLog',
@@ -90,6 +91,7 @@ const PRODUCTION_FG_SHEET = 'Production FG';
 const TRANSECTION_SHEET = 'Transection';
 const INVENTORY_FG_SHEET = 'Inventory FG';
 const INVENTORY_DAILY_LOG_SHEET = 'Inventory_Log_Daily';
+var ZONE_STOCK_SHEET = 'Zone_Stock';
 const PRINT_TAG_LOG_SHEET = 'Print Tag Log';
 const FG_REPORT_SHEET     = 'FG report';      // ยอดผลิตจริงสะสม (ใช้ใน Print Tag FG)
 const INVENTORY_BLOCKING_LOG_SHEET = 'Inventory_Blocking_Log';
@@ -228,6 +230,7 @@ function doGet(e) {
           'saveWarehouseMove','getWarehouseMoveLog',
           'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
       'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
+      'getZoneStock','syncZoneStockFromInventory',
           'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
           'saveAuditLog','getAuditLog',
@@ -8843,6 +8846,163 @@ function _getOrCreateMoveSheet(ss) {
   return sheet;
 }
 
+// ── Zone_Stock sheet helper ──────────────────────────────────────────
+function _getOrCreateZoneStockSheet(ss) {
+  var sheet = ss.getSheetByName(ZONE_STOCK_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(ZONE_STOCK_SHEET);
+    sheet.appendRow(['ZoneId','SKU','SKUName','PCS','PCSPerBundle','BundleWidth','BundleHeight','UpdatedAt']);
+    sheet.getRange(1,1,1,8).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
+  }
+  return sheet;
+}
+
+function getZoneStock() {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = _getOrCreateZoneStockSheet(ss);
+    var data  = {}; // { zoneId: { sku: { pcs, pcsPerBundle, bw, bh, skuName } } }
+    if (sheet.getLastRow() >= 2) {
+      var rows = sheet.getRange(2,1,sheet.getLastRow()-1,8).getValues();
+      rows.forEach(function(r) {
+        var zone = String(r[0]||'').trim();
+        var sku  = String(r[1]||'').trim();
+        if (!zone || !sku) return;
+        if (!data[zone]) data[zone] = {};
+        data[zone][sku] = {
+          skuName:      String(r[2]||''),
+          pcs:          Number(r[3]||0),
+          pcsPerBundle: Number(r[4]||1),
+          bw:           Number(r[5]||0),
+          bh:           Number(r[6]||0),
+          updatedAt:    r[7] instanceof Date ? Utilities.formatDate(r[7],'GMT+7','dd/MM/yyyy HH:mm') : String(r[7]||'')
+        };
+      });
+    }
+    return { success: true, data: data };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function syncZoneStockFromInventory(params) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var month = params && params.month ? Number(params.month) : (new Date().getMonth()+1);
+    var year  = params && params.year  ? Number(params.year)  : new Date().getFullYear();
+
+    var planData = getProductionPlanData({ month: month, year: year });
+    if (!planData.success) return { success: false, message: planData.message };
+
+    var inventory = planData.inventory || {};
+    var machines  = planData.machines  || [];
+
+    // หาเครื่องที่ผลิต SKU ล่าสุด
+    var lastZone = {}, lastDate = {}, skuMeta = {};
+    machines.forEach(function(m) {
+      (m.products||[]).forEach(function(p) {
+        if (!p.sku) return;
+        var dates = Object.keys(p.daily||{}).filter(function(d){ return (p.daily[d]||0)>0; }).sort();
+        var ld = dates.length ? dates[dates.length-1] : '0000-00-00';
+        if (!lastDate[p.sku] || ld > lastDate[p.sku]) {
+          lastDate[p.sku] = ld;
+          lastZone[p.sku] = m.machineId;
+          skuMeta[p.sku]  = { ppb: p.pcsPerBundle||1, bw: p.bundleWidth||0, bh: p.bundleHeight||0, name: p.name||'' };
+        }
+      });
+    });
+
+    // อ่าน Zone_Stock เดิม — เก็บโซนที่ไม่ใช่ home zone (RE zones, etc.)
+    var sheet = _getOrCreateZoneStockSheet(ss);
+    var homeZones = {};
+    Object.keys(lastZone).forEach(function(sku){ homeZones[lastZone[sku]] = true; });
+
+    var preserved = {}; // โซนที่ user บริหารเอง (ไม่ใช่ production zone)
+    if (sheet.getLastRow() >= 2) {
+      var existRows = sheet.getRange(2,1,sheet.getLastRow()-1,8).getValues();
+      existRows.forEach(function(r) {
+        var z = String(r[0]||'').trim(), s = String(r[1]||'').trim();
+        if (!z||!s) return;
+        if (homeZones[z]) return; // จะ overwrite ด้วย inventory
+        if (!preserved[z]) preserved[z] = {};
+        preserved[z][s] = { name: String(r[2]||''), pcs: Number(r[3]||0), ppb: Number(r[4]||1), bw: Number(r[5]||0), bh: Number(r[6]||0) };
+      });
+    }
+
+    // สร้างข้อมูลใหม่
+    var writeRows = [];
+    var now = Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm');
+
+    // 1) production zones — กระจาย inventory ตาม lastProducedZone
+    Object.keys(inventory).forEach(function(sku) {
+      var zone = lastZone[sku];
+      if (!zone) return;
+      var pcs = Math.max(0, Number((inventory[sku]||{}).pcs||0));
+      if (pcs <= 0) return;
+      var m = skuMeta[sku] || { ppb:1, bw:0, bh:0, name:'' };
+      writeRows.push([zone, sku, m.name, pcs, m.ppb, m.bw, m.bh, now]);
+    });
+
+    // 2) preserved zones
+    Object.keys(preserved).forEach(function(zone) {
+      Object.keys(preserved[zone]).forEach(function(sku) {
+        var d = preserved[zone][sku];
+        if ((d.pcs||0) <= 0) return;
+        writeRows.push([zone, sku, d.name, d.pcs, d.ppb, d.bw, d.bh, now]);
+      });
+    });
+
+    sheet.clearContents();
+    sheet.appendRow(['ZoneId','SKU','SKUName','PCS','PCSPerBundle','BundleWidth','BundleHeight','UpdatedAt']);
+    sheet.getRange(1,1,1,8).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
+    if (writeRows.length > 0) {
+      sheet.getRange(2,1,writeRows.length,8).setValues(writeRows);
+    }
+    return { success: true, message: 'Synced '+writeRows.length+' records', count: writeRows.length };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function _updateZoneStockForMove(ss, fromZone, toZone, sku, skuName, totalPCS, pcsPerBundle, bw, bh) {
+  try {
+    var sheet = _getOrCreateZoneStockSheet(ss);
+    var now   = Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm');
+    var rows  = sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,8).getValues() : [];
+
+    var fromRowIdx = -1, toRowIdx = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim()===fromZone && String(rows[i][1]).trim()===sku) fromRowIdx = i+2;
+      if (String(rows[i][0]).trim()===toZone   && String(rows[i][1]).trim()===sku) toRowIdx   = i+2;
+    }
+
+    // ดึง bw/bh จาก fromZone ถ้ามี (มิติจริงจากกอง)
+    var useBw = bw||0, useBh = bh||0, usePpb = pcsPerBundle||1;
+    if (fromRowIdx > 0) {
+      var fd = sheet.getRange(fromRowIdx,1,1,8).getValues()[0];
+      useBw  = Number(fd[5])||bw||0;
+      useBh  = Number(fd[6])||bh||0;
+      usePpb = Number(fd[4])||pcsPerBundle||1;
+      var newPcs = Math.max(0, Number(fd[3]) - totalPCS);
+      sheet.getRange(fromRowIdx,4).setValue(newPcs);
+      sheet.getRange(fromRowIdx,8).setValue(now);
+    }
+
+    if (toRowIdx > 0) {
+      var td = sheet.getRange(toRowIdx,1,1,8).getValues()[0];
+      sheet.getRange(toRowIdx,4).setValue(Number(td[3]) + totalPCS);
+      if (!Number(td[5]) && useBw) sheet.getRange(toRowIdx,6).setValue(useBw);
+      if (!Number(td[6]) && useBh) sheet.getRange(toRowIdx,7).setValue(useBh);
+      sheet.getRange(toRowIdx,8).setValue(now);
+    } else {
+      // สร้าง row ใหม่ใน toZone
+      sheet.appendRow([toZone, sku, skuName, totalPCS, usePpb, useBw, useBh, now]);
+    }
+  } catch(e) {
+    Logger.log('_updateZoneStockForMove error: ' + e.toString());
+  }
+}
+
 function saveWarehouseMove(data) {
   try {
     var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -8869,6 +9029,15 @@ function saveWarehouseMove(data) {
       String(data.note      || '')
     ];
     sheet.appendRow(row);
+
+    // อัพเดต Zone_Stock ทันที (source -PCS, destination +PCS)
+    _updateZoneStockForMove(
+      ss,
+      String(data.fromZone||''), String(data.toZone||''),
+      String(data.sku||''), String(data.skuName||''),
+      totalPCS, pcsPerB,
+      Number(data.bundleWidth||0), Number(data.bundleHeight||0)
+    );
 
     saveAuditLog('Warehouse Move', 'MOVE',
       data.fromZone + ' → ' + data.toZone + ' | ' + data.sku +
