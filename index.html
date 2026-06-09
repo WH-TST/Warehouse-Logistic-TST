@@ -30383,22 +30383,47 @@ function _wmBuildZoneSkuBase(zoneId, prodData, moveSummary) {
 }
 
 // คำนวณข้อมูลการซ้อนกองจริงหน้างาน
-// กฎ: ฐานขั้นต่ำ 3 มัด, ความสูงไม่เกิน WM_MAX_HEIGHT_CM
+// กฎ:
+//   < 10 มัด  → ฐาน 2 มัดเสมอ (ความปลอดภัย)
+//   ≥ 10 มัด  → หาฐานที่หารลงตัว + ฐาน ≥ ชั้น + ความสูง ≤ WM_MAX_HEIGHT_CM
+//              ถ้าไม่มีที่หารลงตัว → เลือกเศษน้อยที่สุด
 function _wmCalcStackInfo(bundles, bw, bh) {
   if (!bw || !bh || bundles <= 0) return null;
-  const maxLayers  = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / bh));  // ซ้อนได้สูงสุดกี่ชั้น
-  const reqCols    = Math.ceil(bundles / maxLayers);                   // ฐานขั้นต่ำจากข้อจำกัดความสูง
-  const minBase    = Math.min(3, bundles);                             // ฐานขั้นต่ำตามกฎหน้างาน (3 มัด)
-  const cols       = Math.max(minBase, reqCols);                       // ฐานที่ใช้จริง
-  const layers     = Math.ceil(bundles / cols);                        // ชั้นที่ซ้อนจริง
-  const heightCm   = layers * bh;                                      // ความสูงจริง
+  const maxLayers = Math.max(1, Math.floor(WM_MAX_HEIGHT_CM / bh)); // สูงสุดจากความสูง
+  let cols, layers;
+
+  if (bundles < 10) {
+    // --- กฎ: < 10 มัด ฐาน 2 มัดเสมอ ---
+    cols   = Math.min(2, bundles);           // ถ้ามีแค่ 1 มัด ก็ฐาน 1
+    layers = Math.ceil(bundles / cols);
+    // ถ้าชั้นเกิน maxLayers ให้ขยายฐาน
+    if (layers > maxLayers) { cols = Math.ceil(bundles / maxLayers); layers = Math.ceil(bundles / cols); }
+  } else {
+    // --- กฎ: ≥ 10 มัด หาฐานเหมาะสม ---
+    let bestCols = 0, bestRem = Infinity;
+    for (let b = 3; b <= bundles; b++) {
+      const l = Math.ceil(bundles / b);
+      if (l > maxLayers) continue;           // สูงเกิน limit
+      if (b < l) continue;                   // ฐานแคบกว่าชั้น — ไม่ปลอดภัย
+      const rem = (b * l) - bundles;         // มัดว่างในชั้นบนสุด
+      if (rem < bestRem || (rem === bestRem && b < bestCols)) {
+        bestRem  = rem;
+        bestCols = b;
+      }
+      if (rem === 0 && bestCols > 0) break;  // เจอที่หารลงตัวแล้ว หยุด
+    }
+    cols   = bestCols || Math.ceil(bundles / maxLayers);
+    layers = Math.ceil(bundles / cols);
+  }
+
+  const heightCm = layers * bh;
   return {
     bundles,
-    cols,                         // ฐานกว้าง (มัด)
-    layers,                       // จำนวนชั้น
-    heightCm,                     // ความสูงจริง (cm)
-    maxLayers,                    // ซ้อนได้สูงสุด
-    needsWideBase: reqCols > 3,   // ต้องวางฐานเกิน 3 มัด
+    cols,                              // ฐานกว้าง (มัด)
+    layers,                            // จำนวนชั้น
+    heightCm,                          // ความสูงจริง (cm)
+    maxLayers,                         // ซ้อนได้สูงสุด
+    remainder: (cols * layers) - bundles, // มัดว่างชั้นบนสุด
     usedWidthCm: cols * bw
   };
 }
