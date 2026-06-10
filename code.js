@@ -54,7 +54,10 @@ function _handleApiPost(e) {
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
       'getTagSystemStartDate','setTagSystemStartDate',
-      'getDeliveryTypeData'
+      'getDeliveryTypeData',
+      'setupAuthSheets','loginUser','getUsers','createUser','updateUser','deleteUser',
+      'getPermissions','savePermissions',
+      'updateUserPresence','getTeamDashboard'
     ];
 
     if (allowedActions.indexOf(action) === -1) {
@@ -108,6 +111,9 @@ const SO_SHEET_NAME                = 'Order lines';
 const TRUCK_DISPATCH_SHEET         = 'Truck_Dispatch';
 const THAI_MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
     'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+const USERS_SHEET       = 'Users';
+const PERMISSIONS_SHEET = 'Permissions';
 const AUDIT_LOG_HEADERS = ['Timestamp','User','Module','Action','Detail','Status'];
 
 // ══════════════════════════════════════════════════════════════════════
@@ -10180,4 +10186,249 @@ function calcSmartMoveRecommendations(params) {
   } catch(e) {
     return { success: false, message: e.toString() };
   }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// AUTH SYSTEM — Login / Users / Permissions
+// ══════════════════════════════════════════════════════════════════════
+
+function _hashPassword(password) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password, Utilities.Charset.UTF_8);
+  return bytes.map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
+}
+
+function setupAuthSheets() {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    var usersSheet = ss.getSheetByName(USERS_SHEET);
+    if (!usersSheet) {
+      usersSheet = ss.insertSheet(USERS_SHEET);
+      usersSheet.appendRow(['username','password_hash','role','name','active','created_at']);
+      usersSheet.appendRow(['admin', _hashPassword('admin1234'), 'admin', 'Administrator', true, new Date()]);
+      usersSheet.setFrozenRows(1);
+    }
+
+    var permSheet = ss.getSheetByName(PERMISSIONS_SHEET);
+    if (!permSheet) {
+      permSheet = ss.insertSheet(PERMISSIONS_SHEET);
+      permSheet.appendRow(['menu_id','admin','manager','supervisor','staff']);
+      var defaults = [
+        ['nav-input',         true,true,true,true],
+        ['nav-report',        true,true,true,true],
+        ['nav-printtag',      true,true,true,true],
+        ['nav-analytics',     true,true,true,false],
+        ['nav-overdue',       true,true,true,true],
+        ['nav-whactivity',    true,true,true,false],
+        ['nav-warehouse-map', true,true,true,true],
+        ['nav-kpi-stock',     true,true,true,false],
+        ['nav-logistic-plan', true,true,true,true],
+        ['nav-truck-dispatch',true,true,true,true],
+        ['nav-kpi-wh',        true,true,true,false],
+        ['nav-audit',         true,true,true,false]
+      ];
+      defaults.forEach(function(r){ permSheet.appendRow(r); });
+      permSheet.setFrozenRows(1);
+    }
+    return { success: true, message: 'setup complete' };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function loginUser(username, password) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(USERS_SHEET);
+    if (!sheet) return { success: false, message: 'ยังไม่ได้ตั้งค่าระบบ Users' };
+
+    var data = sheet.getDataRange().getValues();
+    var hash = _hashPassword(password);
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      if (String(r[0]).trim() === String(username).trim() && r[1] === hash && r[4] === true) {
+        return { success: true, user: { username: r[0], role: r[2], name: r[3] } };
+      }
+    }
+    return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function getUsers() {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(USERS_SHEET);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต Users' };
+    var data = sheet.getDataRange().getValues();
+    var users = [];
+    for (var i = 1; i < data.length; i++) {
+      users.push({ username: data[i][0], role: data[i][2], name: data[i][3], active: data[i][4] });
+    }
+    return { success: true, data: users };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function createUser(userData) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(USERS_SHEET);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต Users' };
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(userData.username).trim())
+        return { success: false, message: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' };
+    }
+    sheet.appendRow([userData.username, _hashPassword(userData.password), userData.role, userData.name, true, new Date()]);
+    return { success: true, message: 'สร้างผู้ใช้สำเร็จ' };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function updateUser(userData) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(USERS_SHEET);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต Users' };
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(userData.username).trim()) {
+        sheet.getRange(i+1,3).setValue(userData.role);
+        sheet.getRange(i+1,4).setValue(userData.name);
+        sheet.getRange(i+1,5).setValue(userData.active);
+        if (userData.newPassword) sheet.getRange(i+1,2).setValue(_hashPassword(userData.newPassword));
+        return { success: true, message: 'อัปเดตผู้ใช้สำเร็จ' };
+      }
+    }
+    return { success: false, message: 'ไม่พบผู้ใช้' };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function deleteUser(username) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(USERS_SHEET);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต Users' };
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(username).trim()) {
+        sheet.deleteRow(i+1);
+        return { success: true, message: 'ลบผู้ใช้สำเร็จ' };
+      }
+    }
+    return { success: false, message: 'ไม่พบผู้ใช้' };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function getPermissions() {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(PERMISSIONS_SHEET);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต Permissions' };
+    var data    = sheet.getDataRange().getValues();
+    var headers = data[0];
+    var result  = {};
+    for (var i = 1; i < data.length; i++) {
+      var menuId = data[i][0];
+      result[menuId] = {};
+      for (var j = 1; j < headers.length; j++) result[menuId][headers[j]] = data[i][j];
+    }
+    return { success: true, data: result, roles: headers.slice(1) };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function savePermissions(permData) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(PERMISSIONS_SHEET);
+    if (!sheet) return { success: false, message: 'ไม่พบชีต Permissions' };
+    var data    = sheet.getDataRange().getValues();
+    var headers = data[0];
+    for (var i = 1; i < data.length; i++) {
+      var menuId = data[i][0];
+      if (!permData[menuId]) continue;
+      for (var j = 1; j < headers.length; j++) {
+        if (permData[menuId][headers[j]] !== undefined)
+          sheet.getRange(i+1, j+1).setValue(permData[menuId][headers[j]]);
+      }
+    }
+    return { success: true, message: 'บันทึกสิทธิ์สำเร็จ' };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+
+// ── Team Dashboard — Presence & Activity ─────────────────────────────
+const USER_SESSIONS_SHEET = 'User_Sessions';
+
+function updateUserPresence(username, name, role, currentView) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(USER_SESSIONS_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(USER_SESSIONS_SHEET);
+      sheet.appendRow(['username','name','role','last_active','current_view']);
+      sheet.setFrozenRows(1);
+    }
+    var data = sheet.getDataRange().getValues();
+    var now  = new Date();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(username).trim()) {
+        sheet.getRange(i+1,4).setValue(now);
+        sheet.getRange(i+1,5).setValue(currentView || '');
+        return { success: true };
+      }
+    }
+    sheet.appendRow([username, name, role, now, currentView || '']);
+    return { success: true };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function getTeamDashboard() {
+  try {
+    var ss         = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var now        = new Date();
+    var fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    var todayStr   = Utilities.formatDate(now, 'Asia/Bangkok', 'dd/MM/yyyy');
+
+    // ── Online users (last_active ภายใน 5 นาที) ──
+    var sessionSheet = ss.getSheetByName(USER_SESSIONS_SHEET);
+    var onlineUsers  = [];
+    if (sessionSheet) {
+      var sData = sessionSheet.getDataRange().getValues();
+      for (var i = 1; i < sData.length; i++) {
+        if (!sData[i][3]) continue;
+        var lastActive = new Date(sData[i][3]);
+        if (lastActive >= fiveMinAgo) {
+          onlineUsers.push({
+            username:    sData[i][0],
+            name:        sData[i][1],
+            role:        sData[i][2],
+            lastActive:  Utilities.formatDate(lastActive, 'Asia/Bangkok', 'HH:mm'),
+            currentView: sData[i][4] || ''
+          });
+        }
+      }
+    }
+
+    // ── Activity วันนี้จาก Audit_Log ──
+    var auditSheet     = ss.getSheetByName(AUDIT_LOG_SHEET);
+    var activityByUser = {};
+    if (auditSheet && auditSheet.getLastRow() > 1) {
+      var aData = auditSheet.getDataRange().getValues();
+      for (var j = 1; j < aData.length; j++) {
+        if (!aData[j][0]) continue;
+        try {
+          var ts      = new Date(aData[j][0]);
+          var dateStr = Utilities.formatDate(ts, 'Asia/Bangkok', 'dd/MM/yyyy');
+          if (dateStr !== todayStr) continue;
+          var user   = String(aData[j][1] || 'unknown');
+          var module = String(aData[j][2] || '');
+          var action = String(aData[j][3] || '');
+          if (!activityByUser[user]) activityByUser[user] = { total: 0, modules: {} };
+          activityByUser[user].total++;
+          var key = module + (action ? ' (' + action + ')' : '');
+          activityByUser[user].modules[key] = (activityByUser[user].modules[key] || 0) + 1;
+        } catch(ex) {}
+      }
+    }
+
+    return { success: true, onlineUsers: onlineUsers, activityByUser: activityByUser, generatedAt: Utilities.formatDate(now, 'Asia/Bangkok', 'HH:mm:ss') };
+  } catch(e) { return { success: false, message: e.toString() }; }
 }

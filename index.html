@@ -866,6 +866,49 @@ thead.sticky {
 </head>
 <body>
 
+<!-- ══════════════════════════════════════════════════════════════
+     LOGIN OVERLAY
+══════════════════════════════════════════════════════════════ -->
+<div id="login-overlay" style="position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:flex;align-items:center;justify-content:center;">
+  <div style="width:100%;max-width:420px;padding:0 20px;">
+    <!-- Logo -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <img src="https://static.wixstatic.com/media/5a1d18_237433e7b53841cca74e8f402795c4ca~mv2.png" alt="Logo" style="height:72px;margin:0 auto 16px;display:block;filter:brightness(0) invert(1);opacity:0.9;">
+      <p style="font-size:13px;font-weight:900;color:#e2e8f0;letter-spacing:0.04em;">บริษัท ที.แสตนดาร์ด สตีล จำกัด</p>
+      <p style="font-size:9px;font-weight:700;color:#60a5fa;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px;">WAREHOUSE MANAGEMENT SYSTEM</p>
+    </div>
+    <!-- Card -->
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:32px;">
+      <h2 style="color:#f1f5f9;font-size:18px;font-weight:800;margin-bottom:24px;text-align:center;letter-spacing:0.02em;">เข้าสู่ระบบ</h2>
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px;letter-spacing:0.05em;">ชื่อผู้ใช้</label>
+        <input id="login-username" type="text" autocomplete="username" placeholder="กรอกชื่อผู้ใช้"
+          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 14px;color:#f1f5f9;font-size:14px;outline:none;box-sizing:border-box;transition:border 0.2s;"
+          onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
+      </div>
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px;letter-spacing:0.05em;">รหัสผ่าน</label>
+        <div style="position:relative;">
+          <input id="login-password" type="password" autocomplete="current-password" placeholder="กรอกรหัสผ่าน"
+            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 40px 10px 14px;color:#f1f5f9;font-size:14px;outline:none;box-sizing:border-box;transition:border 0.2s;"
+            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'"
+            onkeydown="if(event.key==='Enter')doLogin()">
+          <button onclick="toggleLoginPwd()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;padding:4px;">
+            <i id="login-eye-icon" class="fas fa-eye"></i>
+          </button>
+        </div>
+      </div>
+      <p id="login-error" style="color:#f87171;font-size:12px;margin-bottom:12px;text-align:center;display:none;"></p>
+      <button id="login-btn" onclick="doLogin()"
+        style="width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.04em;transition:opacity 0.2s;"
+        onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+        <i class="fas fa-sign-in-alt"></i>&nbsp; เข้าสู่ระบบ
+      </button>
+    </div>
+    <p style="text-align:center;color:#334155;font-size:11px;margin-top:20px;">FlowWH v8.5 · T.Standard Steel</p>
+  </div>
+</div>
+
     <aside id="app-sidebar" class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 hidden lg:flex flex-col" style="transition:transform 0.25s ease;">
         <!-- ── ปุ่ม collapse — ลอยที่ขอบขวาบนของ sidebar ── -->
         <button onclick="toggleSidebar()" title="ซ่อน Sidebar"
@@ -889,6 +932,20 @@ thead.sticky {
                 <div style="height:3px;flex:1;background:rgba(255,255,255,0.12);border-radius:2px;"></div>
                 <div style="height:3px;width:6px;background:rgba(255,255,255,0.07);border-radius:2px;"></div>
             </div>
+        </div>
+
+        <!-- ── User Info ──────────────────────────────────────────── -->
+        <div id="sidebar-user-info" style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:10px;">
+          <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#60a5fa);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="fas fa-user" style="color:#fff;font-size:13px;"></i>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <p id="sidebar-user-name" style="font-size:12px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</p>
+            <p id="sidebar-user-role" style="font-size:10px;color:#60a5fa;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;">—</p>
+          </div>
+          <button onclick="doLogout()" title="ออกจากระบบ" style="background:none;border:none;color:#475569;cursor:pointer;padding:4px;transition:color 0.2s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#475569'">
+            <i class="fas fa-sign-out-alt" style="font-size:14px;"></i>
+          </button>
         </div>
 
         <!-- ── Nav ────────────────────────────────────────────────── -->
@@ -957,6 +1014,22 @@ thead.sticky {
             <div style="height:1px;background:rgba(255,255,255,0.08);margin:6px 0;"></div>
             <button onclick="openAuditLogModal()" class="nav-btn" data-tip="Audit Log" title="ประวัติการแก้ไขข้อมูล">
                 <span class="nav-icon"><i class="fas fa-history"></i></span> Audit Log
+            </button>
+
+            <!-- ─── ADMIN (ซ่อนจาก staff) ─── -->
+            <div id="nav-group-admin" class="nav-group-label" style="display:none;">
+                <span class="line"></span>
+                <i class="fas fa-shield-alt" style="color:#475569;font-size:8px;"></i>&nbsp;ADMIN
+                <span class="line"></span>
+            </div>
+            <button id="nav-team-dashboard" onclick="switchView('team-dashboard')" class="nav-btn" data-tip="Dashboard ทีม" style="display:none;">
+                <span class="nav-icon"><i class="fas fa-users"></i></span> Dashboard ทีม
+            </button>
+            <button id="nav-user-mgmt" onclick="openUserMgmtModal()" class="nav-btn" data-tip="จัดการผู้ใช้" style="display:none;">
+                <span class="nav-icon"><i class="fas fa-users-cog"></i></span> จัดการผู้ใช้
+            </button>
+            <button id="nav-perm-mgmt" onclick="openPermMgmtModal()" class="nav-btn" data-tip="กำหนดสิทธิ์" style="display:none;">
+                <span class="nav-icon"><i class="fas fa-lock"></i></span> กำหนดสิทธิ์
             </button>
 
         </nav>
@@ -7464,6 +7537,24 @@ const _safeStorage = {
     document.addEventListener("DOMContentLoaded", function() {
         console.log("✅ DOM Ready - Warehouse & Logistic Management System Initialized");
 
+        // ── Auth: ซ่อน sidebar+main จนกว่าจะ login สำเร็จ ──
+        const _sidebar = document.getElementById('app-sidebar');
+        const _main    = document.getElementById('app-main');
+        if (_sidebar) _sidebar.style.visibility = 'hidden';
+        if (_main)    _main.style.visibility    = 'hidden';
+
+        // ── Auth: setup sheets (idempotent — สร้างถ้ายังไม่มี) ──
+        google.script.run
+            .withSuccessHandler(function() {
+                if (_sidebar) _sidebar.style.visibility = '';
+                if (_main)    _main.style.visibility    = '';
+            })
+            .withFailureHandler(function() {
+                if (_sidebar) _sidebar.style.visibility = '';
+                if (_main)    _main.style.visibility    = '';
+            })
+            .setupAuthSheets();
+
         // ── Restore import status badges จาก localStorage ──────────────────────
         setTimeout(function() {
             if (typeof _invUpdateCardBadges === 'function') _invUpdateCardBadges();
@@ -9969,7 +10060,7 @@ let currentAnalysis = null;
  * ฟังก์ชันหลักในการสลับ View ใหญ่
  */
 window.switchView = function switchView(view) {
-    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'warehouse-map', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock'];
+    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'warehouse-map', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock', 'team-dashboard'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -9996,7 +10087,8 @@ window.switchView = function switchView(view) {
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
             'truck-dispatch': 'จัดรถส่งสินค้า — Truck Dispatch',
-            'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ'
+            'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
+            'team-dashboard': 'Dashboard ทีม — สถานะออนไลน์และกิจกรรมวันนี้'
         }[view] || 'WL Management';
     }
 
@@ -10053,6 +10145,25 @@ window.switchView = function switchView(view) {
     // จัดรถ — init เมื่อเข้า
     if (view === 'truck-dispatch') {
         tdInit();
+    }
+
+    // Team Dashboard — โหลดทุกครั้งที่เข้า
+    if (view === 'team-dashboard') {
+        loadTeamDashboard();
+    }
+
+    // Presence — บอก GAS ว่า user อยู่เมนูอะไร
+    if (window._currentUser) {
+        const viewLabel = {
+            'input':'STORAGE FG','report':'REPORT STORAGE','printtag':'PRINT TAG FG',
+            'analytics':'ANALYTICS','overdue':'รายการจองค้าง','whactivity':'WH ACTIVITY',
+            'warehouse-map':'ผังคลัง','logistic-plan':'วางแผนส่งมอบ',
+            'truck-dispatch':'จัดรถ','kpi-wh':'KPI WH','kpi-stock':'INVENTORY',
+            'team-dashboard':'Dashboard ทีม'
+        }[view] || view;
+        google.script.run.updateUserPresence(
+            _currentUser.username, _currentUser.name, _currentUser.role, viewLabel
+        );
     }
 }
 
@@ -32650,4 +32761,554 @@ window.confirmSaveInvKPI = function() {
         .saveInventoryKPI(payload);
 };
 
+// ══════════════════════════════════════════════════════════════════════
+// TEAM DASHBOARD — Online Presence & Today Activity
+// ══════════════════════════════════════════════════════════════════════
+
+const _ROLE_COLOR = { admin:'#f87171', manager:'#fb923c', supervisor:'#facc15', staff:'#4ade80' };
+const _VIEW_ICON  = {
+    'STORAGE FG':'fa-pallet','REPORT STORAGE':'fa-chart-pie','PRINT TAG FG':'fa-tag',
+    'ANALYTICS':'fa-chart-bar','รายการจองค้าง':'fa-clock','WH ACTIVITY':'fa-clipboard-list',
+    'ผังคลัง':'fa-map','วางแผนส่งมอบ':'fa-truck','จัดรถ':'fa-truck-loading',
+    'KPI WH':'fa-tachometer-alt','INVENTORY':'fa-boxes','Dashboard ทีม':'fa-users'
+};
+
+window.loadTeamDashboard = function() {
+    safeSetHTML('tdash-online-list', '<div style="text-align:center;padding:32px;color:#475569;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>');
+    safeSetHTML('tdash-activity-list', '<div style="text-align:center;padding:32px;color:#475569;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>');
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res?.success) {
+                safeSetHTML('tdash-online-list', '<p style="color:#f87171;padding:16px;">โหลดไม่สำเร็จ: '+(res?.message||'')+'</p>');
+                return;
+            }
+            _renderOnlineUsers(res.onlineUsers || []);
+            _renderTodayActivity(res.activityByUser || {});
+            safeSetText('tdash-updated-at', 'อัพเดต: ' + (res.generatedAt || ''));
+        })
+        .withFailureHandler(err => safeSetHTML('tdash-online-list','<p style="color:#f87171;padding:16px;">'+String(err)+'</p>'))
+        .getTeamDashboard();
+};
+
+function _renderOnlineUsers(users) {
+    if (!users.length) {
+        safeSetHTML('tdash-online-list','<p style="color:#475569;text-align:center;padding:24px;font-size:13px;">ยังไม่มีผู้ใช้ออนไลน์</p>');
+        safeSetText('tdash-online-count','0');
+        return;
+    }
+    safeSetText('tdash-online-count', String(users.length));
+    const html = users.map(u => {
+        const roleColor = _ROLE_COLOR[u.role] || '#94a3b8';
+        const roleLabel = _ROLE_LABEL[u.role] || u.role;
+        const viewIcon  = _VIEW_ICON[u.currentView] || 'fa-circle';
+        return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05);">
+          <div style="position:relative;flex-shrink:0;">
+            <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#1e3a5f,#2563eb);display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-user" style="color:#93c5fd;font-size:14px;"></i>
+            </div>
+            <span style="position:absolute;bottom:0;right:0;width:10px;height:10px;background:#4ade80;border-radius:50%;border:2px solid #0f172a;"></span>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <p style="color:#e2e8f0;font-weight:700;font-size:13px;margin:0;">${u.name || u.username}</p>
+            <p style="color:#64748b;font-size:11px;margin:2px 0 0;"><span style="color:${roleColor};font-weight:600;">${roleLabel}</span> · <i class="fas ${viewIcon}" style="font-size:10px;"></i> ${u.currentView||'—'}</p>
+          </div>
+          <span style="font-size:11px;color:#475569;white-space:nowrap;">${u.lastActive}</span>
+        </div>`;
+    }).join('');
+    safeSetHTML('tdash-online-list', html);
+}
+
+function _renderTodayActivity(activityByUser) {
+    const users = Object.keys(activityByUser);
+    if (!users.length) {
+        safeSetHTML('tdash-activity-list','<p style="color:#475569;text-align:center;padding:24px;font-size:13px;">ยังไม่มีกิจกรรมวันนี้</p>');
+        safeSetText('tdash-activity-count','0');
+        return;
+    }
+    const totalActions = users.reduce((s,u) => s + activityByUser[u].total, 0);
+    safeSetText('tdash-activity-count', String(totalActions));
+    const html = users.sort((a,b) => activityByUser[b].total - activityByUser[a].total).map(user => {
+        const data    = activityByUser[user];
+        const modules = Object.entries(data.modules)
+            .sort((a,b)=>b[1]-a[1])
+            .map(([k,v]) => `<span style="background:rgba(37,99,235,0.15);color:#93c5fd;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;">${k} ×${v}</span>`)
+            .join(' ');
+        return `<div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <p style="color:#e2e8f0;font-weight:700;font-size:13px;margin:0;"><i class="fas fa-user-circle" style="color:#60a5fa;margin-right:6px;"></i>${user}</p>
+            <span style="background:rgba(74,222,128,0.15);color:#4ade80;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">${data.total} รายการ</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;">${modules}</div>
+        </div>`;
+    }).join('');
+    safeSetHTML('tdash-activity-list', html);
+}
+
+// Heartbeat ทุก 60 วินาที — อัพเดต presence
+let _heartbeatTimer = null;
+function _startHeartbeat() {
+    if (_heartbeatTimer) clearInterval(_heartbeatTimer);
+    _heartbeatTimer = setInterval(function() {
+        if (!window._currentUser) return;
+        google.script.run.updateUserPresence(
+            _currentUser.username, _currentUser.name, _currentUser.role,
+            document.querySelector('.nav-btn.active')?.dataset?.tip || ''
+        );
+    }, 60000);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// AUTH SYSTEM — Login / Logout / Permissions / User Management
+// ══════════════════════════════════════════════════════════════════════
+
+window._currentUser = null;   // { username, name, role }
+window._permissions = {};     // { 'nav-input': { admin:true, staff:false, ... }, ... }
+
+const _ROLE_LABEL = { admin:'Admin', manager:'ผู้จัดการ', supervisor:'ซุปเปอร์ไวเซอร์', staff:'เจ้าหน้าที่' };
+const _ADMIN_ROLES = ['admin','manager','supervisor'];
+
+// ── Login ────────────────────────────────────────────────────────────
+window.toggleLoginPwd = function() {
+    const inp  = document.getElementById('login-password');
+    const icon = document.getElementById('login-eye-icon');
+    if (!inp) return;
+    const show = inp.type === 'password';
+    inp.type   = show ? 'text' : 'password';
+    icon.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+};
+
+window.doLogin = function() {
+    const username = (document.getElementById('login-username')?.value || '').trim();
+    const password = (document.getElementById('login-password')?.value || '');
+    const errEl    = document.getElementById('login-error');
+    const btn      = document.getElementById('login-btn');
+    if (!username || !password) {
+        if (errEl) { errEl.textContent = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'; errEl.style.display = 'block'; }
+        return;
+    }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...'; }
+    if (errEl) errEl.style.display = 'none';
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt"></i>&nbsp; เข้าสู่ระบบ'; }
+            if (res && res.success) {
+                _currentUser = res.user;
+                _loadPermissionsAndEnter();
+            } else {
+                if (errEl) { errEl.textContent = res?.message || 'เข้าสู่ระบบไม่สำเร็จ'; errEl.style.display = 'block'; }
+            }
+        })
+        .withFailureHandler(function(err) {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt"></i>&nbsp; เข้าสู่ระบบ'; }
+            if (errEl) { errEl.textContent = 'เกิดข้อผิดพลาด: ' + (err?.message || String(err)); errEl.style.display = 'block'; }
+        })
+        .loginUser(username, password);
+};
+
+function _loadPermissionsAndEnter() {
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (res && res.success) _permissions = res.data || {};
+            _enterSystem();
+        })
+        .withFailureHandler(function() { _enterSystem(); })
+        .getPermissions();
+}
+
+function _enterSystem() {
+    // ซ่อน login overlay
+    const overlay = document.getElementById('login-overlay');
+    if (overlay) overlay.style.display = 'none';
+
+    // แสดงชื่อ + role ใน sidebar
+    const u = _currentUser;
+    safeSetText('sidebar-user-name', u.name || u.username);
+    safeSetText('sidebar-user-role', _ROLE_LABEL[u.role] || u.role);
+
+    // แสดง/ซ่อนเมนูตาม permission
+    _applyPermissions();
+
+    // แสดง admin nav ถ้า role มีสิทธิ์
+    if (_ADMIN_ROLES.includes(u.role)) {
+        ['nav-group-admin','nav-team-dashboard','nav-user-mgmt','nav-perm-mgmt'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = '';
+        });
+    }
+
+    // Presence: บันทึก session + เริ่ม heartbeat
+    google.script.run.updateUserPresence(u.username, u.name, u.role, 'STORAGE FG');
+    _startHeartbeat();
+}
+
+function _applyPermissions() {
+    const role = _currentUser?.role || 'staff';
+    // nav buttons ทั้งหมดที่มี id
+    const navIds = ['nav-input','nav-report','nav-printtag','nav-analytics','nav-overdue',
+                    'nav-whactivity','nav-warehouse-map','nav-kpi-stock','nav-logistic-plan',
+                    'nav-truck-dispatch','nav-kpi-wh'];
+    navIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const perm = _permissions[id];
+        const allowed = perm ? (perm[role] === true) : _ADMIN_ROLES.includes(role);
+        el.style.display = allowed ? '' : 'none';
+    });
+    // Audit Log (nav-audit ไม่มี id จริง → หา via data-tip)
+    document.querySelectorAll('.nav-btn[data-tip="Audit Log"]').forEach(el => {
+        const perm = _permissions['nav-audit'];
+        el.style.display = (perm ? perm[role] : _ADMIN_ROLES.includes(role)) ? '' : 'none';
+    });
+}
+
+window.doLogout = function() {
+    _currentUser = null;
+    _permissions = {};
+    // reset form
+    ['login-username','login-password'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    const errEl = document.getElementById('login-error');
+    if (errEl) errEl.style.display = 'none';
+    // คืน sidebar user info
+    safeSetText('sidebar-user-name','—');
+    safeSetText('sidebar-user-role','—');
+    // ซ่อน admin nav
+    ['nav-group-admin','nav-team-dashboard','nav-user-mgmt','nav-perm-mgmt'].forEach(id => {
+        const el = document.getElementById(id); if(el) el.style.display='none';
+    });
+    // แสดง login overlay
+    const overlay = document.getElementById('login-overlay');
+    if (overlay) overlay.style.display = 'flex';
+};
+
+// ── User Management Modal ─────────────────────────────────────────────
+window.openUserMgmtModal = function() {
+    const modal = document.getElementById('user-mgmt-modal');
+    if (modal) { modal.style.display = 'flex'; loadUserList(); }
+};
+window.closeUserMgmtModal = function() {
+    const modal = document.getElementById('user-mgmt-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+function loadUserList() {
+    safeSetHTML('user-list-tbody', '<tr><td colspan="5" style="text-align:center;padding:20px;color:#64748b;"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>');
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || !res.success) { safeSetHTML('user-list-tbody','<tr><td colspan="5" style="color:#f87171;text-align:center;padding:20px;">โหลดข้อมูลไม่สำเร็จ</td></tr>'); return; }
+            const rows = (res.data || []).map(u => `
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 12px;color:#e2e8f0;font-weight:600;">${u.username}</td>
+                <td style="padding:10px 12px;color:#94a3b8;">${u.name}</td>
+                <td style="padding:10px 12px;"><span style="background:rgba(37,99,235,0.2);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">${_ROLE_LABEL[u.role]||u.role}</span></td>
+                <td style="padding:10px 12px;"><span style="color:${u.active?'#4ade80':'#f87171'};font-size:12px;">${u.active?'ใช้งาน':'ปิดใช้'}</span></td>
+                <td style="padding:10px 12px;display:flex;gap:6px;">
+                  <button onclick="openEditUser('${u.username}','${u.name}','${u.role}',${u.active})" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;"><i class="fas fa-edit"></i> แก้ไข</button>
+                  <button onclick="confirmDeleteUser('${u.username}')" style="background:rgba(239,68,68,0.15);color:#f87171;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;${u.username===(_currentUser?.username||'')?'opacity:0.3;pointer-events:none;':''}"><i class="fas fa-trash"></i></button>
+                </td>
+              </tr>`).join('');
+            safeSetHTML('user-list-tbody', rows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:#64748b;">ยังไม่มีผู้ใช้</td></tr>');
+        })
+        .withFailureHandler(function(err) { safeSetHTML('user-list-tbody','<tr><td colspan="5" style="color:#f87171;text-align:center;padding:20px;">'+String(err)+'</td></tr>'); })
+        .getUsers();
+}
+
+window.openCreateUser = function() {
+    safeSetHTML('user-form-title','<i class="fas fa-user-plus"></i> สร้างผู้ใช้ใหม่');
+    ['uf-username','uf-name','uf-password'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const el=document.getElementById('uf-username'); if(el) el.disabled=false;
+    const se=document.getElementById('uf-role'); if(se) se.value='staff';
+    const ae=document.getElementById('uf-active'); if(ae) ae.checked=true;
+    const pe=document.getElementById('uf-pwd-row'); if(pe) pe.style.display='';
+    safeSetHTML('user-form-mode','create');
+    const panel=document.getElementById('user-form-panel'); if(panel) panel.style.display='';
+};
+
+window.openEditUser = function(username, name, role, active) {
+    safeSetHTML('user-form-title','<i class="fas fa-user-edit"></i> แก้ไขผู้ใช้');
+    const uu=document.getElementById('uf-username'); if(uu){uu.value=username;uu.disabled=true;}
+    const un=document.getElementById('uf-name'); if(un) un.value=name;
+    const ur=document.getElementById('uf-role'); if(ur) ur.value=role;
+    const ua=document.getElementById('uf-active'); if(ua) ua.checked=!!active;
+    const up=document.getElementById('uf-password'); if(up) up.value='';
+    const pe=document.getElementById('uf-pwd-row'); if(pe) pe.style.display='';
+    safeSetHTML('user-form-mode','edit');
+    const panel=document.getElementById('user-form-panel'); if(panel) panel.style.display='';
+};
+
+window.cancelUserForm = function() {
+    const panel=document.getElementById('user-form-panel'); if(panel) panel.style.display='none';
+};
+
+window.submitUserForm = function() {
+    const modeEl = document.getElementById('user-form-mode');
+    const mode   = modeEl ? modeEl.textContent : 'create';
+    const username = document.getElementById('uf-username')?.value.trim();
+    const name     = document.getElementById('uf-name')?.value.trim();
+    const role     = document.getElementById('uf-role')?.value;
+    const active   = document.getElementById('uf-active')?.checked;
+    const password = document.getElementById('uf-password')?.value;
+
+    if (!username || !name) { showToast('⚠️ กรุณากรอกชื่อผู้ใช้และชื่อ-นามสกุล', true); return; }
+    if (mode === 'create' && !password) { showToast('⚠️ กรุณากรอกรหัสผ่าน', true); return; }
+
+    const payload = { username, name, role, active };
+    if (password) payload[mode==='create'?'password':'newPassword'] = password;
+
+    const fn = mode === 'create' ? 'createUser' : 'updateUser';
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (res?.success) { showToast('✅ ' + res.message); cancelUserForm(); loadUserList(); }
+            else showToast('❌ ' + (res?.message||'เกิดข้อผิดพลาด'), true);
+        })
+        .withFailureHandler(err => showToast('❌ '+String(err), true))
+        [fn](payload);
+};
+
+window.confirmDeleteUser = function(username) {
+    if (!confirm('ลบผู้ใช้ "' + username + '" ใช่หรือไม่?')) return;
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (res?.success) { showToast('✅ ' + res.message); loadUserList(); }
+            else showToast('❌ ' + (res?.message||'เกิดข้อผิดพลาด'), true);
+        })
+        .withFailureHandler(err => showToast('❌ '+String(err), true))
+        .deleteUser(username);
+};
+
+// ── Permission Management Modal ───────────────────────────────────────
+window.openPermMgmtModal = function() {
+    const modal = document.getElementById('perm-mgmt-modal');
+    if (modal) { modal.style.display = 'flex'; loadPermTable(); }
+};
+window.closePermMgmtModal = function() {
+    const modal = document.getElementById('perm-mgmt-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+const _MENU_LABELS = {
+    'nav-input':'STORAGE FG','nav-report':'REPORT STORAGE','nav-printtag':'PRINT TAG FG',
+    'nav-analytics':'ANALYTICS','nav-overdue':'รายการจองค้าง','nav-whactivity':'WH ACTIVITY LOG',
+    'nav-warehouse-map':'ผังคลังสินค้า','nav-kpi-stock':'INVENTORY','nav-logistic-plan':'วางแผนส่งมอบ',
+    'nav-truck-dispatch':'จัดรถส่งสินค้า','nav-kpi-wh':'KPI WH & LOGISTIC','nav-audit':'Audit Log'
+};
+
+function loadPermTable() {
+    safeSetHTML('perm-table-body','<tr><td colspan="5" style="text-align:center;padding:20px;color:#64748b;"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>');
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res?.success) return;
+            const data  = res.data || {};
+            const roles = res.roles || ['admin','manager','supervisor','staff'];
+            const rows = Object.keys(data).map(menuId => {
+                const label = _MENU_LABELS[menuId] || menuId;
+                const cells = roles.map(r => {
+                    const checked = data[menuId][r] ? 'checked' : '';
+                    const disabled = (r !== 'staff') ? 'disabled title="admin/ผจก/ซุป เข้าถึงได้ทุกเมนู"' : '';
+                    return `<td style="text-align:center;padding:10px;">
+                      <input type="checkbox" ${checked} ${disabled} data-menu="${menuId}" data-role="${r}"
+                        style="width:16px;height:16px;cursor:${disabled?'not-allowed':'pointer'};">
+                    </td>`;
+                }).join('');
+                return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                  <td style="padding:10px 12px;color:#e2e8f0;font-weight:600;font-size:13px;">${label}</td>
+                  ${cells}
+                </tr>`;
+            }).join('');
+            safeSetHTML('perm-table-body', rows);
+        })
+        .withFailureHandler(err => safeSetHTML('perm-table-body','<tr><td colspan="5" style="color:#f87171;padding:20px;">'+String(err)+'</td></tr>'))
+        .getPermissions();
+}
+
+window.savePermissions = function() {
+    const checkboxes = document.querySelectorAll('#perm-table-body input[type=checkbox]');
+    const permData   = {};
+    checkboxes.forEach(cb => {
+        const menu = cb.dataset.menu;
+        const role = cb.dataset.role;
+        if (!permData[menu]) permData[menu] = {};
+        permData[menu][role] = cb.checked;
+        // admin/manager/supervisor always true
+        ['admin','manager','supervisor'].forEach(r => { permData[menu][r] = true; });
+    });
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (res?.success) {
+                showToast('✅ บันทึกสิทธิ์สำเร็จ');
+                // รีโหลด permissions ใน memory
+                google.script.run.withSuccessHandler(r=>{ if(r?.success) _permissions=r.data; }).getPermissions();
+            } else showToast('❌ ' + (res?.message||'เกิดข้อผิดพลาด'), true);
+        })
+        .withFailureHandler(err => showToast('❌ '+String(err), true))
+        .savePermissions(permData);
+};
+
 </script>
+
+<!-- ══════════════════════════════════════════════════════════════
+     VIEW: Team Dashboard
+══════════════════════════════════════════════════════════════ -->
+<div id="view-team-dashboard-content" class="hidden" style="padding:24px;max-width:1100px;margin:0 auto;">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h2 style="color:#f1f5f9;font-size:20px;font-weight:900;margin:0;"><i class="fas fa-users" style="color:#60a5fa;margin-right:10px;"></i>Dashboard ทีม</h2>
+      <p id="tdash-updated-at" style="color:#475569;font-size:11px;margin-top:4px;"></p>
+    </div>
+    <button onclick="loadTeamDashboard()" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;">
+      <i class="fas fa-sync-alt"></i> รีเฟรช
+    </button>
+  </div>
+
+  <!-- KPI Cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px;">
+    <div style="background:linear-gradient(135deg,rgba(74,222,128,0.12),rgba(34,197,94,0.06));border:1px solid rgba(74,222,128,0.2);border-radius:12px;padding:20px;">
+      <p style="font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 8px;">ออนไลน์ขณะนี้</p>
+      <p id="tdash-online-count" style="font-size:32px;font-weight:900;color:#4ade80;font-family:'Orbitron',sans-serif;margin:0;">—</p>
+      <p style="font-size:10px;color:#64748b;margin:4px 0 0;">คน (last seen &lt; 5 นาที)</p>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(96,165,250,0.12),rgba(59,130,246,0.06));border:1px solid rgba(96,165,250,0.2);border-radius:12px;padding:20px;">
+      <p style="font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 8px;">กิจกรรมวันนี้</p>
+      <p id="tdash-activity-count" style="font-size:32px;font-weight:900;color:#60a5fa;font-family:'Orbitron',sans-serif;margin:0;">—</p>
+      <p style="font-size:10px;color:#64748b;margin:4px 0 0;">รายการทั้งหมด</p>
+    </div>
+  </div>
+
+  <!-- Two columns -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+    <!-- Online Users -->
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+        <span style="width:8px;height:8px;background:#4ade80;border-radius:50%;display:inline-block;box-shadow:0 0 6px #4ade80;"></span>
+        <h3 style="color:#e2e8f0;font-size:13px;font-weight:800;margin:0;">ออนไลน์ขณะนี้</h3>
+      </div>
+      <div id="tdash-online-list" style="max-height:400px;overflow-y:auto;">
+        <p style="text-align:center;padding:32px;color:#475569;font-size:13px;">กำลังโหลด...</p>
+      </div>
+    </div>
+
+    <!-- Today Activity -->
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-clipboard-list" style="color:#60a5fa;font-size:12px;"></i>
+        <h3 style="color:#e2e8f0;font-size:13px;font-weight:800;margin:0;">กิจกรรมวันนี้</h3>
+      </div>
+      <div id="tdash-activity-list" style="max-height:400px;overflow-y:auto;">
+        <p style="text-align:center;padding:32px;color:#475569;font-size:13px;">กำลังโหลด...</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: User Management
+══════════════════════════════════════════════════════════════ -->
+<div id="user-mgmt-modal" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:100%;max-width:760px;max-height:90vh;display:flex;flex-direction:column;">
+    <!-- Header -->
+    <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="color:#f1f5f9;font-size:16px;font-weight:800;"><i class="fas fa-users-cog" style="color:#60a5fa;margin-right:8px;"></i>จัดการผู้ใช้งาน</h3>
+      <button onclick="closeUserMgmtModal()" style="background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;">&times;</button>
+    </div>
+    <!-- Body -->
+    <div style="padding:20px 24px;overflow-y:auto;flex:1;">
+      <!-- Create button -->
+      <div style="margin-bottom:16px;">
+        <button onclick="openCreateUser()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;">
+          <i class="fas fa-user-plus"></i> สร้างผู้ใช้ใหม่
+        </button>
+      </div>
+      <!-- Create/Edit Form -->
+      <div id="user-form-panel" style="display:none;background:rgba(37,99,235,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:16px;margin-bottom:16px;">
+        <h4 id="user-form-title" style="color:#93c5fd;font-size:13px;font-weight:700;margin-bottom:14px;"></h4>
+        <span id="user-form-mode" style="display:none;">create</span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:4px;">ชื่อผู้ใช้ (username)</label>
+            <input id="uf-username" type="text" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#f1f5f9;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:4px;">ชื่อ-นามสกุล</label>
+            <input id="uf-name" type="text" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#f1f5f9;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:4px;">ระดับสิทธิ์</label>
+            <select id="uf-role" style="width:100%;background:#1e293b;border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#f1f5f9;font-size:13px;box-sizing:border-box;">
+              <option value="admin">Admin</option>
+              <option value="manager">ผู้จัดการ</option>
+              <option value="supervisor">ซุปเปอร์ไวเซอร์</option>
+              <option value="staff">เจ้าหน้าที่</option>
+            </select>
+          </div>
+          <div id="uf-pwd-row">
+            <label style="font-size:11px;color:#94a3b8;font-weight:600;display:block;margin-bottom:4px;">รหัสผ่าน <span style="color:#64748b;">(เว้นว่างไว้หากไม่เปลี่ยน)</span></label>
+            <input id="uf-password" type="password" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#f1f5f9;font-size:13px;box-sizing:border-box;">
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+          <input id="uf-active" type="checkbox" checked style="width:15px;height:15px;">
+          <label for="uf-active" style="font-size:12px;color:#94a3b8;cursor:pointer;">เปิดใช้งาน</label>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px;">
+          <button onclick="submitUserForm()" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;"><i class="fas fa-save"></i> บันทึก</button>
+          <button onclick="cancelUserForm()" style="background:rgba(255,255,255,0.06);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;">ยกเลิก</button>
+        </div>
+      </div>
+      <!-- User Table -->
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:rgba(255,255,255,0.04);">
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.05em;">USERNAME</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.05em;">ชื่อ</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.05em;">ROLE</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.05em;">สถานะ</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.05em;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="user-list-tbody">
+          <tr><td colspan="5" style="text-align:center;padding:20px;color:#64748b;">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: Permission Management
+══════════════════════════════════════════════════════════════ -->
+<div id="perm-mgmt-modal" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;">
+    <!-- Header -->
+    <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="color:#f1f5f9;font-size:16px;font-weight:800;"><i class="fas fa-lock" style="color:#f59e0b;margin-right:8px;"></i>กำหนดสิทธิ์การเข้าถึงเมนู</h3>
+      <button onclick="closePermMgmtModal()" style="background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;">&times;</button>
+    </div>
+    <!-- Body -->
+    <div style="padding:20px 24px;overflow-y:auto;flex:1;">
+      <p style="font-size:12px;color:#64748b;margin-bottom:16px;"><i class="fas fa-info-circle" style="color:#60a5fa;"></i> Admin / ผู้จัดการ / ซุปเปอร์ไวเซอร์ เข้าถึงได้ทุกเมนูเสมอ — ปรับได้เฉพาะสิทธิ์ "เจ้าหน้าที่"</p>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:rgba(255,255,255,0.04);">
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:700;">เมนู</th>
+            <th style="padding:10px;text-align:center;font-size:11px;color:#60a5fa;font-weight:700;">Admin</th>
+            <th style="padding:10px;text-align:center;font-size:11px;color:#60a5fa;font-weight:700;">ผจก.</th>
+            <th style="padding:10px;text-align:center;font-size:11px;color:#60a5fa;font-weight:700;">ซุป</th>
+            <th style="padding:10px;text-align:center;font-size:11px;color:#f59e0b;font-weight:700;">เจ้าหน้าที่</th>
+          </tr>
+        </thead>
+        <tbody id="perm-table-body">
+          <tr><td colspan="5" style="text-align:center;padding:20px;color:#64748b;">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- Footer -->
+    <div style="padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="closePermMgmtModal()" style="background:rgba(255,255,255,0.06);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;">ปิด</button>
+      <button onclick="savePermissions()" style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;"><i class="fas fa-save"></i> บันทึกสิทธิ์</button>
+    </div>
+  </div>
+</div>
