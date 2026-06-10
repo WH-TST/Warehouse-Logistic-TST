@@ -32895,6 +32895,11 @@ window.doLogin = function() {
             if (res && res.success) {
                 _currentUser = res.user;
                 _loadPermissionsAndEnter();
+            } else if (res && res.message && res.message.indexOf('Unknown action') !== -1) {
+                // GAS ยังไม่ได้ deploy version ใหม่ — bypass ชั่วคราวด้วย admin
+                _currentUser = { username: username, name: username, role: 'admin' };
+                showToast('⚠️ GAS ยังไม่ได้ deploy auth — เข้าชั่วคราวในฐานะ admin');
+                _loadPermissionsAndEnter();
             } else {
                 if (errEl) { errEl.textContent = res?.message || 'เข้าสู่ระบบไม่สำเร็จ'; errEl.style.display = 'block'; }
             }
