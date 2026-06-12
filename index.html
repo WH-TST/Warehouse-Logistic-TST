@@ -29318,20 +29318,41 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             </td>`;
         };
 
+        // ถ้าบันทึกแล้ว ใช้ค่า saved ก่อน fallback ไป auto
+        const disp = isSaved ? {
+            checkerFGPct:   saved.checkerFGPct   ?? auto.checkerFGPct,
+            checkerSEMIPct: saved.checkerSEMIPct ?? auto.checkerSEMIPct,
+            finalAdjFGPct:  saved.finalAdjFG     ?? auto.finalAdjFGPct,
+            finalAdjSEMIPct:saved.finalAdjSEMI   ?? auto.finalAdjSEMIPct,
+            loadScore:      saved.loadScore       ?? calcLoadScoreKPI(auto),
+            damageScore:    saved.damageScore     ?? calcDamageScoreKPI(auto),
+            prdKPIFG:       saved.dataErrFG       ?? auto.prdKPIFG,
+            prdKPISEMI:     saved.dataErrSEMI     ?? auto.prdKPISEMI,
+        } : {
+            checkerFGPct:   auto.checkerFGPct,
+            checkerSEMIPct: auto.checkerSEMIPct,
+            finalAdjFGPct:  auto.finalAdjFGPct,
+            finalAdjSEMIPct:auto.finalAdjSEMIPct,
+            loadScore:      calcLoadScoreKPI(auto),
+            damageScore:    calcDamageScoreKPI(auto),
+            prdKPIFG:       auto.prdKPIFG,
+            prdKPISEMI:     auto.prdKPISEMI,
+        };
+
         return `<tr class="${rowCls}" id="kpi-row-${isoDate}">
             <td class="px-4 py-3 font-bold text-sm whitespace-nowrap text-white">
                 ${isSaved ? '<i class="fas fa-check-circle text-emerald-400 mr-1"></i>' : ''}
                 ${ddmmyyyy}
             </td>
-            ${autoCell(auto.checkerFGPct)}
-            ${autoCell(auto.checkerSEMIPct)}
-            ${autoCell(auto.finalAdjFGPct)}
-            ${autoCell(auto.finalAdjSEMIPct)}
+            ${autoCell(disp.checkerFGPct)}
+            ${autoCell(disp.checkerSEMIPct)}
+            ${autoCell(disp.finalAdjFGPct)}
+            ${autoCell(disp.finalAdjSEMIPct)}
             ${spaceCell()}
-            ${autoCell(calcLoadScoreKPI(auto))}
-            ${autoCell(calcDamageScoreKPI(auto))}
-            ${autoCell(auto.prdKPIFG)}
-            ${autoCell(auto.prdKPISEMI)}
+            ${autoCell(disp.loadScore)}
+            ${autoCell(disp.damageScore)}
+            ${autoCell(disp.prdKPIFG)}
+            ${autoCell(disp.prdKPISEMI)}
             <td class="px-4 py-2 text-center">
                 ${isSaved
                     ? `<button id="btn-kpi-save-${isoDate}"
