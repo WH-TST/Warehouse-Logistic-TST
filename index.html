@@ -33121,7 +33121,10 @@ window.loRefreshPlans = function() {
     google.script.run
         .withSuccessHandler(function(res) {
             if (!res || !res.success) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
-            _loPlans = (res.mode === 'list' ? res.plans : []);
+            _loPlans = (res.mode === 'list' ? res.plans : []).filter(function(p) {
+                var s = (p.status || '').toLowerCase().trim();
+                return s !== 'success';
+            });
             sel.innerHTML = '<option value="">— กรุณาเลือกแผน —</option>' +
                 _loPlans.map(function(p) {
                     return '<option value="' + p.id + '">' + p.id + ' · ' + p.date + ' · ' + (p.truck || '—') + '</option>';
@@ -33162,11 +33165,14 @@ window.loOnPlanChange = function() {
                 plan.shops.forEach(function(shop) {
                     (shop.items || []).forEach(function(item) {
                         var found = items.find(function(x) { return x.sku === item.sku; });
+                        var itemLines  = item.qty || item.lines || 0;
+                        var itemName   = item.productName || item.name || item.skuName || '';
+                        var itemWeight = item.weight || 0;
                         if (found) {
-                            found.lines  += (item.qty || item.lines || 0);
-                            found.weight += (item.weight || 0);
+                            found.lines  += itemLines;
+                            found.weight += itemWeight;
                         } else {
-                            items.push({ sku: item.sku, name: item.name || item.skuName || '', lines: item.qty || item.lines || 0, weight: item.weight || 0 });
+                            items.push({ sku: item.sku, name: itemName, lines: itemLines, weight: itemWeight });
                         }
                     });
                 });
