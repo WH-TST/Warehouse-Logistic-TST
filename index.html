@@ -2844,6 +2844,11 @@ thead.sticky {
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-orange-600">
       <i class="fas fa-file-invoice mr-2"></i>Print PRE-SHIPMENT
     </button>
+    <button id="logi-tab-loadorder" onclick="switchLogiTab('loadorder')"
+      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-emerald-700 hidden"
+      style="border:2px dashed #065f46;">
+      <i class="fas fa-truck-loading mr-2"></i>สร้างออเดอร์โหลด
+    </button>
     <button id="logi-tab-driverlog" onclick="switchLogiTab('driverlog')"
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-teal-700">
       <i class="fas fa-clipboard-list mr-2"></i>บันทึกการปฏิบัติงาน
@@ -3570,6 +3575,90 @@ thead.sticky {
       </div>
     </div>
   </div><!-- end logi-panel-preshipment -->
+
+  <!-- ── TAB: สร้างออเดอร์โหลด (Admin only) ── -->
+  <div id="logi-panel-loadorder" class="hidden space-y-5">
+
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
+      <div class="flex items-center gap-3 mb-1">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg" style="background:#065f46;">
+          <i class="fas fa-truck-loading"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-black text-slate-800">สร้างออเดอร์โหลดสินค้า</h3>
+          <p class="text-xs text-slate-400 font-semibold">ส่งออเดอร์ให้ทีมโหลดแบบ Paperless</p>
+        </div>
+      </div>
+
+      <!-- เลือกจากแผน -->
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">เลือกแผนจัดส่ง</label>
+        <div class="flex gap-3 items-end flex-wrap">
+          <select id="lo-plan-select" onchange="loOnPlanChange()"
+            class="flex-1 min-w-[220px] bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all cursor-pointer">
+            <option value="">— กรุณาเลือกแผน —</option>
+          </select>
+          <button onclick="loRefreshPlans()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-black text-sm transition-all flex items-center gap-2">
+            <i class="fas fa-sync-alt"></i> รีเฟรช
+          </button>
+        </div>
+      </div>
+
+      <!-- แสดงรายละเอียดแผนที่เลือก -->
+      <div id="lo-plan-detail" class="hidden rounded-xl border border-slate-200 overflow-hidden">
+        <div class="bg-slate-800 px-4 py-3 flex items-center justify-between">
+          <span class="text-white font-black text-sm flex items-center gap-2">
+            <i class="fas fa-info-circle text-emerald-400"></i> รายละเอียดแผน
+          </span>
+          <span id="lo-plan-badge" class="text-slate-300 text-xs font-bold"></span>
+        </div>
+        <div class="p-4 space-y-3 bg-white">
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-slate-400 font-bold">ทะเบียนรถ:</span> <span id="lo-detail-truck" class="font-black text-slate-800">—</span></div>
+            <div><span class="text-slate-400 font-bold">วันที่:</span> <span id="lo-detail-date" class="font-black text-slate-800">—</span></div>
+            <div><span class="text-slate-400 font-bold">Plan ID:</span> <span id="lo-detail-planid" class="font-black text-slate-800">—</span></div>
+            <div><span class="text-slate-400 font-bold">น้ำหนัก:</span> <span id="lo-detail-weight" class="font-black text-slate-800">—</span></div>
+          </div>
+          <!-- รายการสินค้า -->
+          <div id="lo-items-wrap" class="rounded-lg border border-slate-100 overflow-hidden">
+            <table class="w-full text-sm border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs font-black uppercase">
+                  <th class="px-3 py-2 text-left">SKU</th>
+                  <th class="px-3 py-2 text-left">ชื่อสินค้า</th>
+                  <th class="px-3 py-2 text-right">เส้น</th>
+                  <th class="px-3 py-2 text-right">น้ำหนัก (kg)</th>
+                </tr>
+              </thead>
+              <tbody id="lo-items-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ปุ่มสร้างออเดอร์ -->
+      <button id="lo-create-btn" onclick="loCreateOrder()" disabled
+        class="w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-not-allowed bg-slate-100 text-slate-400">
+        <i class="fas fa-paper-plane"></i> ส่งออเดอร์ให้ทีมโหลด
+      </button>
+    </div>
+
+    <!-- ประวัติออเดอร์ที่สร้างแล้ว -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h4 class="font-black text-slate-700 flex items-center gap-2">
+          <i class="fas fa-history text-emerald-600"></i> ออเดอร์ล่าสุด
+        </h4>
+        <button onclick="loRefreshOrderList()" class="text-xs text-slate-400 hover:text-slate-600 font-bold flex items-center gap-1">
+          <i class="fas fa-sync-alt"></i> รีเฟรช
+        </button>
+      </div>
+      <div id="lo-order-list">
+        <div class="text-center text-slate-400 text-sm py-6 font-bold">กด "รีเฟรช" เพื่อดูออเดอร์ล่าสุด</div>
+      </div>
+    </div>
+
+  </div><!-- end logi-panel-loadorder -->
 
   <!-- ════════════════════════════════════════════════════════ -->
   <!-- TAB: บันทึกการปฏิบัติงานจริง (Driver Activity Log)      -->
@@ -20214,6 +20303,7 @@ window.switchLogiTab = function switchLogiTab(tab) {
         list:         'logi-panel-list',
         cal:          'logi-panel-cal',
         preshipment:  'logi-panel-preshipment',
+        loadorder:    'logi-panel-loadorder',
         driverlog:    'logi-panel-driverlog',
         driverperf:   'logi-panel-driverperf',
         autoplan:     'logi-panel-autoplan',
@@ -20223,6 +20313,7 @@ window.switchLogiTab = function switchLogiTab(tab) {
         list:        ' bg-amber-600 text-white shadow',
         cal:         ' bg-amber-600 text-white shadow',
         preshipment: ' bg-amber-600 text-white shadow',
+        loadorder:   ' bg-emerald-700 text-white shadow',
         driverlog:   ' bg-amber-600 text-white shadow',
         driverperf:  ' bg-amber-600 text-white shadow',
         autoplan:    ' bg-amber-600 text-white shadow',
@@ -32984,5 +33075,213 @@ window.umDeleteUser=function(un){
   if(ls)ls.classList.remove('hidden');
   var lu=document.getElementById('login-username');
   if(lu)lu.focus();
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════
+// สร้างออเดอร์โหลด (Admin only tab)
+// ═══════════════════════════════════════════════════════════════════
+
+var _loPlans = [];  // แผนที่โหลดมา
+
+// แสดง/ซ่อน tab ตาม role — เรียกจาก _applySession
+(function _loInitTabVisibility() {
+    var origApply = window._applySessionOrig || null;
+    // hook หลัง _applySession ทำงาน
+    var _orig = window._applySession;
+    // ใช้ MutationObserver แทน — รอให้ DOM พร้อม
+    function _checkLoTab() {
+        var tab = document.getElementById('logi-tab-loadorder');
+        if (!tab) return;
+        if (typeof _cu !== 'undefined' && _cu && _cu.isAdmin) {
+            tab.classList.remove('hidden');
+        } else {
+            tab.classList.add('hidden');
+        }
+    }
+    // เช็คทุกครั้งที่ switchView เรียก
+    var _origSwitchView = window.switchView;
+    if (_origSwitchView) {
+        window.switchView = function(v) {
+            _origSwitchView(v);
+            _checkLoTab();
+        };
+    }
+    // เช็คเมื่อ page โหลด
+    document.addEventListener('DOMContentLoaded', _checkLoTab);
+    setTimeout(_checkLoTab, 1000);
+    setTimeout(_checkLoTab, 3000);
+})();
+
+// โหลดรายการแผน
+window.loRefreshPlans = function() {
+    var sel = document.getElementById('lo-plan-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— กำลังโหลด... —</option>';
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || !res.success) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
+            _loPlans = (res.mode === 'list' ? res.plans : []);
+            sel.innerHTML = '<option value="">— กรุณาเลือกแผน —</option>' +
+                _loPlans.map(function(p) {
+                    return '<option value="' + p.id + '">' + p.id + ' · ' + p.date + ' · ' + (p.truck || '—') + '</option>';
+                }).join('');
+        })
+        .withFailureHandler(function() { sel.innerHTML = '<option value="">— เกิดข้อผิดพลาด —</option>'; })
+        .getPreShipmentData();
+};
+
+// เมื่อเลือกแผน
+window.loOnPlanChange = function() {
+    var sel    = document.getElementById('lo-plan-select');
+    var planId = sel ? sel.value : '';
+    var detail = document.getElementById('lo-plan-detail');
+    var btn    = document.getElementById('lo-create-btn');
+    if (!planId) {
+        if (detail) detail.classList.add('hidden');
+        if (btn) { btn.disabled = true; btn.className = 'w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-not-allowed bg-slate-100 text-slate-400'; }
+        return;
+    }
+    // ดึงรายละเอียดแผน
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || !res.success) return;
+            var plan = res.plan || {};
+            var safeGet = function(id) { return document.getElementById(id); };
+            var setText = function(id, v) { var el = safeGet(id); if (el) el.textContent = v; };
+            setText('lo-detail-truck',  plan.truckPlate || plan.truck || '—');
+            setText('lo-detail-date',   plan.deliveryDate || plan.date || '—');
+            setText('lo-detail-planid', plan.id || planId);
+            setText('lo-detail-weight', plan.totalWeight ? plan.totalWeight.toLocaleString() + ' kg' : '—');
+            var badge = safeGet('lo-plan-badge');
+            if (badge) badge.textContent = plan.status || '';
+
+            // สร้าง items array
+            var items = [];
+            if (plan.shops && Array.isArray(plan.shops)) {
+                plan.shops.forEach(function(shop) {
+                    (shop.items || []).forEach(function(item) {
+                        var found = items.find(function(x) { return x.sku === item.sku; });
+                        if (found) {
+                            found.lines  += (item.qty || item.lines || 0);
+                            found.weight += (item.weight || 0);
+                        } else {
+                            items.push({ sku: item.sku, name: item.name || item.skuName || '', lines: item.qty || item.lines || 0, weight: item.weight || 0 });
+                        }
+                    });
+                });
+            }
+
+            var tbody = safeGet('lo-items-tbody');
+            if (tbody) {
+                tbody.innerHTML = items.length > 0
+                    ? items.map(function(it) {
+                        return '<tr class="border-b border-slate-100"><td class="px-3 py-2 font-bold text-slate-800">' + it.sku + '</td>' +
+                            '<td class="px-3 py-2 text-slate-600">' + (it.name || '—') + '</td>' +
+                            '<td class="px-3 py-2 text-right font-bold text-blue-600">' + it.lines + '</td>' +
+                            '<td class="px-3 py-2 text-right font-bold text-orange-600">' + (it.weight ? it.weight.toLocaleString() : '—') + '</td></tr>';
+                    }).join('')
+                    : '<tr><td colspan="4" class="px-3 py-4 text-center text-slate-400">ไม่มีรายการสินค้า</td></tr>';
+            }
+
+            if (detail) detail.classList.remove('hidden');
+            if (btn) {
+                btn.disabled = false;
+                btn.className = 'w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg';
+            }
+            // เก็บ items ไว้ใช้ตอนสร้างออเดอร์
+            btn.dataset.items = JSON.stringify(items);
+            btn.dataset.truck = plan.truckPlate || plan.truck || '';
+            btn.dataset.planId = planId;
+        })
+        .withFailureHandler(function() { if (typeof showToast === 'function') showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); })
+        .getPreShipmentData(planId);
+};
+
+// สร้างออเดอร์โหลด
+window.loCreateOrder = function() {
+    var btn = document.getElementById('lo-create-btn');
+    if (!btn || btn.disabled) return;
+    var planId = btn.dataset.planId || '';
+    var truck  = btn.dataset.truck  || '';
+    var items  = btn.dataset.items  || '[]';
+    var creator = (typeof _cu !== 'undefined' && _cu) ? (_cu.name || _cu.username) : 'Admin';
+
+    if (!planId) { showToast('กรุณาเลือกแผนก่อน', true); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังส่งออเดอร์...';
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> ส่งออเดอร์ให้ทีมโหลด';
+            if (res && res.success) {
+                showToast('✅ สร้างออเดอร์ ' + res.orderId + ' สำเร็จ');
+                btn.disabled = true;
+                btn.className = 'w-full py-4 rounded-xl font-black text-base flex items-center justify-center gap-3 bg-slate-100 text-slate-400 cursor-not-allowed';
+                // reset form
+                var sel = document.getElementById('lo-plan-select');
+                if (sel) sel.value = '';
+                var detail = document.getElementById('lo-plan-detail');
+                if (detail) detail.classList.add('hidden');
+                // refresh order list
+                loRefreshOrderList();
+            } else {
+                showToast('❌ ' + (res ? res.message : 'ไม่สำเร็จ'), true);
+                btn.disabled = false;
+            }
+        })
+        .withFailureHandler(function(err) {
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> ส่งออเดอร์ให้ทีมโหลด';
+            btn.disabled = false;
+            showToast('❌ เกิดข้อผิดพลาด: ' + err, true);
+        })
+        .loCreateOrder(planId, truck, creator, items);
+};
+
+// โหลดรายการออเดอร์ล่าสุด
+window.loRefreshOrderList = function() {
+    var wrap = document.getElementById('lo-order-list');
+    if (!wrap) return;
+    wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-4"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || !res.success || !res.orders || res.orders.length === 0) {
+                wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-6 font-bold">ยังไม่มีออเดอร์</div>';
+                return;
+            }
+            var statusBadge = function(s) {
+                if (s === 'PENDING') return '<span style="background:#78350f;color:#fde68a;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">รอโหลด</span>';
+                if (s === 'LOADING') return '<span style="background:#1e3a8a;color:#93c5fd;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">กำลังโหลด</span>';
+                return '<span style="background:#14532d;color:#86efac;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">เสร็จแล้ว</span>';
+            };
+            wrap.innerHTML = res.orders.map(function(o) {
+                return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f1f5f9;">' +
+                    '<div style="flex:1;">' +
+                        '<div style="font-weight:800;font-size:13px;color:#1e293b;">' + o.orderId + '</div>' +
+                        '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (o.truck || '—') + ' · ' + (o.createdAt || '').substring(0, 16) + '</div>' +
+                    '</div>' +
+                    statusBadge(o.status) +
+                '</div>';
+            }).join('');
+        })
+        .withFailureHandler(function() {
+            wrap.innerHTML = '<div class="text-center text-rose-400 text-sm py-4">โหลดไม่สำเร็จ</div>';
+        })
+        .loGetPendingOrders();
+};
+
+// init เมื่อเปิด tab
+(function() {
+    var origSwitch = window.switchLogiTab;
+    if (origSwitch) {
+        window.switchLogiTab = function(tab) {
+            origSwitch(tab);
+            if (tab === 'loadorder') {
+                loRefreshPlans();
+                loRefreshOrderList();
+            }
+        };
+    }
 })();
 </script>
