@@ -14154,12 +14154,14 @@ window.submitEditSemi = function submitEditSemi() {
 </div>
 
 
-<script>
-// ══════════════════════════════════════════════════════════════
-// AUTH & USER MANAGEMENT SYSTEM
-// ══════════════════════════════════════════════════════════════
+<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</scr' + 'ipt>
 
-const WMS_VIEWS = [
+
+
+
+<script>
+// AUTH & USER MANAGEMENT SYSTEM
+var WMS_VIEWS = [
   { id: 'input',         label: 'Storage FG Input' },
   { id: 'report',        label: 'Warehouse Report' },
   { id: 'printtag',      label: 'Print Tag FG' },
@@ -14170,77 +14172,73 @@ const WMS_VIEWS = [
   { id: 'logistic-plan', label: 'วางแผนส่งมอบ' },
   { id: 'truck-dispatch',label: 'จัดรถส่งสินค้า' },
   { id: 'kpi-wh',        label: 'KPI WH & Logistic' },
-  { id: 'kpi-stock',     label: 'KPI Inventory' },
+  { id: 'kpi-stock',     label: 'KPI Inventory' }
 ];
 
-// ── Hash รหัสผ่านแบบง่าย (client-side) ──────────────────────
 function _hashPw(str) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
+  var h = 0x811c9dc5;
+  for (var i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h.toString(16);
 }
 
-// ── โหลด / บันทึก User Store ────────────────────────────────
 function _loadUsers() {
   try {
-    const raw = localStorage.getItem('wms_users');
+    var raw = localStorage.getItem('wms_users');
     if (raw) return JSON.parse(raw);
   } catch(e) {}
-  // Default: Admin account
-  const defaultUsers = [{
+  var def = [{
     username: 'Admin26052540',
     pwHash: _hashPw('26052540'),
     name: 'ผู้ดูแลระบบ',
     role: 'Administrator',
     isAdmin: true,
-    perms: WMS_VIEWS.map(v => v.id)
+    perms: WMS_VIEWS.map(function(v){ return v.id; })
   }];
-  _saveUsers(defaultUsers);
-  return defaultUsers;
+  _saveUsers(def);
+  return def;
 }
 
 function _saveUsers(users) {
   localStorage.setItem('wms_users', JSON.stringify(users));
 }
 
-// ── Session ─────────────────────────────────────────────────
-let _currentUser = null;
+var _currentUser = null;
 
 function _loadSession() {
   try {
-    const s = sessionStorage.getItem('wms_session');
+    var s = sessionStorage.getItem('wms_session');
     if (s) return JSON.parse(s);
   } catch(e) {}
   return null;
 }
-
 function _saveSession(user) {
   sessionStorage.setItem('wms_session', JSON.stringify({ username: user.username }));
 }
-
 function _clearSession() {
   sessionStorage.removeItem('wms_session');
 }
 
-// ── Login / Logout ───────────────────────────────────────────
 window.toggleLoginPw = function() {
-  const inp = document.getElementById('login-password');
-  const ico = document.getElementById('login-pw-icon');
+  var inp = document.getElementById('login-password');
+  var ico = document.getElementById('login-pw-icon');
+  if (!inp) return;
   if (inp.type === 'password') { inp.type = 'text'; ico.className = 'fas fa-eye-slash text-sm'; }
   else { inp.type = 'password'; ico.className = 'fas fa-eye text-sm'; }
 };
 
 window.doLogin = function() {
-  const uname = (document.getElementById('login-username').value || '').trim();
-  const pw    = (document.getElementById('login-password').value || '');
-  const errEl = document.getElementById('login-error');
+  var uname = (document.getElementById('login-username').value || '').trim();
+  var pw    = (document.getElementById('login-password').value || '');
+  var errEl = document.getElementById('login-error');
   errEl.classList.add('hidden');
-
-  const users = _loadUsers();
-  const user  = users.find(u => u.username === uname && u.pwHash === _hashPw(pw));
+  var users = _loadUsers();
+  var user = null;
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].username === uname && users[i].pwHash === _hashPw(pw)) { user = users[i]; break; }
+  }
   if (!user) {
     errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
     errEl.classList.remove('hidden');
@@ -14260,108 +14258,107 @@ window.doLogout = function() {
   document.getElementById('login-password').value = '';
   document.getElementById('login-error').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
-  // ซ่อน app
   document.getElementById('app-sidebar').style.display = 'none';
   document.getElementById('app-main').style.display = 'none';
 };
 
 function _applySession() {
-  // ซ่อน login screen
   document.getElementById('login-screen').classList.add('hidden');
-  // แสดง app (ใช้ style.display เพราะ lg:flex ใน Tailwind override classList)
   document.getElementById('app-sidebar').style.display = 'flex';
   document.getElementById('app-main').style.display = 'block';
-  // อัพเดต sidebar user info
-  document.getElementById('sidebar-user-name').textContent = _currentUser.name || _currentUser.username;
-  document.getElementById('sidebar-user-role').textContent = _currentUser.role || '';
-  // แสดงปุ่มจัดการผู้ใช้เฉพาะ Admin
-  const btnMgmt = document.getElementById('btn-user-mgmt');
-  if (btnMgmt) _currentUser.isAdmin ? btnMgmt.classList.remove('hidden') : btnMgmt.classList.add('hidden');
-  // ซ่อน nav ที่ไม่มีสิทธิ์
-  WMS_VIEWS.forEach(v => {
-    const btn = document.getElementById('nav-' + v.id);
-    if (btn) {
-      if (_currentUser.isAdmin || (_currentUser.perms || []).includes(v.id)) {
-        btn.style.display = '';
-      } else {
-        btn.style.display = 'none';
-      }
+  var nameEl = document.getElementById('sidebar-user-name');
+  var roleEl = document.getElementById('sidebar-user-role');
+  if (nameEl) nameEl.textContent = _currentUser.name || _currentUser.username;
+  if (roleEl) roleEl.textContent = _currentUser.role || '';
+  var btnMgmt = document.getElementById('btn-user-mgmt');
+  if (btnMgmt) {
+    if (_currentUser.isAdmin) btnMgmt.classList.remove('hidden');
+    else btnMgmt.classList.add('hidden');
+  }
+  WMS_VIEWS.forEach(function(v) {
+    var btn = document.getElementById('nav-' + v.id);
+    if (!btn) return;
+    if (_currentUser.isAdmin || (_currentUser.perms || []).indexOf(v.id) >= 0) {
+      btn.style.display = '';
+    } else {
+      btn.style.display = 'none';
     }
   });
-  // ไปหน้าแรกที่มีสิทธิ์
-  const firstView = _currentUser.isAdmin ? 'input' : ((_currentUser.perms || [])[0] || 'input');
+  var firstView = _currentUser.isAdmin ? 'input' : ((_currentUser.perms || [])[0] || 'input');
   if (typeof switchView === 'function') switchView(firstView);
 }
 
-// ── Guard switchView ─────────────────────────────────────────
-const _origSwitchView = window.switchView;
-window.switchView = function(view) {
-  if (_currentUser && !_currentUser.isAdmin && !(_currentUser.perms || []).includes(view)) {
-    showToast('⛔ คุณไม่มีสิทธิ์เข้าถึงหน้านี้', true);
-    return;
-  }
-  _origSwitchView(view);
-};
-
-// ══════════════════════════════════════════════════════════════
-// USER MANAGEMENT
-// ══════════════════════════════════════════════════════════════
-function _renderPermCheckboxes(containerId, checkedPerms) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.innerHTML = WMS_VIEWS.map(v => `
-    <label class="flex items-center gap-1.5 cursor-pointer bg-slate-700/50 rounded-lg px-2 py-1.5 hover:bg-slate-700 transition-colors">
-      <input type="checkbox" class="perm-cb accent-blue-500" value="${v.id}" ${(checkedPerms||[]).includes(v.id) ? 'checked' : ''}>
-      <span class="text-slate-300 font-bold">${v.label}</span>
-    </label>`).join('');
-}
-
-function _getCheckedPerms(containerId) {
-  const el = document.getElementById(containerId);
-  if (!el) return [];
-  return [...el.querySelectorAll('.perm-cb:checked')].map(cb => cb.value);
-}
-
 window.openUserMgmt = function() {
-  if (!_currentUser?.isAdmin) return;
+  if (!_currentUser || !_currentUser.isAdmin) return;
   _renderPermCheckboxes('um-new-perms', []);
   umRefreshList();
   document.getElementById('user-mgmt-modal').classList.remove('hidden');
 };
 
-window.umRefreshList = function() {
-  const users = _loadUsers();
-  const el = document.getElementById('um-user-list');
+function _renderPermCheckboxes(containerId, checkedPerms) {
+  var el = document.getElementById(containerId);
   if (!el) return;
-  el.innerHTML = users.map(u => `
-    <div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 flex items-center gap-3">
-      <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${u.isAdmin ? 'bg-amber-700' : 'bg-blue-800'}">
-        <i class="fas ${u.isAdmin ? 'fa-crown' : 'fa-user'} text-white text-sm"></i>
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="text-white font-black text-sm">${u.username} ${u.isAdmin ? '<span class="text-amber-400 text-[10px] ml-1">ADMIN</span>' : ''}</div>
-        <div class="text-slate-400 text-xs">${u.name || '—'} · ${u.role || '—'}</div>
-        <div class="text-slate-600 text-[10px] mt-0.5">${u.isAdmin ? 'เข้าได้ทุกหน้า' : (u.perms||[]).length + ' หน้า'}</div>
-      </div>
-      <div class="flex gap-2 flex-shrink-0">
-        <button onclick="umOpenEdit('${u.username}')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-black transition-all">
-          <i class="fas fa-edit"></i>
-        </button>
-        ${!u.isAdmin ? `<button onclick="umDeleteUser('${u.username}')" class="bg-rose-900/60 hover:bg-rose-800 text-rose-300 px-3 py-1.5 rounded-lg text-xs font-black transition-all"><i class="fas fa-trash"></i></button>` : ''}
-      </div>
-    </div>`).join('');
+  var html = '';
+  for (var i = 0; i < WMS_VIEWS.length; i++) {
+    var v = WMS_VIEWS[i];
+    var checked = (checkedPerms || []).indexOf(v.id) >= 0 ? 'checked' : '';
+    html += '<label class="flex items-center gap-1 cursor-pointer bg-slate-700/50 rounded-lg px-2 py-1.5 hover:bg-slate-700 transition-colors">'
+          + '<input type="checkbox" class="perm-cb accent-blue-500" value="' + v.id + '" ' + checked + '>'
+          + '<span class="text-slate-300 font-bold text-xs">' + v.label + '</span>'
+          + '</label>';
+  }
+  el.innerHTML = html;
+}
+
+function _getCheckedPerms(containerId) {
+  var el = document.getElementById(containerId);
+  if (!el) return [];
+  var cbs = el.querySelectorAll('.perm-cb:checked');
+  var result = [];
+  for (var i = 0; i < cbs.length; i++) result.push(cbs[i].value);
+  return result;
+}
+
+window.umRefreshList = function() {
+  var users = _loadUsers();
+  var el = document.getElementById('um-user-list');
+  if (!el) return;
+  var html = '';
+  for (var i = 0; i < users.length; i++) {
+    var u = users[i];
+    var adminBadge = u.isAdmin ? '<span class="text-amber-400 text-xs ml-1">ADMIN</span>' : '';
+    var permsText = u.isAdmin ? 'เข้าได้ทุกหน้า' : ((u.perms || []).length + ' หน้า');
+    var deleteBtn = !u.isAdmin
+      ? '<button onclick="umDeleteUser('' + u.username + '')" class="bg-rose-900/60 hover:bg-rose-800 text-rose-300 px-3 py-1.5 rounded-lg text-xs font-black transition-all"><i class="fas fa-trash"></i></button>'
+      : '';
+    html += '<div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 flex items-center gap-3">'
+          + '<div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ' + (u.isAdmin ? 'bg-amber-700' : 'bg-blue-800') + '">'
+          + '<i class="fas ' + (u.isAdmin ? 'fa-crown' : 'fa-user') + ' text-white text-sm"></i></div>'
+          + '<div class="flex-1 min-w-0">'
+          + '<div class="text-white font-black text-sm">' + u.username + adminBadge + '</div>'
+          + '<div class="text-slate-400 text-xs">' + (u.name || '—') + ' · ' + (u.role || '—') + '</div>'
+          + '<div class="text-slate-600 text-xs mt-0.5">' + permsText + '</div>'
+          + '</div>'
+          + '<div class="flex gap-2 flex-shrink-0">'
+          + '<button onclick="umOpenEdit('' + u.username + '')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-black transition-all"><i class="fas fa-edit"></i></button>'
+          + deleteBtn
+          + '</div></div>';
+  }
+  el.innerHTML = html;
 };
 
 window.umAddUser = function() {
-  const uname = (document.getElementById('um-new-username').value || '').trim();
-  const pw    = (document.getElementById('um-new-password').value || '').trim();
-  const name  = (document.getElementById('um-new-name').value || '').trim();
-  const role  = (document.getElementById('um-new-role').value || '').trim();
-  if (!uname || !pw) return showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', true);
-  const users = _loadUsers();
-  if (users.find(u => u.username === uname)) return showToast('ชื่อผู้ใช้นี้มีอยู่แล้ว', true);
-  const perms = _getCheckedPerms('um-new-perms');
-  users.push({ username: uname, pwHash: _hashPw(pw), name, role, isAdmin: false, perms });
+  var uname = (document.getElementById('um-new-username').value || '').trim();
+  var pw    = (document.getElementById('um-new-password').value || '').trim();
+  var name  = (document.getElementById('um-new-name').value || '').trim();
+  var role  = (document.getElementById('um-new-role').value || '').trim();
+  if (!uname || !pw) { showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', true); return; }
+  var users = _loadUsers();
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].username === uname) { showToast('ชื่อผู้ใช้นี้มีอยู่แล้ว', true); return; }
+  }
+  var perms = _getCheckedPerms('um-new-perms');
+  users.push({ username: uname, pwHash: _hashPw(pw), name: name, role: role, isAdmin: false, perms: perms });
   _saveUsers(users);
   document.getElementById('um-new-username').value = '';
   document.getElementById('um-new-password').value = '';
@@ -14369,91 +14366,93 @@ window.umAddUser = function() {
   document.getElementById('um-new-role').value = '';
   _renderPermCheckboxes('um-new-perms', []);
   umRefreshList();
-  showToast('✅ เพิ่มผู้ใช้ ' + uname + ' สำเร็จ');
+  showToast('เพิ่มผู้ใช้ ' + uname + ' สำเร็จ');
 };
 
 window.umOpenEdit = function(username) {
-  const users = _loadUsers();
-  const u = users.find(x => x.username === username);
+  var users = _loadUsers();
+  var u = null;
+  for (var i = 0; i < users.length; i++) { if (users[i].username === username) { u = users[i]; break; } }
   if (!u) return;
   document.getElementById('um-edit-username').value = u.username;
   document.getElementById('um-edit-name').value = u.name || '';
   document.getElementById('um-edit-role').value = u.role || '';
   document.getElementById('um-edit-password').value = '';
-  _renderPermCheckboxes('um-edit-perms', u.isAdmin ? WMS_VIEWS.map(v=>v.id) : (u.perms || []));
-  // ถ้า Admin ล็อค checkbox
+  _renderPermCheckboxes('um-edit-perms', u.isAdmin ? WMS_VIEWS.map(function(v){ return v.id; }) : (u.perms || []));
   if (u.isAdmin) {
-    document.querySelectorAll('#um-edit-perms .perm-cb').forEach(cb => cb.disabled = true);
+    var cbs = document.querySelectorAll('#um-edit-perms .perm-cb');
+    for (var i = 0; i < cbs.length; i++) cbs[i].disabled = true;
   }
   document.getElementById('um-edit-modal').classList.remove('hidden');
 };
 
 window.umSaveEdit = function() {
-  const username = document.getElementById('um-edit-username').value;
-  const users = _loadUsers();
-  const idx = users.findIndex(u => u.username === username);
+  var username = document.getElementById('um-edit-username').value;
+  var users = _loadUsers();
+  var idx = -1;
+  for (var i = 0; i < users.length; i++) { if (users[i].username === username) { idx = i; break; } }
   if (idx < 0) return;
-  const newPw = (document.getElementById('um-edit-password').value || '').trim();
+  var newPw = (document.getElementById('um-edit-password').value || '').trim();
   if (newPw) users[idx].pwHash = _hashPw(newPw);
   users[idx].name = (document.getElementById('um-edit-name').value || '').trim();
   users[idx].role = (document.getElementById('um-edit-role').value || '').trim();
   if (!users[idx].isAdmin) users[idx].perms = _getCheckedPerms('um-edit-perms');
   _saveUsers(users);
-  // อัพเดต currentUser ถ้าเป็น user ที่ login อยู่
   if (_currentUser && _currentUser.username === username) {
     _currentUser = users[idx];
     _saveSession(_currentUser);
   }
   document.getElementById('um-edit-modal').classList.add('hidden');
   umRefreshList();
-  showToast('✅ บันทึกข้อมูลสำเร็จ');
+  showToast('บันทึกข้อมูลสำเร็จ');
 };
 
 window.umDeleteUser = function(username) {
   if (!confirm('ลบผู้ใช้ "' + username + '" ใช่ไหมครับ?')) return;
-  let users = _loadUsers();
-  users = users.filter(u => u.username !== username);
-  _saveUsers(users);
+  var users = _loadUsers();
+  var newUsers = [];
+  for (var i = 0; i < users.length; i++) { if (users[i].username !== username) newUsers.push(users[i]); }
+  _saveUsers(newUsers);
   umRefreshList();
-  showToast('🗑️ ลบผู้ใช้สำเร็จ');
+  showToast('ลบผู้ใช้สำเร็จ');
 };
 
-// ── Auto-init ────────────────────────────────────────────────
-(function initAuth() {
-  // ซ่อน app ก่อนเสมอ
-  const sidebar = document.getElementById('app-sidebar');
-  const main    = document.getElementById('app-main');
-  if (sidebar) sidebar.style.display = 'none';
-  if (main)    main.style.display = 'none';
+// Guard switchView
+document.addEventListener('DOMContentLoaded', function() {
+  var _origSV = window.switchView;
+  if (_origSV) {
+    window.switchView = function(view) {
+      if (_currentUser && !_currentUser.isAdmin && (_currentUser.perms || []).indexOf(view) < 0) {
+        if (typeof showToast === 'function') showToast('คุณไม่มีสิทธิ์เข้าถึงหน้านี้', true);
+        return;
+      }
+      _origSV(view);
+    };
+  }
 
-  // ตรวจ session ที่มีอยู่
-  const session = _loadSession();
+  // ซ่อน/แสดง app ตาม session
+  var sidebar = document.getElementById('app-sidebar');
+  var main    = document.getElementById('app-main');
+  var session = _loadSession();
   if (session) {
-    const users = _loadUsers();
-    const user  = users.find(u => u.username === session.username);
+    var users = _loadUsers();
+    var user = null;
+    for (var i = 0; i < users.length; i++) { if (users[i].username === session.username) { user = users[i]; break; } }
     if (user) {
       _currentUser = user;
-      // รอ DOM โหลดเสร็จก่อน apply
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _applySession);
-      } else {
-        _applySession();
-      }
+      _applySession();
       return;
     }
   }
-  // ไม่มี session → แสดง login screen
-  const loginScreen = document.getElementById('login-screen');
-  if (loginScreen) loginScreen.classList.remove('hidden');
-  document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('login-username')?.focus();
-  });
-})();
+  // ไม่มี session
+  if (sidebar) sidebar.style.display = 'none';
+  if (main)    main.style.display = 'none';
+  var ls = document.getElementById('login-screen');
+  if (ls) ls.classList.remove('hidden');
+  var lu = document.getElementById('login-username');
+  if (lu) lu.focus();
+});
 </script>
-
-<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</scr' + 'ipt>
-
-
 
 </body>
 </html>`;
