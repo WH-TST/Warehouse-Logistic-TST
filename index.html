@@ -29536,7 +29536,14 @@ window.openKpiWHEditModal = function openKpiWHEditModal(isoDate) {
     // Space Breakdown
     const planHEl = safeGet('kpi-edit-space-planhours');
     if (planHEl) planHEl.textContent = (auto.planHours !== null && auto.planHours !== undefined) ? auto.planHours.toFixed(1) + ' ชม.' : '—';
-    setField('kpi-edit-breakdownMins', '');
+    // Back-calculate breakdownMins จาก spaceBreakdown% ที่บันทึกไว้
+    const planM = auto.planMinutes ?? 0;
+    if (saved.spaceBreakdown !== null && saved.spaceBreakdown !== undefined && planM > 0) {
+        const backMins = Math.round(planM * (1 - saved.spaceBreakdown / 100));
+        setField('kpi-edit-breakdownMins', backMins);
+    } else {
+        setField('kpi-edit-breakdownMins', '');
+    }
     const resEl = safeGet('kpi-edit-space-result');
     if (resEl) resEl.textContent = (saved.spaceBreakdown !== null && saved.spaceBreakdown !== undefined) ? 'บันทึกไว้: ' + saved.spaceBreakdown.toFixed(1) + '%' : '—';
 
