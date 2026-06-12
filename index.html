@@ -30790,18 +30790,35 @@ function _wmRenderMachines(data) {
             if (invItems.length === 0 && !isRunning) {
                 info.innerHTML = '<span class="text-slate-600 italic text-xs">ไม่มีสต็อก</span>';
             } else {
-                const rows = invItems.slice(0, 5).map(p => `
-                  <div class="flex items-center gap-2 py-1 border-b border-slate-700/50 last:border-0">
+                const rows = invItems.slice(0, 5).map(p => {
+                  let floorBaseTxt = '';
+                  if (p.todayQty > 0) {
+                    const prod = _wmFindProd(p.sku);
+                    const ppb  = prod?.linesPerBundle || prod?.pcsPerBundle || 1;
+                    const bw   = prod?.bundleWidth  || 0;
+                    const bh   = prod?.bundleHeight || 0;
+                    const todayBundles = Math.ceil(p.todayQty / ppb);
+                    if (todayBundles > 0 && bw && bh) {
+                      const si = _wmCalcStackInfo(todayBundles, bw, bh);
+                      if (si) floorBaseTxt = `<div class="text-amber-400 text-[10px] font-black mt-0.5">⬛ ฐาน ${si.cols} มัด · ${(si.usedWidthCm/100).toFixed(2)} ม. (${todayBundles} มัด / ${si.layers} ชั้น)</div>`;
+                    } else if (todayBundles > 0) {
+                      floorBaseTxt = `<div class="text-amber-400/70 text-[10px] font-bold mt-0.5">⬛ ~${todayBundles} มัด</div>`;
+                    }
+                  }
+                  return `
+                  <div class="flex items-start gap-2 py-1 border-b border-slate-700/50 last:border-0">
                     <div class="flex-1 min-w-0">
                       <div class="text-white font-black text-xs truncate">${p.sku}</div>
                       ${p.name ? `<div class="text-slate-500 text-[10px] truncate">${p.name}</div>` : ''}
+                      ${floorBaseTxt}
                     </div>
                     <div class="text-right flex-shrink-0">
                       <div class="text-sky-300 font-black text-xs">${fmtN(p.pcs)} <span class="text-slate-500 font-normal text-[9px]">โซน</span></div>
                       ${p.plannedOut > 0 ? `<div class="text-rose-400 text-[10px] font-bold">-${fmtN(p.plannedOut)} แผนส่ง</div>` : ''}
                       ${p.todayQty > 0   ? `<div class="text-emerald-400 text-[10px] font-bold">+${fmtN(p.todayQty)} ผลิต</div>` : ''}
                     </div>
-                  </div>`).join('');
+                  </div>`;
+                }).join('');
                 const more = invItems.length > 5
                     ? `<div class="text-slate-600 text-[10px] pt-1">+${invItems.length - 5} SKU อื่นๆ</div>` : '';
                 info.innerHTML = rows + more;
