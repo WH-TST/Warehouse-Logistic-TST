@@ -866,6 +866,130 @@ thead.sticky {
 </head>
 <body>
 
+<!-- ══════════════════════════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════════════════════════ -->
+<div id="login-screen" class="fixed inset-0 z-[9999] flex items-center justify-center" style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 50%,#0f172a 100%);">
+  <div class="w-full max-w-sm mx-4">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
+        <i class="fas fa-warehouse text-white text-3xl"></i>
+      </div>
+      <h1 class="text-white font-black text-2xl tracking-tight">WMS</h1>
+      <p class="text-slate-400 text-sm mt-1">Warehouse & Logistic Management</p>
+    </div>
+    <!-- Card -->
+    <div class="bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-2xl p-7 shadow-2xl">
+      <h2 class="text-white font-black text-lg mb-6 text-center">เข้าสู่ระบบ</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1.5 block">ชื่อผู้ใช้</label>
+          <input id="login-username" type="text" autocomplete="username"
+            class="w-full bg-slate-700 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-colors"
+            placeholder="Username" onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+        </div>
+        <div>
+          <label class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1.5 block">รหัสผ่าน</label>
+          <div class="relative">
+            <input id="login-password" type="password" autocomplete="current-password"
+              class="w-full bg-slate-700 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-colors pr-11"
+              placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+            <button onclick="toggleLoginPw()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors">
+              <i id="login-pw-icon" class="fas fa-eye text-sm"></i>
+            </button>
+          </div>
+        </div>
+        <div id="login-error" class="hidden bg-rose-900/50 border border-rose-700 text-rose-300 text-xs font-bold px-4 py-2.5 rounded-xl text-center"></div>
+        <button onclick="doLogin()"
+          class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-black py-3 rounded-xl text-sm transition-all shadow-lg mt-2">
+          <i class="fas fa-sign-in-alt mr-2"></i> เข้าสู่ระบบ
+        </button>
+      </div>
+    </div>
+    <p class="text-slate-600 text-xs text-center mt-4">T Standard Steel © 2025</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     USER MANAGEMENT MODAL (Admin only)
+══════════════════════════════════════════════════════════════ -->
+<div id="user-mgmt-modal" class="fixed inset-0 bg-black/70 hidden z-[200] flex items-center justify-center px-4 backdrop-blur-sm">
+  <div class="bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-700 flex flex-col max-h-[90vh]">
+    <div class="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center justify-between rounded-t-2xl border-b border-slate-600 flex-shrink-0">
+      <h3 class="text-white font-black text-lg flex items-center gap-2"><i class="fas fa-users-cog text-blue-400"></i> จัดการผู้ใช้งาน</h3>
+      <button onclick="document.getElementById('user-mgmt-modal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fas fa-times text-lg"></i></button>
+    </div>
+    <div class="p-5 overflow-y-auto flex-1 space-y-4">
+      <!-- Add user form -->
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+        <p class="text-white font-black text-sm mb-3 flex items-center gap-2"><i class="fas fa-user-plus text-emerald-400"></i> เพิ่มผู้ใช้ใหม่</p>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="text-slate-400 text-xs font-bold mb-1 block">ชื่อผู้ใช้ *</label>
+            <input id="um-new-username" type="text" placeholder="Username" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 text-xs font-bold mb-1 block">รหัสผ่าน *</label>
+            <input id="um-new-password" type="text" placeholder="Password" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 text-xs font-bold mb-1 block">ชื่อ-นามสกุล</label>
+            <input id="um-new-name" type="text" placeholder="ชื่อที่แสดง" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 text-xs font-bold mb-1 block">ตำแหน่ง</label>
+            <input id="um-new-role" type="text" placeholder="เช่น พนักงานคลัง" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+        </div>
+        <p class="text-slate-400 text-xs font-bold mb-2">สิทธิ์เข้าถึงหน้า:</p>
+        <div id="um-new-perms" class="grid grid-cols-2 gap-1.5 mb-3 text-xs"></div>
+        <button onclick="umAddUser()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl font-black text-sm transition-all">
+          <i class="fas fa-plus mr-1"></i> เพิ่มผู้ใช้
+        </button>
+      </div>
+      <!-- User list -->
+      <div id="um-user-list" class="space-y-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT USER MODAL -->
+<div id="um-edit-modal" class="fixed inset-0 bg-black/80 hidden z-[300] flex items-center justify-center px-4 backdrop-blur-sm">
+  <div class="bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-700">
+    <div class="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center justify-between rounded-t-2xl border-b border-slate-600">
+      <h3 class="text-white font-black text-base flex items-center gap-2"><i class="fas fa-user-edit text-amber-400"></i> แก้ไขผู้ใช้</h3>
+      <button onclick="document.getElementById('um-edit-modal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-5 space-y-3">
+      <input id="um-edit-username" type="hidden">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">ชื่อ-นามสกุล</label>
+          <input id="um-edit-name" type="text" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">ตำแหน่ง</label>
+          <input id="um-edit-role" type="text" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+      </div>
+      <div>
+        <label class="text-slate-400 text-xs font-bold mb-1 block">รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)</label>
+        <input id="um-edit-password" type="text" placeholder="ใหม่..." class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+      </div>
+      <div>
+        <p class="text-slate-400 text-xs font-bold mb-2">สิทธิ์เข้าถึงหน้า:</p>
+        <div id="um-edit-perms" class="grid grid-cols-2 gap-1.5 text-xs"></div>
+      </div>
+      <div class="flex gap-3 justify-end pt-2">
+        <button onclick="document.getElementById('um-edit-modal').classList.add('hidden')" class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-xl font-black text-sm">ยกเลิก</button>
+        <button onclick="umSaveEdit()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl font-black text-sm"><i class="fas fa-save mr-1"></i> บันทึก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
     <aside id="app-sidebar" class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 hidden lg:flex flex-col" style="transition:transform 0.25s ease;">
         <!-- ── ปุ่ม collapse — ลอยที่ขอบขวาบนของ sidebar ── -->
         <button onclick="toggleSidebar()" title="ซ่อน Sidebar"
@@ -962,8 +1086,24 @@ thead.sticky {
         </nav>
 
         <!-- ── Footer ─────────────────────────────────────────────── -->
-        <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.1);">
-            <p id="sidebar-footer-text" style="font-size:9px;color:#b08050;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">FlowWH · WH &amp; Logistic Management</p>
+        <div style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.1);">
+            <div id="sidebar-user-info" class="flex items-center gap-2 mb-2 px-1">
+              <div class="w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-user text-white text-xs"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div id="sidebar-user-name" class="text-white font-black text-xs truncate">—</div>
+                <div id="sidebar-user-role" class="text-slate-400 text-[10px] truncate">—</div>
+              </div>
+            </div>
+            <div class="flex gap-1.5">
+              <button id="btn-user-mgmt" onclick="openUserMgmt()" class="hidden flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1">
+                <i class="fas fa-users-cog"></i> ผู้ใช้
+              </button>
+              <button onclick="doLogout()" class="flex-1 bg-rose-900/60 hover:bg-rose-800 text-rose-300 px-2 py-1.5 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-1">
+                <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+              </button>
+            </div>
         </div>
 
     </aside>
@@ -14015,6 +14155,304 @@ window.submitEditSemi = function submitEditSemi() {
 
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</scr' + 'ipt>
 
+
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// AUTH & USER MANAGEMENT SYSTEM
+// ══════════════════════════════════════════════════════════════
+
+const WMS_VIEWS = [
+  { id: 'input',         label: 'Storage FG Input' },
+  { id: 'report',        label: 'Warehouse Report' },
+  { id: 'printtag',      label: 'Print Tag FG' },
+  { id: 'analytics',     label: 'Analytics' },
+  { id: 'overdue',       label: 'รายการจองค้าง' },
+  { id: 'whactivity',    label: 'WH Activity Log' },
+  { id: 'warehouse-map', label: 'ผังคลังสินค้า' },
+  { id: 'logistic-plan', label: 'วางแผนส่งมอบ' },
+  { id: 'truck-dispatch',label: 'จัดรถส่งสินค้า' },
+  { id: 'kpi-wh',        label: 'KPI WH & Logistic' },
+  { id: 'kpi-stock',     label: 'KPI Inventory' },
+];
+
+// ── Hash รหัสผ่านแบบง่าย (client-side) ──────────────────────
+function _hashPw(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  return h.toString(16);
+}
+
+// ── โหลด / บันทึก User Store ────────────────────────────────
+function _loadUsers() {
+  try {
+    const raw = localStorage.getItem('wms_users');
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  // Default: Admin account
+  const defaultUsers = [{
+    username: 'Admin26052540',
+    pwHash: _hashPw('26052540'),
+    name: 'ผู้ดูแลระบบ',
+    role: 'Administrator',
+    isAdmin: true,
+    perms: WMS_VIEWS.map(v => v.id)
+  }];
+  _saveUsers(defaultUsers);
+  return defaultUsers;
+}
+
+function _saveUsers(users) {
+  localStorage.setItem('wms_users', JSON.stringify(users));
+}
+
+// ── Session ─────────────────────────────────────────────────
+let _currentUser = null;
+
+function _loadSession() {
+  try {
+    const s = sessionStorage.getItem('wms_session');
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return null;
+}
+
+function _saveSession(user) {
+  sessionStorage.setItem('wms_session', JSON.stringify({ username: user.username }));
+}
+
+function _clearSession() {
+  sessionStorage.removeItem('wms_session');
+}
+
+// ── Login / Logout ───────────────────────────────────────────
+window.toggleLoginPw = function() {
+  const inp = document.getElementById('login-password');
+  const ico = document.getElementById('login-pw-icon');
+  if (inp.type === 'password') { inp.type = 'text'; ico.className = 'fas fa-eye-slash text-sm'; }
+  else { inp.type = 'password'; ico.className = 'fas fa-eye text-sm'; }
+};
+
+window.doLogin = function() {
+  const uname = (document.getElementById('login-username').value || '').trim();
+  const pw    = (document.getElementById('login-password').value || '');
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+
+  const users = _loadUsers();
+  const user  = users.find(u => u.username === uname && u.pwHash === _hashPw(pw));
+  if (!user) {
+    errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+    errEl.classList.remove('hidden');
+    document.getElementById('login-password').value = '';
+    return;
+  }
+  _currentUser = user;
+  _saveSession(user);
+  _applySession();
+};
+
+window.doLogout = function() {
+  if (!confirm('ต้องการออกจากระบบใช่ไหมครับ?')) return;
+  _currentUser = null;
+  _clearSession();
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+  // ซ่อน app
+  document.getElementById('app-sidebar').classList.add('hidden');
+  document.getElementById('app-main').classList.add('hidden');
+};
+
+function _applySession() {
+  // ซ่อน login screen
+  document.getElementById('login-screen').classList.add('hidden');
+  // แสดง app
+  document.getElementById('app-sidebar').classList.remove('hidden');
+  document.getElementById('app-main').classList.remove('hidden');
+  // อัพเดต sidebar user info
+  document.getElementById('sidebar-user-name').textContent = _currentUser.name || _currentUser.username;
+  document.getElementById('sidebar-user-role').textContent = _currentUser.role || '';
+  // แสดงปุ่มจัดการผู้ใช้เฉพาะ Admin
+  const btnMgmt = document.getElementById('btn-user-mgmt');
+  if (btnMgmt) _currentUser.isAdmin ? btnMgmt.classList.remove('hidden') : btnMgmt.classList.add('hidden');
+  // ซ่อน nav ที่ไม่มีสิทธิ์
+  WMS_VIEWS.forEach(v => {
+    const btn = document.getElementById('nav-' + v.id);
+    if (btn) {
+      if (_currentUser.isAdmin || (_currentUser.perms || []).includes(v.id)) {
+        btn.style.display = '';
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+  });
+  // ไปหน้าแรกที่มีสิทธิ์
+  const firstView = _currentUser.isAdmin ? 'input' : ((_currentUser.perms || [])[0] || 'input');
+  if (typeof switchView === 'function') switchView(firstView);
+}
+
+// ── Guard switchView ─────────────────────────────────────────
+const _origSwitchView = window.switchView;
+window.switchView = function(view) {
+  if (_currentUser && !_currentUser.isAdmin && !(_currentUser.perms || []).includes(view)) {
+    showToast('⛔ คุณไม่มีสิทธิ์เข้าถึงหน้านี้', true);
+    return;
+  }
+  _origSwitchView(view);
+};
+
+// ══════════════════════════════════════════════════════════════
+// USER MANAGEMENT
+// ══════════════════════════════════════════════════════════════
+function _renderPermCheckboxes(containerId, checkedPerms) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = WMS_VIEWS.map(v => `
+    <label class="flex items-center gap-1.5 cursor-pointer bg-slate-700/50 rounded-lg px-2 py-1.5 hover:bg-slate-700 transition-colors">
+      <input type="checkbox" class="perm-cb accent-blue-500" value="${v.id}" ${(checkedPerms||[]).includes(v.id) ? 'checked' : ''}>
+      <span class="text-slate-300 font-bold">${v.label}</span>
+    </label>`).join('');
+}
+
+function _getCheckedPerms(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return [];
+  return [...el.querySelectorAll('.perm-cb:checked')].map(cb => cb.value);
+}
+
+window.openUserMgmt = function() {
+  if (!_currentUser?.isAdmin) return;
+  _renderPermCheckboxes('um-new-perms', []);
+  umRefreshList();
+  document.getElementById('user-mgmt-modal').classList.remove('hidden');
+};
+
+window.umRefreshList = function() {
+  const users = _loadUsers();
+  const el = document.getElementById('um-user-list');
+  if (!el) return;
+  el.innerHTML = users.map(u => `
+    <div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${u.isAdmin ? 'bg-amber-700' : 'bg-blue-800'}">
+        <i class="fas ${u.isAdmin ? 'fa-crown' : 'fa-user'} text-white text-sm"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-white font-black text-sm">${u.username} ${u.isAdmin ? '<span class="text-amber-400 text-[10px] ml-1">ADMIN</span>' : ''}</div>
+        <div class="text-slate-400 text-xs">${u.name || '—'} · ${u.role || '—'}</div>
+        <div class="text-slate-600 text-[10px] mt-0.5">${u.isAdmin ? 'เข้าได้ทุกหน้า' : (u.perms||[]).length + ' หน้า'}</div>
+      </div>
+      <div class="flex gap-2 flex-shrink-0">
+        <button onclick="umOpenEdit('${u.username}')" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-black transition-all">
+          <i class="fas fa-edit"></i>
+        </button>
+        ${!u.isAdmin ? `<button onclick="umDeleteUser('${u.username}')" class="bg-rose-900/60 hover:bg-rose-800 text-rose-300 px-3 py-1.5 rounded-lg text-xs font-black transition-all"><i class="fas fa-trash"></i></button>` : ''}
+      </div>
+    </div>`).join('');
+};
+
+window.umAddUser = function() {
+  const uname = (document.getElementById('um-new-username').value || '').trim();
+  const pw    = (document.getElementById('um-new-password').value || '').trim();
+  const name  = (document.getElementById('um-new-name').value || '').trim();
+  const role  = (document.getElementById('um-new-role').value || '').trim();
+  if (!uname || !pw) return showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', true);
+  const users = _loadUsers();
+  if (users.find(u => u.username === uname)) return showToast('ชื่อผู้ใช้นี้มีอยู่แล้ว', true);
+  const perms = _getCheckedPerms('um-new-perms');
+  users.push({ username: uname, pwHash: _hashPw(pw), name, role, isAdmin: false, perms });
+  _saveUsers(users);
+  document.getElementById('um-new-username').value = '';
+  document.getElementById('um-new-password').value = '';
+  document.getElementById('um-new-name').value = '';
+  document.getElementById('um-new-role').value = '';
+  _renderPermCheckboxes('um-new-perms', []);
+  umRefreshList();
+  showToast('✅ เพิ่มผู้ใช้ ' + uname + ' สำเร็จ');
+};
+
+window.umOpenEdit = function(username) {
+  const users = _loadUsers();
+  const u = users.find(x => x.username === username);
+  if (!u) return;
+  document.getElementById('um-edit-username').value = u.username;
+  document.getElementById('um-edit-name').value = u.name || '';
+  document.getElementById('um-edit-role').value = u.role || '';
+  document.getElementById('um-edit-password').value = '';
+  _renderPermCheckboxes('um-edit-perms', u.isAdmin ? WMS_VIEWS.map(v=>v.id) : (u.perms || []));
+  // ถ้า Admin ล็อค checkbox
+  if (u.isAdmin) {
+    document.querySelectorAll('#um-edit-perms .perm-cb').forEach(cb => cb.disabled = true);
+  }
+  document.getElementById('um-edit-modal').classList.remove('hidden');
+};
+
+window.umSaveEdit = function() {
+  const username = document.getElementById('um-edit-username').value;
+  const users = _loadUsers();
+  const idx = users.findIndex(u => u.username === username);
+  if (idx < 0) return;
+  const newPw = (document.getElementById('um-edit-password').value || '').trim();
+  if (newPw) users[idx].pwHash = _hashPw(newPw);
+  users[idx].name = (document.getElementById('um-edit-name').value || '').trim();
+  users[idx].role = (document.getElementById('um-edit-role').value || '').trim();
+  if (!users[idx].isAdmin) users[idx].perms = _getCheckedPerms('um-edit-perms');
+  _saveUsers(users);
+  // อัพเดต currentUser ถ้าเป็น user ที่ login อยู่
+  if (_currentUser && _currentUser.username === username) {
+    _currentUser = users[idx];
+    _saveSession(_currentUser);
+  }
+  document.getElementById('um-edit-modal').classList.add('hidden');
+  umRefreshList();
+  showToast('✅ บันทึกข้อมูลสำเร็จ');
+};
+
+window.umDeleteUser = function(username) {
+  if (!confirm('ลบผู้ใช้ "' + username + '" ใช่ไหมครับ?')) return;
+  let users = _loadUsers();
+  users = users.filter(u => u.username !== username);
+  _saveUsers(users);
+  umRefreshList();
+  showToast('🗑️ ลบผู้ใช้สำเร็จ');
+};
+
+// ── Auto-init ────────────────────────────────────────────────
+(function initAuth() {
+  // ซ่อน app ก่อนเสมอ
+  const sidebar = document.getElementById('app-sidebar');
+  const main    = document.getElementById('app-main');
+  if (sidebar) sidebar.classList.add('hidden');
+  if (main)    main.classList.add('hidden');
+
+  // ตรวจ session ที่มีอยู่
+  const session = _loadSession();
+  if (session) {
+    const users = _loadUsers();
+    const user  = users.find(u => u.username === session.username);
+    if (user) {
+      _currentUser = user;
+      // รอ DOM โหลดเสร็จก่อน apply
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _applySession);
+      } else {
+        _applySession();
+      }
+      return;
+    }
+  }
+  // ไม่มี session → แสดง login screen
+  const loginScreen = document.getElementById('login-screen');
+  if (loginScreen) loginScreen.classList.remove('hidden');
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('login-username')?.focus();
+  });
+})();
+</script>
 
 </body>
 </html>`;
