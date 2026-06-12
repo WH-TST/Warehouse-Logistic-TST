@@ -54,7 +54,9 @@ function _handleApiPost(e) {
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
       'getTagSystemStartDate','setTagSystemStartDate',
-      'getDeliveryTypeData'
+      'getDeliveryTypeData',
+      'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
+      'loSubmitLift','loCompleteOrder','loGetOrderStatus'
     ];
 
     if (allowedActions.indexOf(action) === -1) {
@@ -237,7 +239,9 @@ function doGet(e) {
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
           'getTagSystemStartDate','setTagSystemStartDate',
-          'getDeliveryTypeData'
+          'getDeliveryTypeData',
+          'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
+          'loSubmitLift','loCompleteOrder','loGetOrderStatus'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -10180,4 +10184,224 @@ function calcSmartMoveRecommendations(params) {
   } catch(e) {
     return { success: false, message: e.toString() };
   }
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LOADING APP API — Paperless Loading System
+// ═════════════════════════════════════════════════════════════════════════════
+
+var LO_ORDERS_SHEET = 'Loading_Orders';
+var LO_LOG_SHEET    = 'Loading_Log';
+
+var LO_ORDER_HEADERS = [
+  'Order ID','สร้างเมื่อ','Plan ID','ทะเบียนรถ','สร้างโดย',
+  'สถานะ','รายการสินค้า (JSON)','เริ่มโหลดเมื่อ','เสร็จเมื่อ',
+  'พนักงานโหลด','น้ำหนักรวม (kg)','หมายเหตุ'
+];
+var LO_LOG_HEADERS = [
+  'Log ID','Order ID','เวลา','SKU','ชื่อสินค้า',
+  'จำนวนเส้น','น้ำหนัก (kg)','kg/เส้น','พนักงาน'
+];
+
+function _loGetOrCreateSheet(ss, name, headers) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    var hr = sheet.getRange(1, 1, 1, headers.length);
+    hr.setValues([headers]);
+    hr.setFontWeight('bold').setBackground('#1e293b').setFontColor('#f8fafc');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function _loParseJSON(v) {
+  try { return JSON.parse(v); } catch(e) { return []; }
+}
+
+// ── สร้างออเดอร์ใหม่ (เรียกจาก WMS ฝั่งจัดส่ง) ─────────────────────────────
+function loCreateOrder(planId, truck, createdBy, itemsJSON) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = _loGetOrCreateSheet(ss, LO_ORDERS_SHEET, LO_ORDER_HEADERS);
+    var now   = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    var orderId = 'LO' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+    sheet.appendRow([
+      orderId, now,
+      planId || '', truck || '', createdBy || '',
+      'PENDING', typeof itemsJSON === 'string' ? itemsJSON : JSON.stringify(itemsJSON || []),
+      '', '', '', '', ''
+    ]);
+    return { success: true, orderId: orderId };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── ดึงออเดอร์ที่รอโหลด + กำลังโหลด (Loading App polling) ──────────────────
+function loGetPendingOrders() {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(LO_ORDERS_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, orders: [] };
+    var data = sheet.getDataRange().getValues();
+    var orders = [];
+    for (var i = 1; i < data.length; i++) {
+      var status = String(data[i][5] || '').trim();
+      if (status === 'PENDING' || status === 'LOADING') {
+        orders.push({
+          orderId:   String(data[i][0]),
+          createdAt: String(data[i][1]),
+          planId:    String(data[i][2]),
+          truck:     String(data[i][3]),
+          createdBy: String(data[i][4]),
+          status:    status,
+          items:     _loParseJSON(data[i][6]),
+          startedAt: String(data[i][7] || ''),
+        });
+      }
+    }
+    return { success: true, orders: orders };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── ดูรายละเอียด + lifts ของออเดอร์ (Loading App) ────────────────────────────
+function loGetOrderDetail(orderId) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(LO_ORDERS_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'ไม่พบออเดอร์' };
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === orderId) {
+        var lifts = _loGetLifts(ss, orderId);
+        return {
+          success: true,
+          order: {
+            orderId:   String(data[i][0]),
+            createdAt: String(data[i][1]),
+            planId:    String(data[i][2]),
+            truck:     String(data[i][3]),
+            createdBy: String(data[i][4]),
+            status:    String(data[i][5]),
+            items:     _loParseJSON(data[i][6]),
+            startedAt: String(data[i][7] || ''),
+          },
+          lifts: lifts,
+        };
+      }
+    }
+    return { success: false, message: 'ไม่พบ Order ID: ' + orderId };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── บันทึก 1 รอบการยก (Loading App) ──────────────────────────────────────────
+function loSubmitLift(orderId, sku, skuName, lines, weight, employee) {
+  try {
+    var ss       = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var logSheet = _loGetOrCreateSheet(ss, LO_LOG_SHEET, LO_LOG_HEADERS);
+    var ordSheet = ss.getSheetByName(LO_ORDERS_SHEET);
+    var now      = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    var logId    = 'LG' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+    var linesNum  = parseFloat(lines)  || 0;
+    var weightNum = parseFloat(weight) || 0;
+    var kgPerLine = linesNum > 0 ? Math.round((weightNum / linesNum) * 1000) / 1000 : 0;
+
+    logSheet.appendRow([logId, orderId, now, sku, skuName || '', linesNum, weightNum, kgPerLine, employee || '']);
+
+    // อัปเดตสถานะ order → LOADING + บันทึกเวลาเริ่ม
+    if (ordSheet && ordSheet.getLastRow() >= 2) {
+      var ordData = ordSheet.getDataRange().getValues();
+      for (var i = 1; i < ordData.length; i++) {
+        if (String(ordData[i][0]) === orderId) {
+          if (String(ordData[i][5]) === 'PENDING') {
+            ordSheet.getRange(i + 1, 6).setValue('LOADING');
+            ordSheet.getRange(i + 1, 8).setValue(now);
+          }
+          break;
+        }
+      }
+    }
+    return { success: true, logId: logId, kgPerLine: kgPerLine };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── ยืนยันโหลดเสร็จ (Loading App) ────────────────────────────────────────────
+function loCompleteOrder(orderId, employeeId, totalWeight) {
+  try {
+    var ss       = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ordSheet = ss.getSheetByName(LO_ORDERS_SHEET);
+    if (!ordSheet) return { success: false, message: 'ไม่พบชีต Loading_Orders' };
+    var now  = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+    var data = ordSheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === orderId) {
+        ordSheet.getRange(i + 1, 6).setValue('DONE');
+        ordSheet.getRange(i + 1, 9).setValue(now);
+        ordSheet.getRange(i + 1, 10).setValue(employeeId || '');
+        ordSheet.getRange(i + 1, 11).setValue(parseFloat(totalWeight) || 0);
+        return { success: true };
+      }
+    }
+    return { success: false, message: 'ไม่พบ Order ID: ' + orderId };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── เช็คสถานะออเดอร์ (WMS realtime) ─────────────────────────────────────────
+function loGetOrderStatus(orderId) {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(LO_ORDERS_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'ไม่พบชีต' };
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === orderId) {
+        var lifts = _loGetLifts(ss, orderId);
+        return {
+          success:      true,
+          orderId:      String(data[i][0]),
+          status:       String(data[i][5]),
+          startedAt:    String(data[i][7] || ''),
+          completedAt:  String(data[i][8] || ''),
+          employee:     String(data[i][9] || ''),
+          totalWeight:  parseFloat(data[i][10]) || 0,
+          lifts:        lifts,
+        };
+      }
+    }
+    return { success: false, message: 'ไม่พบ Order ID: ' + orderId };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── helper: ดึง lifts ของ order ───────────────────────────────────────────────
+function _loGetLifts(ss, orderId) {
+  var logSheet = ss.getSheetByName(LO_LOG_SHEET);
+  if (!logSheet || logSheet.getLastRow() < 2) return [];
+  var data  = logSheet.getDataRange().getValues();
+  var lifts = [];
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][1]) === orderId) {
+      lifts.push({
+        logId:     String(data[i][0]),
+        time:      String(data[i][2]),
+        sku:       String(data[i][3]),
+        skuName:   String(data[i][4]),
+        lines:     parseFloat(data[i][5]) || 0,
+        weight:    parseFloat(data[i][6]) || 0,
+        kgPerLine: parseFloat(data[i][7]) || 0,
+      });
+    }
+  }
+  return lifts;
 }
