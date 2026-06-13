@@ -3578,10 +3578,11 @@ thead.sticky {
   </div><!-- end logi-panel-preshipment -->
 
   <!-- ── TAB: สร้างออเดอร์โหลด (Admin only) ── -->
-  <div id="logi-panel-loadorder" class="hidden space-y-5">
+  <div id="logi-panel-loadorder" class="hidden space-y-4">
 
-    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
-      <div class="flex items-center gap-3 mb-1">
+    <!-- ── ส่วนสร้างออเดอร์ ── -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-5">
+      <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg" style="background:#065f46;">
           <i class="fas fa-truck-loading"></i>
         </div>
@@ -3591,60 +3592,131 @@ thead.sticky {
         </div>
       </div>
 
-      <!-- เลือกจากแผน -->
-      <div>
-        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">เลือกแผนจัดส่ง</label>
-        <div class="flex gap-3 items-end flex-wrap">
-          <select id="lo-plan-select" onchange="loOnPlanChange()"
-            class="flex-1 min-w-[220px] bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all cursor-pointer">
-            <option value="">— กรุณาเลือกแผน —</option>
-          </select>
-          <button onclick="loRefreshPlans()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-black text-sm transition-all flex items-center gap-2">
-            <i class="fas fa-sync-alt"></i> รีเฟรช
-          </button>
+      <!-- ทะเบียนรถ + วันที่ -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ทะเบียนรถ <span class="text-red-500">*</span></label>
+          <input id="lo-truck" oninput="loUpdateCreateBtn()" placeholder="เช่น กข-1234"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-800 outline-none focus:border-emerald-500 transition-all text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วันที่โหลด <span class="text-red-500">*</span></label>
+          <input id="lo-date" type="date" oninput="loUpdateCreateBtn()"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-800 outline-none focus:border-emerald-500 transition-all text-sm">
         </div>
       </div>
 
-      <!-- แสดงรายละเอียดแผนที่เลือก -->
-      <div id="lo-plan-detail" class="hidden rounded-xl border border-slate-200 overflow-hidden">
-        <div class="bg-slate-800 px-4 py-3 flex items-center justify-between">
-          <span class="text-white font-black text-sm flex items-center gap-2">
-            <i class="fas fa-info-circle text-emerald-400"></i> รายละเอียดแผน
-          </span>
-          <span id="lo-plan-badge" class="text-slate-300 text-xs font-bold"></span>
+      <!-- เลือกจากแผน (optional) -->
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">นำเข้าจากแผนจัดส่ง <span class="text-slate-400 font-normal normal-case">(ไม่บังคับ)</span></label>
+        <div class="flex gap-2 items-center">
+          <select id="lo-plan-select" onchange="loOnPlanChange()"
+            class="flex-1 bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all cursor-pointer text-sm">
+            <option value="">— ไม่เลือกแผน / กรอกเอง —</option>
+          </select>
+          <button onclick="loRefreshPlans()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2.5 rounded-xl font-black text-sm transition-all flex items-center gap-1.5 whitespace-nowrap">
+            <i class="fas fa-sync-alt"></i>
+          </button>
         </div>
-        <div class="p-4 space-y-3 bg-white">
-          <div class="grid grid-cols-2 gap-3 text-sm">
-            <div><span class="text-slate-400 font-bold">ทะเบียนรถ:</span> <span id="lo-detail-truck" class="font-black text-slate-800">—</span></div>
-            <div><span class="text-slate-400 font-bold">วันที่:</span> <span id="lo-detail-date" class="font-black text-slate-800">—</span></div>
-            <div><span class="text-slate-400 font-bold">Plan ID:</span> <span id="lo-detail-planid" class="font-black text-slate-800">—</span></div>
-            <div><span class="text-slate-400 font-bold">น้ำหนัก:</span> <span id="lo-detail-weight" class="font-black text-slate-800">—</span></div>
+        <div id="lo-plan-info" class="hidden mt-2 text-xs text-slate-500 font-semibold bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
+          <i class="fas fa-check-circle text-emerald-500"></i>
+          <span id="lo-plan-info-text"></span>
+        </div>
+      </div>
+
+      <!-- รายการสินค้า -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-black text-slate-500 uppercase">รายการสินค้า</label>
+          <div class="flex items-center gap-2">
+            <span id="lo-validate-status" class="text-xs font-bold hidden"></span>
+            <button onclick="loValidateAll()" id="lo-validate-btn"
+              class="hidden text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-black transition-all flex items-center gap-1">
+              <i class="fas fa-check-double"></i> ตรวจสอบ SO
+            </button>
           </div>
-          <!-- รายการสินค้า -->
-          <div id="lo-items-wrap" class="rounded-lg border border-slate-100 overflow-hidden">
+        </div>
+        <div class="rounded-xl border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
             <table class="w-full text-sm border-collapse">
               <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs font-black uppercase">
+                <tr class="bg-slate-800 text-slate-300 text-xs font-black uppercase">
+                  <th class="px-3 py-2 text-left">SO</th>
                   <th class="px-3 py-2 text-left">SKU</th>
                   <th class="px-3 py-2 text-left">ชื่อสินค้า</th>
                   <th class="px-3 py-2 text-right">เส้น</th>
                   <th class="px-3 py-2 text-right">น้ำหนัก (kg)</th>
+                  <th class="px-3 py-2 text-center">สถานะ</th>
+                  <th class="px-2 py-2"></th>
                 </tr>
               </thead>
-              <tbody id="lo-items-tbody"></tbody>
+              <tbody id="lo-items-tbody">
+                <tr id="lo-items-empty"><td colspan="7" class="px-4 py-6 text-center text-slate-400 text-sm font-semibold">ยังไม่มีรายการ — เลือกจากแผน หรือเพิ่มด้านล่าง</td></tr>
+              </tbody>
             </table>
           </div>
         </div>
       </div>
 
+      <!-- เพิ่มสินค้า: Tab -->
+      <div>
+        <div class="flex gap-1 mb-3 bg-slate-100 rounded-xl p-1 w-fit">
+          <button id="lo-mode-row" onclick="loSetAddMode('row')"
+            class="px-4 py-1.5 rounded-lg text-xs font-black transition-all bg-white text-slate-800 shadow-sm">
+            <i class="fas fa-plus mr-1"></i>เพิ่มทีละแถว
+          </button>
+          <button id="lo-mode-dump" onclick="loSetAddMode('dump')"
+            class="px-4 py-1.5 rounded-lg text-xs font-black transition-all text-slate-500">
+            <i class="fas fa-paste mr-1"></i>Dump หลายแถว
+          </button>
+        </div>
+
+        <!-- เพิ่มทีละแถว -->
+        <div id="lo-add-row-panel" class="bg-slate-50 rounded-xl border border-slate-200 p-4">
+          <div class="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <label class="text-xs font-black text-slate-500 uppercase mb-1 block">SO Number</label>
+              <input id="lo-add-so" placeholder="เช่น SO12345" onkeydown="if(event.key==='Enter')document.getElementById('lo-add-sku').focus()"
+                class="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 outline-none focus:border-emerald-500 transition-all text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-black text-slate-500 uppercase mb-1 block">SKU</label>
+              <input id="lo-add-sku" placeholder="รหัสสินค้า" onkeydown="if(event.key==='Enter')document.getElementById('lo-add-lines').focus()"
+                class="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 outline-none focus:border-emerald-500 transition-all text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-black text-slate-500 uppercase mb-1 block">จำนวนเส้น</label>
+              <input id="lo-add-lines" type="number" min="1" placeholder="0" onkeydown="if(event.key==='Enter')loAddRowItem()"
+                class="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 outline-none focus:border-emerald-500 transition-all text-sm">
+            </div>
+          </div>
+          <button onclick="loAddRowItem()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-plus-circle"></i> เพิ่มรายการนี้
+          </button>
+        </div>
+
+        <!-- Dump หลายแถว -->
+        <div id="lo-dump-panel" class="hidden bg-slate-50 rounded-xl border border-slate-200 p-4">
+          <p class="text-xs text-slate-500 font-bold mb-2">
+            <i class="fas fa-info-circle text-blue-400 mr-1"></i>
+            วางข้อมูลจาก Excel: <span class="font-black text-slate-700">SO &nbsp;|&nbsp; SKU &nbsp;|&nbsp; Lines</span> (3 คอลัมน์ tab-separated)
+          </p>
+          <textarea id="lo-dump-text" rows="5" placeholder="SO12345&#9;SKUABC&#9;100&#10;SO12346&#9;SKUXYZ&#9;50"
+            class="w-full bg-white border-2 border-slate-200 rounded-xl px-3 py-2 font-mono text-xs text-slate-700 outline-none focus:border-emerald-500 transition-all resize-y mb-3"></textarea>
+          <button onclick="loParseDump()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-file-import"></i> นำเข้าทั้งหมด
+          </button>
+        </div>
+      </div>
+
       <!-- ปุ่มสร้างออเดอร์ -->
-      <button id="lo-create-btn" onclick="loCreateOrder()" disabled
+      <button id="lo-create-btn" onclick="loSubmitOrder()" disabled
         class="w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-not-allowed bg-slate-100 text-slate-400">
         <i class="fas fa-paper-plane"></i> ส่งออเดอร์ให้ทีมโหลด
       </button>
     </div>
 
-    <!-- ประวัติออเดอร์ที่สร้างแล้ว -->
+    <!-- ประวัติออเดอร์ -->
     <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
       <div class="flex items-center justify-between mb-4">
         <h4 class="font-black text-slate-700 flex items-center gap-2">
@@ -33177,38 +33249,25 @@ window.umDeleteUser=function(un){
 // สร้างออเดอร์โหลด (Admin only tab)
 // ═══════════════════════════════════════════════════════════════════
 
-var _loPlans = [];  // แผนที่โหลดมา
+var _loPlans  = [];   // แผนที่โหลดมา
+var _loItems  = [];   // รายการสินค้าในออเดอร์ปัจจุบัน [{so,sku,name,lines,weight,validated,ok,error}]
+var _loPlanId = '';   // plan ที่เลือก (ถ้ามี)
 
-// แสดง/ซ่อน tab ตาม role — เรียกจาก _applySession
+// แสดง/ซ่อน tab ตาม role
 (function _loInitTabVisibility() {
-    var origApply = window._applySessionOrig || null;
-    // hook หลัง _applySession ทำงาน
-    var _orig = window._applySession;
-    // ใช้ MutationObserver แทน — รอให้ DOM พร้อม
     function _checkLoTab() {
         var tab = document.getElementById('logi-tab-loadorder');
         if (!tab) return;
-        if (typeof _cu !== 'undefined' && _cu && _cu.isAdmin) {
-            tab.classList.remove('hidden');
-        } else {
-            tab.classList.add('hidden');
-        }
+        if (typeof _cu !== 'undefined' && _cu && _cu.isAdmin) tab.classList.remove('hidden');
+        else tab.classList.add('hidden');
     }
-    // เช็คทุกครั้งที่ switchView เรียก
-    var _origSwitchView = window.switchView;
-    if (_origSwitchView) {
-        window.switchView = function(v) {
-            _origSwitchView(v);
-            _checkLoTab();
-        };
-    }
-    // เช็คเมื่อ page โหลด
+    var _origSW = window.switchView;
+    if (_origSW) window.switchView = function(v) { _origSW(v); _checkLoTab(); };
     document.addEventListener('DOMContentLoaded', _checkLoTab);
     setTimeout(_checkLoTab, 1000);
-    setTimeout(_checkLoTab, 3000);
 })();
 
-// โหลดรายการแผน
+// ── โหลดรายการแผน ───────────────────────────────────────────────
 window.loRefreshPlans = function() {
     var sel = document.getElementById('lo-plan-select');
     if (!sel) return;
@@ -33217,10 +33276,9 @@ window.loRefreshPlans = function() {
         .withSuccessHandler(function(res) {
             if (!res || !res.success) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
             _loPlans = (res.mode === 'list' ? res.plans : []).filter(function(p) {
-                var s = (p.status || '').toLowerCase().trim();
-                return s !== 'success';
+                return (p.status || '').toLowerCase().trim() !== 'success';
             });
-            sel.innerHTML = '<option value="">— กรุณาเลือกแผน —</option>' +
+            sel.innerHTML = '<option value="">— ไม่เลือกแผน / กรอกเอง —</option>' +
                 _loPlans.map(function(p) {
                     return '<option value="' + p.id + '">' + p.id + ' · ' + p.date + ' · ' + (p.truck || '—') + '</option>';
                 }).join('');
@@ -33229,114 +33287,286 @@ window.loRefreshPlans = function() {
         .getPreShipmentData();
 };
 
-// เมื่อเลือกแผน
+// ── เมื่อเลือกแผน (นำเข้าสินค้าจากแผน) ─────────────────────────
 window.loOnPlanChange = function() {
     var sel    = document.getElementById('lo-plan-select');
     var planId = sel ? sel.value : '';
-    var detail = document.getElementById('lo-plan-detail');
-    var btn    = document.getElementById('lo-create-btn');
+    var info   = document.getElementById('lo-plan-info');
+    var infoTx = document.getElementById('lo-plan-info-text');
+    _loPlanId  = planId;
     if (!planId) {
-        if (detail) detail.classList.add('hidden');
-        if (btn) { btn.disabled = true; btn.className = 'w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-not-allowed bg-slate-100 text-slate-400'; }
+        if (info) info.classList.add('hidden');
         return;
     }
-    // ดึงรายละเอียดแผน
     google.script.run
         .withSuccessHandler(function(res) {
-            if (!res || !res.success) return;
-            var safeGet = function(id) { return document.getElementById(id); };
-            var setText = function(id, v) { var el = safeGet(id); if (el) el.textContent = v; };
-            // getPreShipmentData(planId) returns flat structure (mode:'doc')
-            setText('lo-detail-truck',  res.truckPlate || '—');
-            setText('lo-detail-date',   res.loadingDate || '—');
-            setText('lo-detail-planid', res.planId || planId);
-            setText('lo-detail-weight', res.totalWeight ? res.totalWeight.toLocaleString() + ' kg' : '—');
-            var badge = safeGet('lo-plan-badge');
-            if (badge) badge.textContent = '';
+            if (!res || !res.success) { showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); return; }
+            // ใส่ทะเบียนรถ + วันที่ อัตโนมัติ
+            var truckEl = document.getElementById('lo-truck');
+            var dateEl  = document.getElementById('lo-date');
+            if (truckEl && !truckEl.value) truckEl.value = res.truckPlate || '';
+            if (dateEl  && !dateEl.value)  dateEl.value  = (res.loadingDate || '').substring(0, 10);
 
-            // items เป็น flat array: { sku, productName, totalQtyPcs, totalWeight }
-            var items = [];
+            // แสดง info badge
+            if (info && infoTx) {
+                infoTx.textContent = 'แผน ' + (res.planId || planId) + ' · ' + (res.truckPlate || '—') + ' · ' + (res.loadingDate || '—');
+                info.classList.remove('hidden');
+            }
+
+            // นำรายการสินค้าจากแผนใส่ _loItems (ต่อท้ายถ้ามีอยู่แล้ว)
+            var added = 0;
             (res.items || []).forEach(function(item) {
-                var found = items.find(function(x) { return x.sku === item.sku; });
-                var itemLines  = item.totalQtyPcs || item.qty || 0;
-                var itemName   = item.productName || '';
-                var itemWeight = item.totalWeight || item.weight || 0;
-                if (found) {
-                    found.lines  += itemLines;
-                    found.weight += itemWeight;
-                } else {
-                    items.push({ sku: item.sku, name: itemName, lines: itemLines, weight: itemWeight });
-                }
+                var sku   = item.sku || '';
+                var lines = item.totalQtyPcs || item.qty || 0;
+                if (!sku || !lines) return;
+                // ไม่ซ้ำ SO+SKU เดิม (ถ้า SO ไม่มี ให้ใส่ '')
+                _loItems.push({ so: '', sku: sku, name: item.productName || '', lines: lines,
+                    weight: item.totalWeight || 0, validated: true, ok: true, error: '',
+                    fromPlan: true });
+                added++;
             });
-
-            var tbody = safeGet('lo-items-tbody');
-            if (tbody) {
-                tbody.innerHTML = items.length > 0
-                    ? items.map(function(it) {
-                        return '<tr class="border-b border-slate-100"><td class="px-3 py-2 font-bold text-slate-800">' + it.sku + '</td>' +
-                            '<td class="px-3 py-2 text-slate-600">' + (it.name || '—') + '</td>' +
-                            '<td class="px-3 py-2 text-right font-bold text-blue-600">' + it.lines + '</td>' +
-                            '<td class="px-3 py-2 text-right font-bold text-orange-600">' + (it.weight ? it.weight.toLocaleString() : '—') + '</td></tr>';
-                    }).join('')
-                    : '<tr><td colspan="4" class="px-3 py-4 text-center text-slate-400">ไม่มีรายการสินค้า</td></tr>';
-            }
-
-            if (detail) detail.classList.remove('hidden');
-            if (btn) {
-                btn.disabled = false;
-                btn.className = 'w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg';
-            }
-            // เก็บ items ไว้ใช้ตอนสร้างออเดอร์
-            btn.dataset.items = JSON.stringify(items);
-            btn.dataset.truck = plan.truckPlate || plan.truck || '';
-            btn.dataset.planId = planId;
+            if (added) showToast('นำเข้า ' + added + ' รายการจากแผนแล้ว');
+            loRenderItems();
+            loUpdateCreateBtn();
         })
-        .withFailureHandler(function() { if (typeof showToast === 'function') showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); })
+        .withFailureHandler(function() { showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); })
         .getPreShipmentData(planId);
 };
 
-// สร้างออเดอร์โหลด
-window.loCreateOrder = function() {
-    var btn = document.getElementById('lo-create-btn');
-    if (!btn || btn.disabled) return;
-    var planId = btn.dataset.planId || '';
-    var truck  = btn.dataset.truck  || '';
-    var items  = btn.dataset.items  || '[]';
-    var creator = (typeof _cu !== 'undefined' && _cu) ? (_cu.name || _cu.username) : 'Admin';
+// ── สลับ mode เพิ่มสินค้า ───────────────────────────────────────
+window.loSetAddMode = function(mode) {
+    var rowBtn  = document.getElementById('lo-mode-row');
+    var dumpBtn = document.getElementById('lo-mode-dump');
+    var rowPan  = document.getElementById('lo-add-row-panel');
+    var dumpPan = document.getElementById('lo-dump-panel');
+    var active  = 'bg-white text-slate-800 shadow-sm';
+    var inactive= 'text-slate-500';
+    if (mode === 'row') {
+        rowBtn.className  = 'px-4 py-1.5 rounded-lg text-xs font-black transition-all ' + active;
+        dumpBtn.className = 'px-4 py-1.5 rounded-lg text-xs font-black transition-all ' + inactive;
+        rowPan.classList.remove('hidden'); dumpPan.classList.add('hidden');
+    } else {
+        dumpBtn.className = 'px-4 py-1.5 rounded-lg text-xs font-black transition-all ' + active;
+        rowBtn.className  = 'px-4 py-1.5 rounded-lg text-xs font-black transition-all ' + inactive;
+        dumpPan.classList.remove('hidden'); rowPan.classList.add('hidden');
+    }
+};
 
-    if (!planId) { showToast('กรุณาเลือกแผนก่อน', true); return; }
+// ── เพิ่มทีละแถว ──────────────────────────────────────────────────
+window.loAddRowItem = function() {
+    var so    = (document.getElementById('lo-add-so').value    || '').trim();
+    var sku   = (document.getElementById('lo-add-sku').value   || '').trim();
+    var lines = parseInt(document.getElementById('lo-add-lines').value) || 0;
+    if (!so)    { showToast('กรุณากรอก SO Number', true); document.getElementById('lo-add-so').focus(); return; }
+    if (!sku)   { showToast('กรุณากรอก SKU', true); document.getElementById('lo-add-sku').focus(); return; }
+    if (!lines) { showToast('กรุณากรอกจำนวนเส้น', true); document.getElementById('lo-add-lines').focus(); return; }
+    _loItems.push({ so: so, sku: sku, name: '', lines: lines, weight: 0, validated: false, ok: false, error: '' });
+    document.getElementById('lo-add-so').value = '';
+    document.getElementById('lo-add-sku').value = '';
+    document.getElementById('lo-add-lines').value = '';
+    document.getElementById('lo-add-so').focus();
+    loRenderItems();
+    loValidateAll();
+};
+
+// ── Dump หลายแถว ──────────────────────────────────────────────────
+window.loParseDump = function() {
+    var raw = (document.getElementById('lo-dump-text').value || '').trim();
+    if (!raw) { showToast('กรุณาวางข้อมูลก่อน', true); return; }
+    var lines = raw.split('\n');
+    var added = 0, skipped = 0;
+    lines.forEach(function(line) {
+        line = line.trim();
+        if (!line) return;
+        var parts = line.split('\t');
+        if (parts.length < 3) parts = line.split(',');
+        var so  = (parts[0] || '').trim();
+        var sku = (parts[1] || '').trim();
+        var qty = parseInt(parts[2]) || 0;
+        if (so && sku && qty > 0) {
+            _loItems.push({ so: so, sku: sku, name: '', lines: qty, weight: 0, validated: false, ok: false, error: '' });
+            added++;
+        } else { skipped++; }
+    });
+    document.getElementById('lo-dump-text').value = '';
+    if (added > 0) {
+        showToast('นำเข้า ' + added + ' รายการ' + (skipped ? ' (ข้าม ' + skipped + ' แถว)' : ''));
+        loRenderItems();
+        loValidateAll();
+    } else {
+        showToast('ไม่พบข้อมูลที่ถูกต้อง — ตรวจสอบรูปแบบ SO TAB SKU TAB Lines', true);
+    }
+};
+
+// ── ลบรายการ ──────────────────────────────────────────────────────
+window.loRemoveItem = function(idx) {
+    _loItems.splice(idx, 1);
+    loRenderItems();
+    loUpdateCreateBtn();
+};
+
+// ── Validate SO กับ GAS ──────────────────────────────────────────
+window.loValidateAll = function() {
+    var toCheck = _loItems.filter(function(it) { return it.so && !it.fromPlan; });
+    if (toCheck.length === 0) { loRenderItems(); loUpdateCreateBtn(); return; }
+
+    var statusEl = document.getElementById('lo-validate-status');
+    if (statusEl) { statusEl.textContent = 'กำลังตรวจสอบ...'; statusEl.className = 'text-xs font-bold text-blue-500'; statusEl.classList.remove('hidden'); }
+
+    var payload = toCheck.map(function(it) { return { so: it.so, sku: it.sku }; });
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || !res.success) { loRenderItems(); loUpdateCreateBtn(); return; }
+            var checkIdx = 0;
+            _loItems.forEach(function(it) {
+                if (!it.so || it.fromPlan) return;
+                var r = res.results[checkIdx++];
+                if (!r) return;
+                it.validated = true;
+                it.ok        = r.ok;
+                it.error     = r.error || '';
+                it.name      = r.ok ? (r.name || it.name) : it.name;
+                it.weight    = r.ok && r.weightPerPcs ? Math.round(r.weightPerPcs * it.lines * 100) / 100 : it.weight;
+            });
+            loRenderItems();
+            loUpdateCreateBtn();
+        })
+        .withFailureHandler(function(err) {
+            if (statusEl) { statusEl.textContent = 'ตรวจสอบไม่สำเร็จ'; statusEl.className = 'text-xs font-bold text-red-500'; }
+            loRenderItems(); loUpdateCreateBtn();
+        })
+        .validateSOLines(payload);
+};
+
+// ── Render ตารางสินค้า ───────────────────────────────────────────
+window.loRenderItems = function() {
+    var tbody   = document.getElementById('lo-items-tbody');
+    var valBtn  = document.getElementById('lo-validate-btn');
+    var statusEl= document.getElementById('lo-validate-status');
+    if (!tbody) return;
+
+    if (_loItems.length === 0) {
+        tbody.innerHTML = '<tr id="lo-items-empty"><td colspan="7" class="px-4 py-6 text-center text-slate-400 text-sm font-semibold">ยังไม่มีรายการ — เลือกจากแผน หรือเพิ่มด้านล่าง</td></tr>';
+        if (valBtn) valBtn.classList.add('hidden');
+        if (statusEl) statusEl.classList.add('hidden');
+        return;
+    }
+
+    var hasPending  = _loItems.some(function(it) { return !it.fromPlan && !it.validated; });
+    var hasError    = _loItems.some(function(it) { return it.validated && !it.ok; });
+    var allOk       = _loItems.every(function(it) { return it.ok; });
+
+    if (valBtn) {
+        if (hasPending) valBtn.classList.remove('hidden');
+        else valBtn.classList.add('hidden');
+    }
+    if (statusEl) {
+        if (allOk && !hasPending) {
+            statusEl.textContent = '✓ ผ่านทั้งหมด ' + _loItems.length + ' รายการ';
+            statusEl.className = 'text-xs font-bold text-emerald-600';
+            statusEl.classList.remove('hidden');
+        } else if (hasError) {
+            var errCount = _loItems.filter(function(it){ return it.validated && !it.ok; }).length;
+            statusEl.textContent = '✗ ไม่ผ่าน ' + errCount + ' รายการ';
+            statusEl.className = 'text-xs font-bold text-red-500';
+            statusEl.classList.remove('hidden');
+        } else if (hasPending) {
+            statusEl.textContent = 'รอตรวจสอบ ' + _loItems.filter(function(it){return !it.fromPlan&&!it.validated;}).length + ' รายการ';
+            statusEl.className = 'text-xs font-bold text-amber-500';
+            statusEl.classList.remove('hidden');
+        } else {
+            statusEl.classList.add('hidden');
+        }
+    }
+
+    tbody.innerHTML = _loItems.map(function(it, i) {
+        var statusCell = '';
+        if (it.fromPlan) {
+            statusCell = '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">จากแผน</span>';
+        } else if (!it.validated) {
+            statusCell = '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">รอตรวจ</span>';
+        } else if (it.ok) {
+            statusCell = '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">✓ ผ่าน</span>';
+        } else {
+            statusCell = '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;" title="' + (it.error||'') + '">✗ ' + (it.error||'ไม่ผ่าน') + '</span>';
+        }
+        return '<tr class="border-b border-slate-100 hover:bg-slate-50">'
+            + '<td class="px-3 py-2 font-bold text-slate-600 text-xs">' + (it.so || '—') + '</td>'
+            + '<td class="px-3 py-2 font-black text-slate-800 text-sm">' + it.sku + '</td>'
+            + '<td class="px-3 py-2 text-slate-600 text-xs">' + (it.name || '<span class="text-slate-300">—</span>') + '</td>'
+            + '<td class="px-3 py-2 text-right font-black text-blue-600">' + it.lines.toLocaleString() + '</td>'
+            + '<td class="px-3 py-2 text-right font-bold text-orange-600 text-xs">' + (it.weight ? it.weight.toLocaleString() : '—') + '</td>'
+            + '<td class="px-3 py-2 text-center">' + statusCell + '</td>'
+            + '<td class="px-2 py-2 text-center"><button onclick="loRemoveItem(' + i + ')" style="background:none;border:none;color:#cbd5e1;font-size:16px;cursor:pointer;line-height:1;" title="ลบ">×</button></td>'
+            + '</tr>';
+    }).join('');
+};
+
+// ── อัปเดตสถานะปุ่มสร้างออเดอร์ ────────────────────────────────
+window.loUpdateCreateBtn = function() {
+    var btn   = document.getElementById('lo-create-btn');
+    if (!btn) return;
+    var truck = (document.getElementById('lo-truck') || {}).value || '';
+    var date  = (document.getElementById('lo-date')  || {}).value || '';
+    var hasItems   = _loItems.length > 0;
+    var hasPending = _loItems.some(function(it) { return !it.fromPlan && !it.validated; });
+    var hasError   = _loItems.some(function(it) { return it.validated && !it.ok; });
+    var canCreate  = truck.trim() && date && hasItems && !hasPending && !hasError;
+
+    btn.disabled = !canCreate;
+    if (canCreate) {
+        btn.className = 'w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg';
+    } else {
+        btn.className = 'w-full py-4 rounded-xl font-black text-base transition-all flex items-center justify-center gap-3 cursor-not-allowed bg-slate-100 text-slate-400';
+        var msg = !truck.trim() ? 'กรอกทะเบียนรถก่อน' : !date ? 'กรอกวันที่ก่อน' : !hasItems ? 'ยังไม่มีรายการสินค้า' : hasPending ? 'รอตรวจสอบ SO...' : hasError ? 'มีรายการที่ไม่ผ่าน SO' : '';
+        btn.innerHTML = '<i class="fas fa-lock mr-2"></i>' + msg;
+        return;
+    }
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> ส่งออเดอร์ให้ทีมโหลด (' + _loItems.length + ' รายการ)';
+};
+
+// ── ส่งออเดอร์ ───────────────────────────────────────────────────
+window.loSubmitOrder = function() {
+    var btn   = document.getElementById('lo-create-btn');
+    if (!btn || btn.disabled) return;
+    var truck   = (document.getElementById('lo-truck').value || '').trim();
+    var date    = (document.getElementById('lo-date').value  || '');
+    var planId  = _loPlanId || '';
+    var creator = (typeof _cu !== 'undefined' && _cu) ? (_cu.name || _cu.username) : 'Admin';
+    var items   = JSON.stringify(_loItems.map(function(it) {
+        return { so: it.so || '', sku: it.sku, name: it.name || '', lines: it.lines, weight: it.weight || 0 };
+    }));
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังส่งออเดอร์...';
 
     google.script.run
         .withSuccessHandler(function(res) {
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> ส่งออเดอร์ให้ทีมโหลด';
+            btn.disabled = false; loUpdateCreateBtn();
             if (res && res.success) {
                 showToast('✅ สร้างออเดอร์ ' + res.orderId + ' สำเร็จ');
-                btn.disabled = true;
-                btn.className = 'w-full py-4 rounded-xl font-black text-base flex items-center justify-center gap-3 bg-slate-100 text-slate-400 cursor-not-allowed';
                 // reset form
+                _loItems = []; _loPlanId = '';
+                document.getElementById('lo-truck').value = '';
+                document.getElementById('lo-date').value  = '';
                 var sel = document.getElementById('lo-plan-select');
                 if (sel) sel.value = '';
-                var detail = document.getElementById('lo-plan-detail');
-                if (detail) detail.classList.add('hidden');
-                // refresh order list
+                var info = document.getElementById('lo-plan-info');
+                if (info) info.classList.add('hidden');
+                loRenderItems(); loUpdateCreateBtn();
                 loRefreshOrderList();
             } else {
                 showToast('❌ ' + (res ? res.message : 'ไม่สำเร็จ'), true);
-                btn.disabled = false;
             }
         })
         .withFailureHandler(function(err) {
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> ส่งออเดอร์ให้ทีมโหลด';
-            btn.disabled = false;
-            showToast('❌ เกิดข้อผิดพลาด: ' + err, true);
+            btn.disabled = false; loUpdateCreateBtn();
+            showToast('❌ เกิดข้อผิดพลาด: ' + (err||''), true);
         })
         .loCreateOrder(planId, truck, creator, items);
 };
 
-// โหลดรายการออเดอร์ล่าสุด
+// ── รายการออเดอร์ล่าสุด ─────────────────────────────────────────
 window.loRefreshOrderList = function() {
     var wrap = document.getElementById('lo-order-list');
     if (!wrap) return;
@@ -33344,31 +33574,30 @@ window.loRefreshOrderList = function() {
     google.script.run
         .withSuccessHandler(function(res) {
             if (!res || !res.success || !res.orders || res.orders.length === 0) {
-                wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-6 font-bold">ยังไม่มีออเดอร์</div>';
-                return;
+                wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-6 font-bold">ยังไม่มีออเดอร์</div>'; return;
             }
-            var statusBadge = function(s) {
-                if (s === 'PENDING') return '<span style="background:#78350f;color:#fde68a;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">รอโหลด</span>';
-                if (s === 'LOADING') return '<span style="background:#1e3a8a;color:#93c5fd;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">กำลังโหลด</span>';
+            var badge = function(s) {
+                if (s==='PENDING') return '<span style="background:#78350f;color:#fde68a;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">รอโหลด</span>';
+                if (s==='LOADING') return '<span style="background:#1e3a8a;color:#93c5fd;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">กำลังโหลด</span>';
                 return '<span style="background:#14532d;color:#86efac;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">เสร็จแล้ว</span>';
             };
-            wrap.innerHTML = res.orders.map(function(o) {
-                return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f1f5f9;">' +
-                    '<div style="flex:1;">' +
-                        '<div style="font-weight:800;font-size:13px;color:#1e293b;">' + o.orderId + '</div>' +
-                        '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (o.truck || '—') + ' · ' + (o.createdAt || '').substring(0, 16) + '</div>' +
-                    '</div>' +
-                    statusBadge(o.status) +
-                '</div>';
+            wrap.innerHTML = res.orders.slice(0,20).map(function(o) {
+                var itemCount = 0;
+                try { itemCount = JSON.parse(o.items || '[]').length; } catch(e) {}
+                return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f1f5f9;">'
+                    + '<div style="flex:1;">'
+                    +   '<div style="font-weight:800;font-size:13px;color:#1e293b;">' + o.orderId + '</div>'
+                    +   '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (o.truck||'—') + ' · ' + (o.createdAt||'').substring(0,16) + ' · ' + itemCount + ' รายการ</div>'
+                    + '</div>'
+                    + '<div>' + badge(o.status) + '</div>'
+                    + '</div>';
             }).join('');
         })
-        .withFailureHandler(function() {
-            wrap.innerHTML = '<div class="text-center text-rose-400 text-sm py-4">โหลดไม่สำเร็จ</div>';
-        })
+        .withFailureHandler(function() { wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">โหลดไม่สำเร็จ</div>'; })
         .loGetPendingOrders();
 };
 
-// init เมื่อเปิด tab
+// ── init เมื่อเปิด tab ───────────────────────────────────────────
 (function() {
     var origSwitch = window.switchLogiTab;
     if (origSwitch) {
@@ -33377,8 +33606,11 @@ window.loRefreshOrderList = function() {
             if (tab === 'loadorder') {
                 loRefreshPlans();
                 loRefreshOrderList();
+                loRenderItems();
+                loUpdateCreateBtn();
             }
         };
     }
 })();
 </script>
+
