@@ -56,7 +56,8 @@ function _handleApiPost(e) {
       'getTagSystemStartDate','setTagSystemStartDate',
       'getDeliveryTypeData',
       'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
-      'loSubmitLift','loCompleteOrder','loGetOrderStatus'
+      'loSubmitLift','loCompleteOrder','loGetOrderStatus',
+      'wmsGetUsers','wmsSaveUsers'
     ];
 
     if (allowedActions.indexOf(action) === -1) {
@@ -241,7 +242,8 @@ function doGet(e) {
           'getTagSystemStartDate','setTagSystemStartDate',
           'getDeliveryTypeData',
           'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
-          'loSubmitLift','loCompleteOrder','loGetOrderStatus'
+          'loSubmitLift','loCompleteOrder','loGetOrderStatus',
+          'wmsGetUsers','wmsSaveUsers'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -10404,4 +10406,92 @@ function _loGetLifts(ss, orderId) {
     }
   }
   return lifts;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WMS Users — เก็บใน Sheet แทน localStorage (ใช้ได้ทุกเครื่อง)
+// ─────────────────────────────────────────────────────────────────────────────
+var WMS_USERS_SHEET = 'WMS_Users';
+
+var WMS_USER_HEADERS = [
+  'Username',   // A
+  'PwHash',     // B
+  'Name',       // C
+  'Role',       // D
+  'IsAdmin',    // E  TRUE/FALSE
+  'Perms',      // F  JSON array
+  'Active',     // G  TRUE/FALSE
+];
+
+function _getOrCreateUsersSheet(ss) {
+  var sheet = ss.getSheetByName(WMS_USERS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(WMS_USERS_SHEET);
+    var hr = sheet.getRange(1, 1, 1, WMS_USER_HEADERS.length);
+    hr.setValues([WMS_USER_HEADERS]);
+    hr.setFontWeight('bold').setBackground('#1e293b').setFontColor('#f8fafc');
+    sheet.setFrozenRows(1);
+    // ซ่อนชีตนี้ไม่ให้เห็นใน tab
+    sheet.hideSheet();
+  }
+  return sheet;
+}
+
+function wmsGetUsers() {
+  try {
+    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = _getOrCreateUsersSheet(ss);
+    var last  = sheet.getLastRow();
+    if (last < 2) return { success: true, users: [] };   // ยังไม่มีข้อมูล → ให้ client migrate
+
+    var data  = sheet.getRange(2, 1, last - 1, WMS_USER_HEADERS.length).getValues();
+    var users = [];
+    for (var i = 0; i < data.length; i++) {
+      var active = data[i][6];
+      if (active === false || active === 'FALSE' || active === 'false') continue;
+      var perms = [];
+      try { perms = JSON.parse(data[i][5]); } catch(e) {}
+      users.push({
+        username: String(data[i][0]),
+        pwHash:   String(data[i][1]),
+        name:     String(data[i][2]),
+        role:     String(data[i][3]),
+        isAdmin:  data[i][4] === true || data[i][4] === 'TRUE' || data[i][4] === 'true',
+        perms:    perms,
+      });
+    }
+    return { success: true, users: users };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+function wmsSaveUsers(usersJSON) {
+  try {
+    var users = JSON.parse(usersJSON);
+    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = _getOrCreateUsersSheet(ss);
+
+    // ล้างข้อมูลเก่า (เก็บ header)
+    var last = sheet.getLastRow();
+    if (last > 1) sheet.getRange(2, 1, last - 1, WMS_USER_HEADERS.length).clearContent();
+
+    if (!users || users.length === 0) return { success: true };
+
+    var rows = users.map(function(u) {
+      return [
+        u.username || '',
+        u.pwHash   || '',
+        u.name     || '',
+        u.role     || '',
+        u.isAdmin  ? 'TRUE' : 'FALSE',
+        JSON.stringify(u.perms || []),
+        'TRUE',
+      ];
+    });
+    sheet.getRange(2, 1, rows.length, WMS_USER_HEADERS.length).setValues(rows);
+    return { success: true };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
 }

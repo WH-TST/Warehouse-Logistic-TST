@@ -32937,8 +32937,61 @@ window.confirmSaveInvKPI = function() {
 // AUTH & USER MANAGEMENT SYSTEM
 var WMS_VIEWS=[{id:'input',label:'Storage FG Input'},{id:'report',label:'Warehouse Report'},{id:'printtag',label:'Print Tag FG'},{id:'analytics',label:'Analytics'},{id:'overdue',label:'รายการจองค้าง'},{id:'whactivity',label:'WH Activity Log'},{id:'warehouse-map',label:'ผังคลังสินค้า'},{id:'logistic-plan',label:'วางแผนส่งมอบ'},{id:'truck-dispatch',label:'จัดรถส่งสินค้า'},{id:'kpi-wh',label:'KPI WH & Logistic'},{id:'kpi-stock',label:'KPI Inventory'}];
 function _hashPw(s){var h=0x811c9dc5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h.toString(16);}
-function _loadUsers(){try{var r=localStorage.getItem('wms_users');if(r)return JSON.parse(r);}catch(e){}var d=[{username:'Admin26052540',pwHash:_hashPw('26052540'),name:'ผู้ดูแลระบบ',role:'Administrator',isAdmin:true,perms:WMS_VIEWS.map(function(v){return v.id;})}];_saveUsers(d);return d;}
-function _saveUsers(u){localStorage.setItem('wms_users',JSON.stringify(u));}
+// ── Users cache (โหลดจาก GAS ตอนเริ่ม, sync ทุกเครื่อง) ──────────────────────
+var _usersCache = null;
+var _usersLoaded = false;
+
+function _defaultAdminUser(){
+  return [{username:'Admin26052540',pwHash:_hashPw('26052540'),name:'ผู้ดูแลระบบ',role:'Administrator',isAdmin:true,perms:WMS_VIEWS.map(function(v){return v.id;})}];
+}
+
+function _loadUsers(){
+  // คืน cache เสมอ (เติมจาก GAS แล้ว หรือ fallback admin)
+  if(_usersCache) return _usersCache;
+  // ระหว่างรอ GAS → fallback localStorage (migration path)
+  try{var r=localStorage.getItem('wms_users');if(r){var u=JSON.parse(r);if(u&&u.length)return u;}}catch(e){}
+  return _defaultAdminUser();
+}
+
+function _saveUsers(users){
+  _usersCache = users;
+  // บันทึกลง GAS Sheet (async — ไม่รอ)
+  google.script.run
+    .withFailureHandler(function(){})
+    .wmsSaveUsers(JSON.stringify(users));
+  // backup localStorage เผื่อ offline ชั่วคราว
+  try{localStorage.setItem('wms_users',JSON.stringify(users));}catch(e){}
+}
+
+// เรียกตอน app เริ่ม — โหลด users จาก GAS แล้ว migrate localStorage ถ้า GAS ว่าง
+function _initUsers(callback){
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(res && res.success && res.users && res.users.length > 0){
+        _usersCache = res.users;
+        _usersLoaded = true;
+        try{localStorage.setItem('wms_users',JSON.stringify(_usersCache));}catch(e){}
+      } else {
+        // GAS sheet ว่าง → migrate จาก localStorage หรือใช้ default admin
+        var local = null;
+        try{var r=localStorage.getItem('wms_users');if(r)local=JSON.parse(r);}catch(e){}
+        _usersCache = (local && local.length) ? local : _defaultAdminUser();
+        _usersLoaded = true;
+        // push ขึ้น GAS
+        google.script.run.withFailureHandler(function(){}).wmsSaveUsers(JSON.stringify(_usersCache));
+      }
+      if(typeof callback==='function') callback();
+    })
+    .withFailureHandler(function(){
+      // GAS ไม่ตอบ → ใช้ localStorage ต่อ
+      var local = null;
+      try{var r=localStorage.getItem('wms_users');if(r)local=JSON.parse(r);}catch(e){}
+      _usersCache = (local && local.length) ? local : _defaultAdminUser();
+      _usersLoaded = true;
+      if(typeof callback==='function') callback();
+    })
+    .wmsGetUsers();
+}
 var _cu=null;
 function _loadSess(){try{var s=sessionStorage.getItem('wms_sess');if(s)return JSON.parse(s);}catch(e){}return null;}
 function _saveSess(u){sessionStorage.setItem('wms_sess',JSON.stringify({username:u.username}));}
@@ -33063,18 +33116,23 @@ window.umDeleteUser=function(un){
   };}
 })();
 
-// Init
+// Init — โหลด users จาก GAS ก่อน แล้วค่อย restore session
 (function(){
   var sidebar=document.getElementById('app-sidebar'),main=document.getElementById('app-main');
   if(sidebar)sidebar.classList.add('wms-app-hidden');
   if(main)main.classList.add('wms-app-hidden');
-  var s=_loadSess();
-  if(s){var users=_loadUsers(),user=null;for(var i=0;i<users.length;i++){if(users[i].username===s.username){user=users[i];break;}}
-    if(user){_cu=user;_applySession();return;}}
-  var ls=document.getElementById('login-screen');
-  if(ls)ls.classList.remove('hidden');
-  var lu=document.getElementById('login-username');
-  if(lu)lu.focus();
+
+  function _afterUsersLoaded(){
+    var s=_loadSess();
+    if(s){var users=_loadUsers(),user=null;for(var i=0;i<users.length;i++){if(users[i].username===s.username){user=users[i];break;}}
+      if(user){_cu=user;_applySession();return;}}
+    var ls=document.getElementById('login-screen');
+    if(ls)ls.classList.remove('hidden');
+    var lu=document.getElementById('login-username');
+    if(lu)lu.focus();
+  }
+
+  _initUsers(_afterUsersLoaded);
 })();
 
 
@@ -33149,34 +33207,30 @@ window.loOnPlanChange = function() {
     google.script.run
         .withSuccessHandler(function(res) {
             if (!res || !res.success) return;
-            var plan = res.plan || {};
             var safeGet = function(id) { return document.getElementById(id); };
             var setText = function(id, v) { var el = safeGet(id); if (el) el.textContent = v; };
-            setText('lo-detail-truck',  plan.truckPlate || plan.truck || '—');
-            setText('lo-detail-date',   plan.deliveryDate || plan.date || '—');
-            setText('lo-detail-planid', plan.id || planId);
-            setText('lo-detail-weight', plan.totalWeight ? plan.totalWeight.toLocaleString() + ' kg' : '—');
+            // getPreShipmentData(planId) returns flat structure (mode:'doc')
+            setText('lo-detail-truck',  res.truckPlate || '—');
+            setText('lo-detail-date',   res.loadingDate || '—');
+            setText('lo-detail-planid', res.planId || planId);
+            setText('lo-detail-weight', res.totalWeight ? res.totalWeight.toLocaleString() + ' kg' : '—');
             var badge = safeGet('lo-plan-badge');
-            if (badge) badge.textContent = plan.status || '';
+            if (badge) badge.textContent = '';
 
-            // สร้าง items array
+            // items เป็น flat array: { sku, productName, totalQtyPcs, totalWeight }
             var items = [];
-            if (plan.shops && Array.isArray(plan.shops)) {
-                plan.shops.forEach(function(shop) {
-                    (shop.items || []).forEach(function(item) {
-                        var found = items.find(function(x) { return x.sku === item.sku; });
-                        var itemLines  = item.qty || item.lines || 0;
-                        var itemName   = item.productName || item.name || item.skuName || '';
-                        var itemWeight = item.weight || 0;
-                        if (found) {
-                            found.lines  += itemLines;
-                            found.weight += itemWeight;
-                        } else {
-                            items.push({ sku: item.sku, name: itemName, lines: itemLines, weight: itemWeight });
-                        }
-                    });
-                });
-            }
+            (res.items || []).forEach(function(item) {
+                var found = items.find(function(x) { return x.sku === item.sku; });
+                var itemLines  = item.totalQtyPcs || item.qty || 0;
+                var itemName   = item.productName || '';
+                var itemWeight = item.totalWeight || item.weight || 0;
+                if (found) {
+                    found.lines  += itemLines;
+                    found.weight += itemWeight;
+                } else {
+                    items.push({ sku: item.sku, name: itemName, lines: itemLines, weight: itemWeight });
+                }
+            });
 
             var tbody = safeGet('lo-items-tbody');
             if (tbody) {
