@@ -3716,22 +3716,57 @@ thead.sticky {
       </button>
     </div>
 
-    <!-- ประวัติออเดอร์ -->
+    <!-- ออเดอร์ Active (PENDING/LOADING) -->
     <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center justify-between mb-3">
         <h4 class="font-black text-slate-700 flex items-center gap-2">
-          <i class="fas fa-history text-emerald-600"></i> ออเดอร์ล่าสุด
+          <i class="fas fa-spinner fa-spin text-blue-500"></i> กำลังโหลดอยู่
         </h4>
-        <button onclick="loRefreshOrderList()" class="text-xs text-slate-400 hover:text-slate-600 font-bold flex items-center gap-1">
+        <div class="flex items-center gap-2">
+          <span id="lo-live-indicator" class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
+          <span id="lo-live-label" class="text-xs text-slate-400 font-bold">—</span>
+        </div>
+      </div>
+      <div id="lo-active-list">
+        <div class="text-center text-slate-400 text-sm py-4 font-semibold">ไม่มีออเดอร์ที่กำลังโหลด</div>
+      </div>
+    </div>
+
+    <!-- ประวัติออเดอร์ที่เสร็จแล้ว -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="font-black text-slate-700 flex items-center gap-2">
+          <i class="fas fa-check-circle text-emerald-600"></i> เสร็จแล้ว
+        </h4>
+        <button onclick="loRefreshHistory()" class="text-xs text-slate-400 hover:text-slate-600 font-bold flex items-center gap-1">
           <i class="fas fa-sync-alt"></i> รีเฟรช
         </button>
       </div>
       <div id="lo-order-list">
-        <div class="text-center text-slate-400 text-sm py-6 font-bold">กด "รีเฟรช" เพื่อดูออเดอร์ล่าสุด</div>
+        <div class="text-center text-slate-400 text-sm py-4 font-semibold">กด "รีเฟรช" เพื่อดูประวัติ</div>
       </div>
     </div>
 
   </div><!-- end logi-panel-loadorder -->
+
+  <!-- ── Order Detail Modal (Realtime + Report) ── -->
+  <div id="lo-detail-modal" class="fixed inset-0 z-[200] hidden" style="background:rgba(0,0,0,0.6);">
+    <div style="position:absolute;inset-inline:0;bottom:0;background:white;border-radius:20px 20px 0 0;max-height:90vh;display:flex;flex-direction:column;max-width:900px;margin:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
+        <div>
+          <div style="font-weight:900;color:#1e293b;font-size:15px;" id="lo-modal-title">—</div>
+          <div style="font-size:11px;color:#94a3b8;font-weight:600;margin-top:2px;" id="lo-modal-sub">—</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span id="lo-modal-badge"></span>
+          <button onclick="loCloseModal()" style="width:32px;height:32px;border-radius:50%;background:#f1f5f9;border:none;color:#64748b;font-size:18px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
+        </div>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:20px;" id="lo-modal-body">
+        <div style="text-align:center;color:#94a3b8;padding:32px 0;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>
+      </div>
+    </div>
+  </div>
 
   <!-- ════════════════════════════════════════════════════════ -->
   <!-- TAB: บันทึกการปฏิบัติงานจริง (Driver Activity Log)      -->
@@ -33566,36 +33601,239 @@ window.loSubmitOrder = function() {
         .loCreateOrder(planId, truck, creator, items);
 };
 
-// ── รายการออเดอร์ล่าสุด ─────────────────────────────────────────
-window.loRefreshOrderList = function() {
+// ── Active orders (Realtime poll) ──────────────────────────────
+var _loLivePollTimer = null;
+
+function _loStartLivePoll() {
+    _loLivePoll();
+    _loLivePollTimer = setInterval(_loLivePoll, 12000);
+}
+function _loStopLivePoll() {
+    clearInterval(_loLivePollTimer);
+}
+
+function _loLivePoll() {
+    var dot = document.getElementById('lo-live-indicator');
+    var lbl = document.getElementById('lo-live-label');
+    if (dot) dot.style.background = '#f59e0b';
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (dot) dot.style.background = '#22c55e';
+            if (lbl) lbl.textContent = 'อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+            if (!res || !res.success) return;
+            _loRenderActiveList(res.orders || []);
+            // ถ้า modal เปิดอยู่ → refresh ด้วย
+            var modal = document.getElementById('lo-detail-modal');
+            if (modal && !modal.classList.contains('hidden') && window._loModalOrderId) {
+                loOpenOrderDetail(window._loModalOrderId, true);
+            }
+        })
+        .withFailureHandler(function() {
+            if (dot) dot.style.background = '#ef4444';
+            if (lbl) lbl.textContent = 'ออฟไลน์';
+        })
+        .loGetPendingOrders();
+}
+
+function _loRenderActiveList(orders) {
+    var wrap = document.getElementById('lo-active-list');
+    if (!wrap) return;
+    if (!orders || orders.length === 0) {
+        wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-4 font-semibold">ไม่มีออเดอร์ที่กำลังโหลด</div>';
+        return;
+    }
+    wrap.innerHTML = orders.map(function(o) {
+        var items = o.items || [];
+        var totalLines = items.reduce(function(s,i){return s+(i.lines||0);},0);
+        var badge = o.status === 'PENDING'
+            ? '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">รอโหลด</span>'
+            : '<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด</span>';
+        return '<div onclick="loOpenOrderDetail(\'' + o.orderId + '\')" style="display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;cursor:pointer;">'
+            + '<div style="flex:1;">'
+            +   '<div style="font-weight:900;font-size:14px;color:#1e293b;">' + (o.truck||'—') + '</div>'
+            +   '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + o.orderId + ' · ' + (o.createdAt||'').substring(0,16) + '</div>'
+            +   '<div style="margin-top:6px;">' + badge + '</div>'
+            + '</div>'
+            + '<div style="text-align:right;">'
+            +   '<div style="font-family:monospace;font-size:18px;font-weight:900;color:#3b82f6;">' + items.length + '</div>'
+            +   '<div style="font-size:10px;color:#94a3b8;font-weight:700;">รายการ</div>'
+            + '</div>'
+            + '<i class="fas fa-chevron-right" style="color:#cbd5e1;"></i>'
+            + '</div>';
+    }).join('');
+}
+
+// ── รายงานออเดอร์ที่เสร็จแล้ว ────────────────────────────────
+window.loRefreshHistory = function() {
     var wrap = document.getElementById('lo-order-list');
     if (!wrap) return;
     wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-4"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     google.script.run
         .withSuccessHandler(function(res) {
-            if (!res || !res.success || !res.orders || res.orders.length === 0) {
-                wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-6 font-bold">ยังไม่มีออเดอร์</div>'; return;
+            if (!res || !res.success || !res.orders || !res.orders.length) {
+                wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-4 font-semibold">ยังไม่มีประวัติ</div>';
+                return;
             }
-            var badge = function(s) {
-                if (s==='PENDING') return '<span style="background:#78350f;color:#fde68a;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">รอโหลด</span>';
-                if (s==='LOADING') return '<span style="background:#1e3a8a;color:#93c5fd;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">กำลังโหลด</span>';
-                return '<span style="background:#14532d;color:#86efac;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;">เสร็จแล้ว</span>';
-            };
-            wrap.innerHTML = res.orders.slice(0,20).map(function(o) {
-                var itemCount = 0;
-                try { itemCount = JSON.parse(o.items || '[]').length; } catch(e) {}
-                return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f1f5f9;">'
+            wrap.innerHTML = res.orders.map(function(o) {
+                return '<div onclick="loOpenOrderDetail(\'' + o.orderId + '\')" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">'
                     + '<div style="flex:1;">'
-                    +   '<div style="font-weight:800;font-size:13px;color:#1e293b;">' + o.orderId + '</div>'
-                    +   '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (o.truck||'—') + ' · ' + (o.createdAt||'').substring(0,16) + ' · ' + itemCount + ' รายการ</div>'
+                    +   '<div style="font-weight:900;font-size:13px;color:#1e293b;">' + (o.truck||'—') + ' <span style="font-size:10px;color:#94a3b8;font-weight:600;">' + o.orderId + '</span></div>'
+                    +   '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">เสร็จ ' + (o.doneAt||'').substring(0,16) + ' · พนักงาน ' + (o.employee||'—') + '</div>'
+                    +   '<div style="font-size:11px;color:#22c55e;font-weight:800;margin-top:2px;">' + (o.totalWeight?o.totalWeight.toLocaleString():'—') + ' kg</div>'
                     + '</div>'
-                    + '<div>' + badge(o.status) + '</div>'
+                    + '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">เสร็จแล้ว</span>'
+                    + '<i class="fas fa-chevron-right" style="color:#cbd5e1;margin-left:4px;"></i>'
                     + '</div>';
             }).join('');
         })
-        .withFailureHandler(function() { wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">โหลดไม่สำเร็จ</div>'; })
-        .loGetPendingOrders();
+        .withFailureHandler(function() {
+            wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">โหลดไม่สำเร็จ</div>';
+        })
+        .loGetOrderHistory(30);
 };
+
+// ── เปิด Order Detail Modal ──────────────────────────────────
+window._loModalOrderId = null;
+
+window.loOpenOrderDetail = function(orderId, silent) {
+    window._loModalOrderId = orderId;
+    var modal = document.getElementById('lo-detail-modal');
+    var body  = document.getElementById('lo-modal-body');
+    if (!modal) return;
+    if (!silent) {
+        modal.classList.remove('hidden');
+        body.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:32px 0;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i></div>';
+    }
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (!res || !res.success) { if(body) body.innerHTML = '<div style="text-align:center;color:#ef4444;padding:32px;">โหลดไม่สำเร็จ</div>'; return; }
+            _loRenderOrderModal(res);
+        })
+        .withFailureHandler(function() {
+            if (body) body.innerHTML = '<div style="text-align:center;color:#ef4444;padding:32px;">เกิดข้อผิดพลาด</div>';
+        })
+        .loGetOrderDetail(orderId);
+};
+
+window.loCloseModal = function() {
+    var modal = document.getElementById('lo-detail-modal');
+    if (modal) modal.classList.add('hidden');
+    window._loModalOrderId = null;
+};
+
+function _loRenderOrderModal(res) {
+    var order   = res.order || {};
+    var lifts   = res.lifts || [];
+    var items   = order.items || [];
+    var isDone  = order.status === 'DONE';
+
+    // Header
+    var titleEl = document.getElementById('lo-modal-title');
+    var subEl   = document.getElementById('lo-modal-sub');
+    var badgeEl = document.getElementById('lo-modal-badge');
+    if (titleEl) titleEl.textContent = (order.truck||'—') + '  ·  ' + order.orderId;
+    if (subEl)   subEl.textContent   = 'สร้างโดย ' + (order.createdBy||'—') + ' · ' + (order.createdAt||'').substring(0,16);
+    if (badgeEl) badgeEl.innerHTML   = isDone
+        ? '<span style="background:#d1fae5;color:#065f46;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">✓ เสร็จแล้ว</span>'
+        : order.status === 'LOADING'
+            ? '<span style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด</span>'
+            : '<span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;">รอโหลด</span>';
+
+    // รวม lifts by SKU
+    var bySku = {};
+    lifts.forEach(function(l) {
+        if (!bySku[l.sku]) bySku[l.sku] = { name: l.skuName||'', lines:0, weight:0, lifts:[] };
+        bySku[l.sku].lines  += l.lines;
+        bySku[l.sku].weight += l.weight;
+        bySku[l.sku].lifts.push(l);
+    });
+    var totalLoadedLines  = lifts.reduce(function(s,l){return s+l.lines;},0);
+    var totalLoadedWeight = lifts.reduce(function(s,l){return s+l.weight;},0);
+    var totalOrderLines   = items.reduce(function(s,i){return s+(i.lines||0);},0);
+    var pct = totalOrderLines > 0 ? Math.min(100,Math.round(totalLoadedLines/totalOrderLines*100)) : 0;
+    var barColor = pct>=100?'#22c55e':pct>=80?'#f59e0b':'#3b82f6';
+
+    var html = '';
+
+    // Summary bar
+    html += '<div style="background:#f8fafc;border-radius:14px;padding:14px;margin-bottom:16px;">'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">'
+        + _loStatBox('น้ำหนักรวม', (totalLoadedWeight.toLocaleString('th',{minimumFractionDigits:2,maximumFractionDigits:2}))+' kg', '#f59e0b')
+        + _loStatBox('ความคืบหน้า', pct+'%', barColor)
+        + _loStatBox('รอบโหลด', lifts.length+' รอบ', '#8b5cf6')
+        + '</div>'
+        + '<div style="background:#e2e8f0;border-radius:6px;height:8px;overflow:hidden;">'
+        +   '<div style="height:8px;border-radius:6px;background:'+barColor+';width:'+pct+'%;transition:width .4s;"></div>'
+        + '</div>'
+        + '<div style="font-size:11px;color:#64748b;font-weight:700;margin-top:5px;text-align:right;">'
+        + totalLoadedLines.toLocaleString()+' / '+totalOrderLines.toLocaleString()+' เส้น</div>'
+        + '</div>';
+
+    // ถ้า DONE: แสดงพนักงาน + เวลา
+    if (isDone) {
+        html += '<div style="background:#d1fae5;border-radius:12px;padding:12px 14px;margin-bottom:16px;display:flex;gap:16px;">'
+            + '<div><div style="font-size:10px;font-weight:800;color:#065f46;">พนักงาน</div><div style="font-weight:900;font-size:14px;color:#065f46;">'+(order.employee||'—')+'</div></div>'
+            + '<div><div style="font-size:10px;font-weight:800;color:#065f46;">เสร็จเมื่อ</div><div style="font-weight:900;font-size:13px;color:#065f46;">'+(order.doneAt||'—').substring(0,16)+'</div></div>'
+            + '</div>';
+    }
+
+    // ตาราง SKU progress
+    html += '<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;margin-bottom:8px;">รายการสินค้า</div>';
+    html += '<div style="border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:16px;">';
+    items.forEach(function(item) {
+        var d = bySku[item.sku] || {lines:0, weight:0};
+        var ip = item.lines>0 ? Math.min(100,Math.round(d.lines/item.lines*100)) : 0;
+        var ic = ip>=100?'#22c55e':ip>=80?'#f59e0b':'#3b82f6';
+        var diff = d.lines - (item.lines||0);
+        var diffStr = diff===0 ? '' : (diff>0?'<span style="color:#22c55e;font-size:10px;font-weight:800;"> +'+diff+'</span>':'<span style="color:#ef4444;font-size:10px;font-weight:800;"> '+diff+'</span>');
+        html += '<div style="padding:12px 14px;border-bottom:1px solid #f1f5f9;">'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+            +   '<div><div style="font-weight:900;font-size:13px;color:#1e293b;">'+item.sku+diffStr+'</div>'
+            +   '<div style="font-size:10px;color:#64748b;">'+(item.name||'')+'</div></div>'
+            +   '<div style="text-align:right;"><span style="font-family:monospace;font-weight:900;color:'+ic+';">'+d.lines.toLocaleString()+'</span>'
+            +   '<span style="font-size:10px;color:#94a3b8;"> / '+(item.lines||0).toLocaleString()+' เส้น</span></div>'
+            + '</div>'
+            + '<div style="background:#e2e8f0;border-radius:4px;height:6px;overflow:hidden;">'
+            +   '<div style="height:6px;background:'+ic+';width:'+ip+'%;border-radius:4px;"></div>'
+            + '</div>'
+            + (d.weight ? '<div style="font-size:10px;color:#94a3b8;margin-top:3px;text-align:right;">'+d.weight.toFixed(2)+' kg · '+(d.lines>0?(d.weight/d.lines).toFixed(3):'-')+' kg/เส้น</div>' : '')
+            + '</div>';
+    });
+    html += '</div>';
+
+    // Lift log
+    if (lifts.length > 0) {
+        html += '<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;margin-bottom:8px;">บันทึกรอบการยก ('+ lifts.length +' รอบ)</div>';
+        html += '<div style="border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">';
+        lifts.slice().reverse().forEach(function(l, i) {
+            html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;">'
+                + '<div style="background:#f1f5f9;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:900;color:#64748b;min-width:28px;text-align:center;">'+(lifts.length-i)+'</div>'
+                + '<div style="flex:1;">'
+                +   '<div style="font-weight:800;font-size:13px;color:#1e293b;">'+l.sku+'</div>'
+                +   '<div style="font-size:10px;color:#94a3b8;">'+(l.time||'').substring(11,16)+'</div>'
+                + '</div>'
+                + '<div style="text-align:right;">'
+                +   '<div style="font-weight:800;font-size:13px;color:#3b82f6;">'+l.lines.toLocaleString()+' เส้น</div>'
+                +   '<div style="font-size:10px;color:#94a3b8;">'+l.weight.toFixed(2)+' kg · '+l.kgPerLine.toFixed(3)+' kg/เส้น</div>'
+                + '</div>'
+                + '</div>';
+        });
+        html += '</div>';
+    }
+
+    var body = document.getElementById('lo-modal-body');
+    if (body) body.innerHTML = html;
+}
+
+function _loStatBox(label, val, color) {
+    return '<div style="background:white;border-radius:10px;padding:10px;text-align:center;border:1px solid #e2e8f0;">'
+        + '<div style="font-family:monospace;font-size:15px;font-weight:900;color:'+color+';">'+val+'</div>'
+        + '<div style="font-size:10px;color:#94a3b8;font-weight:700;margin-top:2px;">'+label+'</div>'
+        + '</div>';
+}
+
+// ── compat: loRefreshOrderList → loRefreshHistory ─────────────
+window.loRefreshOrderList = window.loRefreshHistory;
 
 // ── init เมื่อเปิด tab ───────────────────────────────────────────
 (function() {
@@ -33605,12 +33843,16 @@ window.loRefreshOrderList = function() {
             origSwitch(tab);
             if (tab === 'loadorder') {
                 loRefreshPlans();
-                loRefreshOrderList();
+                loRefreshHistory();
                 loRenderItems();
                 loUpdateCreateBtn();
+                _loStartLivePoll();
+            } else {
+                _loStopLivePoll();
             }
         };
     }
 })();
 </script>
+
 

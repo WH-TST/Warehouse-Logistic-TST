@@ -56,7 +56,7 @@ function _handleApiPost(e) {
       'getTagSystemStartDate','setTagSystemStartDate',
       'getDeliveryTypeData',
       'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
-      'loSubmitLift','loCompleteOrder','loGetOrderStatus',
+      'loSubmitLift','loCompleteOrder','loGetOrderStatus','loGetOrderHistory',
       'wmsGetUsers','wmsSaveUsers'
     ];
 
@@ -242,7 +242,7 @@ function doGet(e) {
           'getTagSystemStartDate','setTagSystemStartDate',
           'getDeliveryTypeData',
           'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
-          'loSubmitLift','loCompleteOrder','loGetOrderStatus',
+          'loSubmitLift','loCompleteOrder','loGetOrderStatus','loGetOrderHistory',
           'wmsGetUsers','wmsSaveUsers'
         ];
 
@@ -10491,6 +10491,44 @@ function wmsSaveUsers(usersJSON) {
     });
     sheet.getRange(2, 1, rows.length, WMS_USER_HEADERS.length).setValues(rows);
     return { success: true };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// loGetOrderHistory — ดึงออเดอร์ที่เสร็จแล้ว (DONE) + lifts
+// ─────────────────────────────────────────────────────────────────────────────
+function loGetOrderHistory(limitRows) {
+  try {
+    var limit    = parseInt(limitRows) || 30;
+    var ss       = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ordSheet = ss.getSheetByName(LO_ORDERS_SHEET);
+    if (!ordSheet || ordSheet.getLastRow() < 2) return { success: true, orders: [] };
+
+    var data   = ordSheet.getDataRange().getValues();
+    var orders = [];
+    for (var i = data.length - 1; i >= 1; i--) {        // ล่าสุดขึ้นก่อน
+      var status = String(data[i][5] || '').trim();
+      if (status !== 'DONE') continue;
+      var lifts = getLiftsForOrder(ss, String(data[i][0]));
+      orders.push({
+        orderId:    String(data[i][0]),
+        createdAt:  String(data[i][1]),
+        planId:     String(data[i][2]),
+        truck:      String(data[i][3]),
+        createdBy:  String(data[i][4]),
+        status:     status,
+        items:      _parseJSON(data[i][6]),
+        startedAt:  String(data[i][7] || ''),
+        doneAt:     String(data[i][8] || ''),
+        employee:   String(data[i][9] || ''),
+        totalWeight:parseFloat(data[i][10]) || 0,
+        lifts:      lifts,
+      });
+      if (orders.length >= limit) break;
+    }
+    return { success: true, orders: orders };
   } catch(e) {
     return { success: false, message: e.toString() };
   }
