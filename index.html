@@ -32982,32 +32982,52 @@ function _saveUsers(users){
 
 // เรียกตอน app เริ่ม — โหลด users จาก GAS แล้ว migrate localStorage ถ้า GAS ว่าง
 function _initUsers(callback){
-  google.script.run
-    .withSuccessHandler(function(res){
-      if(res && res.success && res.users && res.users.length > 0){
-        _usersCache = res.users;
-        _usersLoaded = true;
-        try{localStorage.setItem('wms_users',JSON.stringify(_usersCache));}catch(e){}
-      } else {
-        // GAS sheet ว่าง → migrate จาก localStorage หรือใช้ default admin
-        var local = null;
-        try{var r=localStorage.getItem('wms_users');if(r)local=JSON.parse(r);}catch(e){}
-        _usersCache = (local && local.length) ? local : _defaultAdminUser();
-        _usersLoaded = true;
-        // push ขึ้น GAS
-        google.script.run.withFailureHandler(function(){}).wmsSaveUsers(JSON.stringify(_usersCache));
-      }
-      if(typeof callback==='function') callback();
-    })
-    .withFailureHandler(function(){
-      // GAS ไม่ตอบ → ใช้ localStorage ต่อ
+  var gasUrl = window._WMS_GAS_URL;
+
+  function _onSuccess(res){
+    if(res && res.success && res.users && res.users.length > 0){
+      _usersCache = res.users;
+      _usersLoaded = true;
+      try{localStorage.setItem('wms_users',JSON.stringify(_usersCache));}catch(e){}
+      console.log('[WMS] _initUsers loaded',_usersCache.length,'users from GAS');
+    } else {
+      // GAS sheet ว่าง → migrate จาก localStorage หรือใช้ default admin
       var local = null;
       try{var r=localStorage.getItem('wms_users');if(r)local=JSON.parse(r);}catch(e){}
       _usersCache = (local && local.length) ? local : _defaultAdminUser();
       _usersLoaded = true;
-      if(typeof callback==='function') callback();
+      console.log('[WMS] _initUsers GAS empty → using local/default, pushing up');
+      if(gasUrl){
+        fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({action:'wmsSaveUsers',args:[JSON.stringify(_usersCache)]})}).catch(function(){});
+      }
+    }
+    if(typeof callback==='function') callback();
+  }
+
+  function _onFail(err){
+    console.error('[WMS] _initUsers failed:',err);
+    var local = null;
+    try{var r=localStorage.getItem('wms_users');if(r)local=JSON.parse(r);}catch(e){}
+    _usersCache = (local && local.length) ? local : _defaultAdminUser();
+    _usersLoaded = true;
+    if(typeof callback==='function') callback();
+  }
+
+  if(gasUrl){
+    // ใช้ POST โดยตรง — เชื่อถือได้กว่า JSONP GET บนทุกเครื่อง
+    fetch(gasUrl,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'wmsGetUsers',args:[]})
     })
-    .wmsGetUsers();
+    .then(function(r){return r.json();})
+    .then(_onSuccess)
+    .catch(_onFail);
+  } else {
+    // Native GAS environment
+    google.script.run.withSuccessHandler(_onSuccess).withFailureHandler(_onFail).wmsGetUsers();
+  }
 }
 var _cu=null;
 function _loadSess(){try{var s=sessionStorage.getItem('wms_sess');if(s)return JSON.parse(s);}catch(e){}return null;}
