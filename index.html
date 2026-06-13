@@ -20,6 +20,7 @@
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
       var GAS_URL = 'https://script.google.com/macros/s/AKfycbzInc0P2x7yWWnR9Fh2S1ytybhA8roLzuaWDFo0IX4dh839NTe8AC7hwkvbtstYoKIu/exec';
+      window._WMS_GAS_URL = GAS_URL; // expose สำหรับ write operations ที่ต้องใช้ POST โดยตรง
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -32955,12 +32956,28 @@ function _loadUsers(){
 
 function _saveUsers(users){
   _usersCache = users;
-  // บันทึกลง GAS Sheet (async — ไม่รอ)
-  google.script.run
-    .withFailureHandler(function(){})
-    .wmsSaveUsers(JSON.stringify(users));
   // backup localStorage เผื่อ offline ชั่วคราว
   try{localStorage.setItem('wms_users',JSON.stringify(users));}catch(e){}
+  // บันทึกลง GAS Sheet — ใช้ POST โดยตรง (JSONP/GET ไม่เหมาะกับ write operation)
+  var gasUrl = window._WMS_GAS_URL;
+  if(gasUrl){
+    fetch(gasUrl,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'wmsSaveUsers',args:[JSON.stringify(users)]})
+    })
+    .then(function(r){return r.json();})
+    .then(function(res){
+      if(!res||!res.success){console.error('[WMS] wmsSaveUsers failed:',res&&res.message);}
+      else{console.log('[WMS] wmsSaveUsers OK — saved',users.length,'users');}
+    })
+    .catch(function(err){console.error('[WMS] wmsSaveUsers error:',err);});
+  } else {
+    // Native GAS environment
+    google.script.run
+      .withFailureHandler(function(e){console.error('[WMS] wmsSaveUsers GAS error:',e);})
+      .wmsSaveUsers(JSON.stringify(users));
+  }
 }
 
 // เรียกตอน app เริ่ม — โหลด users จาก GAS แล้ว migrate localStorage ถ้า GAS ว่าง
