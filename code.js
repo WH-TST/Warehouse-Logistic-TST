@@ -57,6 +57,7 @@ function _handleApiPost(e) {
       'getDeliveryTypeData',
       'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
       'loSubmitLift','loCompleteOrder','loGetOrderStatus','loGetOrderHistory',
+      'loSyncLifts',
       'wmsGetUsers','wmsSaveUsers'
     ];
 
@@ -243,6 +244,7 @@ function doGet(e) {
           'getDeliveryTypeData',
           'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
           'loSubmitLift','loCompleteOrder','loGetOrderStatus','loGetOrderHistory',
+          'loSyncLifts',
           'wmsGetUsers','wmsSaveUsers'
         ];
 
@@ -10330,6 +10332,58 @@ function loSubmitLift(orderId, sku, skuName, lines, weight, employee) {
       }
     }
     return { success: true, logId: logId, kgPerLine: kgPerLine };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// ── ซิงค์ lifts ทั้งหมดจาก Loading App (live view ให้ WMS) ──────────────────
+// liftsJson = JSON string ของ array [{sku, skuName, lines, weight}]
+function loSyncLifts(orderId, liftsJson) {
+  try {
+    var ss       = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var logSheet = _loGetOrCreateSheet(ss, LO_LOG_SHEET, LO_LOG_HEADERS);
+    var ordSheet = ss.getSheetByName(LO_ORDERS_SHEET);
+    var lifts    = JSON.parse(liftsJson || '[]');
+    var now      = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+
+    // ลบแถวเดิมทั้งหมดของ orderId นี้ (ลบจากท้ายขึ้นมาเพื่อไม่ให้ index เลื่อน)
+    if (logSheet.getLastRow() >= 2) {
+      var logData = logSheet.getDataRange().getValues();
+      for (var r = logData.length - 1; r >= 1; r--) {
+        if (String(logData[r][1]) === orderId) {
+          logSheet.deleteRow(r + 1);
+        }
+      }
+    }
+
+    // เพิ่มแถวใหม่จาก lifts array
+    var counter = 1;
+    lifts.forEach(function(l) {
+      var linesNum  = parseFloat(l.lines)  || 0;
+      var weightNum = parseFloat(l.weight) || 0;
+      if (linesNum <= 0 || weightNum <= 0) return; // skip empty rows
+      var kgPerLine = Math.round((weightNum / linesNum) * 1000) / 1000;
+      var logId     = 'LG' + orderId.substring(2) + '_' + counter;
+      logSheet.appendRow([logId, orderId, now, l.sku, l.skuName || '', linesNum, weightNum, kgPerLine, l.employee || '']);
+      counter++;
+    });
+
+    // อัปเดตสถานะ order → LOADING ถ้ายังเป็น PENDING
+    if (ordSheet && ordSheet.getLastRow() >= 2) {
+      var ordData = ordSheet.getDataRange().getValues();
+      for (var i = 1; i < ordData.length; i++) {
+        if (String(ordData[i][0]) === orderId) {
+          if (String(ordData[i][5]) === 'PENDING') {
+            ordSheet.getRange(i + 1, 6).setValue('LOADING');
+            ordSheet.getRange(i + 1, 8).setValue(now);
+          }
+          break;
+        }
+      }
+    }
+
+    return { success: true, synced: counter - 1 };
   } catch(e) {
     return { success: false, message: e.toString() };
   }
