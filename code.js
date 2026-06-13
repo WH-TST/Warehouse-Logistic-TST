@@ -10439,7 +10439,7 @@ function _getOrCreateUsersSheet(ss) {
 
 function wmsGetUsers() {
   try {
-    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = _getOrCreateUsersSheet(ss);
     var last  = sheet.getLastRow();
     if (last < 2) return { success: true, users: [] };   // ยังไม่มีข้อมูล → ให้ client migrate
@@ -10469,7 +10469,7 @@ function wmsGetUsers() {
 function wmsSaveUsers(usersJSON) {
   try {
     var users = JSON.parse(usersJSON);
-    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = _getOrCreateUsersSheet(ss);
 
     // ล้างข้อมูลเก่า (เก็บ header)
