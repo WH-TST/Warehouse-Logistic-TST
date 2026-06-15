@@ -155,6 +155,42 @@
     }
     body { font-family: 'Sarabun', 'Inter', sans-serif; background-color: var(--bg-base); color: var(--text-primary); margin: 0; }
 
+    /* ── MOBILE SIDEBAR DRAWER ── */
+    #mobile-sidebar-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 90;
+        backdrop-filter: blur(2px);
+    }
+    #mobile-sidebar-overlay.active { display: block; }
+
+    @media (max-width: 1023px) {
+        #app-sidebar {
+            display: flex !important;
+            transform: translateX(-100%);
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+            z-index: 100;
+        }
+        #app-sidebar.mobile-open {
+            transform: translateX(0);
+        }
+        #app-main { margin-left: 0 !important; }
+        #sidebar-toggle-btn { display: flex !important; }
+        /* ซ่อนปุ่ม collapse บน mobile */
+        #app-sidebar > button:first-child { display: none !important; }
+    }
+    @media (min-width: 1024px) {
+        #mobile-hamburger { display: none !important; }
+    }
+
+    /* Header responsive */
+    @media (max-width: 640px) {
+        header { padding: 10px 14px !important; }
+        #view-title { font-size: 13px !important; }
+        #current-sheet-label { font-size: 12px !important; }
+    }
+
     /* ── SIDEBAR: Dark Steel Navy ── */
     .sidebar-gradient {
         background: linear-gradient(180deg, #0d1b2a 0%, #132030 50%, #172840 100%);
@@ -993,7 +1029,14 @@ thead.sticky {
 </div>
 
 
-    <aside id="app-sidebar" class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 hidden lg:flex flex-col" style="transition:transform 0.25s ease;">
+    <!-- Mobile overlay backdrop -->
+    <div id="mobile-sidebar-overlay" onclick="closeMobileSidebar()"></div>
+
+    <aside id="app-sidebar" class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 flex flex-col" style="transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);">
+        <!-- ปุ่มปิด sidebar บน mobile -->
+        <button onclick="closeMobileSidebar()" id="mobile-close-btn" class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-white lg:hidden" style="background:rgba(255,255,255,0.12);z-index:110;">
+            <i class="fas fa-times text-sm"></i>
+        </button>
         <!-- ── ปุ่ม collapse — ลอยที่ขอบขวาบนของ sidebar ── -->
         <button onclick="toggleSidebar()" title="ซ่อน Sidebar"
             style="position:absolute;right:-14px;top:22px;width:28px;height:28px;border-radius:50%;background:#1d4ed8;color:#fff;border:2px solid #bec8d8;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:60;box-shadow:0 2px 8px rgba(0,0,0,0.3);transition:background 0.15s;"
@@ -1038,9 +1081,6 @@ thead.sticky {
             </button>
             <button onclick="switchView('analytics')" id="nav-analytics" class="nav-btn" data-tip="ANALYTICS">
                 <span class="nav-icon"><i class="fas fa-chart-line"></i></span> ANALYTICS
-            </button>
-            <button onclick="switchView('overdue')" id="nav-overdue" class="nav-btn" data-tip="รายการจองค้าง">
-                <span class="nav-icon"><i class="fas fa-exclamation-triangle"></i></span> รายการจองค้าง
             </button>
             <button onclick="switchView('whactivity')" id="nav-whactivity" class="nav-btn" data-tip="WH ACTIVITY LOG">
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> WH ACTIVITY LOG
@@ -1114,6 +1154,11 @@ thead.sticky {
     <div id="app-main" class="lg:ml-72 min-h-screen flex flex-col" style="transition:margin-left 0.25s ease;">
     <header class="bg-white px-6 py-4 border-b flex justify-between items-center sticky top-0 z-40">
         <div class="flex items-center gap-3">
+            <!-- Hamburger สำหรับ mobile -->
+            <button id="mobile-hamburger" onclick="openMobileSidebar()" title="เมนู" class="w-9 h-9 rounded-xl flex items-center justify-center transition-all shadow-sm lg:hidden" style="background:#1a2535;color:#e2e8f0;">
+                <i class="fas fa-bars text-sm"></i>
+            </button>
+            <!-- Toggle mini-mode สำหรับ desktop -->
             <button id="sidebar-toggle-btn" onclick="toggleSidebar()" title="แสดง Sidebar" class="w-9 h-9 rounded-xl items-center justify-center transition-all shadow-sm hidden" style="background:#1a2535;color:#e2e8f0;">
                 <i class="fas fa-bars text-sm"></i>
             </button>
@@ -7776,7 +7821,28 @@ const _safeStorage = {
 
     // ── Sidebar Toggle ────────────────────────────────────────────────────
     let _sidebarMini = false;
+    const _isMobile = () => window.innerWidth < 1024;
+
+    window.openMobileSidebar = function() {
+        const sidebar  = document.getElementById('app-sidebar');
+        const overlay  = document.getElementById('mobile-sidebar-overlay');
+        if (!sidebar) return;
+        sidebar.classList.add('mobile-open');
+        if (overlay) overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.closeMobileSidebar = function() {
+        const sidebar  = document.getElementById('app-sidebar');
+        const overlay  = document.getElementById('mobile-sidebar-overlay');
+        if (!sidebar) return;
+        sidebar.classList.remove('mobile-open');
+        if (overlay) overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    };
+
     window.toggleSidebar = function toggleSidebar() {
+        if (_isMobile()) { openMobileSidebar(); return; }
         const sidebar      = document.getElementById('app-sidebar');
         const main         = document.getElementById('app-main');
         const headerBtn    = document.getElementById('sidebar-toggle-btn');
@@ -7788,12 +7854,15 @@ const _safeStorage = {
         if (collapseIcon) collapseIcon.className = _sidebarMini ? 'fas fa-chevron-right' : 'fas fa-chevron-left';
         if (headerBtn)    headerBtn.style.display = _sidebarMini ? 'flex' : 'none';
     };
-    // ── Auto-expand เมื่อกด nav ในโหมด mini ──
+
+    // ── Auto-close mobile sidebar เมื่อกด nav ──
     document.addEventListener('DOMContentLoaded', function() {
         var nav = document.getElementById('sidebar-nav');
         if (nav) {
             nav.addEventListener('click', function(e) {
-                if (_sidebarMini && e.target.closest('.nav-btn')) {
+                if (_isMobile() && e.target.closest('.nav-btn')) {
+                    closeMobileSidebar();
+                } else if (!_isMobile() && _sidebarMini && e.target.closest('.nav-btn')) {
                     window.toggleSidebar();
                 }
             });
