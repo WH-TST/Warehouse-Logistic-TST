@@ -8867,9 +8867,49 @@ function getProductionPlanData(params) {
     }
     Logger.log('=== END DEBUG ===');
 
+    // ── ดึงยอดผลิตจริงจาก DynamicTransaction → { SKU: { 'yyyy-MM-dd': pcs } } ──
+    var actualBySkuDate = {};
+    try {
+      var dynSS2    = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
+      var dynSheet2 = dynSS2.getSheetByName('DynamicTransaction');
+      if (dynSheet2 && dynSheet2.getLastRow() > 1) {
+        var dynLast  = dynSheet2.getLastRow();
+        var dynFrom  = Math.max(2, dynLast - 20000);
+        var dynData  = dynSheet2.getRange(dynFrom, 1, dynLast - dynFrom + 1, 20).getValues();
+        for (var di = 0; di < dynData.length; di++) {
+          var dType = String(dynData[di][6] || '').trim(); // Col G = Reference
+          if (dType !== 'Production') continue;
+          var dSku = String(dynData[di][4] || '').trim(); // Col E = SKU
+          if (!dSku) continue;
+          var dLines = parseFloat(dynData[di][7]) || 0;  // Col H = เส้น
+          if (dLines <= 0) continue;
+          // Col T (index 19) = date D/M/YYYY
+          var dRaw  = dynData[di][19];
+          var dStr2 = '';
+          if (dRaw instanceof Date) {
+            dStr2 = Utilities.formatDate(dRaw, 'GMT+7', 'yyyy-MM-dd');
+          } else {
+            var tp2 = String(dRaw || '').trim().split(' ')[0].split('/');
+            if (tp2.length === 3) {
+              var dd2 = parseInt(tp2[0]), mm2 = parseInt(tp2[1]), yy2 = parseInt(tp2[2]);
+              if (!isNaN(dd2) && !isNaN(mm2) && !isNaN(yy2)) {
+                dStr2 = yy2 + '-' + String(mm2).padStart(2,'0') + '-' + String(dd2).padStart(2,'0');
+              }
+            }
+          }
+          if (!dStr2) continue;
+          if (!actualBySkuDate[dSku]) actualBySkuDate[dSku] = {};
+          actualBySkuDate[dSku][dStr2] = (actualBySkuDate[dSku][dStr2] || 0) + dLines;
+        }
+      }
+    } catch (eAct) {
+      Logger.log('⚠️ actualBySkuDate error: ' + eAct.message);
+    }
+
     return { success: true, sheetName: sheetName, machines: machines,
              dates: dateColumns.map(function(d) { return d.dateStr; }), today: today,
-             inventory: inventory, todaySheetPlan: todaySheetPlan };
+             inventory: inventory, todaySheetPlan: todaySheetPlan,
+             actualBySkuDate: actualBySkuDate };
   } catch (e) {
     return { success: false, message: e.toString() };
   }

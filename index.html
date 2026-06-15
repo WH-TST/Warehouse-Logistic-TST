@@ -19,7 +19,7 @@
     <script>
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
-      var GAS_URL = 'https://script.google.com/macros/s/AKfycbxz_G6zQSB3HleE2ao1JNexLGKr0AOc_89QhfUDuIq9MTlSYuAUiEBOK20RE_nbmxM/exec';
+      var GAS_URL = 'https://script.google.com/macros/s/AKfycbxwueXLHRDlR8580drZaUOj0zljkxDLMri_IG5JGIzcePuVGQuZHP49i0sfFV5lYDdf/exec';
       window._WMS_GAS_URL = GAS_URL; // expose สำหรับ write operations ที่ต้องใช้ POST โดยตรง
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
@@ -30789,8 +30789,10 @@ function _wmBuildZoneSkuBase(zoneId, prodData, moveSummary) {
             .sort()
             .pop() || '0000-00-00';
 
-          // รวมยอดผลิต **หลังวันที่ย้ายออก** จนถึงวันนี้
-          const newPcs = Object.entries(p.daily || {})
+          // รวมยอดผลิตจริง **หลังวันที่ย้ายออก** จนถึงวันนี้
+          // ใช้ actualBySkuDate (จาก DynamicTransaction) แทน p.daily (แผนล่วงหน้า)
+          const actualDates = (prodData.actualBySkuDate || {})[p.sku] || {};
+          const newPcs = Object.entries(actualDates)
             .filter(([d]) => d > lastMoveOutDate && d <= today)
             .reduce((sum, [, qty]) => sum + (qty || 0), 0);
 
