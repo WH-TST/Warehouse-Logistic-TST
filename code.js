@@ -10866,15 +10866,20 @@ function analyzeZoneCapacity(params) {
       var aheadIncoming = aheadByZone[zoneId] || {};
       var aheadUsedW    = 0;
       var aheadList     = [];
-      // per-day breakdown
+      // per-day breakdown (รวม usedWidthCm ต่อ row และ dayUsedCm รวมต่อวัน)
       var aheadBreakdown = aheadDays.map(function(day) {
         var agg = aggregateByZoneSku(dayPlan[day]);
         var rows = [];
+        var dayUsedW = 0;
         Object.keys(agg[zoneId] || {}).forEach(function(sku) {
           var d = agg[zoneId][sku];
-          rows.push({ sku:sku, skuName:d.skuName, bundles:d.bundles, machHrs:d.machHrs });
+          var info = (!d.bw || !d.bh) ? null : stackInfo(d.bundles, d.bw, d.bh);
+          var usedW = info ? info.usedWidthCm : 0;
+          dayUsedW += usedW;
+          rows.push({ sku:sku, skuName:d.skuName, bundles:d.bundles,
+                      machHrs:d.machHrs, usedWidthCm: Math.round(usedW) });
         });
-        return { date: day, rows: rows };
+        return { date: day, rows: rows, dayUsedCm: Math.round(dayUsedW) };
       });
       Object.keys(aheadIncoming).forEach(function(sku) {
         var d = aheadIncoming[sku];
@@ -10961,6 +10966,44 @@ function analyzeZoneCapacity(params) {
         });
       }
 
+      // ── คาดการณ์การเต็มรายวัน (dayProgression) ──
+      // สร้าง timeline: ตอนนี้ → วันนี้ → D+1 → D+2 → D+3
+      var dayProgression = [];
+      var cumUsed = currentUsedW;
+      // จุดเริ่ม: ตอนนี้ (ก่อนผลิตวันนี้)
+      dayProgression.push({
+        label: 'ตอนนี้', date: dateStr,
+        usedCm: Math.round(cumUsed),
+        pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0
+      });
+      // หลังผลิตวันนี้
+      cumUsed += todayUsedW;
+      dayProgression.push({
+        label: 'วันนี้', date: dateStr,
+        usedCm: Math.round(cumUsed),
+        pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0,
+        addedCm: Math.round(todayUsedW)
+      });
+      // D+1, D+2, D+3
+      aheadBreakdown.forEach(function(bd) {
+        cumUsed += bd.dayUsedCm;
+        dayProgression.push({
+          label: fmtYMD ? bd.date.substring(5).replace('-','/') : bd.date,
+          date: bd.date,
+          usedCm: Math.round(cumUsed),
+          pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0,
+          addedCm: bd.dayUsedCm
+        });
+      });
+      // หาวันแรกที่เต็ม (>= THRESHOLD)
+      var fullOnDate = null;
+      for (var pi = 1; pi < dayProgression.length; pi++) {
+        if (dayProgression[pi].pct >= THRESHOLD) {
+          fullOnDate = dayProgression[pi].date;
+          break;
+        }
+      }
+
       results.push({
         zoneId: zoneId,
         totalWidthCm: totalW,
@@ -10985,6 +11028,9 @@ function analyzeZoneCapacity(params) {
         projectedPct: projectedPct,
         needsAction: projectedPct >= THRESHOLD,
         neededCm: Math.round(needCm),
+        // คาดการณ์การเต็ม
+        dayProgression: dayProgression,
+        fullOnDate: fullOnDate,
         // ขั้น 7
         suggestions: suggestions
       });
