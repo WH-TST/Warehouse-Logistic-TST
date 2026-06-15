@@ -1373,7 +1373,7 @@ thead.sticky {
                 <h3 class="text-2xl font-black text-slate-800 italic underline decoration-indigo-500 underline-offset-8">TAG PRINT PREVIEW</h3>
                 <div class="flex gap-4">
                     <button onclick="closePrintPreview()" class="px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">CLOSE</button>
-                    <button onclick="window.print()" class="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-lg transition-all">PRINT ALL</button>
+                    <button onclick="printTagPopup()" class="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-lg transition-all">PRINT ALL</button>
                 </div>
             </div>
             <div id="preview-content" class="print-area flex flex-wrap gap-6 justify-center bg-slate-50 p-10 rounded-3xl border-2 border-dashed border-slate-200"></div>
@@ -10068,6 +10068,30 @@ function generatePreview(item) {
     document.getElementById('tag-preview-area').classList.remove('hidden');
 }
         window.closePrintPreview = function closePrintPreview() { document.getElementById('tag-preview-area').classList.add('hidden'); }
+
+        window.printTagPopup = function printTagPopup() {
+            var content = document.getElementById('preview-content');
+            if (!content) return;
+            var tags = content.querySelectorAll('.tag-preview-page');
+            if (!tags.length) return;
+            var html = '';
+            tags.forEach(function(t) { html += t.outerHTML; });
+            var pw = window.open('', '_blank', 'width=400,height=320');
+            pw.document.write(
+                '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+                '<style>' +
+                '@page { size: 100mm 75mm; margin: 0; }' +
+                'html, body { margin: 0; padding: 0; background: white; }' +
+                '.tag-preview-page { width: 100mm; height: 75mm; overflow: hidden; page-break-after: always; box-sizing: border-box; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 2mm 4mm; display: flex; flex-direction: column; position: relative; color: black; background: white; }' +
+                '.barcode-container { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 1mm; }' +
+                '.barcode-svg { width: 90% !important; max-height: 10mm; }' +
+                '* { font-family: Arial, sans-serif; box-sizing: border-box; }' +
+                '</style>' +
+                '</head><body onload="window.print();window.onafterprint=function(){window.close();};">' +
+                html + '</body></html>'
+            );
+            pw.document.close();
+        }
 
         window.saveCalculation = function saveCalculation() {
             if (rawData.length === 0) return showToast("ไม่มีข้อมูลเพื่อบันทึกการคำนวณ", true);
