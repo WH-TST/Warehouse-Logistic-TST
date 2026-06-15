@@ -8109,87 +8109,188 @@ const _safeStorage = {
         const cnt   = safeGet('wmm-analysis-count');
         if (!panel || !list) return;
 
-        const zones = data.zones || [];
-        const STATUS_COLOR = { ok:'#059669', warn:'#d97706', crit:'#dc2626' };
-        const STATUS_BG    = { ok:'#ecfdf5',  warn:'#fffbeb',  crit:'#fef2f2' };
+        const zones     = data.zones || [];
+        const aheadDays = data.aheadDays || [];
 
-        function zStatus(pct) {
-          return pct >= 70 ? 'crit' : pct >= 50 ? 'warn' : 'ok';
+        const SC = { ok:'#059669', warn:'#d97706', crit:'#dc2626' };
+        const SB = { ok:'#ecfdf5', warn:'#fffbeb', crit:'#fef2f2' };
+        function stOf(pct) { return pct >= 70 ? 'crit' : pct >= 50 ? 'warn' : 'ok'; }
+
+        // ฟอร์แมต yyyy-MM-dd → dd/MM
+        function fmtD(s) {
+          if (!s) return '';
+          const p = s.split('-');
+          return p[2]+'/'+p[1];
         }
 
-        let zoneHtml = '';
-        let suggHtml = '';
+        // Bar แสดง %
+        function pctBar(pct, color) {
+          return `<div style="height:5px;border-radius:3px;background:#1e293b;margin-top:4px;">
+            <div style="height:5px;border-radius:3px;background:${color};width:${Math.min(100,pct)}%;transition:width .4s;"></div>
+          </div>`;
+        }
+
+        let html = '';
         let suggCount = 0;
+        let hasAnyIssue = false;
 
         zones.forEach(function(z) {
-          const st  = zStatus(z.projectedPct);
-          const stC = zStatus(z.currentPct);
-          const needsAction = z.needsAction;
+          // แสดงเฉพาะโซนที่มีแผนผลิตเข้าวันนี้ หรือ projected ≥ 50%
+          const hasPlan = z.todayList && z.todayList.length > 0;
+          const hasAhead = z.aheadList && z.aheadList.length > 0;
+          if (!hasPlan && !hasAhead && z.projectedPct < 50) return;
 
-          // แสดงโซนที่ projected ≥ 50% เท่านั้น (โซน ok ไม่ต้องแสดง)
-          if (z.projectedPct < 50 && !needsAction) return;
+          hasAnyIssue = true;
+          const st  = stOf(z.projectedPct);
+          const stC = stOf(z.currentPct);
 
-          // incoming list summary
-          const incSummary = z.incomingList && z.incomingList.length > 0
-            ? z.incomingList.map(function(i){ return i.sku+' '+i.bundles+'มัด'; }).join(', ')
-            : '-';
+          // ──── Zone Header ────
+          html += `<div style="border:1.5px solid ${SC[st]};border-radius:16px;overflow:hidden;margin-bottom:14px;">`;
 
-          zoneHtml += `<div style="background:${STATUS_BG[st]};border:1.5px solid ${STATUS_COLOR[st]};border-radius:14px;padding:14px 16px;margin-bottom:10px;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-              <span style="font-size:13px;font-weight:900;padding:3px 12px;border-radius:20px;background:${STATUS_COLOR[st]};color:#fff;">${z.zoneId}</span>
-              <span style="font-size:12px;font-weight:700;color:#0f172a;">ปัจจุบัน <b>${z.currentPct}%</b></span>
-              <span style="font-size:11px;color:#64748b;">→</span>
-              <span style="font-size:13px;font-weight:900;color:${STATUS_COLOR[st]};">หลังผลิต <b>${z.projectedPct}%</b></span>
-              <span style="font-size:11px;color:#94a3b8;margin-left:auto;">${(z.totalWidthCm/100).toFixed(1)}ม. รวม</span>
+          // header bar
+          html += `<div style="background:${SB[st]};padding:12px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:14px;font-weight:900;padding:3px 14px;border-radius:20px;background:${SC[st]};color:#fff;">${z.zoneId}</span>
+            <div style="flex:1;min-width:160px;">
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <span style="font-size:11px;color:#64748b;">ปัจจุบัน <b style="color:${SC[stC]};">${z.currentPct}%</b></span>
+                <span style="font-size:11px;color:#64748b;">+วันนี้ <b style="color:${SC[stOf(z.todayPct)]};">${z.todayPct}%</b></span>
+                <span style="font-size:12px;font-weight:900;color:${SC[st]};">+3วัน ${z.projectedPct}%</span>
+                <span style="font-size:11px;color:#94a3b8;">พื้นที่ว่าง <b style="color:${z.freeSpaceCm>0?'#059669':'#dc2626'};">${(z.freeSpaceCm/100).toFixed(1)}ม.</b></span>
+              </div>
+              ${pctBar(z.projectedPct, SC[st])}
             </div>
-            <div style="font-size:11px;color:#64748b;">แผนผลิตเข้า: ${incSummary}</div>
-            ${needsAction ? '<div style="font-size:11px;color:'+STATUS_COLOR['crit']+';font-weight:700;margin-top:4px;">⚠️ ต้องการพื้นที่คืน '+(z.neededCm/100).toFixed(2)+' ม.</div>' : ''}
+            <span style="font-size:10px;color:#94a3b8;">${(z.totalWidthCm/100).toFixed(1)}ม.</span>
           </div>`;
 
-          // suggestions
-          (z.suggestions || []).forEach(function(s) {
-            suggCount++;
-            const isMove = s.type === 'ย้ายสินค้า';
-            const icon   = isMove ? '📦' : '🔄';
-            const badge  = isMove
-              ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#eff6ff;color:#1d4ed8;">${icon} ย้ายน้อยได้มาก</span>`
-              : `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#fef3c7;color:#92400e;">${icon} ยุบกอง</span>`;
-            const delivWarn = s.hasDelivery ? '<span style="font-size:10px;color:#b45309;">⚡มีแผนส่ง</span>' : '';
-            const detailLine = isMove
-              ? `ย้าย <b>${s.bundlesToMove} มัด</b> · ได้พื้นที่คืน <b style="color:#059669;">${(s.freedCm/100).toFixed(2)} ม.</b> · ประสิทธิภาพ ${s.efficiency} cm/มัด`
-              : `รวมกอง ${s.currentBundles}+${s.incomingBundles} = <b>${s.totalBundles} มัด</b> → ${s.optCols} ฐาน` + (s.savedWidthCm > 0 ? ` ประหยัด ${(s.savedWidthCm/100).toFixed(2)} ม.` : '');
+          html += `<div style="background:#0f172a;padding:12px 16px;">`;
 
-            const btnData = isMove
-              ? `{type:'ย้ายสินค้า',zone:'${z.zoneId}',sku:'${s.sku}',bundles:${s.bundlesToMove}}`
-              : `{type:'ยุบกอง',zone:'${z.zoneId}',sku:'${s.sku}',bundles:${s.totalBundles}}`;
+          // ── ขั้น 1: แผนวันนี้ ──
+          if (z.todayList && z.todayList.length > 0) {
+            html += `<div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:6px;letter-spacing:.05em;">📅 แผนผลิตวันนี้</div>`;
+            html += `<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">`;
+            z.todayList.forEach(function(r) {
+              const needW = (r.usedWidthCm/100).toFixed(2);
+              const hrs   = r.machHrs > 0 ? r.machHrs+'ชม.' : '';
+              const sh    = r.shifts && r.shifts.length ? 'กะ'+r.shifts.join(',') : '';
+              html += `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#1e293b;border-radius:8px;flex-wrap:wrap;">
+                <span style="font-size:11px;font-weight:700;color:#e2e8f0;flex:1;min-width:120px;">${r.skuName||r.sku}</span>
+                <span style="font-size:11px;color:#94a3b8;">${r.bundles} มัด · ${r.cols} ฐาน · ใช้ ${needW}ม.</span>
+                ${hrs?`<span style="font-size:10px;color:#f59e0b;">${hrs}</span>`:''}
+                ${sh?`<span style="font-size:10px;color:#818cf8;">${sh}</span>`:''}
+              </div>`;
+            });
+            html += `</div>`;
+          }
 
-            suggHtml += `<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px;">
-              <div style="flex:1;min-width:200px;">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
-                  ${badge}
-                  <span style="font-size:10px;font-weight:900;padding:2px 8px;border-radius:20px;background:#0f172a;color:#fff;">${z.zoneId}</span>
-                  ${delivWarn}
+          // ── ขั้น 2: แผน 3 วันล่วงหน้า ──
+          if (z.aheadBreakdown) {
+            const hasRows = z.aheadBreakdown.some(function(b){ return b.rows && b.rows.length > 0; });
+            if (hasRows) {
+              html += `<div style="font-size:10px;font-weight:700;color:#a78bfa;margin-bottom:6px;letter-spacing:.05em;">🗓 แผน 3 วันล่วงหน้า</div>`;
+              html += `<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:10px;">`;
+              z.aheadBreakdown.forEach(function(b) {
+                if (!b.rows || !b.rows.length) return;
+                const skuStr = b.rows.map(function(r){ return r.skuName||r.sku+' '+r.bundles+'มัด'; }).join(' · ');
+                html += `<div style="display:flex;align-items:baseline;gap:8px;padding:5px 10px;background:#1e293b;border-radius:8px;">
+                  <span style="font-size:10px;font-weight:900;color:#a78bfa;white-space:nowrap;">${fmtD(b.date)}</span>
+                  <span style="font-size:11px;color:#94a3b8;">${skuStr}</span>
+                </div>`;
+              });
+              html += `</div>`;
+            }
+          }
+
+          // ── ขั้น 3: SKU ผลิตต่อเนื่อง ──
+          if (z.continuousSkus && z.continuousSkus.length > 0) {
+            html += `<div style="font-size:10px;font-weight:700;color:#f59e0b;margin-bottom:5px;letter-spacing:.05em;">🔁 ผลิตต่อเนื่อง (ต้องจองพื้นที่)</div>`;
+            html += `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;">`;
+            z.continuousSkus.forEach(function(c) {
+              html += `<span style="font-size:11px;padding:3px 10px;border-radius:20px;background:#292524;border:1px solid #f59e0b;color:#fcd34d;">${c.skuName||c.sku} ${c.daysCount}วัน·${c.totalBundles}มัด</span>`;
+            });
+            html += `</div>`;
+          }
+
+          // ── ขั้น 4: สต็อคปัจจุบัน top 5 ──
+          if (z.stockDetails && z.stockDetails.length > 0) {
+            const top = z.stockDetails.slice(0,5);
+            html += `<div style="font-size:10px;font-weight:700;color:#34d399;margin-bottom:5px;letter-spacing:.05em;">📦 สต็อคปัจจุบัน (top ${top.length})</div>`;
+            html += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">`;
+            top.forEach(function(s) {
+              const delivMark = s.hasDelivery ? '⚡' : '';
+              html += `<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:#1e293b;color:#94a3b8;">${delivMark}${s.skuName||s.sku} ${s.bundles}มัด·${s.optCols}ฐาน</span>`;
+            });
+            if (z.stockDetails.length > 5) html += `<span style="font-size:10px;color:#475569;">+${z.stockDetails.length-5} อื่นๆ</span>`;
+            html += `</div>`;
+          }
+
+          // ── ขั้น 5+6: สรุปพื้นที่ ──
+          html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:${z.needsAction?'10px':'0'};">
+            <div style="flex:1;min-width:100px;background:#1e293b;border-radius:8px;padding:7px 10px;text-align:center;">
+              <div style="font-size:10px;color:#64748b;">สต็อคใช้</div>
+              <div style="font-size:13px;font-weight:900;color:#94a3b8;">${(z.currentUsedCm/100).toFixed(1)}ม.</div>
+            </div>
+            <div style="flex:1;min-width:100px;background:#1e293b;border-radius:8px;padding:7px 10px;text-align:center;">
+              <div style="font-size:10px;color:#64748b;">เข้าวันนี้</div>
+              <div style="font-size:13px;font-weight:900;color:#60a5fa;">+${(z.todayUsedCm/100).toFixed(1)}ม.</div>
+            </div>
+            <div style="flex:1;min-width:100px;background:#1e293b;border-radius:8px;padding:7px 10px;text-align:center;">
+              <div style="font-size:10px;color:#64748b;">3วันล่วงหน้า</div>
+              <div style="font-size:13px;font-weight:900;color:#a78bfa;">+${(z.aheadUsedCm/100).toFixed(1)}ม.</div>
+            </div>
+            <div style="flex:1;min-width:100px;background:${z.freeSpaceCm>0?'#1e293b':'#450a0a'};border-radius:8px;padding:7px 10px;text-align:center;">
+              <div style="font-size:10px;color:#64748b;">ว่างจริง</div>
+              <div style="font-size:13px;font-weight:900;color:${z.freeSpaceCm>0?'#34d399':'#f87171'};">${(z.freeSpaceCm/100).toFixed(1)}ม.</div>
+            </div>
+          </div>`;
+
+          // ── ขั้น 7: สรุปงาน ──
+          if (z.suggestions && z.suggestions.length > 0) {
+            html += `<div style="margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">`;
+            html += `<div style="font-size:10px;font-weight:700;color:#f87171;margin-bottom:7px;letter-spacing:.05em;">⚠️ งานที่ต้องทำ (ต้องการพื้นที่คืน ${(z.neededCm/100).toFixed(2)}ม.)</div>`;
+            z.suggestions.forEach(function(s) {
+              suggCount++;
+              const isMove = s.type === 'ย้ายสินค้า';
+              const icon   = isMove ? '📦' : '🔄';
+              const typeBg = isMove ? '#1e3a5f' : '#422006';
+              const typeC  = isMove ? '#60a5fa' : '#fcd34d';
+              const delivWarn = s.hasDelivery ? '<span style="font-size:9px;color:#f59e0b;margin-left:4px;">⚡แผนส่งออก</span>' : '';
+              const detail = isMove
+                ? `ย้าย <b style="color:#fff;">${s.bundlesToMove} มัด</b> — ได้พื้นที่คืน <b style="color:#34d399;">${(s.freedCm/100).toFixed(2)}ม.</b> · ${s.efficiency}cm/มัด`
+                : `รวมกอง <b style="color:#fff;">${s.currentBundles}+${s.incomingBundles}=${s.totalBundles}มัด</b> → ${s.optCols} ฐาน`
+                  + (s.savedWidthCm > 0 ? ` ประหยัด <b style="color:#34d399;">${(s.savedWidthCm/100).toFixed(2)}ม.</b>` : '');
+
+              const safeSkuName = (s.skuName||s.sku).replace(/'/g,"\\'");
+              const btnData = isMove
+                ? `{type:'ย้ายสินค้า',zone:'${z.zoneId}',sku:'${s.sku}',skuName:'${safeSkuName}',bundles:${s.bundlesToMove}}`
+                : `{type:'ยุบกอง',zone:'${z.zoneId}',sku:'${s.sku}',skuName:'${safeSkuName}',bundles:${s.totalBundles}}`;
+
+              html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;background:#1e293b;border-radius:10px;margin-bottom:6px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:160px;">
+                  <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap;">
+                    <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:${typeBg};color:${typeC};">${icon} ${s.type}</span>
+                    ${delivWarn}
+                  </div>
+                  <div style="font-size:12px;font-weight:700;color:#e2e8f0;">${s.skuName||s.sku}</div>
+                  <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${detail}</div>
                 </div>
-                <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:3px;">${s.skuName||s.sku}</div>
-                <div style="font-size:11px;color:#64748b;">${detailLine}</div>
-                <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${s.note||''}</div>
-              </div>
-              <button onclick="wmmOpenCreateModal(${btnData})"
-                style="padding:8px 14px;border-radius:10px;background:#1d4ed8;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
-                <i class="fas fa-plus" style="font-size:10px;margin-right:4px;"></i>สร้างใบงาน
-              </button>
-            </div>`;
-          });
+                <button onclick="wmmOpenCreateModal(${btnData})"
+                  style="padding:7px 12px;border-radius:8px;background:#1d4ed8;color:#fff;border:none;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                  <i class="fas fa-plus" style="font-size:9px;margin-right:3px;"></i>สร้างใบงาน
+                </button>
+              </div>`;
+            });
+            html += `</div>`;
+          }
+
+          html += `</div></div>`; // close inner + zone card
         });
 
-        if (!zoneHtml && !suggHtml) {
-          list.innerHTML = '<div style="text-align:center;padding:32px;color:#059669;font-weight:700;"><i class="fas fa-check-circle" style="font-size:28px;display:block;margin-bottom:8px;"></i>พื้นที่ทุกโซนเพียงพอ ไม่ต้องดำเนินการ</div>';
+        if (!hasAnyIssue) {
+          list.innerHTML = '<div style="text-align:center;padding:40px;color:#059669;font-weight:700;"><i class="fas fa-check-circle" style="font-size:32px;display:block;margin-bottom:10px;"></i>ทุกโซนพื้นที่เพียงพอ ไม่มีงานที่ต้องทำ</div>';
         } else {
-          list.innerHTML =
-            (zoneHtml ? `<div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;padding:0 2px;">📊 สถานะโซนที่ต้องดูแล</div>${zoneHtml}` : '') +
-            (suggHtml  ? `<div style="font-size:12px;font-weight:700;color:#64748b;margin:12px 0 8px;padding:0 2px;">💡 คำแนะนำการจัดพื้นที่</div>${suggHtml}` : '');
+          list.innerHTML = html;
         }
-        if (cnt) cnt.textContent = suggCount > 0 ? suggCount + ' รายการแนะนำ' : '✓ OK';
+        if (cnt) cnt.textContent = suggCount > 0 ? suggCount + ' งานที่ต้องทำ' : '✓ OK';
         panel.style.display = 'block';
         panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
