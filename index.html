@@ -1070,8 +1070,8 @@ thead.sticky {
                 <i class="fas fa-industry" style="color:#475569;font-size:8px;"></i>&nbsp;WAREHOUSE
                 <span class="line"></span>
             </div>
-            <button onclick="switchView('input')" id="nav-input" class="nav-btn active" data-tip="STORAGE FG">
-                <span class="nav-icon"><i class="fas fa-pallet"></i></span> STORAGE FG
+            <button onclick="switchView('wm-manage')" id="nav-wm-manage" class="nav-btn active" data-tip="จัดการคลัง">
+                <span class="nav-icon"><i class="fas fa-layer-group"></i></span> จัดการคลัง
             </button>
             <button onclick="switchView('report')" id="nav-report" class="nav-btn" data-tip="REPORT STORAGE">
                 <span class="nav-icon"><i class="fas fa-chart-pie"></i></span> REPORT STORAGE
@@ -1084,9 +1084,6 @@ thead.sticky {
             </button>
             <button onclick="switchView('whactivity')" id="nav-whactivity" class="nav-btn" data-tip="WH ACTIVITY LOG">
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> WH ACTIVITY LOG
-            </button>
-            <button onclick="switchView('warehouse-map')" id="nav-warehouse-map" class="nav-btn" data-tip="ผังคลังสินค้า">
-                <span class="nav-icon"><i class="fas fa-th-large"></i></span> ผังคลัง
             </button>
 
             <!-- ─── INVENTORY ─── -->
@@ -1178,27 +1175,159 @@ thead.sticky {
     <main class="px-5 py-6 flex-grow w-full">
     
     <!-- ============================================ -->
-    <!-- VIEW 1: STORAGE FG (Input) -->
+    <!-- VIEW: จัดการคลัง (WM Manage)              -->
     <!-- ============================================ -->
-    <div id="view-input-content" class="space-y-8">
-        <div class="bg-slate-900 rounded-[2rem] p-10 shadow-2xl flex flex-col md:flex-row gap-8 items-end">
-            <div class="flex-grow w-full">
-                <label class="text-amber-500 text-xs font-black uppercase tracking-widest block mb-3">1. ระบุวันที่ผลิต (Production Date)</label>
-                <input type="date" id="plan-date" class="w-full bg-slate-800 border-2 border-slate-700 text-white p-5 rounded-2xl text-xl font-bold outline-none focus:border-amber-500 transition-all">
-            </div>
-            <button onclick="fetchPlanByDate()" id="btn-fetch" class="w-full md:w-56 bg-amber-500 hover:bg-amber-600 text-slate-900 h-16 rounded-2xl font-black text-lg transition-all shadow-lg flex items-center justify-center gap-3">
-                <i class="fas fa-search"></i> VIEW PLAN
-            </button>
-            <button onclick="saveCalculation()" id="btn-save-calc" class="w-full md:w-56 bg-emerald-600 hover:bg-emerald-800 text-white h-16 rounded-2xl font-black text-lg shadow-lg flex items-center justify-center gap-3">
-                <i class="fas fa-save"></i> SAVE CALC
-            </button>
+    <div id="view-wm-manage-content" class="space-y-4">
+
+      <!-- Control Bar -->
+      <div class="flex flex-wrap gap-3 items-center justify-between rounded-2xl px-5 py-4" style="background:linear-gradient(135deg,#0d1b2a,#172840);">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div>
+            <div class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#64748b;">วันที่วิเคราะห์</div>
+            <input type="date" id="wmm-date" class="rounded-xl px-3 py-2 text-sm font-bold focus:outline-none" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;">
+          </div>
+          <button onclick="wmmRunAnalysis()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow" style="background:#2563eb;color:#fff;">
+            <i class="fas fa-search-location text-xs"></i> วิเคราะห์พื้นที่
+          </button>
+          <button onclick="wmmRefreshZones()" class="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;">
+            <i class="fas fa-sync-alt"></i>
+          </button>
         </div>
-        <div id="input-container" class="space-y-6 min-h-[400px]">
-            <div class="p-40 text-center text-slate-300">
-                <i class="fas fa-calendar-check text-7xl mb-6 opacity-20"></i>
-                <p class="text-xl font-bold">กรุณาเลือกวันที่เพื่อเริ่มต้นคำนวณพื้นที่</p>
-            </div>
+        <button onclick="wmmOpenCreateModal({})" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;">
+          <i class="fas fa-plus text-xs"></i> สร้างใบงาน
+        </button>
+      </div>
+
+      <!-- Notification Banner -->
+      <div id="wmm-notification" class="items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold" style="display:none;background:#fef3c7;color:#92400e;border:1px solid #fde68a;">
+        <i class="fas fa-bell"></i>
+        <span id="wmm-notification-text"></span>
+        <button onclick="wmmDismissNotification()" style="margin-left:auto;font-size:11px;text-decoration:underline;background:none;border:none;cursor:pointer;color:#92400e;">ปิด</button>
+      </div>
+
+      <!-- Zone Capacity Grid -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+            <i class="fas fa-th-large text-blue-400"></i> Zone Capacity
+          </div>
+          <div id="wmm-zone-updated" class="text-xs text-slate-400"></div>
         </div>
+        <div id="wmm-zone-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div class="col-span-full py-10 text-center text-slate-400">
+            <i class="fas fa-spinner fa-spin text-xl mb-2 block"></i>
+            <span class="text-sm">กำลังโหลดข้อมูล...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analysis Panel -->
+      <div id="wmm-analysis-panel" style="display:none;">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="text-xs font-black uppercase tracking-widest text-slate-500">
+            <i class="fas fa-exclamation-triangle text-amber-400 mr-1"></i> ผลวิเคราะห์
+          </div>
+          <span id="wmm-analysis-count" class="text-xs px-2 py-0.5 rounded-full font-bold" style="background:#fef3c7;color:#92400e;"></span>
+        </div>
+        <div id="wmm-analysis-list" class="space-y-3"></div>
+      </div>
+
+      <!-- Work Orders -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div class="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+            <i class="fas fa-clipboard-list text-blue-400"></i> ใบงาน
+            <span id="wmm-orders-count" class="text-[10px] px-2 py-0.5 rounded-full font-bold" style="background:#eff6ff;color:#1d4ed8;"></span>
+          </div>
+          <div class="flex gap-1 rounded-xl p-1" style="background:#f1f5f9;">
+            <button onclick="wmmFilterOrders('all')" id="wmm-tab-all" class="wmm-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all" style="background:#fff;color:#0f172a;box-shadow:0 1px 3px rgba(0,0,0,0.1);">ทั้งหมด</button>
+            <button onclick="wmmFilterOrders('รอดำเนินการ')" id="wmm-tab-wait" class="wmm-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all" style="color:#64748b;">รอดำเนินการ</button>
+            <button onclick="wmmFilterOrders('กำลังทำ')" id="wmm-tab-doing" class="wmm-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all" style="color:#64748b;">กำลังทำ</button>
+            <button onclick="wmmFilterOrders('เสร็จแล้ว')" id="wmm-tab-done" class="wmm-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all" style="color:#64748b;">เสร็จแล้ว</button>
+          </div>
+        </div>
+        <div id="wmm-orders-list" class="divide-y divide-slate-50" style="max-height:480px;overflow-y:auto;">
+          <div class="py-10 text-center text-slate-400 text-sm">
+            <i class="fas fa-inbox text-3xl mb-2 block opacity-30"></i>
+            กดรีเฟรชเพื่อโหลดใบงาน
+          </div>
+        </div>
+        <div class="px-5 py-3 border-t border-slate-50 flex justify-end">
+          <button onclick="wmmLoadOrders()" class="text-xs font-bold hover:underline" style="color:#2563eb;background:none;border:none;cursor:pointer;">
+            <i class="fas fa-sync-alt mr-1"></i> รีเฟรชใบงาน
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Create Work Order Modal ── -->
+    <div id="wmm-modal" style="display:none;position:fixed;inset:0;z-index:300;align-items:center;justify-content:center;">
+      <div onclick="wmmCloseModal()" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);"></div>
+      <div style="position:relative;background:#fff;border-radius:20px;width:100%;max-width:440px;margin:0 16px;z-index:10;box-shadow:0 25px 50px rgba(0,0,0,0.3);max-height:90vh;overflow-y:auto;">
+        <div style="padding:20px 24px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1;">
+          <div style="font-size:15px;font-weight:900;color:#0f172a;">สร้างใบงาน</div>
+          <button onclick="wmmCloseModal()" style="width:28px;height:28px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;color:#64748b;display:flex;align-items:center;justify-content:center;"><i class="fas fa-times" style="font-size:11px;"></i></button>
+        </div>
+        <div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">ประเภทงาน</div>
+            <select id="wmm-f-type" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;color:#0f172a;outline:none;background:#f8fafc;box-sizing:border-box;">
+              <option value="ยุบกอง">🔄 ยุบกอง — จัดเรียงให้ใช้ฐานน้อยลง</option>
+              <option value="ย้ายสินค้า">📦 ย้ายสินค้า — ย้ายออกจากโซน</option>
+              <option value="จัดพื้นที่">🏭 จัดพื้นที่ — จัดวางทั่วไป</option>
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">Zone ต้นทาง *</div>
+              <select id="wmm-f-zone" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;outline:none;background:#f8fafc;box-sizing:border-box;">
+                <option value="">เลือก Zone</option>
+                <option>P4</option><option>P1</option><option>C5</option>
+                <option>P2</option><option>P3</option><option>C4</option>
+                <option>RE4</option><option>RE-C5</option><option>RE1</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">Zone ปลายทาง</div>
+              <select id="wmm-f-tozone" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;outline:none;background:#f8fafc;box-sizing:border-box;">
+                <option value="">ไม่ระบุ</option>
+                <option>P4</option><option>P1</option><option>C5</option>
+                <option>P2</option><option>P3</option><option>C4</option>
+                <option>RE4</option><option>RE-C5</option><option>RE1</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">SKU (ถ้าระบุได้)</div>
+            <input type="text" id="wmm-f-sku" placeholder="รหัสสินค้า" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;outline:none;box-sizing:border-box;">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">จำนวนมัด</div>
+              <input type="number" id="wmm-f-bundles" placeholder="0" min="0" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;outline:none;box-sizing:border-box;">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">มอบหมายให้</div>
+              <input type="text" id="wmm-f-assigned" placeholder="ทีม / ชื่อ" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;outline:none;box-sizing:border-box;">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">กำหนดเสร็จ</div>
+            <input type="date" id="wmm-f-due" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;outline:none;box-sizing:border-box;">
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">หมายเหตุ / รายละเอียดงาน</div>
+            <textarea id="wmm-f-note" rows="2" placeholder="รายละเอียดงาน..." style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;resize:none;outline:none;box-sizing:border-box;"></textarea>
+          </div>
+        </div>
+        <div style="padding:16px 24px;border-top:1px solid #f1f5f9;display:flex;gap:10px;position:sticky;bottom:0;background:#fff;">
+          <button onclick="wmmCloseModal()" style="flex:1;padding:11px;border-radius:12px;border:1.5px solid #e2e8f0;background:#fff;font-size:13px;font-weight:700;color:#64748b;cursor:pointer;">ยกเลิก</button>
+          <button onclick="wmmSubmitOrder()" id="wmm-f-submit" style="flex:2;padding:11px;border-radius:12px;border:none;background:#1d4ed8;color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(29,78,216,0.3);">
+            <i class="fas fa-check mr-1"></i> สร้างใบงาน
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- ============================================ -->
@@ -7869,8 +7998,350 @@ const _safeStorage = {
         }
     });
 
+    // =====================================================================
+    // WM MANAGE — จัดการคลัง (Zone Capacity + Work Orders)
+    // =====================================================================
+    (function() {
+      const WMM_ZONE_WIDTHS = {
+        'P4':[830,830,1330],'P1':[1650,1600,1300],
+        'C5':[500,2100,300,300],'P2':[500,1000,1300],'P3':[700,700,700,250,250],
+        'C4':[1330,1330,1330],'RE4':[500],'RE-C5':[2100,2100],'RE1':[850]
+      };
+      const WMM_MAIN_ZONES    = ['P4','P1','C5','P2','P3'];
+      const WMM_RESERVE_ZONES = ['C4','RE4','RE-C5','RE1'];
+      const WMM_STATUS = {
+        'รอดำเนินการ':{ color:'#d97706',bg:'#fef3c7',icon:'fa-clock' },
+        'กำลังทำ'    :{ color:'#2563eb',bg:'#eff6ff',icon:'fa-play-circle' },
+        'เสร็จแล้ว'  :{ color:'#059669',bg:'#ecfdf5',icon:'fa-check-circle' }
+      };
+      let _wmmOrders = [], _wmmFilter = 'all', _wmmPoll = null, _wmmLastActive = 0;
+
+      // ── Init ──────────────────────────────────────────────────────
+      window.wmmInit = function() {
+        const d = safeGet('wmm-date');
+        if (d && !d.value) {
+          const t = new Date();
+          d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+        wmmRefreshZones();
+        wmmLoadOrders();
+        if (!_wmmPoll) wmmStartPolling();
+      };
+
+      // ── Zone Grid ─────────────────────────────────────────────────
+      window.wmmRefreshZones = function() {
+        const g = safeGet('wmm-zone-grid');
+        if (g) g.innerHTML = '<div class="col-span-full py-10 text-center text-slate-400"><i class="fas fa-spinner fa-spin text-xl mb-2 block"></i><span class="text-sm">กำลังโหลด...</span></div>';
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.success) _wmmRenderZoneGrid(res.data || {});
+            else showToast('โหลด Zone ไม่สำเร็จ');
+            const u = safeGet('wmm-zone-updated');
+            if (u) u.textContent = 'อัปเดต '+new Date().toLocaleTimeString('th-TH');
+          })
+          .withFailureHandler(function(e){ showToast('Error: '+e.message); })
+          .getZoneStock();
+      };
+
+      function _wmmRenderZoneGrid(zoneStock) {
+        const g = safeGet('wmm-zone-grid'); if (!g) return;
+        function calc(zoneId) {
+          const ws = WMM_ZONE_WIDTHS[zoneId]||[], totalW = ws.reduce((s,w)=>s+w,0);
+          const skus = zoneStock[zoneId]||{};
+          let usedW=0, skuN=0, bndls=0;
+          Object.values(skus).forEach(d=>{
+            if (!d.bw||!d.bh||!d.pcs) return;
+            const b = Math.ceil(d.pcs/(d.pcsPerBundle||1));
+            const info = _wmCalcStackInfo(b, d.bw, d.bh);
+            if (info) usedW += info.usedWidthCm;
+            skuN++; bndls += b;
+          });
+          const pct = totalW>0 ? Math.min(100,usedW/totalW*100) : 0;
+          return {totalW,usedW,pct,skuN,bndls};
+        }
+        function card(zoneId, reserve) {
+          const {totalW,usedW,pct,skuN,bndls} = calc(zoneId);
+          const p = pct.toFixed(1);
+          let bar='#10b981',txt='#10b981',alert='';
+          if (pct>=70){bar='#ef4444';txt='#ef4444';alert='<span style="font-size:11px;color:#ef4444;">⚠️</span>';}
+          else if (pct>=50){bar='#f59e0b';txt='#f59e0b';}
+          const bg  = reserve?'#0a1628':'#0d1b2a';
+          const bdr = reserve?'1.5px dashed #334155':'1.5px solid #1e293b';
+          return `<div onclick="wmmSelectZone('${zoneId}')" style="background:${bg};border:${bdr};border-radius:14px;padding:12px;cursor:pointer;transition:filter 0.15s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter=''">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:11px;font-weight:900;padding:2px 9px;border-radius:20px;background:#1d4ed8;color:#fff;">${zoneId}</span>${alert}
+            </div>
+            <div style="font-size:22px;font-weight:900;color:${txt};font-family:'Orbitron',monospace;line-height:1;margin-bottom:5px;">${p}%</div>
+            <div style="width:100%;height:4px;background:#1e293b;border-radius:4px;margin-bottom:8px;overflow:hidden;">
+              <div style="height:100%;background:${bar};width:${p}%;border-radius:4px;transition:width 0.6s;"></div>
+            </div>
+            <div style="font-size:10px;color:#64748b;line-height:1.7;">
+              <div>${skuN} SKU · ${bndls} มัด</div>
+              <div>${(usedW/100).toFixed(1)}ม. / ${(totalW/100).toFixed(1)}ม.</div>
+            </div>
+          </div>`;
+        }
+        let html = '';
+        WMM_MAIN_ZONES.forEach(z=>{ html+=card(z,false); });
+        WMM_RESERVE_ZONES.forEach(z=>{ html+=card(z,true); });
+        g.innerHTML = html;
+      }
+
+      window.wmmSelectZone = function(z){ wmmOpenCreateModal({zone:z}); };
+
+      // ── Analysis ──────────────────────────────────────────────────
+      window.wmmRunAnalysis = function() {
+        const dateSel = safeGet('wmm-date');
+        const dateStr = dateSel ? dateSel.value : '';
+        showToast('กำลังวิเคราะห์พื้นที่' + (dateStr ? ' วันที่ '+dateStr : '') + '...');
+        google.script.run
+          .withSuccessHandler(function(res){
+            if (!res || !res.success){ showToast('วิเคราะห์ไม่สำเร็จ: '+(res&&res.message||'unknown')); return; }
+            _wmmRenderAnalysis(res);
+          })
+          .withFailureHandler(function(e){ showToast('Error: '+e.message); })
+          .analyzeZoneCapacity({ date: dateStr });
+      };
+
+      function _wmmRenderAnalysis(data) {
+        const panel = safeGet('wmm-analysis-panel');
+        const list  = safeGet('wmm-analysis-list');
+        const cnt   = safeGet('wmm-analysis-count');
+        if (!panel || !list) return;
+
+        const zones = data.zones || [];
+        const STATUS_COLOR = { ok:'#059669', warn:'#d97706', crit:'#dc2626' };
+        const STATUS_BG    = { ok:'#ecfdf5',  warn:'#fffbeb',  crit:'#fef2f2' };
+
+        function zStatus(pct) {
+          return pct >= 70 ? 'crit' : pct >= 50 ? 'warn' : 'ok';
+        }
+
+        let zoneHtml = '';
+        let suggHtml = '';
+        let suggCount = 0;
+
+        zones.forEach(function(z) {
+          const st  = zStatus(z.projectedPct);
+          const stC = zStatus(z.currentPct);
+          const needsAction = z.needsAction;
+
+          // แสดงโซนที่ projected ≥ 50% เท่านั้น (โซน ok ไม่ต้องแสดง)
+          if (z.projectedPct < 50 && !needsAction) return;
+
+          // incoming list summary
+          const incSummary = z.incomingList && z.incomingList.length > 0
+            ? z.incomingList.map(function(i){ return i.sku+' '+i.bundles+'มัด'; }).join(', ')
+            : '-';
+
+          zoneHtml += `<div style="background:${STATUS_BG[st]};border:1.5px solid ${STATUS_COLOR[st]};border-radius:14px;padding:14px 16px;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+              <span style="font-size:13px;font-weight:900;padding:3px 12px;border-radius:20px;background:${STATUS_COLOR[st]};color:#fff;">${z.zoneId}</span>
+              <span style="font-size:12px;font-weight:700;color:#0f172a;">ปัจจุบัน <b>${z.currentPct}%</b></span>
+              <span style="font-size:11px;color:#64748b;">→</span>
+              <span style="font-size:13px;font-weight:900;color:${STATUS_COLOR[st]};">หลังผลิต <b>${z.projectedPct}%</b></span>
+              <span style="font-size:11px;color:#94a3b8;margin-left:auto;">${(z.totalWidthCm/100).toFixed(1)}ม. รวม</span>
+            </div>
+            <div style="font-size:11px;color:#64748b;">แผนผลิตเข้า: ${incSummary}</div>
+            ${needsAction ? '<div style="font-size:11px;color:'+STATUS_COLOR['crit']+';font-weight:700;margin-top:4px;">⚠️ ต้องการพื้นที่คืน '+(z.neededCm/100).toFixed(2)+' ม.</div>' : ''}
+          </div>`;
+
+          // suggestions
+          (z.suggestions || []).forEach(function(s) {
+            suggCount++;
+            const isMove = s.type === 'ย้ายสินค้า';
+            const icon   = isMove ? '📦' : '🔄';
+            const badge  = isMove
+              ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#eff6ff;color:#1d4ed8;">${icon} ย้ายน้อยได้มาก</span>`
+              : `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#fef3c7;color:#92400e;">${icon} ยุบกอง</span>`;
+            const delivWarn = s.hasDelivery ? '<span style="font-size:10px;color:#b45309;">⚡มีแผนส่ง</span>' : '';
+            const detailLine = isMove
+              ? `ย้าย <b>${s.bundlesToMove} มัด</b> · ได้พื้นที่คืน <b style="color:#059669;">${(s.freedCm/100).toFixed(2)} ม.</b> · ประสิทธิภาพ ${s.efficiency} cm/มัด`
+              : `รวมกอง ${s.currentBundles}+${s.incomingBundles} = <b>${s.totalBundles} มัด</b> → ${s.optCols} ฐาน` + (s.savedWidthCm > 0 ? ` ประหยัด ${(s.savedWidthCm/100).toFixed(2)} ม.` : '');
+
+            const btnData = isMove
+              ? `{type:'ย้ายสินค้า',zone:'${z.zoneId}',sku:'${s.sku}',bundles:${s.bundlesToMove}}`
+              : `{type:'ยุบกอง',zone:'${z.zoneId}',sku:'${s.sku}',bundles:${s.totalBundles}}`;
+
+            suggHtml += `<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px;">
+              <div style="flex:1;min-width:200px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
+                  ${badge}
+                  <span style="font-size:10px;font-weight:900;padding:2px 8px;border-radius:20px;background:#0f172a;color:#fff;">${z.zoneId}</span>
+                  ${delivWarn}
+                </div>
+                <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:3px;">${s.skuName||s.sku}</div>
+                <div style="font-size:11px;color:#64748b;">${detailLine}</div>
+                <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${s.note||''}</div>
+              </div>
+              <button onclick="wmmOpenCreateModal(${btnData})"
+                style="padding:8px 14px;border-radius:10px;background:#1d4ed8;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                <i class="fas fa-plus" style="font-size:10px;margin-right:4px;"></i>สร้างใบงาน
+              </button>
+            </div>`;
+          });
+        });
+
+        if (!zoneHtml && !suggHtml) {
+          list.innerHTML = '<div style="text-align:center;padding:32px;color:#059669;font-weight:700;"><i class="fas fa-check-circle" style="font-size:28px;display:block;margin-bottom:8px;"></i>พื้นที่ทุกโซนเพียงพอ ไม่ต้องดำเนินการ</div>';
+        } else {
+          list.innerHTML =
+            (zoneHtml ? `<div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;padding:0 2px;">📊 สถานะโซนที่ต้องดูแล</div>${zoneHtml}` : '') +
+            (suggHtml  ? `<div style="font-size:12px;font-weight:700;color:#64748b;margin:12px 0 8px;padding:0 2px;">💡 คำแนะนำการจัดพื้นที่</div>${suggHtml}` : '');
+        }
+        if (cnt) cnt.textContent = suggCount > 0 ? suggCount + ' รายการแนะนำ' : '✓ OK';
+        panel.style.display = 'block';
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      // ── Work Orders ───────────────────────────────────────────────
+      window.wmmLoadOrders = function() {
+        google.script.run
+          .withSuccessHandler(function(res){
+            if (!res||!res.success) return;
+            _wmmOrders = res.orders||[];
+            const active = _wmmOrders.filter(o=>o.status!=='เสร็จแล้ว').length;
+            if (_wmmLastActive>0 && active>_wmmLastActive) wmmShowNotification('มีใบงานใหม่ '+(active-_wmmLastActive)+' รายการ');
+            _wmmLastActive = active;
+            const c = safeGet('wmm-orders-count'); if(c) c.textContent = active>0?active+' งานค้าง':'';
+            _wmmRenderOrders();
+          })
+          .getWorkOrders({});
+      };
+
+      function _wmmRenderOrders() {
+        const list=safeGet('wmm-orders-list'); if (!list) return;
+        const filtered = _wmmFilter==='all' ? _wmmOrders : _wmmOrders.filter(o=>o.status===_wmmFilter);
+        if (!filtered.length) {
+          list.innerHTML='<div style="padding:32px;text-align:center;color:#94a3b8;font-size:13px;"><i class="fas fa-inbox" style="font-size:28px;display:block;margin-bottom:8px;opacity:0.3;"></i>ไม่มีใบงาน</div>';
+          return;
+        }
+        const typeIcon={'ยุบกอง':'🔄','ย้ายสินค้า':'📦','จัดพื้นที่':'🏭'};
+        list.innerHTML = filtered.map(function(o){
+          const sc=WMM_STATUS[o.status]||{color:'#64748b',bg:'#f1f5f9',icon:'fa-circle'};
+          const ico=typeIcon[o.reason]||typeIcon[o.type]||'📋';
+          const toZ=o.toZone?` → ${o.toZone}`:'';
+          let actions='';
+          if (o.status==='รอดำเนินการ') actions=`<button onclick="wmmUpdateStatus('${o.orderId}','กำลังทำ')" style="padding:6px 14px;border-radius:8px;background:#2563eb;color:#fff;border:none;font-size:11px;font-weight:700;cursor:pointer;">เริ่มทำ</button>`;
+          else if (o.status==='กำลังทำ') actions=`<button onclick="wmmUpdateStatus('${o.orderId}','เสร็จแล้ว')" style="padding:6px 14px;border-radius:8px;background:#059669;color:#fff;border:none;font-size:11px;font-weight:700;cursor:pointer;">✓ เสร็จแล้ว</button>`;
+          else actions=`<span style="font-size:11px;color:#059669;font-weight:700;">✓ ${o.updatedAt}</span>`;
+          return `<div style="padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+            <div style="flex:1;min-width:220px;">
+              <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap;">
+                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${sc.bg};color:${sc.color};"><i class="fas ${sc.icon}" style="margin-right:3px;"></i>${o.status}</span>
+                <span style="font-size:10px;color:#94a3b8;">${o.orderId}</span>
+                <span style="font-size:10px;font-weight:900;padding:2px 8px;border-radius:20px;background:#0f172a;color:#94a3b8;">${o.zone}${toZ}</span>
+              </div>
+              <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:2px;">${ico} ${o.reason||o.skuName||o.sku||'งานทั่วไป'}</div>
+              <div style="font-size:11px;color:#64748b;">${o.sku?o.sku+' · ':''}${o.bundles>0?o.bundles+' มัด · ':''}${o.assignedTo?'👷 '+o.assignedTo:'ยังไม่ระบุผู้รับ'}${o.dueDate?' · 📅 '+o.dueDate:''}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">${actions}</div>
+          </div>`;
+        }).join('');
+      }
+
+      window.wmmFilterOrders = function(status) {
+        _wmmFilter = status;
+        const map={'all':'all','รอดำเนินการ':'wait','กำลังทำ':'doing','เสร็จแล้ว':'done'};
+        ['all','wait','doing','done'].forEach(function(t){
+          const btn=safeGet('wmm-tab-'+t); if(!btn) return;
+          const isActive=(map[status]||'all')===t;
+          btn.style.background  = isActive?'#1d4ed8':'transparent';
+          btn.style.color       = isActive?'#fff':'#64748b';
+          btn.style.boxShadow   = isActive?'0 2px 6px rgba(29,78,216,0.3)':'none';
+          btn.style.borderRadius= '8px';
+        });
+        _wmmRenderOrders();
+      };
+
+      window.wmmUpdateStatus = function(orderId, newStatus) {
+        google.script.run
+          .withSuccessHandler(function(res){
+            if (res.success) {
+              showToast(newStatus==='เสร็จแล้ว'?'✅ บันทึกเสร็จสิ้น':'🔄 เริ่มดำเนินการแล้ว');
+              wmmLoadOrders();
+              if (newStatus==='เสร็จแล้ว') wmmRefreshZones();
+            } else showToast('ไม่สำเร็จ: '+res.message);
+          })
+          .withFailureHandler(function(e){ showToast('Error: '+e.message); })
+          .updateWorkOrder({orderId:orderId,status:newStatus,note:newStatus==='เสร็จแล้ว'?'หน้างานยืนยันเสร็จสิ้น':''});
+      };
+
+      // ── Modal ─────────────────────────────────────────────────────
+      window.wmmOpenCreateModal = function(opts) {
+        opts=opts||{};
+        const m=safeGet('wmm-modal'); if(m) m.style.display='flex';
+        if (opts.type)   { const e=safeGet('wmm-f-type');    if(e) e.value=opts.type; }
+        if (opts.zone)   { const e=safeGet('wmm-f-zone');    if(e) e.value=opts.zone; }
+        if (opts.toZone) { const e=safeGet('wmm-f-tozone');  if(e) e.value=opts.toZone; }
+        if (opts.sku)    { const e=safeGet('wmm-f-sku');     if(e) e.value=opts.sku; }
+        if (opts.bundles){ const e=safeGet('wmm-f-bundles'); if(e) e.value=opts.bundles; }
+        const due=safeGet('wmm-f-due');
+        if (due&&!due.value) {
+          const t=new Date(); due.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+      };
+
+      window.wmmCloseModal = function() {
+        const m=safeGet('wmm-modal'); if(m) m.style.display='none';
+        ['wmm-f-sku','wmm-f-bundles','wmm-f-assigned','wmm-f-note'].forEach(function(id){
+          const e=safeGet(id); if(e) e.value='';
+        });
+      };
+
+      window.wmmSubmitOrder = function() {
+        const zone=(safeGet('wmm-f-zone')||{}).value||'';
+        if (!zone){ showToast('กรุณาเลือก Zone ต้นทาง'); return; }
+        const btn=safeGet('wmm-f-submit');
+        if (btn){ btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin mr-1"></i>กำลังสร้าง...'; }
+        const data={
+          zone, toZone:(safeGet('wmm-f-tozone')||{}).value||'',
+          reason:(safeGet('wmm-f-type')||{}).value||'จัดพื้นที่',
+          sku:(safeGet('wmm-f-sku')||{}).value||'',
+          bundles:Number((safeGet('wmm-f-bundles')||{}).value||0),
+          assignedTo:(safeGet('wmm-f-assigned')||{}).value||'',
+          dueDate:(safeGet('wmm-f-due')||{}).value||'',
+          note:(safeGet('wmm-f-note')||{}).value||'',
+          createdBy:'WMS User'
+        };
+        google.script.run
+          .withSuccessHandler(function(res){
+            if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-check mr-1"></i>สร้างใบงาน'; }
+            if (res.success){ showToast('✅ สร้างใบงาน '+res.orderId); wmmCloseModal(); wmmLoadOrders(); }
+            else showToast('ไม่สำเร็จ: '+res.message);
+          })
+          .withFailureHandler(function(e){
+            if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-check mr-1"></i>สร้างใบงาน'; }
+            showToast('Error: '+e.message);
+          })
+          .createWorkOrder(data);
+      };
+
+      // ── Notification & Polling ────────────────────────────────────
+      window.wmmShowNotification = function(msg) {
+        const b=safeGet('wmm-notification'),t=safeGet('wmm-notification-text');
+        if (!b||!t) return;
+        t.textContent=msg; b.style.display='flex';
+      };
+      window.wmmDismissNotification = function() {
+        const b=safeGet('wmm-notification'); if(b) b.style.display='none';
+      };
+      window.wmmStartPolling = function() {
+        _wmmPoll=setInterval(function(){ wmmLoadOrders(); },30000);
+      };
+      window.wmmStopPolling = function() {
+        if (_wmmPoll){ clearInterval(_wmmPoll); _wmmPoll=null; }
+      };
+
+    })(); // end WM MANAGE
+
     document.addEventListener("DOMContentLoaded", function() {
         console.log("✅ DOM Ready - Warehouse & Logistic Management System Initialized");
+
+        // ── Init จัดการคลัง (default view) ────────────────────────────────────
+        setTimeout(function() {
+            if (typeof wmmInit === 'function') wmmInit();
+        }, 500);
 
         // ── Restore import status badges จาก localStorage ──────────────────────
         setTimeout(function() {
@@ -10377,7 +10848,10 @@ let currentAnalysis = null;
  * ฟังก์ชันหลักในการสลับ View ใหญ่
  */
 window.switchView = function switchView(view) {
-    const views = ['input', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'warehouse-map', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock'];
+    // redirect เส้นทางเก่า → view ใหม่
+    if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
+
+    const views = ['wm-manage', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -10394,7 +10868,7 @@ window.switchView = function switchView(view) {
     const titleEl = document.getElementById('view-title');
     if (titleEl) {
         titleEl.innerText = {
-            'input': 'Loading Area Input',
+            'wm-manage': 'จัดการคลัง — Zone Capacity & Work Orders',
             'report': 'Warehouse Capacity Report',
             'printtag': 'Print Tag FG System',
             'analytics': 'Warehouse Analytics & Flow',
@@ -10453,9 +10927,9 @@ window.switchView = function switchView(view) {
         });
     }
 
-    // ผังคลัง — init production plan อัตโนมัติ (ไม่มี FG zone แล้ว)
-    if (view === 'warehouse-map') {
-        _wmInitProdControls();
+    // จัดการคลัง — init เมื่อเข้าครั้งแรก
+    if (view === 'wm-manage') {
+        wmmInit();
     }
 
     // จัดรถ — init เมื่อเข้า

@@ -47,6 +47,7 @@ function _handleApiPost(e) {
       'saveWarehouseMove','getWarehouseMoveLog',
       'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
       'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
+      'analyzeZoneCapacity',
       'getZoneStock','syncZoneStockFromInventory','getZoneConfig','saveZoneConfig',
       'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
@@ -233,8 +234,9 @@ function doGet(e) {
           'probeProdBlockSheet','getProductionPlanData',
           'saveWarehouseMove','getWarehouseMoveLog',
           'createWorkOrder','getWorkOrders','updateWorkOrder','checkZoneCapacityAlerts',
-      'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
-      'getZoneStock','syncZoneStockFromInventory','getZoneConfig','saveZoneConfig',
+          'getDeliveryPlanByDate','getZoneStockSummary','calcSmartMoveRecommendations',
+          'analyzeZoneCapacity',
+          'getZoneStock','syncZoneStockFromInventory','getZoneConfig','saveZoneConfig',
           'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
       'getSaleAndCustomerList','getSOLinesByCustomer',
           'saveAuditLog','getAuditLog',
@@ -10623,6 +10625,207 @@ function loGetOrderHistory(limitRows) {
       if (orders.length >= limit) break;
     }
     return { success: true, orders: orders };
+  } catch(e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+// =====================================================================
+// analyzeZoneCapacity — วิเคราะห์พื้นที่คลังตามวันที่เลือก
+// คิดจาก: สต็อคปัจจุบัน + แผนผลิตวันนี้ → projected % ต่อโซน
+// แนะนำ: ยุบกอง / ย้ายสินค้า (ย้ายน้อยได้มาก)
+// =====================================================================
+function analyzeZoneCapacity(params) {
+  try {
+    var dateStr = (params && params.date) ? params.date
+                  : Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+
+    var ZONE_WIDTHS = {
+      'P4':[830,830,1330],'P1':[1650,1600,1300],
+      'C5':[500,2100,300,300],'P2':[500,1000,1300],'P3':[700,700,700,250,250],
+      'C4':[1330,1330,1330],'RE4':[500],'RE-C5':[2100,2100],'RE1':[850]
+    };
+    var MACHINE_ZONE = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
+
+    function stackInfo(bundles, bw, bh) {
+      if (!bw || !bh || bundles <= 0) return null;
+      var maxL = Math.max(1, Math.floor(420 / bh));
+      var cols, layers;
+      if (bundles <= 3) {
+        cols = 1; layers = bundles;
+        if (layers > maxL) { cols = Math.ceil(bundles / maxL); layers = Math.ceil(bundles / cols); }
+      } else if (bundles <= 9) {
+        cols = 2; layers = Math.ceil(bundles / cols);
+        if (layers > maxL) { cols = Math.ceil(bundles / maxL); layers = Math.ceil(bundles / cols); }
+      } else {
+        cols = Math.max(3, Math.ceil(bundles / maxL));
+        layers = Math.ceil(bundles / cols);
+      }
+      return { cols: cols, layers: layers, usedWidthCm: cols * bw };
+    }
+
+    var zsRes = getZoneStock();
+    var zoneStock = (zsRes.success && zsRes.data) ? zsRes.data : {};
+
+    var planRes = getPlanByDate(dateStr);
+    var planRows = (planRes.success && planRes.rows) ? planRes.rows : [];
+
+    var extMap = getExternalProductMap();
+
+    var delivBySku = {};
+    try {
+      var delivRes = getDeliveryPlanByDate({ daysAhead: 14 });
+      if (delivRes.success && delivRes.bySkuDate) {
+        Object.keys(delivRes.bySkuDate).forEach(function(sku) {
+          var total = 0;
+          var byDate = delivRes.bySkuDate[sku];
+          Object.keys(byDate).forEach(function(d){ total += Number(byDate[d] || 0); });
+          if (total > 0) delivBySku[sku] = total;
+        });
+      }
+    } catch(e2) { }
+
+    var incomingPerZone = {};
+    planRows.forEach(function(row) {
+      var machId = String(row.machine || '').toUpperCase().replace(/\s/g, '');
+      var zoneId = MACHINE_ZONE[machId] || machId;
+      if (!ZONE_WIDTHS[zoneId]) return;
+      var sku = String(row.productId || row.ItemCode || '');
+      if (!sku) return;
+      var ext = extMap[sku] || {};
+      var ppb = Number(ext.pcsPerBundle || row.linesPerBundle || 1) || 1;
+      var bw  = Number(ext.bundleWidth  || 0);
+      var bh  = Number(ext.bundleHeight || 0);
+      var bndls = Number(row.plannedBundles || 0);
+      if (!bndls) {
+        var pcs = Number(row.plannedLines || row.Qty || 0);
+        bndls = ppb > 0 ? Math.ceil(pcs / ppb) : 0;
+      }
+      if (bndls <= 0) return;
+      if (!incomingPerZone[zoneId]) incomingPerZone[zoneId] = {};
+      if (!incomingPerZone[zoneId][sku]) {
+        incomingPerZone[zoneId][sku] = { bundles: 0, bw: bw, bh: bh, ppb: ppb, skuName: ext.name || sku };
+      }
+      incomingPerZone[zoneId][sku].bundles += bndls;
+    });
+
+    var results = [];
+    var THRESHOLD = 70;
+
+    Object.keys(ZONE_WIDTHS).forEach(function(zoneId) {
+      var totalW   = ZONE_WIDTHS[zoneId].reduce(function(s,w){ return s+w; }, 0);
+      var skus     = zoneStock[zoneId] || {};
+      var incoming = incomingPerZone[zoneId] || {};
+
+      var currentUsedW = 0;
+      var skuDetails   = [];
+      Object.keys(skus).forEach(function(sku) {
+        var d   = skus[sku];
+        var ext = extMap[sku] || {};
+        var bw  = Number(d.bw  || ext.bundleWidth  || 0);
+        var bh  = Number(d.bh  || ext.bundleHeight || 0);
+        var ppb = Number(d.pcsPerBundle || ext.pcsPerBundle || 1) || 1;
+        if (!bw || !bh || !d.pcs) return;
+        var bundles = Math.ceil(Number(d.pcs) / ppb);
+        if (bundles <= 0) return;
+        var info = stackInfo(bundles, bw, bh);
+        if (!info) return;
+        currentUsedW += info.usedWidthCm;
+        var delivPcs   = Number(delivBySku[sku] || 0);
+        var availBndl  = Math.max(0, bundles - Math.ceil(delivPcs / ppb));
+        var efficiency = availBndl > 0 ? info.usedWidthCm / availBndl : 0;
+        skuDetails.push({
+          sku: sku, skuName: d.skuName || sku,
+          pcs: d.pcs, bundles: bundles, availBundles: availBndl,
+          bw: bw, bh: bh, ppb: ppb,
+          optCols: info.cols, usedWidthCm: info.usedWidthCm,
+          hasDelivery: delivPcs > 0,
+          efficiency: efficiency
+        });
+      });
+
+      var incomingUsedW = 0;
+      var incomingList  = [];
+      Object.keys(incoming).forEach(function(sku) {
+        var d = incoming[sku];
+        if (!d.bw || !d.bh) return;
+        var info = stackInfo(d.bundles, d.bw, d.bh);
+        if (!info) return;
+        incomingUsedW += info.usedWidthCm;
+        incomingList.push({ sku: sku, skuName: d.skuName, bundles: d.bundles, usedWidthCm: info.usedWidthCm });
+      });
+
+      var currentPct   = totalW > 0 ? Math.min(100, Math.round(currentUsedW / totalW * 100)) : 0;
+      var projectedPct = totalW > 0 ? Math.min(100, Math.round((currentUsedW + incomingUsedW) / totalW * 100)) : 0;
+      var needCm       = Math.max(0, (currentUsedW + incomingUsedW) - totalW * (THRESHOLD / 100));
+
+      var suggestions = [];
+      if (needCm > 0) {
+        var candidates = skuDetails
+          .filter(function(s){ return s.availBundles > 0 && s.efficiency > 0; })
+          .sort(function(a,b){ return b.efficiency - a.efficiency; });
+
+        var freed = 0;
+        candidates.forEach(function(s) {
+          if (freed >= needCm) return;
+          var inc    = incoming[s.sku] || {};
+          var hasInc = (inc.bundles || 0) > 0;
+          var totalB = s.bundles + (inc.bundles || 0);
+
+          if (hasInc) {
+            var combinedInfo = stackInfo(totalB, s.bw, s.bh);
+            var savedCm = combinedInfo ? Math.max(0, s.usedWidthCm - combinedInfo.usedWidthCm) : 0;
+            suggestions.push({
+              type: 'ยุบกอง',
+              sku: s.sku, skuName: s.skuName,
+              currentBundles: s.bundles,
+              incomingBundles: inc.bundles || 0,
+              totalBundles: totalB,
+              optCols: combinedInfo ? combinedInfo.cols : s.optCols,
+              savedWidthCm: savedCm,
+              hasDelivery: s.hasDelivery,
+              note: 'จัดรวมกองหลังรับสินค้าเข้า ใช้ ' + (combinedInfo ? combinedInfo.cols : '?') + ' ฐาน'
+            });
+            freed += savedCm;
+          } else {
+            var maxL      = Math.max(1, Math.floor(420 / s.bh));
+            var remaining = needCm - freed;
+            var colsNeeded = Math.ceil(remaining / s.bw);
+            var bndlsMove  = Math.min(s.availBundles, colsNeeded * maxL);
+            if (bndlsMove <= 0) return;
+            var freedThis  = Math.ceil(bndlsMove / maxL) * s.bw;
+            suggestions.push({
+              type: 'ย้ายสินค้า',
+              sku: s.sku, skuName: s.skuName,
+              bundlesToMove: bndlsMove,
+              currentBundles: s.bundles,
+              availBundles: s.availBundles,
+              hasDelivery: s.hasDelivery,
+              freedCm: freedThis,
+              efficiency: Math.round(s.efficiency * 10) / 10,
+              note: 'ย้าย ' + bndlsMove + ' มัด ได้พื้นที่คืน ' + (freedThis / 100).toFixed(2) + ' ม.'
+            });
+            freed += freedThis;
+          }
+        });
+      }
+
+      results.push({
+        zoneId: zoneId,
+        totalWidthCm: totalW,
+        currentUsedCm: Math.round(currentUsedW),
+        projectedUsedCm: Math.round(currentUsedW + incomingUsedW),
+        currentPct: currentPct,
+        projectedPct: projectedPct,
+        needsAction: projectedPct >= THRESHOLD,
+        neededCm: Math.round(needCm),
+        incomingList: incomingList,
+        skuDetails: skuDetails,
+        suggestions: suggestions
+      });
+    });
+
+    return { success: true, date: dateStr, zones: results };
   } catch(e) {
     return { success: false, message: e.toString() };
   }
