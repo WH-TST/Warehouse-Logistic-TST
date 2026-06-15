@@ -30744,6 +30744,9 @@ const WM_MAX_HEIGHT_CM = 420; // ความสูงสูงสุด 4.2 เ
 
 // คำนวณความจุโซน (ซม.กว้าง) และการใช้งานจาก inventory + move log
 function _wmBuildZoneSkuBase(zoneId, prodData, moveSummary) {
+  // โซนที่มีเครื่องผลิต — ต้องนับยอดผลิตใหม่ที่ยังไม่ได้ Sync Zone_Stock
+  const _machineZones = new Set(_wmMachineIds || ['P1','P2','P3','P4','C5']);
+
   // ถ้ามี Zone_Stock — ใช้โดยตรง (แม่นยำ, มิติกล่องถูกต้อง)
   if (_wmZoneStock && _wmZoneStock[zoneId]) {
     const zs = _wmZoneStock[zoneId];
@@ -30767,6 +30770,42 @@ function _wmBuildZoneSkuBase(zoneId, prodData, moveSummary) {
         });
       }
     }
+
+    // ── สำหรับโซนเครื่องผลิต: ตรวจจับผลผลิตใหม่ที่ยังไม่ได้ Sync ──
+    // กรณี: ย้าย SKU X ออกจาก P4 ทั้งหมดเมื่อวันที่ D
+    //       วันถัดไป (> D) ผลิต X ใหม่ที่ P4 → Zone_Stock ยังเป็น 0
+    //       แก้: นับยอดผลิต (daily) ที่เกิด หลังวันที่ย้ายออกล่าสุด → แสดงที่เครื่อง
+    if (_machineZones.has(zoneId) && prodData && prodData.machines) {
+      const mach  = prodData.machines.find(m => m.machineId === zoneId);
+      const today = prodData.today || '';
+      if (mach) {
+        mach.products.forEach(p => {
+          if (result[p.sku]) return; // มีใน Zone_Stock แล้ว — ไม่ต้องทำอะไร
+
+          // หาวันที่ย้ายออกล่าสุดของ SKU นี้จากโซนนี้
+          const lastMoveOutDate = (_wmMoveList || [])
+            .filter(mv => mv.fromZone === zoneId && mv.sku === p.sku && mv.date)
+            .map(mv => mv.date)
+            .sort()
+            .pop() || '0000-00-00';
+
+          // รวมยอดผลิต **หลังวันที่ย้ายออก** จนถึงวันนี้
+          const newPcs = Object.entries(p.daily || {})
+            .filter(([d]) => d > lastMoveOutDate && d <= today)
+            .reduce((sum, [, qty]) => sum + (qty || 0), 0);
+
+          if (newPcs > 0) {
+            result[p.sku] = {
+              pcs:          newPcs,
+              pcsPerBundle: p.pcsPerBundle || 1,
+              bw:           p.bundleWidth  || 0,
+              bh:           p.bundleHeight || 0
+            };
+          }
+        });
+      }
+    }
+
     return result;
   }
 
