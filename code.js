@@ -9833,15 +9833,19 @@ function updateWorkOrder(data) {
             }
           }
         } catch(pe) {}
+        var totalPCS2 = woBundles * ppb;
+        // บันทึก Move Log
         var moveSheet2 = _getOrCreateMoveSheet(ss);
         var moveId2   = 'MV' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
         var moveDate2 = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
         moveSheet2.appendRow([
           moveId2, now, moveDate2,
           woFromZone, woToZone, woSku, woSkuName,
-          woBundles, ppb, woBundles * ppb,
+          woBundles, ppb, totalPCS2,
           String(data.assignedTo || ''), 'WO:' + data.orderId
         ]);
+        // อัพเดต ZoneStock sheet ทันที (real-time)
+        _updateZoneStockForMove(ss, woFromZone, woToZone, woSku, woSkuName, totalPCS2, ppb, 0, 0);
       }
     }
 
