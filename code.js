@@ -9624,12 +9624,16 @@ function migrateLogiMasterToSupabase() {
       });
     }
   }
-  if (shops.length) {
-    for (var i = 0; i < shops.length; i += 200) {
-      _sbFetch('POST', 'logi_shops?on_conflict=id', shops.slice(i, i + 200));
+  // dedup by id (เอาแถวสุดท้ายที่เจอถ้า id ซ้ำ)
+  var shopMap = {};
+  shops.forEach(function(s) { shopMap[s.id] = s; });
+  var shopsDedup = Object.values(shopMap);
+  if (shopsDedup.length) {
+    for (var i = 0; i < shopsDedup.length; i += 200) {
+      _sbFetch('POST', 'logi_shops?on_conflict=id', shopsDedup.slice(i, i + 200));
     }
   }
-  Logger.log('[MigrateLogiMaster] shops: ' + shops.length);
+  Logger.log('[MigrateLogiMaster] shops: ' + shopsDedup.length + ' (raw: ' + shops.length + ')');
 
   // 5. WH Staff
   var staff = [];
