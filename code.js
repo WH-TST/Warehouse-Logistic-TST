@@ -11005,12 +11005,41 @@ function analyzeZoneCapacity(params) {
       }
     } catch(e2) {}
 
+    // หักยอดส่งมอบ: home zone ก่อน แล้วค่อยไป zone ปลายทาง
+    // ทำบน zoneStock copy เพื่อให้ stockDetails สะท้อนยอดหลังหัก
+    var delivedPcsPerZoneSku = {}; // zone→sku→pcs ที่ถูกหัก (ใช้แสดง hasDelivery)
+    Object.keys(delivBySku).forEach(function(sku) {
+      var remaining = Number(delivBySku[sku] || 0);
+      if (remaining <= 0) return;
+      var home = homeZone2[sku];
+      // หัก home zone ก่อน
+      if (home && zoneStock[home] && zoneStock[home][sku] && zoneStock[home][sku].pcs > 0) {
+        var take = Math.min(remaining, zoneStock[home][sku].pcs);
+        zoneStock[home][sku].pcs -= take;
+        remaining -= take;
+        if (!delivedPcsPerZoneSku[home]) delivedPcsPerZoneSku[home] = {};
+        delivedPcsPerZoneSku[home][sku] = (delivedPcsPerZoneSku[home][sku] || 0) + take;
+      }
+      // ถ้ายังขาด → หักจาก zone อื่นที่มีสินค้านั้น
+      if (remaining > 0) {
+        Object.keys(zoneStock).forEach(function(zone) {
+          if (remaining <= 0 || zone === home) return;
+          if (!zoneStock[zone][sku] || zoneStock[zone][sku].pcs <= 0) return;
+          var take2 = Math.min(remaining, zoneStock[zone][sku].pcs);
+          zoneStock[zone][sku].pcs -= take2;
+          remaining -= take2;
+          if (!delivedPcsPerZoneSku[zone]) delivedPcsPerZoneSku[zone] = {};
+          delivedPcsPerZoneSku[zone][sku] = (delivedPcsPerZoneSku[zone][sku] || 0) + take2;
+        });
+      }
+    });
+
     var results = [];
 
     Object.keys(ZONE_WIDTHS).forEach(function(zoneId) {
       var totalW = ZONE_WIDTHS[zoneId].reduce(function(s,w){ return s+w; }, 0);
 
-      // ขั้น 4: current stock
+      // ขั้น 4: current stock (หลังหักส่งมอบแล้ว)
       var stockSkus    = zoneStock[zoneId] || {};
       var currentUsedW = 0;
       var stockDetails = [];
@@ -11026,15 +11055,14 @@ function analyzeZoneCapacity(params) {
         var info = stackInfo(bundles, bw, bh);
         if (!info) return;
         currentUsedW += info.usedWidthCm;
-        var delivPcs  = Number(delivBySku[sku] || 0);
-        var availBndl = Math.max(0, bundles - Math.ceil(delivPcs / ppb));
+        var hasDelivery = !!((delivedPcsPerZoneSku[zoneId] || {})[sku]);
         stockDetails.push({
           sku: sku, skuName: localProductNames[sku] || d.skuName || sku,
-          pcs: d.pcs, bundles: bundles, availBundles: availBndl,
+          pcs: d.pcs, bundles: bundles, availBundles: bundles,
           bw: bw, bh: bh, ppb: ppb,
           optCols: info.cols, usedWidthCm: info.usedWidthCm,
-          hasDelivery: delivPcs > 0,
-          efficiency: availBndl > 0 ? info.usedWidthCm / availBndl : 0
+          hasDelivery: hasDelivery,
+          efficiency: info.usedWidthCm / bundles
         });
       });
 
