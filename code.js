@@ -11861,3 +11861,66 @@ function analyzeZoneCapacity(params) {
     return { success: false, message: e.toString() };
   }
 }
+
+// ============================================================
+// Migrate GPS_Activity_Log → Supabase gps_activity_log
+// ============================================================
+function migrateGpsActivityToSupabase() {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(GPS_ACTIVITY_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) {
+    Logger.log('[GPS Migrate] ไม่พบข้อมูล');
+    return;
+  }
+
+  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues();
+  var batch = [];
+
+  data.forEach(function(row) {
+    var rawDate = row[4];
+    var dateStr = '';
+    if (rawDate instanceof Date) {
+      dateStr = Utilities.formatDate(rawDate, 'Asia/Bangkok', 'yyyy-MM-dd');
+    } else {
+      var s = String(rawDate || '').trim();
+      // รองรับ dd/MM/yyyy และ dd-MM-yyyy
+      var m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (m) dateStr = m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) dateStr = s;
+    }
+    if (!dateStr) return; // ข้ามแถวที่ไม่มีวันที่
+
+    batch.push({
+      device_id:       String(row[0]  || '').trim(),
+      truck:           String(row[1]  || '').trim(),
+      vehicle_name:    String(row[2]  || '').trim(),
+      driver:          String(row[3]  || '').trim(),
+      activity_date:   dateStr,
+      time_start:      _fmtTime(row[5]),
+      time_end:        _fmtTime(row[6]),
+      engine_run_time: String(row[7]  || '').trim(),
+      idle_str:        String(row[8]  || '').trim(),
+      travel_time:     String(row[9]  || '').trim(),
+      distance:        parseFloat(row[10]) || 0,
+      avg_speed:       parseFloat(row[11]) || 0,
+      max_speed:       parseFloat(row[12]) || 0,
+      fuel_used:       parseFloat(row[13]) || 0,
+      idle_min:        parseFloat(row[14]) || 0,
+      engine_min:      parseFloat(row[15]) || 0,
+      fuel_eff:        parseFloat(row[16]) || 0,
+    });
+  });
+
+  Logger.log('[GPS Migrate] รวม ' + batch.length + ' แถว');
+
+  var success = 0, error = 0;
+  var CHUNK = 100;
+  for (var i = 0; i < batch.length; i += CHUNK) {
+    var chunk = batch.slice(i, i + CHUNK);
+    var ok = _sbFetch('POST', 'gps_activity_log', chunk);
+    if (ok) success += chunk.length;
+    else    error   += chunk.length;
+  }
+
+  Logger.log('[GPS Migrate] success=' + success + ' error=' + error + ' total=' + batch.length);
+}
