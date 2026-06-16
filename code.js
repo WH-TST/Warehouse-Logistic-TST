@@ -9531,6 +9531,125 @@ function runSupabaseSync() {
 // ต่อ plan_id ลงใน Supabase logistic_plans
 // รันครั้งเดียวจาก GAS Editor
 // ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+// migrateLogiMasterToSupabase()
+// ย้าย trucks / drivers / shops / transports / wh_staff จากชีตไป Supabase
+// รันครั้งเดียวจาก GAS Editor
+// ══════════════════════════════════════════════════════════════════════
+function migrateLogiMasterToSupabase() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var now = new Date().toISOString();
+
+  // 1. Trucks
+  var trucks = [];
+  var truckSheet = ss.getSheetByName(LOGI_SH_TRUCK);
+  if (truckSheet && truckSheet.getLastRow() >= 2) {
+    var td = truckSheet.getDataRange().getValues();
+    for (var i = 1; i < td.length; i++) {
+      var plate = String(td[i][0] || '').trim();
+      if (!plate) continue;
+      var capMother = parseFloat(td[i][3]) || 0;
+      var capChild  = parseFloat(td[i][4]) || 0;
+      trucks.push({
+        plate:       plate,
+        type:        String(td[i][1] || '').trim(),
+        net_weight:  parseFloat(td[i][2]) || 0,
+        cap_mother:  capMother,
+        cap_child:   capChild,
+        child_plate: String(td[i][5] || '').trim(),
+        is_trailer:  capMother > 0 && capChild > 0,
+        updated_at:  now
+      });
+    }
+  }
+  if (trucks.length) _sbFetch('POST', 'logi_trucks?on_conflict=plate', trucks);
+  Logger.log('[MigrateLogiMaster] trucks: ' + trucks.length);
+
+  // 2. Drivers
+  var drivers = [];
+  var driverSheet = ss.getSheetByName(LOGI_SH_DRIVER);
+  if (driverSheet && driverSheet.getLastRow() >= 2) {
+    var dd = driverSheet.getDataRange().getValues();
+    for (var i = 1; i < dd.length; i++) {
+      var empId   = String(dd[i][0] || '').trim();
+      var empName = String(dd[i][1] || '').trim();
+      if (!empName) continue;
+      if (!empId) empId = empName; // fallback key
+      drivers.push({
+        id:               empId,
+        name:             empName,
+        can_trailer:      String(dd[i][2] || '').trim().toUpperCase() === 'TRUE',
+        trailer_priority: parseInt(dd[i][3]) || 1,
+        updated_at:       now
+      });
+    }
+  }
+  if (drivers.length) _sbFetch('POST', 'logi_drivers?on_conflict=id', drivers);
+  Logger.log('[MigrateLogiMaster] drivers: ' + drivers.length);
+
+  // 3. Transports
+  var transports = [];
+  var transSheet = ss.getSheetByName(LOGI_SH_TRANSPORT);
+  if (transSheet && transSheet.getLastRow() >= 2) {
+    var tt = transSheet.getDataRange().getValues();
+    for (var i = 1; i < tt.length; i++) {
+      var tid   = String(tt[i][0] || '').trim();
+      var tname = String(tt[i][1] || '').trim();
+      if (!tname) continue;
+      if (!tid) tid = tname;
+      transports.push({ id: tid, name: tname, capacity: parseFloat(tt[i][2]) || 0, updated_at: now });
+    }
+  }
+  if (transports.length) _sbFetch('POST', 'logi_transports?on_conflict=id', transports);
+  Logger.log('[MigrateLogiMaster] transports: ' + transports.length);
+
+  // 4. Shops
+  var shops = [];
+  var custSheet = ss.getSheetByName(LOGI_SH_CUSTOMER);
+  if (custSheet && custSheet.getLastRow() >= 2) {
+    var cd = custSheet.getDataRange().getValues();
+    for (var i = 1; i < cd.length; i++) {
+      var cid   = String(cd[i][0] || '').trim();
+      var cname = String(cd[i][1] || '').trim();
+      if (!cid || !cname) continue;
+      shops.push({
+        id:         cid,
+        name:       cname,
+        address:    String(cd[i][2] || '').trim(),
+        phone:      String(cd[i][3] || '').trim(),
+        sale:       String(cd[i][4] || '').trim(),
+        distance:   parseFloat(cd[i][5]) || 0,
+        no_trailer: String(cd[i][6] || '').trim().toUpperCase() === 'TRUE',
+        updated_at: now
+      });
+    }
+  }
+  if (shops.length) {
+    for (var i = 0; i < shops.length; i += 200) {
+      _sbFetch('POST', 'logi_shops?on_conflict=id', shops.slice(i, i + 200));
+    }
+  }
+  Logger.log('[MigrateLogiMaster] shops: ' + shops.length);
+
+  // 5. WH Staff
+  var staff = [];
+  var staffSheet = ss.getSheetByName(LOGI_SH_WH_STAFF);
+  if (staffSheet && staffSheet.getLastRow() >= 2) {
+    var sd = staffSheet.getDataRange().getValues();
+    for (var i = 1; i < sd.length; i++) {
+      var sid   = String(sd[i][0] || '').trim();
+      var sname = String(sd[i][1] || '').trim();
+      if (!sname) continue;
+      if (!sid) sid = sname;
+      staff.push({ id: sid, name: sname, team: String(sd[i][2] || '').trim(), updated_at: now });
+    }
+  }
+  if (staff.length) _sbFetch('POST', 'logi_wh_staff?on_conflict=id', staff);
+  Logger.log('[MigrateLogiMaster] wh_staff: ' + staff.length);
+
+  Logger.log('[MigrateLogiMaster] Done.');
+}
+
 function migrateLogisticPlansToSupabase() {
   var ss        = SpreadsheetApp.openById(SPREADSHEET_ID);
   var planSheet = ss.getSheetByName('Logistic_Plan');

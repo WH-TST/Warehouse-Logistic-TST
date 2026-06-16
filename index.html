@@ -19861,70 +19861,81 @@ window.onLogiStatusChange = function onLogiStatusChange() {
 }
 
 // ── โหลด Master Data จาก GAS ──────────────────────────────────────────────
-function loadLogiMaster(callback) {
+async function loadLogiMaster(callback) {
     if (LOGI_MASTER_CACHE.loaded && LOGI_MASTER_CACHE.shops.length > 0) {
         if (callback) callback();
         return;
     }
-    // โหลด products จาก Supabase, ที่เหลือจาก GAS ตามเดิม
-    const _loadProducts = async () => {
-        try {
-            const cached = _cacheGet('logi_products');
-            if (cached) return cached;
-            const { data, error } = await window._sb.from('products').select('sku,name,lines_per_bundle,likely_w,min_w,max_w,lifts_per_round').order('sku');
-            if (error) throw error;
-            const prods = (data || []).map(p => ({
-                sku:            p.sku,
-                name:           p.name,
-                linesPerBundle: p.lines_per_bundle || 1,
-                likelyW:        p.likely_w || 0,
-                minW:           p.min_w    || 0,
-                maxW:           p.max_w    || 0,
-                liftsPerRound:  p.lifts_per_round || 0,
-            }));
-            _cacheSet('logi_products', prods);
-            return prods;
-        } catch(e) {
-            console.warn('[logiMaster] products Supabase error:', e);
-            return [];
-        }
-    };
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (res && res.success) {
-                LOGI_MASTER_CACHE.trucks     = res.trucks     || [];
-                LOGI_MASTER_CACHE.drivers    = res.drivers    || [];
-                LOGI_MASTER_CACHE.transports = res.transports || [];
-                LOGI_MASTER_CACHE.shops      = res.shops      || [];
-                LOGI_MASTER_CACHE.whStaff    = res.whStaff    || [];
-                // products จาก GAS เป็น fallback ก่อน แล้ว Supabase จะ override
-                LOGI_MASTER_CACHE.products   = res.products   || [];
-                LOGI_PRODUCTS_MASTER         = LOGI_MASTER_CACHE.products;
-                LOGI_MASTER_CACHE.loaded     = LOGI_MASTER_CACHE.shops.length > 0;
-            } else {
-                showToast('โหลดข้อมูลร้านค้าไม่สำเร็จ: ' + (res && res.message || 'กรุณากด รีเฟรชข้อมูล อีกครั้ง'), true);
-            }
-            // override products ด้วย Supabase
-            _loadProducts().then(sbProds => {
-                if (sbProds.length > 0) {
-                    LOGI_MASTER_CACHE.products = sbProds;
-                    LOGI_PRODUCTS_MASTER       = sbProds;
-                }
-                if (callback) callback();
-            });
-        })
-        .withFailureHandler(function(err) {
-            showToast('โหลด Master ไม่สำเร็จ: ' + (err && err.message || err), true);
-            // ลอง load products จาก Supabase แม้ GAS fail
-            _loadProducts().then(sbProds => {
-                if (sbProds.length > 0) {
-                    LOGI_MASTER_CACHE.products = sbProds;
-                    LOGI_PRODUCTS_MASTER       = sbProds;
-                }
-                if (callback) callback();
-            });
-        })
-        .getLogisticMasterData();
+    try {
+        // โหลดทุกตารางพร้อมกันใน 1 รอบ
+        const [trucks, drivers, transports, shops, staff, products] = await Promise.all([
+            window._sb.from('logi_trucks').select('*').order('plate'),
+            window._sb.from('logi_drivers').select('*').order('name'),
+            window._sb.from('logi_transports').select('*').order('name'),
+            window._sb.from('logi_shops').select('*').order('name'),
+            window._sb.from('logi_wh_staff').select('*').order('name'),
+            window._sb.from('products').select('sku,name,lines_per_bundle,likely_w,min_w,max_w,lifts_per_round').order('sku'),
+        ]);
+
+        LOGI_MASTER_CACHE.trucks = (trucks.data || []).map(t => ({
+            plate:       t.plate,
+            type:        t.type,
+            netWeight:   t.net_weight,
+            capMother:   t.cap_mother,
+            capChild:    t.cap_child,
+            childPlate:  t.child_plate,
+            isTrailer:   t.is_trailer,
+        }));
+
+        LOGI_MASTER_CACHE.drivers = (drivers.data || []).map(d => ({
+            id:               d.id,
+            name:             d.name,
+            canTrailer:       d.can_trailer,
+            trailerPriority:  d.trailer_priority,
+        }));
+
+        LOGI_MASTER_CACHE.transports = (transports.data || []).map(t => ({
+            id:       t.id,
+            name:     t.name,
+            capacity: t.capacity,
+        }));
+
+        LOGI_MASTER_CACHE.shops = (shops.data || []).map(s => ({
+            id:           s.id,
+            name:         s.name,
+            address:      s.address,
+            phone:        s.phone,
+            sale:         s.sale,
+            distance:     s.distance,
+            freeDistance: 0,
+            zone:         '',
+            noTrailer:    s.no_trailer,
+        }));
+
+        LOGI_MASTER_CACHE.whStaff = (staff.data || []).map(s => ({
+            id:   s.id,
+            name: s.name,
+            team: s.team,
+        }));
+
+        LOGI_MASTER_CACHE.products = (products.data || []).map(p => ({
+            sku:           p.sku,
+            name:          p.name,
+            linesPerBundle: p.lines_per_bundle || 1,
+            likelyW:       p.likely_w || 0,
+            minW:          p.min_w    || 0,
+            maxW:          p.max_w    || 0,
+            liftsPerRound: p.lifts_per_round || 0,
+        }));
+
+        LOGI_PRODUCTS_MASTER     = LOGI_MASTER_CACHE.products;
+        LOGI_MASTER_CACHE.loaded = LOGI_MASTER_CACHE.shops.length > 0;
+
+    } catch(e) {
+        console.error('[loadLogiMaster] Supabase error:', e);
+        showToast('โหลดข้อมูล Master ไม่สำเร็จ: ' + (e?.message || e), true);
+    }
+    if (callback) callback();
 }
 
 // ── Force reload master (ปุ่ม รีเฟรช) ──────────────────────────────────────
