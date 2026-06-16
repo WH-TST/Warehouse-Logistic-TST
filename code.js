@@ -10804,7 +10804,7 @@ function analyzeZoneCapacity(params) {
           if (bndls <= 0) return;
           enriched.push({
             zoneId: zoneId, machineId: machId,
-            sku: sku, skuName: localProductNames[sku] || p.name || ext.name || sku,
+            sku: sku, skuName: localProductNames[sku] || sku,
             shift: '-',
             plannedBundles: bndls,
             linesQty: qty,
@@ -11090,7 +11090,7 @@ function analyzeZoneCapacity(params) {
           var ext = extMap[sku] || {};
           continuousSkus.push({
             sku: sku,
-            skuName: localProductNames[sku] || (extMap[sku]||{}).name || sku,
+            skuName: localProductNames[sku] || sku,
             daysCount: zDayCount[sku],
             totalBundles: totalB
           });
