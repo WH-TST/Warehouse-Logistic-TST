@@ -9440,17 +9440,63 @@ function _syncProductionPlanCacheToSupabase() {
 }
 
 // Main sync entry — called by Time Trigger every 15 min
+function _syncAnalyticsCacheToSupabase() {
+  try {
+    var today = new Date();
+    // คำนวณ 3 เดือน: เดือนก่อน, เดือนนี้, เดือนหน้า
+    var months = [-1, 0, 1].map(function(offset) {
+      var d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+      var y = d.getFullYear();
+      var m = d.getMonth(); // 0-based
+      var firstDay = Utilities.formatDate(new Date(y, m, 1), 'GMT+7', 'yyyy-MM-dd');
+      var lastDay  = Utilities.formatDate(new Date(y, m + 1, 0), 'GMT+7', 'yyyy-MM-dd');
+      return { key: y + '-' + (m+1 < 10 ? '0'+(m+1) : String(m+1)), start: firstDay, end: lastDay };
+    });
+
+    months.forEach(function(mo) {
+      try {
+        // flow analytics
+        var flowKey = 'analytics_flow_' + mo.key;
+        var flowData = getWarehouseAnalyticsData(mo.start, mo.end);
+        _sbFetch('POST', 'analytics_cache?on_conflict=cache_key', [{
+          cache_key: flowKey, data: flowData, updated_at: new Date().toISOString()
+        }]);
+        Logger.log('[SB Sync] analytics_cache: ' + flowKey);
+
+        // delivery type
+        var delivKey = 'analytics_delivery_' + mo.key;
+        var delivData = getDeliveryTypeData(mo.start, mo.end);
+        _sbFetch('POST', 'analytics_cache?on_conflict=cache_key', [{
+          cache_key: delivKey, data: delivData, updated_at: new Date().toISOString()
+        }]);
+        Logger.log('[SB Sync] analytics_cache: ' + delivKey);
+      } catch(em) { Logger.log('[SB Sync] analytics month error ' + mo.key + ': ' + em); }
+    });
+
+    // space analysis (ไม่มี params)
+    try {
+      var spaceData = getSpaceAnalysisData();
+      _sbFetch('POST', 'analytics_cache?on_conflict=cache_key', [{
+        cache_key: 'space_analysis', data: spaceData, updated_at: new Date().toISOString()
+      }]);
+      Logger.log('[SB Sync] analytics_cache: space_analysis');
+    } catch(es) { Logger.log('[SB Sync] space_analysis error: ' + es); }
+
+  } catch(e) { Logger.log('[SB Sync] _syncAnalyticsCacheToSupabase error: ' + e); }
+}
+
 function runSupabaseSync() {
   try {
     Logger.log('[SB Sync] Starting full sync...');
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     _syncProductsToSupabase(ss);
-    _syncZoneStockToSupabase(ss);
+    syncZoneStockFromInventory();
     _syncOnhandToSupabase();
     _syncProductionBlockToSupabase();
     _syncDeliveryItemsToSupabase();
     _syncHolidaysToSupabase(ss);
     _syncProductionPlanCacheToSupabase();
+    _syncAnalyticsCacheToSupabase();
     Logger.log('[SB Sync] Done.');
   } catch(e) {
     Logger.log('[SB Sync] runSupabaseSync error: ' + e);

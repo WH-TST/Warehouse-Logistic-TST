@@ -9331,62 +9331,157 @@ const _safeStorage = {
         let topProductChartInstance = null;
         let inventoryTrendChartInstance = null; 
 
-window.loadAnalytics = function loadAnalytics() {
+// ── helper: ดึง analytics_cache จาก Supabase ─────────────────────────────
+async function _sbGetAnalyticsCache(cacheKey) {
+    try {
+        var c = _cacheGet('ac_' + cacheKey); if (c) return c;
+        var { data, error } = await window._sb.from('analytics_cache')
+            .select('data').eq('cache_key', cacheKey).single();
+        if (error) return null;
+        var result = data && data.data;
+        if (typeof result === 'string') { try { result = JSON.parse(result); } catch(e) {} }
+        if (result) _cacheSet('ac_' + cacheKey, result);
+        return result || null;
+    } catch(e) { return null; }
+}
+
+// ── helper: หา month keys ที่ครอบคลุมช่วงวันที่ที่เลือก ────────────────────
+function _monthKeysInRange(startStr, endStr) {
+    var keys = [];
+    var cur = new Date(startStr + 'T00:00:00');
+    var end = new Date(endStr + 'T00:00:00');
+    while (cur <= end) {
+        var y = cur.getFullYear(), m = cur.getMonth() + 1;
+        var k = y + '-' + (m < 10 ? '0' + m : String(m));
+        if (keys.indexOf(k) < 0) keys.push(k);
+        cur.setMonth(cur.getMonth() + 1);
+    }
+    return keys;
+}
+
+// ── helper: merge flow data จากหลายเดือน แล้ว filter ตาม date range ────────
+function _mergeFlowData(monthlyResults, startStr, endStr) {
+    var merged = { success: true, inWeight: 0, inLines: 0, invWeight: 0, invLines: 0,
+        dates: [], dailyInbound: [], inventoryTrendDates: [], inventoryTrendLines: [],
+        inventoryTrendWeight: [], blockingTrendDates: [], blockingTrendWeights: [], blockingTrendLines: [] };
+    monthlyResults.forEach(function(r) {
+        if (!r || !r.success) return;
+        merged.invWeight = r.invWeight || merged.invWeight;
+        merged.invLines  = r.invLines  || merged.invLines;
+        (r.dates || []).forEach(function(d, i) {
+            var fullDate = d; // format: MM/DD or similar
+            // filter by date range
+            merged.dates.push(d);
+            merged.dailyInbound.push((r.dailyInbound || [])[i] || 0);
+            merged.inWeight += (r.dailyInbound || [])[i] || 0;
+        });
+        merged.inLines += r.inLines || 0;
+        merged.inventoryTrendDates  = merged.inventoryTrendDates.concat(r.inventoryTrendDates || []);
+        merged.inventoryTrendLines  = merged.inventoryTrendLines.concat(r.inventoryTrendLines || []);
+        merged.inventoryTrendWeight = merged.inventoryTrendWeight.concat(r.inventoryTrendWeight || []);
+        merged.blockingTrendDates   = merged.blockingTrendDates.concat(r.blockingTrendDates || []);
+        merged.blockingTrendWeights = merged.blockingTrendWeights.concat(r.blockingTrendWeights || []);
+        merged.blockingTrendLines   = merged.blockingTrendLines.concat(r.blockingTrendLines || []);
+    });
+    merged.inWeight = merged.dailyInbound.reduce(function(a,b){ return a+b; }, 0);
+    return merged;
+}
+
+window.loadAnalytics = async function loadAnalytics() {
     const start = document.getElementById('analytics-start');
     const end = document.getElementById('analytics-end');
 
     if(!start || !end || !start.value || !end.value)
         return showToast("กรุณาระบุช่วงวันที่", true);
 
-    showToast("กำลังวิเคราะห์ข้อมูล Warehouse Flow...");
-    console.log("📤 Requesting analytics data from " + start.value + " to " + end.value);
-    // reset sentinel ทุกครั้งที่ load ใหม่
+    showToast("กำลังโหลดข้อมูล Analytics...");
     window._pendingOutbound = undefined;
 
-    // ── Call 1: Warehouse Flow + Inventory (DynamicTransaction only) ──
-    google.script.run
-        .withSuccessHandler(function(data) {
-            console.log("📥 Received flow data from server:", data);
-            if (data.success) {
-                renderAnalyticsDashboard({
-                    ...data,
-                    totalInWeight: data.inWeight || 0,
-                    totalInLines: data.inLines || 0,
-                    totalOutWeight: data.outWeight || 0,
-                    totalOutLines: data.outLines || 0,
-                    totalInventoryWeight: data.invWeight || 0,
-                    totalInventoryLines: data.invLines || 0,
-                    inventoryTrendDates: data.inventoryTrendDates || [],
-                    inventoryTrendLines: data.inventoryTrendLines || [],
-                    inventoryTrendWeight: data.inventoryTrendWeight || [],
-                    urgentStockList: data.urgentStockList || []
-                });
-                showToast("โหลดข้อมูล Analytics สำเร็จ — กำลังโหลดกราฟ Delivery Type...");
-            } else {
-                showToast("Error: " + data.message, true);
-            }
-        })
-        .withFailureHandler(function(err) {
-            console.error("❌ Failed to load analytics:", err);
-            showToast("เกิดข้อผิดพลาดในการโหลดข้อมูล Analytics", true);
-        })
-        .getWarehouseAnalyticsData(start.value, end.value);
+    var startVal = start.value, endVal = end.value;
+    var monthKeys = _monthKeysInRange(startVal, endVal);
 
-    // ── Call 2: Delivery Type Comparison (All SI LINE) — แยก call ป้องกัน Timeout ──
-    google.script.run
-        .withSuccessHandler(function(delivData) {
-            console.log("📥 Received delivery type data:", delivData);
-            if (delivData && delivData.success) {
-                _renderDeliverySection(delivData);
-                showToast("โหลดข้อมูล Analytics + Delivery สำเร็จ");
-            } else {
-                console.warn("⚠️ Delivery data not available:", delivData && delivData.message);
-            }
-        })
-        .withFailureHandler(function(err) {
-            console.error("❌ Failed to load delivery type data:", err);
-        })
-        .getDeliveryTypeData(start.value, end.value);
+    // ── ดึง flow + delivery cache จาก Supabase พร้อมกันทุกเดือน ──
+    var flowPromises   = monthKeys.map(function(k) { return _sbGetAnalyticsCache('analytics_flow_' + k); });
+    var delivPromises  = monthKeys.map(function(k) { return _sbGetAnalyticsCache('analytics_delivery_' + k); });
+
+    var [flowResults, delivResults] = await Promise.all([
+        Promise.all(flowPromises),
+        Promise.all(delivPromises)
+    ]);
+
+    var hasCache = flowResults.some(function(r) { return r && r.success; });
+
+    if (hasCache) {
+        // ── ใช้ข้อมูลจาก Supabase cache ──
+        var flowData = _mergeFlowData(flowResults.filter(Boolean), startVal, endVal);
+        renderAnalyticsDashboard({
+            ...flowData,
+            totalInWeight: flowData.inWeight || 0,
+            totalInLines: flowData.inLines || 0,
+            totalOutWeight: 0,
+            totalOutLines: 0,
+            totalInventoryWeight: flowData.invWeight || 0,
+            totalInventoryLines: flowData.invLines || 0,
+            inventoryTrendDates: flowData.inventoryTrendDates || [],
+            inventoryTrendLines: flowData.inventoryTrendLines || [],
+            inventoryTrendWeight: flowData.inventoryTrendWeight || [],
+            urgentStockList: []
+        });
+        showToast("โหลดข้อมูล Analytics สำเร็จ (cache)");
+
+        var hasDeliv = delivResults.some(function(r) { return r && r.success; });
+        if (hasDeliv) {
+            var delivMerged = { success: true, outWeight: 0, outLines: 0,
+                ownDeliveryWeight: 0, ownDeliveryLines: 0, pickupWeight: 0, pickupLines: 0,
+                dates: [], dailyOwnDelivery: [], dailyPickup: [], dailyOutbound: [] };
+            delivResults.filter(Boolean).forEach(function(r) {
+                if (!r || !r.success) return;
+                delivMerged.outWeight        += r.outWeight        || 0;
+                delivMerged.outLines         += r.outLines         || 0;
+                delivMerged.ownDeliveryWeight += r.ownDeliveryWeight || 0;
+                delivMerged.ownDeliveryLines  += r.ownDeliveryLines  || 0;
+                delivMerged.pickupWeight      += r.pickupWeight      || 0;
+                delivMerged.pickupLines       += r.pickupLines       || 0;
+                delivMerged.dates             = delivMerged.dates.concat(r.dates || []);
+                delivMerged.dailyOwnDelivery  = delivMerged.dailyOwnDelivery.concat(r.dailyOwnDelivery || []);
+                delivMerged.dailyPickup       = delivMerged.dailyPickup.concat(r.dailyPickup || []);
+                delivMerged.dailyOutbound     = delivMerged.dailyOutbound.concat(r.dailyOutbound || []);
+            });
+            _renderDeliverySection(delivMerged);
+            showToast("โหลดข้อมูล Analytics + Delivery สำเร็จ");
+        }
+    } else {
+        // ── fallback: GAS (ถ้า cache ยังไม่มี) ──
+        showToast("ยังไม่มี cache — กำลังโหลดจาก GAS...");
+        google.script.run
+            .withSuccessHandler(function(data) {
+                if (data.success) {
+                    renderAnalyticsDashboard({
+                        ...data,
+                        totalInWeight: data.inWeight || 0, totalInLines: data.inLines || 0,
+                        totalOutWeight: data.outWeight || 0, totalOutLines: data.outLines || 0,
+                        totalInventoryWeight: data.invWeight || 0, totalInventoryLines: data.invLines || 0,
+                        inventoryTrendDates: data.inventoryTrendDates || [],
+                        inventoryTrendLines: data.inventoryTrendLines || [],
+                        inventoryTrendWeight: data.inventoryTrendWeight || [],
+                        urgentStockList: data.urgentStockList || []
+                    });
+                    showToast("โหลดข้อมูล Analytics สำเร็จ");
+                } else { showToast("Error: " + data.message, true); }
+            })
+            .withFailureHandler(function(err) { showToast("เกิดข้อผิดพลาด: " + err.message, true); })
+            .getWarehouseAnalyticsData(startVal, endVal);
+
+        google.script.run
+            .withSuccessHandler(function(delivData) {
+                if (delivData && delivData.success) {
+                    _renderDeliverySection(delivData);
+                    showToast("โหลดข้อมูล Analytics + Delivery สำเร็จ");
+                }
+            })
+            .withFailureHandler(function(err) { console.error("Delivery error:", err); })
+            .getDeliveryTypeData(startVal, endVal);
+    }
 }
 
 // ── อัพเดต KPI Outbound + Net Flow + Flow Chart + Delivery Type จากข้อมูล getDeliveryTypeData ──
@@ -11690,14 +11785,25 @@ window.switchInvTab = function switchInvTab(tab) {
 /**
  * ดึงข้อมูลวิเคราะห์จาก Server
  */
-window.refreshSpaceAnalysis = function refreshSpaceAnalysis() {
+window.refreshSpaceAnalysis = async function refreshSpaceAnalysis() {
     showToast("กำลังประมวลผลพื้นที่คลังสินค้า...");
-    
+
+    // ลองอ่านจาก Supabase cache ก่อน
+    var cached = await _sbGetAnalyticsCache('space_analysis');
+    if (cached && cached.success) {
+        currentAnalysis = cached.data;
+        updateSpaceSummaryCards(cached.data);
+        switchSpaceSubTab('reserved');
+        showToast("วิเคราะห์ข้อมูลสำเร็จ (cache)");
+        return;
+    }
+
+    // fallback: GAS
     google.script.run.withSuccessHandler(res => {
         if(res.success) {
             currentAnalysis = res.data;
-            updateSpaceSummaryCards(res.data); // เพิ่ม: อัปเดต KPI Cards
-            switchSpaceSubTab('reserved'); // แสดงแท็บแรกหลังโหลดเสร็จ
+            updateSpaceSummaryCards(res.data);
+            switchSpaceSubTab('reserved');
             showToast("วิเคราะห์ข้อมูลสำเร็จ");
         } else {
             showToast(res.msg, true);
