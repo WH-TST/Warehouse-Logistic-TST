@@ -3008,14 +3008,6 @@ thead.sticky {
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-rose-600">
       <i class="fas fa-user-shield mr-2"></i>พฤติกรรม & KPI
     </button>
-    <button id="logi-tab-autoplan" onclick="switchLogiTab('autoplan')"
-      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-violet-700">
-      <i class="fas fa-magic mr-2"></i>วางแผนอัตโนมัติ
-    </button>
-    <button id="logi-tab-outplan" onclick="switchLogiTab('outplan')"
-      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-rose-600">
-      <i class="fas fa-chart-bar mr-2"></i>กราฟขาออก
-    </button>
   </div>
 
   <!-- ── TAB: รายการแผน ── -->
@@ -4914,173 +4906,10 @@ thead.sticky {
   <!-- ════════════════════════════════════════════════════════ -->
   <!-- TAB: วางแผนการส่งมอบอัตโนมัติ (Auto Delivery Planner)   -->
   <!-- ════════════════════════════════════════════════════════ -->
-  <div id="logi-panel-autoplan" class="hidden space-y-5">
-
-    <!-- Header -->
-    <div class="rounded-2xl p-6 flex items-center gap-4" style="background:linear-gradient(135deg,#0d1b2a 0%,#1e3a8a 50%,#2563eb 100%);">
-      <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl" style="background:rgba(255,255,255,0.12);">
-        <i class="fas fa-magic" style="color:#e2e8f0;"></i>
-      </div>
-      <div>
-        <h3 class="text-xl font-black tracking-tight" style="color:#ffffff;">วางแผนการส่งมอบอัตโนมัติ</h3>
-        <p class="text-xs font-bold mt-0.5 uppercase tracking-widest" style="color:#93c5fd;">Auto Delivery Planning — Greedy Nearest-Neighbor</p>
-      </div>
-    </div>
-
-    <!-- STEP 1: กำหนดเงื่อนไข + วันที่ส่ง -->
-    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">1</span>
-        <h4 class="font-black text-slate-700">กำหนดเงื่อนไขการวางแผน</h4>
-      </div>
-      <!-- hidden elements for backward compat -->
-      <input type="date" id="autoplan-ship-date" class="hidden">
-      <div id="autoplan-date-chips" class="hidden"></div>
-      <input type="file" id="autoplan-file-input" accept=".xlsx,.xls" class="hidden" onchange="autoplanReadExcel(this)">
-      <div id="autoplan-so-preview" class="hidden"></div>
-      <span id="autoplan-so-count" class="hidden">0</span>
-      <span id="autoplan-shop-count" class="hidden">0</span>
-      <tbody id="autoplan-so-tbody" class="hidden"></tbody>
-      <button id="autoplan-load-btn" class="hidden"></button>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div>
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">
-            🎯 เป้าหมาย กม./เที่ยว
-            <span class="text-violet-500 normal-case font-normal ml-1">(soft target)</span>
-          </label>
-          <input type="number" id="autoplan-target-km" value="300" min="50" max="1000"
-            class="w-full bg-violet-50 border-2 border-violet-300 rounded-xl px-4 py-2.5 font-black text-violet-700 outline-none focus:border-violet-500 text-sm text-center">
-        </div>
-        <div>
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">
-            🚧 กม.สูงสุด/เที่ยว
-            <span class="text-slate-400 normal-case font-normal ml-1">(hard limit)</span>
-          </label>
-          <input type="number" id="autoplan-max-km" value="500" min="100" max="2000"
-            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm text-center">
-        </div>
-        <div>
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ประเภทรถ</label>
-          <select id="autoplan-truck-type" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" onchange="autoplanUpdateTruckOptions()">
-            <option value="company">รถบริษัท</option>
-            <option value="hired">รถจ้าง</option>
-          </select>
-        </div>
-        <!-- รถบริษัท: dropdown ทะเบียน + auto-fill capacity -->
-        <div id="autoplan-company-truck-col">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">เลือกทะเบียนรถ</label>
-          <select id="autoplan-truck-sel" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm cursor-pointer" onchange="autoplanUpdateCapacity()">
-            <option value="">— เลือกรถ —</option>
-          </select>
-        </div>
-        <!-- รถจ้าง: ไม่มี dropdown (บริษัทขนส่งมีหลายคัน) — กรอก capacity เองได้ -->
-        <div id="autoplan-hired-truck-col" class="hidden">
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">บริษัทขนส่ง (ระบุต่อเที่ยว)</label>
-          <div class="bg-violet-50 border-2 border-violet-200 rounded-xl px-4 py-2.5 text-xs text-violet-600 font-bold">
-            <i class="fas fa-info-circle mr-1"></i>เลือกบริษัทขนส่งต่อเที่ยวในขั้นตอน 3
-          </div>
-        </div>
-        <div>
-          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">Capacity ต่อเที่ยว (กก.)</label>
-          <input type="number" id="autoplan-capacity" value="15000" min="1000"
-            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-violet-400 text-sm text-center"
-            placeholder="กรอก capacity กก.">
-          <div class="text-[10px] text-slate-400 mt-0.5 text-center">รถจ้าง: กรอกตามขนาดที่จ้างมา</div>
-        </div>
-        <div>
-          <label class="text-xs font-black text-slate-500 uppercase tracking-wide mb-1 block">
-            ⚖️ น้ำหนักขั้นต่ำ/เที่ยว
-            <span class="text-slate-400 normal-case font-normal ml-1">(ต่ำกว่านี้ = รอรวม)</span>
-          </label>
-          <input type="number" id="autoplan-min-weight" value="14000" min="0" max="33000" step="500"
-            class="w-full bg-amber-50 border-2 border-amber-300 rounded-xl px-4 py-2.5 font-black text-amber-700 text-center text-sm outline-none focus:border-amber-500 transition">
-        </div>
-      </div>
-      <div class="mt-4 flex justify-end items-center gap-3">
-        <div id="autoplan-excluded-badge" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-bold"></div>
-        <button onclick="autoplanRunAll()" id="autoplan-run-btn"
-          class="bg-violet-600 hover:bg-violet-500 text-white px-8 py-3 rounded-xl font-black text-sm shadow-lg transition-all flex items-center gap-2">
-          <i class="fas fa-magic"></i>จัดแผนอัตโนมัติ
-        </button>
-      </div>
-    </div>
-
-    <!-- STEP 2: Draft Trips -->
-    <div id="autoplan-result-section" class="hidden">
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-2">
-            <span class="w-7 h-7 bg-violet-600 text-white rounded-full flex items-center justify-center font-black text-sm">2</span>
-            <h4 class="font-black text-slate-700">ผลลัพธ์ Draft Trips</h4>
-            <span id="autoplan-trip-count-badge" class="bg-violet-100 text-violet-700 text-xs font-black px-3 py-1 rounded-full"></span>
-          </div>
-          <div class="flex gap-2">
-            <button onclick="autoplanResetResult()" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition-all">
-              <i class="fas fa-redo mr-1"></i>เริ่มใหม่
-            </button>
-          </div>
-        </div>
-
-        <!-- ไม่มี match warning -->
-        <div id="autoplan-unmatched-warning" class="hidden mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-          <i class="fas fa-exclamation-triangle mr-1 text-amber-500"></i>
-          <span id="autoplan-unmatched-text"></span>
-        </div>
-
-        <div id="autoplan-trips-container" class="space-y-4"></div>
-      </div>
-    </div>
-
-  </div><!-- end logi-panel-autoplan -->
 
   <!-- ════════════════════════════════════════════════════════ -->
   <!-- TAB: กราฟขาออก 7 วัน (Outbound Sales Forecast)         -->
   <!-- ════════════════════════════════════════════════════════ -->
-  <div id="logi-panel-outplan" class="hidden space-y-5">
-
-    <!-- Header bar -->
-    <div class="flex flex-wrap items-center gap-3 bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-3">
-      <div class="flex items-center gap-3 flex-1">
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg shadow" style="background:linear-gradient(135deg,#be123c,#fb7185);">
-          <i class="fas fa-chart-bar"></i>
-        </div>
-        <div>
-          <div class="text-base font-black text-slate-800">แผนส่งมอบล่วงหน้า 7 วัน</div>
-          <div class="text-xs text-slate-400 font-bold uppercase tracking-widest">Outbound Delivery Forecast</div>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <label class="text-xs font-black text-slate-400 uppercase">วันเริ่ม</label>
-        <input type="date" id="outplan-start-date"
-          class="bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-700 outline-none focus:border-rose-400 text-sm">
-      </div>
-      <button onclick="loadOutPlanChart()" class="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 rounded-xl font-black text-sm flex items-center gap-2 transition-all">
-        <i class="fas fa-sync-alt"></i> โหลด
-      </button>
-    </div>
-
-    <!-- KPI row -->
-    <div id="outplan-kpi" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
-
-    <!-- Chart area -->
-    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-      <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-        <i class="fas fa-boxes text-rose-400"></i> แผนส่งมอบรายวัน (PCS)
-      </p>
-      <div style="position:relative;height:260px;">
-        <canvas id="outplan-chart"></canvas>
-      </div>
-    </div>
-
-    <!-- SKU breakdown table -->
-    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-      <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-        <i class="fas fa-list text-rose-400"></i> รายละเอียดสินค้า × วันที่
-      </p>
-      <div id="outplan-table" class="overflow-x-auto"></div>
-    </div>
-
-  </div><!-- end logi-panel-outplan -->
 
 
 </div>
@@ -20997,8 +20826,6 @@ window.switchLogiTab = function switchLogiTab(tab) {
         loadorder:    'logi-panel-loadorder',
         driverlog:    'logi-panel-driverlog',
         driverperf:   'logi-panel-driverperf',
-        autoplan:     'logi-panel-autoplan',
-        outplan:      'logi-panel-outplan',
     };
     const tabColors = {
         list:        ' bg-amber-600 text-white shadow',
@@ -21007,8 +20834,6 @@ window.switchLogiTab = function switchLogiTab(tab) {
         loadorder:   ' bg-emerald-700 text-white shadow',
         driverlog:   ' bg-amber-600 text-white shadow',
         driverperf:  ' bg-amber-600 text-white shadow',
-        autoplan:    ' bg-amber-600 text-white shadow',
-        outplan:     ' bg-rose-600 text-white shadow',
     };
     const tabHover = {
         list:        ' text-gray-500 hover:bg-white hover:text-amber-700',
@@ -21016,8 +20841,6 @@ window.switchLogiTab = function switchLogiTab(tab) {
         preshipment: ' text-gray-500 hover:bg-white hover:text-amber-700',
         driverlog:   ' text-gray-500 hover:bg-white hover:text-amber-700',
         driverperf:  ' text-gray-500 hover:bg-white hover:text-amber-700',
-        autoplan:    ' text-gray-500 hover:bg-white hover:text-violet-700',
-        outplan:     ' text-gray-500 hover:bg-white hover:text-rose-600',
     };
     const btnBase = 'flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all';
     Object.keys(panels).forEach(function(t) {
