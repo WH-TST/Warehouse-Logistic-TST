@@ -10741,13 +10741,12 @@ function analyzeZoneCapacity(params) {
       return days;
     }
 
-    // Load product names + ppb directly from Product sheet
+    // Load product names + ppb directly from Product sheet (ss = SPREADSHEET_ID, same sheet)
     var localProductNames = {};
     var localProductPpb   = {};
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     try {
-      var lpSS = SpreadsheetApp.openById('1uLXHWv6_jTb1wnaIzq652gn2gH0Odiw2KOlB8DyY2Us');
-      var lpSheet = lpSS.getSheetByName('Product');
+      var lpSheet = ss.getSheetByName('Product');
       if (lpSheet && lpSheet.getLastRow() >= 2) {
         var lpRows = lpSheet.getRange(2, 1, lpSheet.getLastRow() - 1, 3).getValues();
         lpRows.forEach(function(r) {
@@ -10869,6 +10868,11 @@ function analyzeZoneCapacity(params) {
     // =============================================
     var zoneStock = {};
     try {
+      var _zsc = CacheService.getScriptCache();
+      var _zsCached = _zsc.get('analyzeZC_zoneStock');
+      if (_zsCached) {
+        zoneStock = JSON.parse(_zsCached);
+      } else {
       // 4.1 อ่านยอด On-hand (FG-BP + QC)
       var ohSS    = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
       var ohSheet = ohSS.getSheetByName('On-hand');
@@ -10979,6 +10983,8 @@ function analyzeZoneCapacity(params) {
           zoneStock[toZone][sku].pcs += totalPCS;
         });
       }
+      try { _zsc.put('analyzeZC_zoneStock', JSON.stringify(zoneStock), 300); } catch(ce) {}
+      } // end cache miss
     } catch(e4) {
       Logger.log('analyzeZoneCapacity zone stock error: ' + e4.toString());
     }
