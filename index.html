@@ -25849,35 +25849,51 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
         </div>`;
 
     logiCalPlanList = [];
-    let pending = days.length;
-    let hasError = false;
-
     if (days.length === 0) { renderLogiCalendar(); return; }
 
-    days.forEach(function(dateStr) {
-        google.script.run
-            .withSuccessHandler(function(res) {
-                if (res && res.success && Array.isArray(res.plans)) {
-                    logiCalPlanList = logiCalPlanList.concat(res.plans);
-                }
-                pending--;
-                if (pending === 0) {
-                    // dedup by id
-                    const seen = new Set();
-                    logiCalPlanList = logiCalPlanList.filter(p => {
-                        if (seen.has(p.id)) return false;
-                        seen.add(p.id); return true;
-                    });
-                    renderLogiCalendar();
-                }
-            })
-            .withFailureHandler(function(err) {
-                pending--;
-                hasError = true;
-                if (pending === 0) renderLogiCalendar();
-            })
-            .getLogisticPlans(dateStr);
-    });
+    // ดึงทั้งช่วงวันใน 1 request จาก Supabase
+    window._sb
+        .from('logistic_plans')
+        .select('*')
+        .gte('plan_date', startVal)
+        .lte('plan_date', endVal)
+        .order('plan_id')
+        .then(function(result) {
+            if (result.error) {
+                console.error('[logiCal]', result.error);
+                renderLogiCalendar();
+                return;
+            }
+            logiCalPlanList = (result.data || []).map(function(row) {
+                return {
+                    id:              row.plan_id,
+                    pairId:          row.pair_id          || row.plan_id,
+                    isMother:        row.is_mother        || false,
+                    isChild:         row.is_child         || false,
+                    date:            row.plan_date,
+                    truckType:       row.truck_type       || 'company',
+                    driverTransport: row.driver_transport || '',
+                    driverId:        row.driver_id        || '',
+                    tripNo:          row.trip_no          || '',
+                    jobType:         row.job_type         || '',
+                    status:          row.status           || 'planned',
+                    truckPlate:      row.truck_plate      || '',
+                    childPlate:      row.child_plate      || '',
+                    trailerMode:     row.trailer_mode     || '',
+                    wage:            row.wage             || 0,
+                    warehouse:       row.warehouse        || '',
+                    failReason:      row.fail_reason      || '',
+                    transferRemark:  row.fail_reason      || '',
+                    returnDistance:  row.return_distance  || 0,
+                    totalWeight:     row.total_weight     || 0,
+                    shops:           row.shops            || [],
+                    shopNames:       (row.shops||[]).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
+                    distance:        (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
+                    stopFee:         (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.freeDistance)||0); }, 0),
+                };
+            });
+            renderLogiCalendar();
+        });
 }
 
 // ── Main render ────────────────────────────────────────────────────────────
