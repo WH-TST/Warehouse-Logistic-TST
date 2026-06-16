@@ -24937,27 +24937,34 @@ window.loadPreShipmentItems = function loadPreShipmentItems() {
             var items = [];
             var prodMap = {};
             (LOGI_MASTER_CACHE.products || []).forEach(function(p) { prodMap[p.sku] = p; });
+            var _seqOffset = 0;
             function flattenShops(planRow, defaultTruck) {
                 (planRow.shops || []).forEach(function(shop, si) {
                     (shop.items || []).forEach(function(it) {
-                        var prod = prodMap[it.sku] || {};
-                        var lpb  = prod.linesPerBundle || 1;
-                        var qty  = it.qty || 0;
-                        var bnds = lpb > 0 ? Math.ceil(qty / lpb) : 0;
+                        var prod   = prodMap[it.sku] || {};
+                        var lpb    = prod.linesPerBundle  || 1;
+                        var bpl    = prod.liftsPerRound   || 1;
+                        var wpl    = prod.likelyW         || 0;
+                        var qty    = it.qty || 0;
+                        var bnds   = lpb > 0 ? Math.ceil(qty / lpb) : 0;
+                        var wt     = wpl > 0 ? Math.round(qty * wpl * 100) / 100 : (it.weight || 0);
                         items.push({
-                            sku:          it.sku || '',
-                            productName:  it.productName || '',
-                            totalQtyPcs:  qty,
-                            totalBundles: bnds,
-                            totalWeight:  it.weight || 0,
-                            truckLabel:   it.truckLabel || defaultTruck || 'mother',
-                            shopName:     shop.shopName || shop.shopId || '',
-                            shopId:       shop.shopId   || '',
-                            shopSeq:      si,
+                            sku:            it.sku || '',
+                            productName:    it.productName || '',
+                            totalQtyPcs:    qty,
+                            totalBundles:   bnds,
+                            totalWeight:    wt,
+                            truckLabel:     it.truckLabel || defaultTruck || 'mother',
+                            shopName:       shop.shopName || shop.shopId || '',
+                            shopId:         shop.shopId   || '',
+                            shopSeq:        _seqOffset + si,
                             linesPerBundle: lpb,
+                            bundlesPerLift: bpl,
+                            likelyW:        wpl,
                         });
                     });
                 });
+                _seqOffset += (planRow.shops || []).length;
             }
             flattenShops(motherRow, 'mother');
             if (childRow) flattenShops(childRow, 'child');
@@ -25779,22 +25786,28 @@ window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
             var prodMap = {};
             (LOGI_MASTER_CACHE.products || []).forEach(function(p) { prodMap[p.sku] = p; });
             var items = [];
+            var _seqOff = 0;
             function flattenShops(planRow, defaultTruck) {
                 (planRow.shops || []).forEach(function(shop, si) {
                     (shop.items || []).forEach(function(it) {
                         var prod = prodMap[it.sku] || {};
                         var lpb  = prod.linesPerBundle || 1;
+                        var bpl  = prod.liftsPerRound  || 1;
+                        var wpl  = prod.likelyW        || 0;
                         var qty  = it.qty || 0;
+                        var wt   = wpl > 0 ? Math.round(qty * wpl * 100) / 100 : (it.weight || 0);
                         items.push({
                             sku: it.sku || '', productName: it.productName || '',
                             totalQtyPcs: qty, totalBundles: lpb > 0 ? Math.ceil(qty / lpb) : 0,
-                            totalWeight: it.weight || 0,
+                            totalWeight: wt,
                             truckLabel: it.truckLabel || defaultTruck || 'mother',
                             shopName: shop.shopName || shop.shopId || '',
-                            shopId: shop.shopId || '', shopSeq: si, linesPerBundle: lpb,
+                            shopId: shop.shopId || '', shopSeq: _seqOff + si,
+                            linesPerBundle: lpb, bundlesPerLift: bpl, likelyW: wpl,
                         });
                     });
                 });
+                _seqOff += (planRow.shops || []).length;
             }
             flattenShops(motherRow, 'mother');
             if (childRow) flattenShops(childRow, 'child');
