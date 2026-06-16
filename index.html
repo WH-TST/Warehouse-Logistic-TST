@@ -8080,7 +8080,35 @@ const _safeStorage = {
           return p[2]+'/'+p[1];
         }
 
-        // Timeline: dayProgression boxes
+        // Mini timeline สำหรับแสดงบนหน้าการ์ด (light theme)
+        function renderMiniTimeline(z) {
+          var prog = z.dayProgression;
+          if (!prog || !prog.length) return '';
+          var tl = '<div style="margin-top:10px;border-top:1px solid #f1f5f9;padding-top:10px;">'
+            + '<div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.05em;margin-bottom:6px;">&#9318; คาดการณ์จะเต็มเมื่อไหร่</div>'
+            + '<div style="display:flex;align-items:flex-end;gap:3px;flex-wrap:nowrap;overflow-x:auto;">';
+          prog.forEach(function(pt, i) {
+            var c = pt.pct >= 80 ? '#ef4444' : pt.pct >= 55 ? '#f59e0b' : '#10b981';
+            var isFull = z.fullOnDate && pt.date === z.fullOnDate;
+            tl += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:44px;flex-shrink:0;">'
+              + '<div style="font-size:9px;font-weight:900;color:' + c + ';">' + pt.pct + '%</div>'
+              + '<div style="width:36px;background:#f1f5f9;border-radius:4px;overflow:hidden;height:28px;display:flex;align-items:flex-end;position:relative;">'
+              + '<div style="width:100%;height:' + Math.min(100,pt.pct) + '%;background:' + c + ';opacity:0.85;border-radius:3px;transition:height .4s;"></div>'
+              + (isFull ? '<span style="position:absolute;top:1px;left:50%;transform:translateX(-50%);font-size:8px;">&#9888;</span>' : '')
+              + '</div>'
+              + '<div style="font-size:8px;color:#64748b;white-space:nowrap;">' + (i===0?'วันนี้':fmtD(pt.date)) + '</div>'
+              + '</div>'
+              + (i < prog.length-1 ? '<div style="font-size:10px;color:#cbd5e1;padding-bottom:14px;">&#8250;</div>' : '');
+          });
+          tl += '</div>';
+          if (z.fullOnDate) {
+            tl += '<div style="margin-top:5px;padding:4px 8px;border-radius:6px;background:#fef2f2;border:1px solid #fecaca;font-size:10px;font-weight:700;color:#dc2626;">&#9888; คาดว่าจะเต็มวันที่ ' + fmtD(z.fullOnDate) + '</div>';
+          }
+          tl += '</div>';
+          return tl;
+        }
+
+        // Timeline: dayProgression boxes (popup version)
         function renderTimeline(prog, fullOnDate) {
           if (!prog || !prog.length) return '';
           let tl = `<div style="display:flex;align-items:flex-end;gap:4px;flex-wrap:wrap;margin-top:4px;">`;
@@ -8167,32 +8195,7 @@ const _safeStorage = {
                   <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.05em;margin-bottom:4px;">รายการผลิตวันนี้</div>
                   ${todayItems}
                   <!-- mini forecast timeline -->
-                  ${(function() {
-                    const prog = z.dayProgression;
-                    if (!prog || !prog.length) return '';
-                    let tl = `<div style="margin-top:10px;border-top:1px solid #f1f5f9;padding-top:10px;">
-                      <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.05em;margin-bottom:6px;">⑥ คาดการณ์จะเต็มเมื่อไหร่</div>
-                      <div style="display:flex;align-items:flex-end;gap:3px;flex-wrap:nowrap;overflow-x:auto;">`;
-                    prog.forEach(function(pt, i) {
-                      const c = pt.pct >= 80 ? '#ef4444' : pt.pct >= 55 ? '#f59e0b' : '#10b981';
-                      const isFull = z.fullOnDate && pt.date === z.fullOnDate;
-                      tl += `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:44px;flex-shrink:0;">
-                        <div style="font-size:9px;font-weight:900;color:${c};">${pt.pct}%</div>
-                        <div style="width:36px;background:#f1f5f9;border-radius:4px;overflow:hidden;height:28px;display:flex;align-items:flex-end;position:relative;">
-                          <div style="width:100%;height:${Math.min(100,pt.pct)}%;background:${c};opacity:0.85;border-radius:3px;transition:height .4s;"></div>
-                          ${isFull ? `<span style="position:absolute;top:1px;left:50%;transform:translateX(-50%);font-size:8px;">⚠</span>` : ''}
-                        </div>
-                        <div style="font-size:8px;color:#64748b;white-space:nowrap;">${i===0?'วันนี้':fmtD(pt.date)}</div>
-                      </div>
-                      ${i < prog.length-1 ? `<div style="font-size:10px;color:#cbd5e1;padding-bottom:14px;">›</div>` : ''}`;
-                    });
-                    tl += `</div>`;
-                    if (z.fullOnDate) {
-                      tl += `<div style="margin-top:5px;padding:4px 8px;border-radius:6px;background:#fef2f2;border:1px solid #fecaca;font-size:10px;font-weight:700;color:#dc2626;">⚠ คาดว่าจะเต็มวันที่ ${fmtD(z.fullOnDate)}</div>`;
-                    }
-                    tl += `</div>`;
-                    return tl;
-                  })()}
+                  ${renderMiniTimeline(z)}
                   <!-- tap hint -->
                   <div style="margin-top:8px;text-align:center;font-size:10px;color:#94a3b8;">กดเพื่อดูรายละเอียด →</div>
                 </div>
