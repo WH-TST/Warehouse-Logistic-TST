@@ -9525,6 +9525,190 @@ function runSupabaseSync() {
 }
 
 // ── Run this ONCE from GAS Editor to install 15-min trigger ──────────────────
+// ══════════════════════════════════════════════════════════════════════
+// migrateLogisticPlansToSupabase()
+// อ่าน Logistic_Plan + Logistic_Plan_Item แล้ว upsert รวมเป็น 1 row
+// ต่อ plan_id ลงใน Supabase logistic_plans
+// รันครั้งเดียวจาก GAS Editor
+// ══════════════════════════════════════════════════════════════════════
+function migrateLogisticPlansToSupabase() {
+  var ss        = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var planSheet = ss.getSheetByName('Logistic_Plan');
+  var itemSheet = ss.getSheetByName('Logistic_Plan_Item');
+
+  if (!planSheet || planSheet.getLastRow() < 2) {
+    Logger.log('[Migrate] Logistic_Plan ว่างหรือไม่มีข้อมูล');
+    return;
+  }
+
+  // ── 1. อ่าน Logistic_Plan ──────────────────────────────────────────
+  // Col: A=PlanID B=วันที่ C=ประเภทรถ D=Driver/Transport E=TripNo
+  //      F=ประเภทงาน G=ร้านค้า H=ระยะทาง I=ค่าStop J=ค่าจ้าง
+  //      K=เซลล์ L=สถานะ M=คลังสินค้า N=สาเหตุ O=ทะเบียนรถ P=ระยะทางขากลับ
+  //      Q=ลำดับร้าน R=รหัสร้านค้า S=หมายเหตุ T=trailerMode
+  var planData  = planSheet.getDataRange().getValues();
+  var planMap   = {};
+  var planOrder = [];
+
+  for (var i = 1; i < planData.length; i++) {
+    var row    = planData[i];
+    var pid    = String(row[0] || '').trim();
+    if (!pid) continue;
+
+    var rowDate = row[1] instanceof Date
+      ? Utilities.formatDate(row[1], 'GMT+7', 'yyyy-MM-dd')
+      : String(row[1] || '').substring(0, 10);
+
+    var basePlanId = pid.replace(/-[MC]$/, '');
+    var isMother   = pid.endsWith('-M');
+    var isChild    = pid.endsWith('-C');
+
+    if (!planMap[pid]) {
+      planOrder.push(pid);
+      planMap[pid] = {
+        plan_id:          pid,
+        pair_id:          basePlanId,
+        is_mother:        isMother,
+        is_child:         isChild,
+        plan_date:        rowDate,
+        truck_type:       String(row[2]  || 'company'),
+        driver_transport: String(row[3]  || ''),
+        driver_id:        '',
+        trip_no:          String(row[4]  || ''),
+        job_type:         String(row[5]  || ''),
+        wage:             parseFloat(row[9])  || 0,
+        status:           String(row[11] || 'planned'),
+        warehouse:        String(row[12] || ''),
+        fail_reason:      String(row[13] || ''),
+        truck_plate:      String(row[14] || ''),
+        child_plate:      '',
+        return_distance:  parseFloat(row[15]) || 0,
+        trailer_mode:     String(row[19] || ''),
+        total_weight:     0,
+        created_by:       'migration',
+        updated_at:       new Date().toISOString(),
+        _shopMap:         {},   // shopSeq → shop object (temp)
+        shops:            [],
+      };
+    }
+
+    // ── รวม shop rows (format ใหม่: col Q มีค่า) ──
+    var hasShopRow = (row[16] !== '' && row[16] !== null && row[16] !== undefined);
+    if (hasShopRow) {
+      var shopSeq = parseInt(row[16]) || 0;
+      var shopId  = String(row[17] || '');
+      var key     = shopSeq + '_' + shopId;
+      if (!planMap[pid]._shopMap[key]) {
+        var shopObj = {
+          shopSeq:       shopSeq,
+          shopId:        shopId,
+          shopName:      String(row[6]  || ''),
+          distance:      parseFloat(row[7])  || 0,
+          freeDistance:  parseFloat(row[8])  || 0,
+          sale:          String(row[10] || ''),
+          loadWarehouse: String(row[12] || ''),
+          remark:        String(row[18] || ''),
+          truckLabel:    isChild ? 'child' : 'mother',
+          items:         [],
+        };
+        planMap[pid]._shopMap[key] = shopObj;
+        planMap[pid].shops.push(shopObj);
+      }
+    } else if (!hasShopRow && planMap[pid].shops.length === 0) {
+      // format เก่า: 1 แถว ต่อ plan ไม่มี per-shop
+      var shopObj = {
+        shopSeq:       0,
+        shopId:        '',
+        shopName:      String(row[6]  || ''),
+        distance:      parseFloat(row[7])  || 0,
+        freeDistance:  parseFloat(row[8])  || 0,
+        sale:          String(row[10] || ''),
+        loadWarehouse: String(row[12] || ''),
+        remark:        '',
+        truckLabel:    'mother',
+        items:         [],
+      };
+      planMap[pid]._shopMap['0_'] = shopObj;
+      planMap[pid].shops.push(shopObj);
+    }
+  }
+
+  // ── 2. อ่าน Logistic_Plan_Item แล้วแนบเข้า shop ──────────────────
+  // Col: A=PlanID B=SKU C=Name D=Qty E=WeightPerUnit F=TotalWeight
+  //      G=JobType H=ShopName I=Warehouse J=Date K=Status L=TruckPlate
+  //      M=LoadWarehouse N=ระยะทาง O=หมายเหตุ P=shopSeq Q=ระยะทางฟรี R=shopId
+  if (itemSheet && itemSheet.getLastRow() >= 2) {
+    var itemData = itemSheet.getDataRange().getValues();
+    for (var j = 1; j < itemData.length; j++) {
+      var ir  = itemData[j];
+      var pid = String(ir[0] || '').trim();
+      if (!pid || !planMap[pid]) continue;
+
+      var shopSeq  = (ir[15] !== undefined && ir[15] !== '') ? parseInt(ir[15]) : -1;
+      var shopId   = String(ir[17] || '');
+      var shopName = String(ir[7]  || '');
+      if (!shopName) continue;
+
+      // หา shop ที่ตรงกัน
+      var plan = planMap[pid];
+      var shop = null;
+      if (shopSeq >= 0) {
+        for (var k = 0; k < plan.shops.length; k++) {
+          if (plan.shops[k].shopSeq === shopSeq) { shop = plan.shops[k]; break; }
+        }
+      }
+      if (!shop) {
+        for (var k = 0; k < plan.shops.length; k++) {
+          if (plan.shops[k].shopName === shopName) { shop = plan.shops[k]; break; }
+        }
+      }
+      if (!shop) {
+        // สร้าง shop ใหม่ถ้าไม่เจอ (fallback)
+        shop = { shopSeq: shopSeq, shopId: shopId, shopName: shopName,
+                 distance: 0, freeDistance: 0, sale: '', loadWarehouse: String(ir[12]||''),
+                 remark: '', truckLabel: 'mother', items: [] };
+        plan.shops.push(shop);
+      }
+
+      var weight = parseFloat(ir[5]) || 0;
+      shop.items.push({
+        sku:           String(ir[1] || ''),
+        productName:   String(ir[2] || ''),
+        qty:           parseFloat(ir[3]) || 0,
+        weightPerUnit: parseFloat(ir[4]) || 0,
+        weight:        weight,
+        truckLabel:    'mother',
+      });
+      plan.total_weight += weight;
+    }
+  }
+
+  // ── 3. ลบ _shopMap temp แล้ว upsert เป็น batch ──────────────────
+  var batch = planOrder.map(function(pid) {
+    var p = planMap[pid];
+    delete p._shopMap;
+    return p;
+  });
+
+  if (!batch.length) { Logger.log('[Migrate] ไม่มีข้อมูล'); return; }
+
+  var successCount = 0;
+  var errorCount   = 0;
+  var CHUNK = 50;
+  for (var i = 0; i < batch.length; i += CHUNK) {
+    var chunk  = batch.slice(i, i + CHUNK);
+    var result = _sbFetch('POST', 'logistic_plans?on_conflict=plan_id', chunk);
+    if (result && result.error) {
+      Logger.log('[Migrate] error chunk ' + i + ': ' + JSON.stringify(result.error));
+      errorCount += chunk.length;
+    } else {
+      successCount += chunk.length;
+    }
+  }
+
+  Logger.log('[Migrate] logistic_plans: success=' + successCount + ' error=' + errorCount + ' total=' + batch.length);
+}
+
 function setupSupabaseSyncTrigger() {
   // Remove existing if any
   ScriptApp.getProjectTriggers().forEach(function(t) {
