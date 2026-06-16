@@ -8135,6 +8135,7 @@ const _safeStorage = {
         }
 
         let machineCards = [], reserveCards = [], totalWork = 0;
+        // machineCards/reserveCards จะเก็บ {pct, fullOnDate, html} เพื่อ sort ก่อน render
 
         zones.forEach(function(z) {
           if (z.freeSpaceCm == null || isNaN(z.freeSpaceCm)) {
@@ -8169,7 +8170,7 @@ const _safeStorage = {
               todayItems = `<div style="font-size:11px;color:#94a3b8;padding:6px 0;">ไม่มีแผนผลิตวันนี้</div>`;
             }
 
-            machineCards.push(`
+            machineCards.push({pct: z.projectedPct||0, fullOnDate: z.fullOnDate||'9999', html: `
               <div onclick="wmmOpenZoneDetail('${z.zoneId}')" style="background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.08);cursor:pointer;overflow:hidden;transition:box-shadow .2s;border:1.5px solid ${statusC}33;"
                 onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,0.15)'" onmouseout="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'">
                 <!-- top accent bar -->
@@ -8197,12 +8198,12 @@ const _safeStorage = {
                   <!-- tap hint -->
                   <div style="margin-top:8px;text-align:center;font-size:10px;color:#94a3b8;">กดเพื่อดูรายละเอียด →</div>
                 </div>
-              </div>`);
+              </div>`});
 
           } else {
             // ══ RESERVE ZONE compact card ══
             const freeC = z.freeSpaceCm > 0 ? OK : CRIT;
-            reserveCards.push(`
+            reserveCards.push({pct: z.projectedPct||0, fullOnDate: z.fullOnDate||'9999', html: `
               <div onclick="wmmOpenZoneDetail('${z.zoneId}')" style="background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);cursor:pointer;overflow:hidden;border:1px solid #e2e8f0;transition:box-shadow .2s;"
                 onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.06)'">
                 <div style="height:4px;background:${statusC};"></div>
@@ -8217,9 +8218,17 @@ const _safeStorage = {
                   </div>
                   <div style="margin-top:8px;font-size:10px;color:#94a3b8;text-align:center;">กดดูสต็อค →</div>
                 </div>
-              </div>`);
+              </div>`});
           }
         });
+
+        // เรียงตามความเสี่ยง: % มาก → น้อย, ถ้าเท่ากันให้ fullOnDate ก่อน
+        function riskSort(a, b) {
+          if (b.pct !== a.pct) return b.pct - a.pct;
+          return a.fullOnDate < b.fullOnDate ? -1 : a.fullOnDate > b.fullOnDate ? 1 : 0;
+        }
+        machineCards.sort(riskSort);
+        reserveCards.sort(riskSort);
 
         // ── assemble grid ──
         let finalHtml = '';
@@ -8227,14 +8236,14 @@ const _safeStorage = {
           finalHtml += `
             <div style="font-size:10px;font-weight:800;color:#94a3b8;letter-spacing:.08em;margin-bottom:10px;">MACHINE ZONES</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:20px;">
-              ${machineCards.join('')}
+              ${machineCards.map(function(c){return c.html;}).join('')}
             </div>`;
         }
         if (reserveCards.length) {
           finalHtml += `
             <div style="font-size:10px;font-weight:800;color:#94a3b8;letter-spacing:.08em;margin-bottom:10px;">RESERVE ZONES</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
-              ${reserveCards.join('')}
+              ${reserveCards.map(function(c){return c.html;}).join('')}
             </div>`;
         }
         if (!finalHtml) {
