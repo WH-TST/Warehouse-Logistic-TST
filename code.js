@@ -9015,6 +9015,20 @@ function syncZoneStockFromInventory(params) {
 
     var MZONE = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
 
+    // ── Step 0: โหลด pcsPerBundle จาก sheet Product (แหล่งที่ถูกต้อง) ──
+    var productPpb = {}; // { sku: ppb }
+    var productName = {};
+    var localProdSheet = ss.getSheetByName('Product');
+    if (localProdSheet && localProdSheet.getLastRow() >= 2) {
+      var pRows = localProdSheet.getRange(2, 1, localProdSheet.getLastRow()-1, 3).getValues();
+      pRows.forEach(function(r) {
+        var sku = String(r[0]||'').trim();
+        if (!sku) return;
+        productPpb[sku]  = Number(r[2]) || 1; // col C = linesPerBundle
+        productName[sku] = String(r[1]||'');
+      });
+    }
+
     // ── Step 1: Production Block → skuMachines + skuMeta ──
     var planData = getProductionPlanData({ month: month, year: year });
     if (!planData.success) return { success: false, message: planData.message };
@@ -9030,7 +9044,12 @@ function syncZoneStockFromInventory(params) {
         if (!skuMachines[p.sku]) skuMachines[p.sku] = [];
         if (skuMachines[p.sku].indexOf(mid) < 0) skuMachines[p.sku].push(mid);
         if (!skuMeta[p.sku] || (!skuMeta[p.sku].bw && p.bundleWidth)) {
-          skuMeta[p.sku] = { ppb: p.pcsPerBundle||1, bw: p.bundleWidth||0, bh: p.bundleHeight||0, name: p.name||'' };
+          skuMeta[p.sku] = {
+            ppb: productPpb[p.sku] || p.pcsPerBundle || 1, // ใช้ Product sheet ก่อน
+            bw:  p.bundleWidth  || 0,
+            bh:  p.bundleHeight || 0,
+            name: productName[p.sku] || p.name || ''
+          };
         }
       });
     });
