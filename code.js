@@ -10973,7 +10973,7 @@ function analyzeZoneCapacity(params) {
           var ext = extMap[sku] || {};
           continuousSkus.push({
             sku: sku,
-            skuName: (extMap[sku]||{}).name || sku,
+            skuName: localProductNames[sku] || (extMap[sku]||{}).name || sku,
             daysCount: zDayCount[sku],
             totalBundles: totalB
           });
