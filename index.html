@@ -1276,7 +1276,7 @@ thead.sticky {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">Zone ต้นทาง *</div>
-              <select id="wmm-f-zone" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;outline:none;background:#f8fafc;box-sizing:border-box;">
+              <select id="wmm-f-zone" onchange="var s=safeGet('wmm-f-sku');if(s)s.value='';var i=safeGet('wmm-sku-info');if(i)i.style.display='none';wmmHideSkuDrop();" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;outline:none;background:#f8fafc;box-sizing:border-box;">
                 <option value="">เลือก Zone</option>
                 <option>P4</option><option>P1</option><option>C5</option>
                 <option>P2</option><option>P3</option><option>C4</option>
@@ -1293,9 +1293,15 @@ thead.sticky {
               </select>
             </div>
           </div>
-          <div>
+          <div style="position:relative;">
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">SKU (ถ้าระบุได้)</div>
-            <input type="text" id="wmm-f-sku" placeholder="รหัสสินค้า" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;outline:none;box-sizing:border-box;">
+            <input type="text" id="wmm-f-sku" placeholder="พิมพ์เพื่อค้นหา SKU..." autocomplete="off"
+              style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;outline:none;box-sizing:border-box;"
+              oninput="wmmSkuInput(this.value)" onfocus="wmmSkuInput(this.value)" onblur="setTimeout(()=>wmmHideSkuDrop(),180)">
+            <div id="wmm-sku-drop" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:999;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:200px;overflow-y:auto;"></div>
+            <div id="wmm-sku-info" style="display:none;margin-top:6px;padding:8px 12px;border-radius:10px;background:#f0fdf4;border:1.5px solid #bbf7d0;">
+              <span id="wmm-sku-info-text" style="font-size:12px;font-weight:700;color:#059669;"></span>
+            </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
@@ -8529,6 +8535,59 @@ const _safeStorage = {
         ['wmm-f-sku','wmm-f-bundles','wmm-f-assigned','wmm-f-note'].forEach(function(id){
           const e=safeGet(id); if(e) e.value='';
         });
+        wmmHideSkuDrop();
+        const info=safeGet('wmm-sku-info'); if(info) info.style.display='none';
+      };
+
+      // ── SKU autocomplete helpers ──────────────────────────────────────
+      function _wmmZoneSkus() {
+        const zone = (safeGet('wmm-f-zone')||{}).value||'';
+        const z = (window._wmmZoneData||{})[zone];
+        return (z && z.stockDetails) ? z.stockDetails : [];
+      }
+
+      window.wmmSkuInput = function(val) {
+        const drop = safeGet('wmm-sku-drop'); if (!drop) return;
+        const skus = _wmmZoneSkus();
+        if (!skus.length) { drop.style.display='none'; return; }
+        const q = (val||'').toLowerCase().trim();
+        const filtered = q ? skus.filter(function(s){
+          return (s.sku||'').toLowerCase().includes(q) || (s.skuName||'').toLowerCase().includes(q);
+        }) : skus;
+        if (!filtered.length) { drop.style.display='none'; return; }
+        drop.innerHTML = filtered.map(function(s){
+          return `<div onclick="wmmPickSku('${s.sku}')" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:8px;"
+            onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+            <div>
+              <div style="font-size:12px;font-weight:700;color:#0f172a;">${s.sku}</div>
+              ${s.skuName && s.skuName!==s.sku ? `<div style="font-size:11px;color:#64748b;">${s.skuName}</div>` : ''}
+            </div>
+            <span style="font-size:12px;font-weight:900;color:#059669;white-space:nowrap;">${s.bundles} มัด</span>
+          </div>`;
+        }).join('');
+        drop.style.display='block';
+      };
+
+      window.wmmPickSku = function(sku) {
+        const inp = safeGet('wmm-f-sku'); if (inp) inp.value = sku;
+        wmmHideSkuDrop();
+        // แสดง stock info
+        const skus = _wmmZoneSkus();
+        const found = skus.find(function(s){ return s.sku===sku; });
+        const info = safeGet('wmm-sku-info');
+        const txt  = safeGet('wmm-sku-info-text');
+        if (info && txt && found) {
+          const zoneName = (safeGet('wmm-f-zone')||{}).value||'';
+          txt.innerHTML = `📦 ${found.skuName||found.sku} ใน Zone ${zoneName}: <b>${found.bundles} มัด</b> · ${found.optCols} ฐาน · ${(found.usedWidthCm/100).toFixed(1)} ม.`;
+          info.style.display='block';
+        }
+        // auto-fill bundles if empty
+        const bnd = safeGet('wmm-f-bundles');
+        if (bnd && (!bnd.value || bnd.value==='0') && found) bnd.value = found.bundles;
+      };
+
+      window.wmmHideSkuDrop = function() {
+        const drop = safeGet('wmm-sku-drop'); if(drop) drop.style.display='none';
       };
 
       window.wmmSubmitOrder = function() {
