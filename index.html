@@ -25760,44 +25760,79 @@ window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
     if (prevEl)    prevEl.classList.add('hidden');
     if (printBtn)  { printBtn.disabled = true; printBtn.className = 'bg-slate-200 text-slate-400 px-8 py-2.5 rounded-xl font-black flex items-center gap-2 cursor-not-allowed transition-all'; }
 
-    google.script.run
-        .withSuccessHandler(function(res) {
+    var basePlanId = planId.replace(/-[MC]$/, '');
+    window._sb.from('logistic_plans')
+        .select('*')
+        .like('plan_id', basePlanId + '%')
+        .order('plan_id')
+        .then(function(qr) {
             if (loadingEl) loadingEl.classList.add('hidden');
-            if (!res || !res.success) {
+            if (qr.error || !qr.data || !qr.data.length) {
                 _psdAutoPrintAfterLoad = false;
-                showToast('โหลดข้อมูลแผนไม่สำเร็จ: ' + (res ? res.message : ''), true);
-                return;
+                showToast('โหลดแผนไม่สำเร็จ', true); return;
             }
+            var rows = qr.data;
+            var motherRow = rows.find(function(r) { return r.is_mother || r.plan_id.endsWith('-M'); })
+                         || rows.find(function(r) { return !r.is_child; })
+                         || rows[0];
+            var childRow  = rows.find(function(r) { return r.is_child  || r.plan_id.endsWith('-C'); });
+            var isTrailerPlan = !!(motherRow && childRow);
+
+            var prodMap = {};
+            (LOGI_MASTER_CACHE.products || []).forEach(function(p) { prodMap[p.sku] = p; });
+            var items = [];
+            function flattenShops(planRow, defaultTruck) {
+                (planRow.shops || []).forEach(function(shop, si) {
+                    (shop.items || []).forEach(function(it) {
+                        var prod = prodMap[it.sku] || {};
+                        var lpb  = prod.linesPerBundle || 1;
+                        var qty  = it.qty || 0;
+                        items.push({
+                            sku: it.sku || '', productName: it.productName || '',
+                            totalQtyPcs: qty, totalBundles: lpb > 0 ? Math.ceil(qty / lpb) : 0,
+                            totalWeight: it.weight || 0,
+                            truckLabel: it.truckLabel || defaultTruck || 'mother',
+                            shopName: shop.shopName || shop.shopId || '',
+                            shopId: shop.shopId || '', shopSeq: si, linesPerBundle: lpb,
+                        });
+                    });
+                });
+            }
+            flattenShops(motherRow, 'mother');
+            if (childRow) flattenShops(childRow, 'child');
+
+            var res = {
+                success: true, isTrailerPlan: isTrailerPlan,
+                truckPlate: motherRow.truck_plate || '',
+                childTruckPlate: childRow ? (childRow.truck_plate || '') : (motherRow.child_plate || ''),
+                planId: motherRow.plan_id, loadingDate: motherRow.plan_date,
+                items: items,
+            };
             _psdPlanData = res;
 
-            // sync dropdown ให้ตรงกับ planId ที่โหลดมา (ถ้ามี option อยู่แล้ว)
             var sel = document.getElementById('psd-plan-select');
             if (sel) {
-                // ถ้า dropdown ยังว่าง → สร้าง option ชั่วคราว
-                if (!sel.querySelector('option[value="'+planId+'"]')) {
+                if (!sel.querySelector('option[value="'+basePlanId+'"]')) {
                     var tmpOpt = document.createElement('option');
-                    tmpOpt.value = planId;
-                    tmpOpt.dataset.truck      = res.truckPlate      || '';
+                    tmpOpt.value = basePlanId;
+                    tmpOpt.dataset.truck      = res.truckPlate || '';
                     tmpOpt.dataset.childPlate = res.childTruckPlate || '';
-                    tmpOpt.textContent = planId;
+                    tmpOpt.textContent = basePlanId;
                     sel.appendChild(tmpOpt);
                 }
-                sel.value = planId;
-                // trigger trailer detection ทันทีหลัง set value
+                sel.value = basePlanId;
                 psdPlanCheckTrailer();
             }
 
-            // auto-detect รถพ่วงจากข้อมูลแผน (fill cap จาก res โดยตรง ถ้า psdPlanCheckTrailer ยังไม่มี truck ใน cache)
             if (res.isTrailerPlan) {
                 var tog = document.getElementById('psd-plan-trailer-toggle');
                 if (tog && !tog.checked) { tog.checked = true; psdPlanToggleTrailer(); }
-                var capMEl2 = document.getElementById('psd-plan-trailer-cap-mother');
-                var capCEl2 = document.getElementById('psd-plan-trailer-cap-child');
-                // fill จาก LOGI_MASTER_CACHE ก่อน ถ้าไม่มีค่าค่อย skip (รอให้ผู้ใช้กรอกเอง)
                 var truckMaster = (LOGI_MASTER_CACHE.trucks || []).find(function(t) {
                     return t.plate === res.truckPlate || t.childPlate === res.childTruckPlate;
                 });
                 if (truckMaster && truckMaster.isTrailer) {
+                    var capMEl2 = document.getElementById('psd-plan-trailer-cap-mother');
+                    var capCEl2 = document.getElementById('psd-plan-trailer-cap-child');
                     if (capMEl2 && !capMEl2.value) capMEl2.value = truckMaster.capMother || '';
                     if (capCEl2 && !capCEl2.value) capCEl2.value = truckMaster.capChild  || '';
                 }
@@ -25806,10 +25841,9 @@ window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
                     infoEl.textContent = '🚛 รถแม่: ' + (res.truckPlate || '—') + '   |   🔗 รถลูก: ' + (res.childTruckPlate || '—');
                     infoEl.classList.remove('hidden');
                 }
-                _psdPlanData.motherPlate = res.truckPlate || '';
-                _psdPlanData.childPlate  = res.childTruckPlate || '';
+                _psdPlanData.motherPlate = res.truckPlate;
+                _psdPlanData.childPlate  = res.childTruckPlate;
             } else {
-                // รถธรรมดา: fill cap
                 var capEl = document.getElementById('psd-plan-cap');
                 if (capEl && res.truckPlate) {
                     var truck = (LOGI_MASTER_CACHE.trucks || []).find(function(t) { return t.plate === res.truckPlate; });
@@ -25819,7 +25853,6 @@ window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
 
             _psdPlanRenderTable(res);
 
-            // auto-print
             if (_psdAutoPrintAfterLoad) {
                 _psdAutoPrintAfterLoad = false;
                 setTimeout(function() {
@@ -25828,12 +25861,11 @@ window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
                 }, 400);
             }
         })
-        .withFailureHandler(function(e) {
+        .catch(function(e) {
             if (loadingEl) loadingEl.classList.add('hidden');
             _psdAutoPrintAfterLoad = false;
-            showToast('โหลดแผนไม่สำเร็จ: ' + (e.message || String(e)), true);
-        })
-        .getPreShipmentData(planId);
+            showToast('โหลดแผนไม่สำเร็จ: ' + (e?.message || String(e)), true);
+        });
 }
 
 // ── Calendar State (Date Range) ───────────────────────────────────────────
@@ -26351,15 +26383,40 @@ window.editLogiPlan = function editLogiPlan(planId) {
     const saveBtn = document.querySelector('#logistic-form-modal button[onclick="saveLogisticPlan()"]');
     if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> กำลังโหลด...'; saveBtn.disabled = true; }
 
-    // ── ดึงข้อมูลสดจาก Sheet โดยตรง ─────────────────────────────────────
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (!res || !res.success || !res.plan) {
-                showToast('โหลดข้อมูลแผนไม่สำเร็จ: ' + (res?.message || ''), true);
+    // ── ดึงข้อมูลสดจาก Supabase ──────────────────────────────────────────
+    window._sb.from('logistic_plans')
+        .select('*')
+        .like('plan_id', planId.replace(/-[MC]$/, '') + '%')
+        .order('plan_id')
+        .then(function(qr) {
+            if (qr.error || !qr.data || !qr.data.length) {
+                showToast('โหลดข้อมูลแผนไม่สำเร็จ', true);
                 if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i> บันทึกการแก้ไข'; saveBtn.disabled = false; }
                 return;
             }
-            const p = res.plan;
+            const rows = qr.data;
+            const motherRow = rows.find(r => r.is_mother || r.plan_id.endsWith('-M'))
+                           || rows.find(r => !r.is_child)
+                           || rows[0];
+            // รวม shops จากทุก row (แม่+ลูก)
+            const allShops = rows.flatMap(r => r.shops || []);
+            const p = {
+                id: motherRow.plan_id, date: motherRow.plan_date,
+                jobType: motherRow.job_type, status: motherRow.status,
+                truckType: motherRow.truck_type || 'company',
+                truckPlate: motherRow.truck_plate || '', childPlate: motherRow.child_plate || '',
+                driverTransport: motherRow.driver_transport || '', driverId: motherRow.driver_id || '',
+                tripNo: motherRow.trip_no || '', trailerMode: motherRow.trailer_mode || '',
+                wage: motherRow.wage || 0, failReason: motherRow.fail_reason || '',
+                warehouse: motherRow.warehouse || '', returnDistance: motherRow.return_distance || 0,
+                totalWeight: motherRow.total_weight || 0,
+                isMother: motherRow.is_mother || false, isChild: motherRow.is_child || false,
+                pairId: motherRow.pair_id || '',
+                shops: allShops,
+                whSource: (motherRow.job_type === 'transfer_fg' || motherRow.job_type === 'transfer_semi')
+                    ? ((allShops[0]?.loadWarehouse) || '') : '',
+                transferRemark: motherRow.fail_reason || '',
+            };
 
             loadLogiMaster(function() {
                 populateLogiDropdowns();
@@ -26603,11 +26660,11 @@ window.editLogiPlan = function editLogiPlan(planId) {
                 });
             }); // end loadLogiMaster
         })
-        .withFailureHandler(function(err) {
+        })
+        .catch(function(err) {
             showToast('โหลดข้อมูลแผนไม่สำเร็จ: ' + (err?.message || String(err)), true);
             if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i> บันทึกการแก้ไข'; saveBtn.disabled = false; }
-        })
-        .getLogisticPlanById(planId);
+        });
 }
 
 window.deleteLogiPlan = function deleteLogiPlan(planId) {
@@ -26627,24 +26684,22 @@ window.deleteLogiPlan = function deleteLogiPlan(planId) {
         confirmMsg,
         function() {
             showToast('⏳ กำลังลบ ' + planId + (hasChild ? ' + ' + childId : '') + '...');
-            google.script.run
-                .withSuccessHandler(function(res) {
-                    if (!res || !res.success) {
-                        showToast('ลบไม่สำเร็จ: ' + (res?.message || ''), true);
-                        return;
-                    }
-                    // ลบทั้ง -M และ -C ออกจาก list
-                    const baseId = pairId || planId;
+            const idsToDelete = [planId];
+            if (hasChild && childId) idsToDelete.push(childId);
+            window._sb.from('logistic_plans')
+                .delete()
+                .in('plan_id', idsToDelete)
+                .then(function(res) {
+                    if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
                     logiPlanList = logiPlanList.filter(p => p.id !== planId && p.id !== childId);
                     renderLogisticList();
                     updateLogiKPI();
                     showToast('🗑️ ลบ ' + planId + (hasChild ? ' + ' + childId : '') + ' เรียบร้อยแล้ว');
                     logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + (hasChild ? ' + ' + childId : ''));
                 })
-                .withFailureHandler(function(err) {
+                .catch(function(err) {
                     showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-                })
-                .deleteLogisticPlan(planId);
+                });
         },
         { type: 'danger', okText: 'ลบเลย' }
     );
@@ -26657,23 +26712,21 @@ window.deleteLogiPlanFromCal = function deleteLogiPlanFromCal(planId) {
         'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>',
         function() {
             showToast('⏳ กำลังลบ ' + planId + '...');
-            google.script.run
-                .withSuccessHandler(function(res) {
-                    if (!res || !res.success) {
-                        showToast('ลบไม่สำเร็จ: ' + (res?.message || ''), true);
-                        return;
-                    }
-                    logiPlanList    = logiPlanList.filter(p => p.id !== planId);
-                    logiCalPlanList = logiCalPlanList.filter(p => p.id !== planId);
+            window._sb.from('logistic_plans')
+                .delete()
+                .eq('plan_id', planId)
+                .then(function(res) {
+                    if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
+                    logiPlanList    = (logiPlanList    || []).filter(p => p.id !== planId);
+                    logiCalPlanList = (logiCalPlanList || []).filter(p => p.id !== planId);
                     renderLogiCalendar();
                     updateLogiKPI();
                     showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
                     logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + ' (from Calendar)');
                 })
-                .withFailureHandler(function(err) {
+                .catch(function(err) {
                     showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-                })
-                .deleteLogisticPlan(planId);
+                });
         },
         { type: 'danger', okText: 'ลบเลย' }
     );
