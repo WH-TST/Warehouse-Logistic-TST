@@ -24186,29 +24186,41 @@ window.psdSwitchMode = function psdSwitchMode(mode) {
     _psdCurrentDoc = null;
 }
 
-// ── Load Product List from Sheet ─────────────────────────────────────────
+// ── Load Product List from Supabase ──────────────────────────────────────
 function psdLoadProducts() {
     if (_psdProductLoaded) return;
     var sel = document.getElementById('psd-m-sku-sel');
-    sel.innerHTML = '<option value="">⏳ กำลังโหลดสินค้า...</option>';
+    sel.placeholder = '⏳ กำลังโหลดสินค้า...';
     sel.disabled = true;
 
-    google.script.run
-        .withSuccessHandler(function(res) {
+    window._sb.from('products')
+        .select('sku,name,lines_per_bundle,lifts_per_round,likely_w,min_w,max_w')
+        .order('sku')
+        .then(function(res) {
             _psdProductLoaded = true;
             sel.disabled = false;
             sel.placeholder = '— พิมพ์ SKU หรือชื่อสินค้า —';
-            if (!res.success || !res.products.length) {
+            var rows = res.data || [];
+            if (!rows.length) {
                 sel.placeholder = '— ไม่พบข้อมูลสินค้า —';
                 return;
             }
             _psdProductMap = {};
             var dl = document.getElementById('psd-sku-datalist');
             if (dl) dl.innerHTML = '';
-            res.products.forEach(function(p) {
-                _psdProductMap[p.sku] = p;
+            rows.forEach(function(p) {
+                var weightRange = (p.min_w && p.max_w) ? (p.min_w + '-' + p.max_w) : '';
+                var mapped = {
+                    sku: p.sku,
+                    name: p.name,
+                    linesPerBundle: p.lines_per_bundle || 1,
+                    bundlesPerLift: p.lifts_per_round || 1,
+                    likelyW: p.likely_w || 0,
+                    weightRange: weightRange
+                };
+                _psdProductMap[p.sku] = mapped;
                 var label = p.sku + ' | ' + p.name
-                    + (p.weightRange ? ' [' + p.weightRange + ']' : '');
+                    + (weightRange ? ' [' + weightRange + ']' : '');
                 if (dl) {
                     var opt = document.createElement('option');
                     opt.value = label;
@@ -24217,11 +24229,10 @@ function psdLoadProducts() {
                 }
             });
         })
-        .withFailureHandler(function(e) {
+        .catch(function(e) {
             sel.placeholder = '— โหลดไม่สำเร็จ —';
             sel.disabled = false;
-        })
-        .getPreShipmentProductList();
+        });
 }
 
 // ── Auto-calc preview when SKU / Qty changes ─────────────────────────────
@@ -24615,11 +24626,23 @@ function initPreShipmentTab() {
     var sel = document.getElementById('psd-plan-select');
     if (!sel || _psdListLoaded) return;
     sel.innerHTML = '<option value="">กำลังโหลด...</option>';
-    google.script.run
-        .withSuccessHandler(function(res) {
+    window._sb.from('logistic_plans')
+        .select('plan_id,plan_date,status,truck_plate,child_plate,driver_transport,total_weight,shops,is_mother,is_child,pair_id,trailer_mode')
+        .eq('status', 'planned')
+        .order('plan_id', { ascending: false })
+        .limit(200)
+        .then(function(res) {
             _psdListLoaded = true;
-            if (!res.success) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
-            var plans = (res.plans || []).filter(function(p) { return p.status === 'planned'; });
+            if (res.error) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
+            var plans = (res.data || []).map(function(row) {
+                return {
+                    id: row.plan_id, date: row.plan_date, status: row.status,
+                    truckPlate: row.truck_plate || '', childPlate: row.child_plate || '',
+                    driverTransport: row.driver_transport || '', totalWeight: row.total_weight || 0,
+                    shops: row.shops || [], isMother: row.is_mother || false, isChild: row.is_child || false,
+                    pairId: row.pair_id || '', trailerMode: row.trailer_mode || ''
+                };
+            });
 
             // รวม -M และ -C เข้าด้วยกัน → แสดงแค่รายการเดียวต่อเที่ยว
             // กฎ: ถ้ามี -M ใช้ -M เป็น representative, ซ่อน -C ออก
@@ -24680,9 +24703,10 @@ function initPreShipmentTab() {
             sel.innerHTML = opts;
         })
         .withFailureHandler(function(e) {
-            sel.innerHTML = '<option value="">— Error —</option>';
         })
-        .getLogisticPlans(null);
+        .catch(function() {
+            sel.innerHTML = '<option value="">— Error —</option>';
+        });
 }
 
 // ── Plan Mode: Auto-detect รถพ่วงจาก plan ที่เลือก ──────────────────────────
@@ -24893,12 +24917,63 @@ window.loadPreShipmentItems = function loadPreShipmentItems() {
     var printBtn = document.getElementById('psd-print-btn');
     if (printBtn) { printBtn.disabled = true; printBtn.className = 'bg-slate-200 text-slate-400 px-8 py-2.5 rounded-xl font-black flex items-center gap-2 cursor-not-allowed transition-all'; }
 
-    google.script.run
-        .withSuccessHandler(function(res) {
+    // ดึงแผนจาก Supabase — รองรับทั้ง base plan_id และ -M/-C pair
+    window._sb.from('logistic_plans')
+        .select('*')
+        .like('plan_id', planId + '%')
+        .order('plan_id')
+        .then(function(qr) {
             document.getElementById('psd-loading').classList.add('hidden');
-            if (!res.success) { showToast('โหลดไม่สำเร็จ: ' + res.message, true); return; }
+            if (qr.error || !qr.data || !qr.data.length) {
+                showToast('ไม่พบแผน ' + planId, true); return;
+            }
+            var rows = qr.data;
+            // หา mother row (หรือ row เดียว)
+            var motherRow = rows.find(function(r) { return r.is_mother || r.plan_id.endsWith('-M'); })
+                         || rows.find(function(r) { return !r.is_child; })
+                         || rows[0];
+            var childRow  = rows.find(function(r) { return r.is_child  || r.plan_id.endsWith('-C'); });
+            var isTrailerPlan = !!(motherRow && childRow);
+
+            // Flatten shops[].items → flat items array
+            var items = [];
+            var prodMap = {};
+            (LOGI_MASTER_CACHE.products || []).forEach(function(p) { prodMap[p.sku] = p; });
+            function flattenShops(planRow, defaultTruck) {
+                (planRow.shops || []).forEach(function(shop, si) {
+                    (shop.items || []).forEach(function(it) {
+                        var prod = prodMap[it.sku] || {};
+                        var lpb  = prod.linesPerBundle || 1;
+                        var qty  = it.qty || 0;
+                        var bnds = lpb > 0 ? Math.ceil(qty / lpb) : 0;
+                        items.push({
+                            sku:          it.sku || '',
+                            productName:  it.productName || '',
+                            totalQtyPcs:  qty,
+                            totalBundles: bnds,
+                            totalWeight:  it.weight || 0,
+                            truckLabel:   it.truckLabel || defaultTruck || 'mother',
+                            shopName:     shop.shopName || shop.shopId || '',
+                            shopId:       shop.shopId   || '',
+                            shopSeq:      si,
+                            linesPerBundle: lpb,
+                        });
+                    });
+                });
+            }
+            flattenShops(motherRow, 'mother');
+            if (childRow) flattenShops(childRow, 'child');
+
+            var res = {
+                success:        true,
+                isTrailerPlan:  isTrailerPlan,
+                truckPlate:     motherRow.truck_plate  || '',
+                childTruckPlate: childRow ? (childRow.truck_plate || '') : (motherRow.child_plate || ''),
+                planId:         motherRow.plan_id,
+                loadingDate:    motherRow.plan_date,
+                items:          items,
+            };
             _psdPlanData = res;
-            // ถ้า backend ส่ง isTrailerPlan=true → auto-enable trailer toggle + ใส่ plate info
             if (res.isTrailerPlan) {
                 var tog = document.getElementById('psd-plan-trailer-toggle');
                 if (tog && !tog.checked) { tog.checked = true; psdPlanToggleTrailer(); }
@@ -24907,25 +24982,22 @@ window.loadPreShipmentItems = function loadPreShipmentItems() {
                     infoEl.textContent = '🚛 รถแม่: ' + (res.truckPlate || '—') + '   |   🔗 รถลูก: ' + (res.childTruckPlate || '—');
                     infoEl.classList.remove('hidden');
                 }
-                _psdPlanData.motherPlate = res.truckPlate || '';
-                _psdPlanData.childPlate  = res.childTruckPlate || '';
+                _psdPlanData.motherPlate = res.truckPlate;
+                _psdPlanData.childPlate  = res.childTruckPlate;
             }
             _psdPlanRenderTable(res);
-            // ── Auto-print mode (กดจากตาราง/ปฏิทิน) ──
             if (_psdAutoPrintAfterLoad) {
                 _psdAutoPrintAfterLoad = false;
-                // psdPlanAssignTrailer() handles both trailer and non-trailer (renders doc + enables print btn)
                 setTimeout(function() {
                     psdPlanAssignTrailer();
                     setTimeout(printPreShipment, 800);
                 }, 400);
             }
         })
-        .withFailureHandler(function(e) {
+        .catch(function(e) {
             document.getElementById('psd-loading').classList.add('hidden');
-            showToast('Error: ' + e.message, true);
-        })
-        .getPreShipmentData(planId);
+            showToast('Error: ' + (e?.message || e), true);
+        });
 };
 
 // ── Render ตารางสินค้า ────────────────────────────────────────────────────
@@ -35071,19 +35143,22 @@ window.loRefreshPlans = function() {
     var sel = document.getElementById('lo-plan-select');
     if (!sel) return;
     sel.innerHTML = '<option value="">— กำลังโหลด... —</option>';
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (!res || !res.success) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
-            _loPlans = (res.mode === 'list' ? res.plans : []).filter(function(p) {
-                return (p.status || '').toLowerCase().trim() !== 'success';
+    window._sb.from('logistic_plans')
+        .select('plan_id,plan_date,status,truck_plate')
+        .neq('status', 'success')
+        .order('plan_id', { ascending: false })
+        .limit(100)
+        .then(function(res) {
+            if (res.error) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
+            _loPlans = (res.data || []).map(function(r) {
+                return { id: r.plan_id, date: r.plan_date, truck: r.truck_plate || '', status: r.status };
             });
             sel.innerHTML = '<option value="">— ไม่เลือกแผน / กรอกเอง —</option>' +
                 _loPlans.map(function(p) {
                     return '<option value="' + p.id + '">' + p.id + ' · ' + p.date + ' · ' + (p.truck || '—') + '</option>';
                 }).join('');
         })
-        .withFailureHandler(function() { sel.innerHTML = '<option value="">— เกิดข้อผิดพลาด —</option>'; })
-        .getPreShipmentData();
+        .catch(function() { sel.innerHTML = '<option value="">— เกิดข้อผิดพลาด —</option>'; });
 };
 
 // ── เมื่อเลือกแผน (นำเข้าสินค้าจากแผน) ─────────────────────────
@@ -35097,39 +35172,41 @@ window.loOnPlanChange = function() {
         if (info) info.classList.add('hidden');
         return;
     }
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (!res || !res.success) { showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); return; }
-            // ใส่ทะเบียนรถ + วันที่ อัตโนมัติ
+    window._sb.from('logistic_plans')
+        .select('plan_id,plan_date,truck_plate,shops')
+        .like('plan_id', planId.replace(/-[MC]$/, '') + '%')
+        .then(function(qr) {
+            if (qr.error || !qr.data || !qr.data.length) {
+                showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); return;
+            }
+            var row = qr.data[0];
             var truckEl = document.getElementById('lo-truck');
             var dateEl  = document.getElementById('lo-date');
-            if (truckEl && !truckEl.value) truckEl.value = res.truckPlate || '';
-            if (dateEl  && !dateEl.value)  dateEl.value  = (res.loadingDate || '').substring(0, 10);
-
-            // แสดง info badge
+            if (truckEl && !truckEl.value) truckEl.value = row.truck_plate || '';
+            if (dateEl  && !dateEl.value)  dateEl.value  = (row.plan_date || '').substring(0, 10);
             if (info && infoTx) {
-                infoTx.textContent = 'แผน ' + (res.planId || planId) + ' · ' + (res.truckPlate || '—') + ' · ' + (res.loadingDate || '—');
+                infoTx.textContent = 'แผน ' + row.plan_id + ' · ' + (row.truck_plate || '—') + ' · ' + (row.plan_date || '—');
                 info.classList.remove('hidden');
             }
-
-            // นำรายการสินค้าจากแผนใส่ _loItems (ต่อท้ายถ้ามีอยู่แล้ว)
             var added = 0;
-            (res.items || []).forEach(function(item) {
-                var sku   = item.sku || '';
-                var lines = item.totalQtyPcs || item.qty || 0;
-                if (!sku || !lines) return;
-                // ไม่ซ้ำ SO+SKU เดิม (ถ้า SO ไม่มี ให้ใส่ '')
-                _loItems.push({ so: '', sku: sku, name: item.productName || '', lines: lines,
-                    weight: item.totalWeight || 0, validated: true, ok: true, error: '',
-                    fromPlan: true });
-                added++;
+            qr.data.forEach(function(r) {
+                (r.shops || []).forEach(function(shop) {
+                    (shop.items || []).forEach(function(item) {
+                        var sku   = item.sku || '';
+                        var lines = item.qty || 0;
+                        if (!sku || !lines) return;
+                        _loItems.push({ so: '', sku: sku, name: item.productName || '', lines: lines,
+                            weight: item.weight || 0, validated: true, ok: true, error: '',
+                            fromPlan: true });
+                        added++;
+                    });
+                });
             });
             if (added) showToast('นำเข้า ' + added + ' รายการจากแผนแล้ว');
             loRenderItems();
             loUpdateCreateBtn();
         })
-        .withFailureHandler(function() { showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); })
-        .getPreShipmentData(planId);
+        .catch(function() { showToast('โหลดรายละเอียดแผนไม่สำเร็จ', true); });
 };
 
 // ── สลับ mode เพิ่มสินค้า ───────────────────────────────────────
