@@ -9238,17 +9238,38 @@ function _sbFetch(method, path, body) {
 // Sync Products sheet → Supabase products table
 function _syncProductsToSupabase(ss) {
   try {
+    // Read QC Standard: A=SKU, B=Name, C=MinW, D=MaxW, E=LikelyW
+    var qcMap = {};
+    var qcSheet = ss.getSheetByName(LOGI_SH_QC_STD);
+    if (qcSheet && qcSheet.getLastRow() >= 2) {
+      var qd = qcSheet.getDataRange().getValues();
+      for (var i = 1; i < qd.length; i++) {
+        var qsku = String(qd[i][0] || '').trim();
+        if (!qsku) continue;
+        qcMap[qsku] = { min_w: parseFloat(qd[i][2]) || 0, max_w: parseFloat(qd[i][3]) || 0, likely_w: parseFloat(qd[i][4]) || 0 };
+      }
+    }
     var sheet = ss.getSheetByName('Product');
     if (!sheet || sheet.getLastRow() < 2) return;
-    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+    // Col A=SKU, B=Name, C=LinesPerBundle, D=LiftsPerRound (optional)
+    var rows = sheet.getDataRange().getValues();
     var batch = [];
-    rows.forEach(function(r) {
-      var sku = String(r[0] || '').trim();
-      if (!sku) return;
-      batch.push({ sku: sku, name: String(r[1] || ''), lines_per_bundle: Number(r[2]) || 1, updated_at: new Date().toISOString() });
-    });
+    for (var i = 1; i < rows.length; i++) {
+      var sku = String(rows[i][0] || '').trim();
+      if (!sku) continue;
+      var qc = qcMap[sku] || {};
+      batch.push({
+        sku:             sku,
+        name:            String(rows[i][1] || ''),
+        lines_per_bundle: Number(rows[i][2]) || 1,
+        lifts_per_round: Number(rows[i][3]) || 0,
+        likely_w:        qc.likely_w || 0,
+        min_w:           qc.min_w    || 0,
+        max_w:           qc.max_w    || 0,
+        updated_at:      new Date().toISOString()
+      });
+    }
     if (!batch.length) return;
-    // upsert in chunks of 200
     for (var i = 0; i < batch.length; i += 200) {
       _sbFetch('POST', 'products?on_conflict=sku', batch.slice(i, i + 200));
     }

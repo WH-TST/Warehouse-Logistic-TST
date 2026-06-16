@@ -19862,11 +19862,33 @@ window.onLogiStatusChange = function onLogiStatusChange() {
 
 // ── โหลด Master Data จาก GAS ──────────────────────────────────────────────
 function loadLogiMaster(callback) {
-    // โหลดซ้ำถ้า shops ว่าง (ป้องกัน cache เก่าที่โหลดตอนชีตผิดชื่อ)
     if (LOGI_MASTER_CACHE.loaded && LOGI_MASTER_CACHE.shops.length > 0) {
         if (callback) callback();
         return;
     }
+    // โหลด products จาก Supabase, ที่เหลือจาก GAS ตามเดิม
+    const _loadProducts = async () => {
+        try {
+            const cached = _cacheGet('logi_products');
+            if (cached) return cached;
+            const { data, error } = await window._sb.from('products').select('sku,name,lines_per_bundle,likely_w,min_w,max_w,lifts_per_round').order('sku');
+            if (error) throw error;
+            const prods = (data || []).map(p => ({
+                sku:            p.sku,
+                name:           p.name,
+                linesPerBundle: p.lines_per_bundle || 1,
+                likelyW:        p.likely_w || 0,
+                minW:           p.min_w    || 0,
+                maxW:           p.max_w    || 0,
+                liftsPerRound:  p.lifts_per_round || 0,
+            }));
+            _cacheSet('logi_products', prods);
+            return prods;
+        } catch(e) {
+            console.warn('[logiMaster] products Supabase error:', e);
+            return [];
+        }
+    };
     google.script.run
         .withSuccessHandler(function(res) {
             if (res && res.success) {
@@ -19874,19 +19896,33 @@ function loadLogiMaster(callback) {
                 LOGI_MASTER_CACHE.drivers    = res.drivers    || [];
                 LOGI_MASTER_CACHE.transports = res.transports || [];
                 LOGI_MASTER_CACHE.shops      = res.shops      || [];
-                LOGI_MASTER_CACHE.products   = res.products   || [];
                 LOGI_MASTER_CACHE.whStaff    = res.whStaff    || [];
+                // products จาก GAS เป็น fallback ก่อน แล้ว Supabase จะ override
+                LOGI_MASTER_CACHE.products   = res.products   || [];
                 LOGI_PRODUCTS_MASTER         = LOGI_MASTER_CACHE.products;
-                // mark loaded เฉพาะตอนมีร้านค้า — ถ้าว่างจะ retry รอบถัดไป
                 LOGI_MASTER_CACHE.loaded     = LOGI_MASTER_CACHE.shops.length > 0;
             } else {
                 showToast('โหลดข้อมูลร้านค้าไม่สำเร็จ: ' + (res && res.message || 'กรุณากด รีเฟรชข้อมูล อีกครั้ง'), true);
             }
-            if (callback) callback();
+            // override products ด้วย Supabase
+            _loadProducts().then(sbProds => {
+                if (sbProds.length > 0) {
+                    LOGI_MASTER_CACHE.products = sbProds;
+                    LOGI_PRODUCTS_MASTER       = sbProds;
+                }
+                if (callback) callback();
+            });
         })
         .withFailureHandler(function(err) {
             showToast('โหลด Master ไม่สำเร็จ: ' + (err && err.message || err), true);
-            if (callback) callback();
+            // ลอง load products จาก Supabase แม้ GAS fail
+            _loadProducts().then(sbProds => {
+                if (sbProds.length > 0) {
+                    LOGI_MASTER_CACHE.products = sbProds;
+                    LOGI_PRODUCTS_MASTER       = sbProds;
+                }
+                if (callback) callback();
+            });
         })
         .getLogisticMasterData();
 }
@@ -21353,6 +21389,45 @@ window.saveLogisticPlan = function saveLogisticPlan() {
         shops: (payload.shops || []).map(s => ({ name: s.shopName, truck: s.truckLabel, items: (s.items||[]).length }))
     });
 
+    // ── บันทึกลง Supabase โดยตรง แล้วส่ง GAS ด้วย (backward compat) ──────
+    const _sbSavePlan = async (planId, pl) => {
+        const isTrailerSplit = !!(pl.truckType !== 'hire' && pl.childPlate && pl.trailerMode !== 'mother_only');
+        const basePlanId = planId.replace(/-[MC]$/, '');
+        const rows = [];
+        const buildRow = (pid, isMother, isChild, plate) => ({
+            plan_id:         pid,
+            plan_date:       pl.date,
+            job_type:        pl.jobType        || '',
+            status:          pl.status         || 'planned',
+            truck_type:      pl.truckType      || 'company',
+            truck_plate:     plate             || '',
+            child_plate:     isTrailerSplit ? (pl.childPlate || '') : '',
+            driver_transport: pl.truckType === 'hire' ? (pl.transportName || '') : (pl.driverName || ''),
+            driver_id:       pl.driverId       || '',
+            trip_no:         pl.tripNo         || '',
+            trailer_mode:    pl.trailerMode    || '',
+            wage:            pl.wage           || 0,
+            warehouse:       pl.warehouse      || '',
+            fail_reason:     pl.failReason     || pl.pmDetail || '',
+            shops:           pl.shops          || [],
+            total_weight:    pl.totalWeight    || 0,
+            return_distance: pl.returnDistance || 0,
+            is_mother:       isMother,
+            is_child:        isChild,
+            pair_id:         basePlanId,
+            created_by:      window._currentUser || '',
+            updated_at:      new Date().toISOString(),
+        });
+        if (isTrailerSplit) {
+            rows.push(buildRow(basePlanId + '-M', true,  false, pl.truckPlate  || ''));
+            rows.push(buildRow(basePlanId + '-C', false, true,  pl.childPlate  || ''));
+        } else {
+            rows.push(buildRow(basePlanId, false, false, pl.truckType === 'hire' ? '' : (pl.truckPlate || '')));
+        }
+        const { error } = await window._sb.from('logistic_plans').upsert(rows, { onConflict: 'plan_id' });
+        if (error) console.error('[Supabase] saveLogisticPlan error:', error);
+    };
+
     // ── เรียก GAS ──────────────────────────────────────────────────────────
     google.script.run
         .withSuccessHandler(function(res) {
@@ -21363,6 +21438,7 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             }
 
             const planId = res.planId || logiEditId;
+            _sbSavePlan(planId, payload);
             showLogiSuccessToast(planId);
 
             const updatedPlan = {
@@ -21441,34 +21517,63 @@ function showLogiSuccessToast(planId) {
 }
 
 // ── โหลดข้อมูลจาก GAS ──────────────────────────────────────────────────────
-window.loadLogisticList = function loadLogisticList() {
+window.loadLogisticList = async function loadLogisticList() {
     const filterDate = document.getElementById('logi-filter-date')?.value;
     if (!filterDate) return;
 
     const empty = document.getElementById('logi-table-empty');
     const wrap  = document.getElementById('logi-table-wrap');
     if (empty) { empty.classList.remove('hidden'); empty.innerHTML = '<i class="fas fa-spinner fa-spin text-4xl text-emerald-400 mb-4 block mx-auto"></i><p class="text-slate-400 font-bold">กำลังโหลดแผน...</p>'; }
-    if (wrap)  wrap.classList.add('hidden');
+    if (wrap) wrap.classList.add('hidden');
 
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (!res || !res.success) {
-                showToast('โหลดแผนไม่สำเร็จ: ' + (res?.message || ''), true);
-                if (empty) { empty.classList.remove('hidden'); empty.innerHTML = '<i class="fas fa-truck text-7xl mb-6 opacity-10 text-emerald-400"></i><p class="text-xl font-bold text-slate-400">เลือกวันที่เพื่อดูแผนการส่งมอบ</p>'; }
-                return;
-            }
-            logiPlanList = res.plans || [];
-            renderLogisticList();
-            updateLogiKPI();
-            if (logiPlanList.length === 0) {
-                if (empty) { empty.classList.remove('hidden'); empty.innerHTML = '<i class="fas fa-truck text-7xl mb-6 opacity-10 text-emerald-400"></i><p class="text-xl font-bold text-slate-400">ไม่พบแผนในวันที่เลือก</p>'; }
-            }
-        })
-        .withFailureHandler(function(err) {
-            showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-            if (empty) { empty.classList.remove('hidden'); empty.innerHTML = '<i class="fas fa-exclamation-triangle text-5xl text-rose-300 mb-4 block mx-auto"></i><p class="text-rose-400 font-bold">โหลดไม่สำเร็จ</p>'; }
-        })
-        .getLogisticPlans(filterDate);
+    try {
+        const { data, error } = await window._sb
+            .from('logistic_plans')
+            .select('*')
+            .eq('plan_date', filterDate)
+            .order('plan_id');
+        if (error) throw error;
+
+        logiPlanList = (data || []).map(row => ({
+            id:              row.plan_id,
+            pairId:          row.pair_id || row.plan_id,
+            isMother:        row.is_mother || false,
+            isChild:         row.is_child  || false,
+            date:            row.plan_date,
+            truckType:       row.truck_type      || 'company',
+            driverTransport: row.driver_transport || '',
+            driverId:        row.driver_id        || '',
+            tripNo:          row.trip_no          || '',
+            jobType:         row.job_type         || '',
+            status:          row.status           || 'planned',
+            truckPlate:      row.truck_plate       || '',
+            childPlate:      row.child_plate       || '',
+            trailerMode:     row.trailer_mode      || '',
+            wage:            row.wage             || 0,
+            warehouse:       row.warehouse        || '',
+            failReason:      row.fail_reason       || '',
+            transferRemark:  row.fail_reason       || '',
+            returnDistance:  row.return_distance   || 0,
+            totalWeight:     row.total_weight      || 0,
+            shops:           row.shops            || [],
+            whSource:        (row.job_type === 'transfer_fg' || row.job_type === 'transfer_semi')
+                               ? ((row.shops||[])[0]?.loadWarehouse || '') : '',
+            whDest:          '',
+            shopNames:       (row.shops||[]).map(s => s.shopName).filter(Boolean).join(', '),
+            distance:        (row.shops||[]).reduce((s, sh) => s + (parseFloat(sh.distance)||0), 0),
+            stopFee:         (row.shops||[]).reduce((s, sh) => s + (parseFloat(sh.freeDistance)||0), 0),
+        }));
+
+        renderLogisticList();
+        updateLogiKPI();
+        if (logiPlanList.length === 0) {
+            if (empty) { empty.classList.remove('hidden'); empty.innerHTML = '<i class="fas fa-truck text-7xl mb-6 opacity-10 text-emerald-400"></i><p class="text-xl font-bold text-slate-400">ไม่พบแผนในวันที่เลือก</p>'; }
+        }
+    } catch(err) {
+        console.error('[loadLogisticList]', err);
+        showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
+        if (empty) { empty.classList.remove('hidden'); empty.innerHTML = '<i class="fas fa-exclamation-triangle text-5xl text-rose-300 mb-4 block mx-auto"></i><p class="text-rose-400 font-bold">โหลดไม่สำเร็จ</p>'; }
+    }
 }
 
 // ── แสดงตารางแผนการส่งมอบ ──
