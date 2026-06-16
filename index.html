@@ -8147,207 +8147,207 @@ const _safeStorage = {
         }
 
         let machineHtml = '', reserveHtml = '', totalWork = 0;
+        let cardIdx = 0;
 
         zones.forEach(function(z) {
-          // fallback: คำนวณ freeSpaceCm เองถ้า GAS ไม่ส่งมาหรือเป็น NaN
           if (z.freeSpaceCm == null || isNaN(z.freeSpaceCm)) {
             z.freeSpaceCm = Math.max(0, (z.totalWidthCm || 0) - (z.currentUsedCm || 0));
           }
-          const isMachine = MACHINE_ZONES.has(z.zoneId);
-          const statusC   = stColor(z.projectedPct);
+          const isMachine  = MACHINE_ZONES.has(z.zoneId);
+          const statusC    = stColor(z.projectedPct);
           const machHrsMax = (z.todayList||[]).reduce(function(m,r){ return Math.max(m, r.machHrs||0); }, 0);
-          const safeZone  = z.zoneId;
+          const safeZone   = z.zoneId;
+          const detailId   = 'wmm-detail-' + (cardIdx++);
 
-          // ══════════ MACHINE ZONE — full 7-step card ══════════
           if (isMachine) {
-            const fullBadge = z.fullOnDate
-              ? `<span style="font-size:10px;font-weight:900;padding:3px 9px;border-radius:20px;background:${CRIT};color:#fff;">⚠ เต็ม ${fmtD(z.fullOnDate)}</span>`
-              : `<span style="font-size:10px;padding:3px 9px;border-radius:20px;background:#0a1f12;color:${OK};border:1px solid ${OK}44;">พื้นที่เพียงพอ</span>`;
-            const hrsChip = machHrsMax > 0
-              ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#0d2010;color:#4ade80;border:1px solid #16a34a44;">🕐 ${machHrsMax} ชม./วัน</span>` : '';
+            // ── Progress bar width ──
+            const pctBar = Math.min(100, z.projectedPct || 0);
 
-            machineHtml += `<div style="border:1.5px solid ${statusC}44;border-radius:18px;overflow:hidden;margin-bottom:14px;background:#0c1525;">`;
+            // ── Full date chip ──
+            const fullChip = z.fullOnDate
+              ? `<span style="font-size:10px;font-weight:900;padding:2px 8px;border-radius:20px;background:${CRIT};color:#fff;white-space:nowrap;">⚠ เต็ม ${fmtD(z.fullOnDate)}</span>`
+              : `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#0a1f12;color:${OK};border:1px solid ${OK}44;white-space:nowrap;">พื้นที่ OK</span>`;
 
-            // Header
-            machineHtml += `<div style="background:linear-gradient(135deg,#0f1e35,#162440);padding:12px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid #1e3a5f30;">
-              <span style="font-size:20px;font-weight:900;color:#fff;font-family:'Orbitron',sans-serif;min-width:44px;">${z.zoneId}</span>
-              <span style="font-size:13px;font-weight:900;color:${statusC};">${z.projectedPct}%</span>
-              ${fullBadge}
-              ${hrsChip}
-              <div style="flex:1;"></div>
-              <span style="font-size:11px;color:${z.freeSpaceCm>0?OK:CRIT};font-weight:700;">ว่าง ${(z.freeSpaceCm/100).toFixed(1)}ม. / ${(z.totalWidthCm/100).toFixed(1)}ม.</span>
-            </div>`;
-
-            machineHtml += `<div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">`;
-
-            // ① วันนี้ผลิต
-            machineHtml += `<div>
-              <div style="font-size:9px;font-weight:900;color:${INFO};letter-spacing:.06em;margin-bottom:5px;">① วันนี้ผลิต</div>`;
+            // ── Today production rows ──
+            let todayRows = '';
             if (z.todayList && z.todayList.length) {
               z.todayList.forEach(function(r) {
                 const cont = (z.continuousSkus||[]).some(function(c){ return c.sku===r.sku; });
-                machineHtml += `<div style="background:#111f35;border-radius:9px;padding:8px 11px;margin-bottom:4px;">
-                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                    <span style="font-size:12px;font-weight:800;color:#f1f5f9;flex:1;">${r.skuName||r.sku}</span>
-                    ${cont?`<span style="font-size:8px;padding:1px 6px;border-radius:20px;background:#1c1208;color:#fcd34d;border:1px solid #f59e0b44;">ต่อเนื่อง</span>`:''}
-                    ${r.shifts&&r.shifts.length?`<span style="font-size:9px;color:#818cf8;">กะ ${r.shifts.join(',')}</span>`:''}
-                  </div>
-                  <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">
-                    <span style="font-size:11px;color:#64748b;">มัด <b style="color:#e2e8f0;">${r.bundles}</b></span>
-                    <span style="font-size:11px;color:#64748b;">ฐาน <b style="color:#e2e8f0;">${r.cols}</b></span>
-                    <span style="font-size:11px;color:#64748b;">ใช้พื้นที่ <b style="color:${INFO};">${(r.usedWidthCm/100).toFixed(2)}ม.</b></span>
-                    ${r.machHrs>0?`<span style="font-size:11px;color:#64748b;">เครื่อง <b style="color:#4ade80;">${r.machHrs}ชม.</b></span>`:''}
-                  </div>
+                todayRows += `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:#111f35;border-radius:8px;margin-bottom:4px;flex-wrap:wrap;">
+                  <span style="font-size:12px;font-weight:800;color:#f1f5f9;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.skuName||r.sku}</span>
+                  ${cont?`<span style="font-size:8px;padding:1px 5px;border-radius:20px;background:#1c1208;color:#fcd34d;border:1px solid #f59e0b44;white-space:nowrap;">ต่อเนื่อง</span>`:''}
+                  <span style="font-size:11px;color:#94a3b8;white-space:nowrap;"><b style="color:#e2e8f0;">${r.bundles}</b> มัด · <b style="color:#60a5fa;">${r.cols}</b> ฐาน</span>
+                  ${r.machHrs>0?`<span style="font-size:11px;color:#4ade80;white-space:nowrap;">${r.machHrs}ชม.</span>`:''}
                 </div>`;
               });
             } else {
-              machineHtml += `<div style="padding:6px 10px;border-radius:8px;background:#111f35;font-size:11px;color:#475569;">ไม่มีแผนผลิตวันนี้</div>`;
+              todayRows = `<div style="padding:5px 10px;border-radius:8px;background:#111f35;font-size:11px;color:#475569;">ไม่มีแผนผลิตวันนี้</div>`;
             }
-            machineHtml += `</div>`;
 
-            // ② แผนล่วงหน้า 3 วัน
-            machineHtml += `<div>
-              <div style="font-size:9px;font-weight:900;color:#8b5cf6;letter-spacing:.06em;margin-bottom:5px;">② แผนล่วงหน้า 3 วัน</div>`;
-            const hasAheadRows = (z.aheadBreakdown||[]).some(function(b){ return b.rows&&b.rows.length; });
-            if (hasAheadRows) {
+            // ── Work order badge ──
+            const workCount = (z.suggestions||[]).length;
+            if (workCount > 0) totalWork += workCount;
+            const workBadge = workCount > 0
+              ? `<span style="font-size:10px;font-weight:900;padding:2px 8px;border-radius:20px;background:#1f0a0a;color:${CRIT};border:1px solid ${CRIT}44;white-space:nowrap;">⑦ ${workCount} งาน</span>`
+              : '';
+
+            // ══ CARD ══
+            machineHtml += `<div style="border:1.5px solid ${statusC}44;border-radius:16px;overflow:hidden;margin-bottom:12px;background:#0c1525;">
+
+              <!-- ── SUMMARY (always visible) ── -->
+              <div style="padding:12px 14px;">
+
+                <!-- Row 1: machine name + status chips -->
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                  <span style="font-size:22px;font-weight:900;color:#fff;font-family:'Orbitron',sans-serif;min-width:46px;">${z.zoneId}</span>
+                  <span style="font-size:14px;font-weight:900;color:${statusC};">${z.projectedPct}%</span>
+                  ${machHrsMax>0?`<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#0d2010;color:#4ade80;border:1px solid #16a34a44;white-space:nowrap;">🕐 ${machHrsMax} ชม.</span>`:''}
+                  ${fullChip}
+                  ${workBadge}
+                  <div style="flex:1;min-width:60px;text-align:right;">
+                    <span style="font-size:11px;color:${z.freeSpaceCm>0?OK:CRIT};font-weight:700;">ว่าง ${(z.freeSpaceCm/100).toFixed(1)}ม.</span>
+                  </div>
+                </div>
+
+                <!-- Progress bar -->
+                <div style="width:100%;height:5px;background:#1e293b;border-radius:4px;margin-bottom:10px;overflow:hidden;">
+                  <div style="height:100%;background:${statusC};width:${pctBar}%;border-radius:4px;transition:width .5s;"></div>
+                </div>
+
+                <!-- Row 2: today production -->
+                <div style="font-size:9px;font-weight:900;color:${INFO};letter-spacing:.06em;margin-bottom:5px;">รายการผลิตวันนี้</div>
+                ${todayRows}
+              </div>
+
+              <!-- ── DETAIL (expandable) ── -->
+              <div style="border-top:1px solid #1e293b44;">
+                <button onclick="(function(btn){var d=document.getElementById('${detailId}');var open=d.style.display!=='none';d.style.display=open?'none':'block';btn.innerHTML=open?'▸ ดูรายละเอียด':'▴ ซ่อน';})(this)"
+                  style="width:100%;padding:8px 14px;background:transparent;border:none;color:#475569;font-size:11px;font-weight:700;cursor:pointer;text-align:left;">▸ ดูรายละเอียด</button>
+                <div id="${detailId}" style="display:none;padding:0 14px 14px;display:none;flex-direction:column;gap:10px;">
+
+                  <!-- ② แผนล่วงหน้า 3 วัน -->
+                  <div>
+                    <div style="font-size:9px;font-weight:900;color:#8b5cf6;letter-spacing:.06em;margin-bottom:5px;">② แผนล่วงหน้า 3 วัน</div>`;
+
+            const hasAhead = (z.aheadBreakdown||[]).some(function(b){ return b.rows&&b.rows.length; });
+            if (hasAhead) {
               z.aheadBreakdown.forEach(function(b) {
                 if (!b.rows||!b.rows.length) return;
-                machineHtml += `<div style="background:#111f35;border-radius:9px;padding:7px 11px;margin-bottom:4px;">
-                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                    <span style="font-size:11px;font-weight:900;color:#a78bfa;min-width:36px;">${fmtD(b.date)}</span>`;
+                machineHtml += `<div style="background:#111f35;border-radius:8px;padding:6px 10px;margin-bottom:4px;">
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span style="font-size:11px;font-weight:900;color:#a78bfa;min-width:32px;">${fmtD(b.date)}</span>`;
                 b.rows.forEach(function(r) {
                   machineHtml += `<span style="font-size:11px;color:#e2e8f0;font-weight:700;">${r.skuName||r.sku}</span>
                     <span style="font-size:11px;color:#64748b;">${r.bundles}มัด`;
-                  if (r.usedWidthCm>0) machineHtml += ` +${(r.usedWidthCm/100).toFixed(2)}ม.`;
-                  if (r.machHrs>0) machineHtml += ` <span style="color:#4ade80;">${r.machHrs}ชม.</span>`;
+                  if (r.usedWidthCm>0) machineHtml += ` +${(r.usedWidthCm/100).toFixed(1)}ม.`;
                   machineHtml += `</span>`;
                 });
-                if (b.dayUsedCm>0) machineHtml += `<span style="font-size:10px;color:#8b5cf6;margin-left:auto;">+${(b.dayUsedCm/100).toFixed(2)}ม.</span>`;
+                if (b.dayUsedCm>0) machineHtml += `<span style="font-size:10px;color:#8b5cf6;margin-left:auto;">+${(b.dayUsedCm/100).toFixed(1)}ม.</span>`;
                 machineHtml += `</div></div>`;
               });
             } else {
-              machineHtml += `<div style="padding:6px 10px;border-radius:8px;background:#111f35;font-size:11px;color:#475569;">ไม่มีแผน 3 วันข้างหน้า</div>`;
+              machineHtml += `<div style="padding:5px 10px;border-radius:8px;background:#111f35;font-size:11px;color:#475569;">ไม่มีแผน 3 วันข้างหน้า</div>`;
             }
+
             machineHtml += `</div>`;
 
-            // ③ ผลิตต่อเนื่อง
-            if (z.continuousSkus && z.continuousSkus.length) {
-              machineHtml += `<div>
-                <div style="font-size:9px;font-weight:900;color:#f59e0b;letter-spacing:.06em;margin-bottom:5px;">③ ผลิตต่อเนื่อง → จองพื้นที่ล่วงหน้า</div>
-                <div style="display:flex;flex-wrap:wrap;gap:5px;">`;
-              z.continuousSkus.forEach(function(c) {
-                machineHtml += `<div style="padding:4px 10px;border-radius:20px;background:#1c1208;border:1px solid #f59e0b44;">
-                  <span style="font-size:11px;font-weight:700;color:#fcd34d;">${c.skuName||c.sku}</span>
-                  <span style="font-size:10px;color:#92400e;margin-left:5px;">${c.daysCount}วัน · ${c.totalBundles}มัด</span>
-                </div>`;
-              });
-              machineHtml += `</div></div>`;
-            }
-
-            // ④ สต็อคปัจจุบัน + ฐานวาง
+            // ④ สต็อคในโซน
             machineHtml += `<div>
-              <div style="font-size:9px;font-weight:900;color:${OK};letter-spacing:.06em;margin-bottom:5px;">④ สต็อคในโซนตอนนี้ + ฐานวาง</div>`;
+                    <div style="font-size:9px;font-weight:900;color:${OK};letter-spacing:.06em;margin-bottom:5px;">④ สต็อคในโซน + ฐานวาง</div>`;
             if (z.stockDetails && z.stockDetails.length) {
               z.stockDetails.forEach(function(s) {
                 const dBadge = s.hasDelivery ? `<span style="font-size:8px;padding:1px 5px;border-radius:20px;background:#451a03;color:#fbbf24;border:1px solid #f59e0b44;">⚡แผนส่ง</span>` : '';
-                machineHtml += `<div style="background:#111f35;border-radius:9px;padding:7px 11px;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                  <div style="flex:1;">
-                    <div style="display:flex;align-items:center;gap:5px;"><span style="font-size:11px;font-weight:700;color:#e2e8f0;">${s.skuName||s.sku}</span>${dBadge}</div>
-                    <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;">
-                      <span style="font-size:10px;color:#64748b;">${s.bundles} มัด</span>
-                      <span style="font-size:10px;color:#64748b;">วาง <b style="color:${OK};">${s.optCols} ฐาน</b></span>
-                      <span style="font-size:10px;color:#64748b;">${(s.usedWidthCm/100).toFixed(2)}ม.</span>
-                    </div>
-                  </div>
+                machineHtml += `<div style="background:#111f35;border-radius:8px;padding:6px 10px;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span style="font-size:11px;font-weight:700;color:#e2e8f0;flex:1;">${s.skuName||s.sku}</span>${dBadge}
+                  <span style="font-size:10px;color:#64748b;">${s.bundles}มัด · <b style="color:${OK};">${s.optCols}ฐาน</b> · ${(s.usedWidthCm/100).toFixed(1)}ม.</span>
                 </div>`;
               });
             } else {
-              machineHtml += `<div style="padding:6px 10px;border-radius:8px;background:#111f35;font-size:11px;color:#475569;">ไม่มีสต็อคในโซนนี้</div>`;
+              machineHtml += `<div style="padding:5px 10px;border-radius:8px;background:#111f35;font-size:11px;color:#475569;">ไม่มีสต็อคในโซนนี้</div>`;
             }
             machineHtml += `</div>`;
 
-            // ⑤ พื้นที่ว่างจริง
-            machineHtml += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-              <div style="background:#111f35;border-radius:9px;padding:8px;text-align:center;">
-                <div style="font-size:9px;color:#64748b;margin-bottom:2px;">พื้นที่รวม</div>
-                <div style="font-size:13px;font-weight:900;color:#94a3b8;">${(z.totalWidthCm/100).toFixed(1)}ม.</div>
-              </div>
-              <div style="background:#111f35;border-radius:9px;padding:8px;text-align:center;">
-                <div style="font-size:9px;color:#64748b;margin-bottom:2px;">คาดว่าใช้</div>
-                <div style="font-size:13px;font-weight:900;color:${statusC};">${(z.projectedUsedCm/100).toFixed(1)}ม.</div>
-              </div>
-              <div style="background:${z.freeSpaceCm>0?'#0a1f12':'#1f0a0a'};border-radius:9px;padding:8px;text-align:center;border:1px solid ${z.freeSpaceCm>0?OK+'44':CRIT+'44'};">
-                <div style="font-size:9px;color:#64748b;margin-bottom:2px;">⑤ ว่างจริง</div>
-                <div style="font-size:14px;font-weight:900;color:${z.freeSpaceCm>0?OK:CRIT};">${(z.freeSpaceCm/100).toFixed(1)}ม.</div>
-              </div>
-            </div>`;
+            // ⑤ พื้นที่
+            machineHtml += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;">
+                    <div style="background:#111f35;border-radius:8px;padding:7px;text-align:center;">
+                      <div style="font-size:8px;color:#64748b;">รวม</div>
+                      <div style="font-size:13px;font-weight:900;color:#94a3b8;">${(z.totalWidthCm/100).toFixed(1)}ม.</div>
+                    </div>
+                    <div style="background:#111f35;border-radius:8px;padding:7px;text-align:center;">
+                      <div style="font-size:8px;color:#64748b;">คาดใช้</div>
+                      <div style="font-size:13px;font-weight:900;color:${statusC};">${(z.projectedUsedCm/100).toFixed(1)}ม.</div>
+                    </div>
+                    <div style="background:${z.freeSpaceCm>0?'#0a1f12':'#1f0a0a'};border-radius:8px;padding:7px;text-align:center;border:1px solid ${z.freeSpaceCm>0?OK+'44':CRIT+'44'};">
+                      <div style="font-size:8px;color:#64748b;">ว่างจริง</div>
+                      <div style="font-size:13px;font-weight:900;color:${z.freeSpaceCm>0?OK:CRIT};">${(z.freeSpaceCm/100).toFixed(1)}ม.</div>
+                    </div>
+                  </div>`;
 
-            // ⑥ คาดการณ์ว่าจะเต็มเมื่อไหร่ (timeline)
+            // ⑥ Timeline
             machineHtml += `<div>
-              <div style="font-size:9px;font-weight:900;color:#94a3b8;letter-spacing:.06em;margin-bottom:4px;">⑥ คาดการณ์พื้นที่ — จะเต็มเมื่อไหร่</div>
-              ${renderTimeline(z.dayProgression, z.fullOnDate)}
-            </div>`;
+                    <div style="font-size:9px;font-weight:900;color:#94a3b8;letter-spacing:.06em;margin-bottom:4px;">⑥ คาดการณ์จะเต็มเมื่อไหร่</div>
+                    ${renderTimeline(z.dayProgression, z.fullOnDate)}
+                  </div>`;
 
             // ⑦ งานที่ต้องทำ
             if (z.suggestions && z.suggestions.length) {
-              totalWork += z.suggestions.length;
-              machineHtml += `<div style="border-top:1px solid #1e293b;padding-top:10px;">
-                <div style="font-size:9px;font-weight:900;color:${CRIT};letter-spacing:.06em;margin-bottom:6px;">⑦ งานที่ต้องทำ — ต้องการพื้นที่คืน ${(z.neededCm/100).toFixed(2)}ม.</div>
-                <div style="display:flex;flex-direction:column;gap:5px;">`;
+              machineHtml += `<div>
+                    <div style="font-size:9px;font-weight:900;color:${CRIT};letter-spacing:.06em;margin-bottom:5px;">⑦ งานที่ต้องทำ — ต้องการพื้นที่คืน ${(z.neededCm/100).toFixed(1)}ม.</div>`;
               z.suggestions.forEach(function(s) {
-                const isMove  = s.type==='ย้ายสินค้า';
-                const tBdr    = isMove ? '#1d4ed8' : '#d97706';
-                const tC      = isMove ? '#60a5fa' : '#fbbf24';
-                const detail  = isMove
-                  ? `ย้าย <b style="color:#fff">${s.bundlesToMove}มัด</b> → ได้คืน <b style="color:${OK}">${(s.freedCm/100).toFixed(2)}ม.</b>`
-                  : `รวมกอง <b style="color:#fff">${s.currentBundles}+${s.incomingBundles}=${s.totalBundles}มัด</b> → ${s.optCols}ฐาน${s.savedWidthCm>0?` ประหยัด <b style="color:${OK}">${(s.savedWidthCm/100).toFixed(2)}ม.</b>`:''}`;
-                const sn      = (s.skuName||s.sku).replace(/'/g,"\\'");
-                const btnD    = isMove
+                const isMove = s.type==='ย้ายสินค้า';
+                const tBdr   = isMove ? '#1d4ed8' : '#d97706';
+                const tC     = isMove ? '#60a5fa' : '#fbbf24';
+                const detail = isMove
+                  ? `ย้าย ${s.bundlesToMove}มัด → คืน ${(s.freedCm/100).toFixed(1)}ม.`
+                  : `รวมกอง ${s.currentBundles}+${s.incomingBundles}=${s.totalBundles}มัด → ${s.optCols}ฐาน`;
+                const sn     = (s.skuName||s.sku).replace(/'/g,"\\'");
+                const btnD   = isMove
                   ? `{type:'ย้ายสินค้า',zone:'${safeZone}',sku:'${s.sku}',skuName:'${sn}',bundles:${s.bundlesToMove}}`
                   : `{type:'ยุบกอง',zone:'${safeZone}',sku:'${s.sku}',skuName:'${sn}',bundles:${s.totalBundles}}`;
-                machineHtml += `<div style="background:#0f1525;border:1px solid ${tBdr}44;border-radius:10px;padding:9px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                  <div style="flex:1;min-width:130px;">
-                    <div style="display:flex;gap:5px;align-items:center;margin-bottom:3px;">
-                      <span style="font-size:8px;font-weight:900;padding:1px 6px;border-radius:20px;background:${tBdr}22;color:${tC};border:1px solid ${tBdr}55;">${isMove?'↗ ย้าย':'⬛ ยุบกอง'}</span>
-                      ${s.hasDelivery?`<span style="font-size:8px;color:#fbbf24;">⚡แผนส่งออก</span>`:''}
-                    </div>
+                machineHtml += `<div style="background:#0f1525;border:1px solid ${tBdr}44;border-radius:9px;padding:8px 11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+                  <div style="flex:1;">
                     <div style="font-size:12px;font-weight:800;color:#f1f5f9;">${s.skuName||s.sku}</div>
-                    <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${detail}</div>
+                    <div style="font-size:10px;color:#94a3b8;">${isMove?'↗ ย้าย':'⬛ ยุบกอง'} · ${detail}</div>
                   </div>
-                  <button onclick="wmmOpenCreateModal(${btnD})" style="padding:7px 12px;border-radius:8px;background:#1d4ed8;color:#fff;border:none;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">
-                    <i class="fas fa-plus" style="font-size:9px;margin-right:3px;"></i>สร้างใบงาน
-                  </button>
+                  <button onclick="wmmOpenCreateModal(${btnD})" style="padding:6px 11px;border-radius:7px;background:#1d4ed8;color:#fff;border:none;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">+ ใบงาน</button>
                 </div>`;
               });
-              machineHtml += `</div></div>`;
+              machineHtml += `</div>`;
             } else {
-              machineHtml += `<div style="padding:6px 10px;border-radius:8px;background:#0a1f12;border:1px solid ${OK}33;font-size:11px;color:#4ade80;">⑦ พื้นที่เพียงพอ ไม่มีงานเร่งด่วน</div>`;
+              machineHtml += `<div style="padding:5px 10px;border-radius:8px;background:#0a1f12;border:1px solid ${OK}33;font-size:11px;color:#4ade80;">⑦ พื้นที่เพียงพอ ไม่มีงานเร่งด่วน</div>`;
             }
 
-            machineHtml += `</div></div>`; // close body + card
+            machineHtml += `</div></div></div>`; // close detail div + detail wrapper + card
 
           } else {
-            // ══════════ RESERVE ZONE — compact card ══════════
+            // ══ RESERVE ZONE ══
             const freeC = z.freeSpaceCm > 0 ? OK : CRIT;
-            reserveHtml += `<div style="border:1px solid ${statusC}33;border-radius:14px;padding:11px 14px;background:#0c1525;margin-bottom:8px;">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                <span style="font-size:13px;font-weight:900;color:#fff;font-family:'Orbitron',sans-serif;">${z.zoneId}</span>
-                <span style="font-size:11px;font-weight:700;color:${statusC};">${z.currentPct}%</span>
-                <span style="font-size:11px;color:${freeC};margin-left:auto;">ว่าง ${(z.freeSpaceCm/100).toFixed(1)}ม.</span>
+            reserveHtml += `<div style="border:1px solid ${statusC}33;border-radius:13px;overflow:hidden;margin-bottom:8px;background:#0c1525;">
+              <div style="padding:10px 13px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <span style="font-size:14px;font-weight:900;color:#fff;font-family:'Orbitron',sans-serif;">${z.zoneId}</span>
+                  <span style="font-size:11px;font-weight:700;color:${statusC};">${z.currentPct}%</span>
+                  <span style="font-size:11px;color:${freeC};margin-left:auto;font-weight:700;">ว่าง ${(z.freeSpaceCm/100).toFixed(1)}ม.</span>
+                </div>
+                <div style="width:100%;height:4px;background:#1e293b;border-radius:4px;margin-bottom:0;">
+                  <div style="height:100%;background:${statusC};width:${Math.min(100,z.currentPct)}%;border-radius:4px;"></div>
+                </div>
               </div>
-              <div style="width:100%;height:4px;background:#1e293b;border-radius:4px;margin-bottom:8px;">
-                <div style="height:100%;background:${statusC};width:${Math.min(100,z.currentPct)}%;border-radius:4px;"></div>
-              </div>`;
+              <div style="border-top:1px solid #1e293b44;">
+                <button onclick="(function(btn){var d=document.getElementById('${detailId}');var open=d.style.display!=='none';d.style.display=open?'none':'block';btn.innerHTML=open?'▸ สต็อค':'▴ ซ่อน';})(this)"
+                  style="width:100%;padding:6px 13px;background:transparent;border:none;color:#475569;font-size:11px;font-weight:700;cursor:pointer;text-align:left;">▸ สต็อค</button>
+                <div id="${detailId}" style="display:none;padding:0 13px 10px;">`;
             if (z.stockDetails && z.stockDetails.length) {
-              z.stockDetails.slice(0,4).forEach(function(s) {
-                reserveHtml += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e293b10;">
+              z.stockDetails.forEach(function(s) {
+                reserveHtml += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e293b22;">
                   <span style="font-size:11px;color:#94a3b8;flex:1;">${s.skuName||s.sku}</span>
                   <span style="font-size:10px;color:#64748b;">${s.bundles}มัด · ${s.optCols}ฐาน</span>
                 </div>`;
               });
-              if (z.stockDetails.length > 4) reserveHtml += `<div style="font-size:10px;color:#475569;padding-top:3px;">+${z.stockDetails.length-4} รายการ</div>`;
+            } else {
+              reserveHtml += `<div style="font-size:11px;color:#475569;">ไม่มีสต็อค</div>`;
             }
-            reserveHtml += `</div>`;
+            reserveHtml += `</div></div></div>`;
           }
         });
 
