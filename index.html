@@ -22,6 +22,18 @@
       var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdXVubXlyeHVnc29xd3J2ZGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODk5ODcsImV4cCI6MjA5NzE2NTk4N30.rpcJKRMDumcsgYx-JrgxFKeO26TKrIULxBJm0jWpBZw';
       window._sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
+      // ── Simple in-memory cache (TTL 5 min) ───────────────────────
+      var _cache = {};
+      var _CACHE_TTL = 5 * 60 * 1000;
+      function _cacheGet(key) {
+        var e = _cache[key];
+        if (!e) return null;
+        if (Date.now() - e.ts > _CACHE_TTL) { delete _cache[key]; return null; }
+        return e.val;
+      }
+      function _cacheSet(key, val) { _cache[key] = { ts: Date.now(), val: val }; }
+      window._cacheClear = function(key) { if (key) delete _cache[key]; else _cache = {}; };
+
       // ── ID generator ──────────────────────────────────────────────
       function _makeId(prefix) {
         var now = new Date();
@@ -171,8 +183,9 @@
       };
 
       // ── Zone Stock ───────────────────────────────────────────────
-      window._sbGetZoneStock = async function() {
+      window._sbGetZoneStock = async function(forceRefresh) {
         try {
+          if (!forceRefresh) { var c = _cacheGet('zone_stock'); if (c) return c; }
           var { data, error } = await window._sb.from('zone_stock').select('*');
           if (error) throw error;
           var result = {};
@@ -180,7 +193,9 @@
             if (!result[r.zone]) result[r.zone] = {};
             result[r.zone][r.sku] = { pcs: r.pcs, ppb: r.ppb, name: r.sku_name, bw: r.bundle_width, bh: r.bundle_height };
           });
-          return { success: true, data: result };
+          var ret = { success: true, data: result };
+          _cacheSet('zone_stock', ret);
+          return ret;
         } catch(e) { return { success: false, message: e.message, data: {} }; }
       };
 
@@ -248,9 +263,12 @@
       // ── Holidays ─────────────────────────────────────────────────
       window._sbGetHolidays = async function() {
         try {
+          var c = _cacheGet('holidays'); if (c) return c;
           var { data, error } = await window._sb.from('holidays').select('holiday_date');
           if (error) throw error;
-          return (data || []).map(function(r) { return r.holiday_date; }); // ['yyyy-MM-dd', ...]
+          var ret = (data || []).map(function(r) { return r.holiday_date; });
+          _cacheSet('holidays', ret);
+          return ret;
         } catch(e) { return []; }
       };
 
@@ -258,6 +276,7 @@
       window._sbGetProductionPlan = async function(month, year) {
         try {
           var monthKey = year + '-' + (month < 10 ? '0' + month : String(month));
+          var c = _cacheGet('prod_plan_' + monthKey); if (c) return c;
           var { data, error } = await window._sb.from('production_plan_cache')
             .select('data')
             .eq('month_key', monthKey)
@@ -266,16 +285,18 @@
             if (error.code === 'PGRST116') return { success: false, message: 'ไม่พบข้อมูล' };
             throw error;
           }
-          // data.data is the JSONB object stored by GAS
           var result = data.data;
           if (typeof result === 'string') { try { result = JSON.parse(result); } catch(pe) {} }
-          return result && result.success !== false ? result : { success: false, message: 'ไม่พบข้อมูล' };
+          var ret = result && result.success !== false ? result : { success: false, message: 'ไม่พบข้อมูล' };
+          _cacheSet('prod_plan_' + monthKey, ret);
+          return ret;
         } catch(e) { return { success: false, message: e.message }; }
       };
 
       // ── Products map ─────────────────────────────────────────────
       window._sbGetProducts = async function() {
         try {
+          var c = _cacheGet('products'); if (c) return c;
           var { data, error } = await window._sb.from('products')
             .select('sku,name,lines_per_bundle,bundle_width,bundle_height');
           if (error) throw error;
@@ -288,6 +309,7 @@
               bh:   Number(r.bundle_height || 0)
             };
           });
+          _cacheSet('products', map);
           return map;
         } catch(e) { return {}; }
       };
