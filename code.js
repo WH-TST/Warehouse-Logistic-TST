@@ -9238,35 +9238,31 @@ function _sbFetch(method, path, body) {
 // Sync Products sheet → Supabase products table
 function _syncProductsToSupabase(ss) {
   try {
-    // Read QC Standard: A=SKU, B=Name, C=MinW, D=MaxW, E=LikelyW
-    var qcMap = {};
-    var qcSheet = ss.getSheetByName(LOGI_SH_QC_STD);
-    if (qcSheet && qcSheet.getLastRow() >= 2) {
-      var qd = qcSheet.getDataRange().getValues();
-      for (var i = 1; i < qd.length; i++) {
-        var qsku = String(qd[i][0] || '').trim();
-        if (!qsku) continue;
-        qcMap[qsku] = { min_w: parseFloat(qd[i][2]) || 0, max_w: parseFloat(qd[i][3]) || 0, likely_w: parseFloat(qd[i][4]) || 0 };
-      }
-    }
     var sheet = ss.getSheetByName('Product');
     if (!sheet || sheet.getLastRow() < 2) return;
-    // Col A=SKU, B=Name, C=LinesPerBundle, D=LiftsPerRound (optional)
+    // Col A=SKU, B=Name, C=เส้นต่อมัด, D=มัดต่อรอบยก, E=W(Min-Max) text, F=W(std)
     var rows = sheet.getDataRange().getValues();
     var batch = [];
     for (var i = 1; i < rows.length; i++) {
       var sku = String(rows[i][0] || '').trim();
       if (!sku) continue;
-      var qc = qcMap[sku] || {};
+      // Parse W(Min-Max) เช่น "10.0 - 10.4" → min=10.0, max=10.4
+      var wRange = String(rows[i][4] || '').trim();
+      var minW = 0, maxW = 0;
+      var wParts = wRange.split('-');
+      if (wParts.length === 2) {
+        minW = parseFloat(wParts[0].trim()) || 0;
+        maxW = parseFloat(wParts[1].trim()) || 0;
+      }
       batch.push({
-        sku:             sku,
-        name:            String(rows[i][1] || ''),
+        sku:              sku,
+        name:             String(rows[i][1] || '').trim(),
         lines_per_bundle: Number(rows[i][2]) || 1,
-        lifts_per_round: Number(rows[i][3]) || 0,
-        likely_w:        qc.likely_w || 0,
-        min_w:           qc.min_w    || 0,
-        max_w:           qc.max_w    || 0,
-        updated_at:      new Date().toISOString()
+        lifts_per_round:  Number(rows[i][3]) || 0,
+        min_w:            minW,
+        max_w:            maxW,
+        likely_w:         parseFloat(rows[i][5]) || 0,
+        updated_at:       new Date().toISOString()
       });
     }
     if (!batch.length) return;
