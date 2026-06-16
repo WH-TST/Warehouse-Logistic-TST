@@ -10741,6 +10741,20 @@ function analyzeZoneCapacity(params) {
       return days;
     }
 
+    // Load product names directly from Product sheet (so names show without needing Sync Zone Stock)
+    var localProductNames = {};
+    try {
+      var lpSS = SpreadsheetApp.openById('1uLXHWv6_jTb1wnaIzq652gn2gH0Odiw2KOlB8DyY2Us');
+      var lpSheet = lpSS.getSheetByName('Product');
+      if (lpSheet && lpSheet.getLastRow() >= 2) {
+        var lpRows = lpSheet.getRange(2, 1, lpSheet.getLastRow() - 1, 2).getValues();
+        lpRows.forEach(function(r) {
+          var sku = String(r[0] || '').trim();
+          if (sku) localProductNames[sku] = String(r[1] || '');
+        });
+      }
+    } catch(e) {}
+
     // =============================================
     // ขั้น 1+2: ดึงแผนผลิต วันนี้ + 3 วันล่วงหน้า (จาก Production Block)
     // =============================================
@@ -10786,7 +10800,7 @@ function analyzeZoneCapacity(params) {
           if (bndls <= 0) return;
           enriched.push({
             zoneId: zoneId, machineId: machId,
-            sku: sku, skuName: p.name || ext.name || sku,
+            sku: sku, skuName: localProductNames[sku] || p.name || ext.name || sku,
             shift: '-',
             plannedBundles: bndls,
             linesQty: qty,
@@ -10892,7 +10906,7 @@ function analyzeZoneCapacity(params) {
         var delivPcs  = Number(delivBySku[sku] || 0);
         var availBndl = Math.max(0, bundles - Math.ceil(delivPcs / ppb));
         stockDetails.push({
-          sku: sku, skuName: d.skuName || sku,
+          sku: sku, skuName: localProductNames[sku] || d.skuName || sku,
           pcs: d.pcs, bundles: bundles, availBundles: availBndl,
           bw: bw, bh: bh, ppb: ppb,
           optCols: info.cols, usedWidthCm: info.usedWidthCm,
@@ -10912,7 +10926,7 @@ function analyzeZoneCapacity(params) {
         if (!info) return;
         todayUsedW += info.usedWidthCm;
         todayList.push({
-          sku: sku, skuName: d.skuName, bundles: d.bundles,
+          sku: sku, skuName: localProductNames[sku] || d.skuName || sku, bundles: d.bundles,
           usedWidthCm: info.usedWidthCm, cols: info.cols,
           machHrs: d.machHrs, itemHrs: d.itemHrs, shifts: d.shifts
         });
@@ -10932,7 +10946,7 @@ function analyzeZoneCapacity(params) {
           var info = (!d.bw || !d.bh) ? null : stackInfo(d.bundles, d.bw, d.bh);
           var usedW = info ? info.usedWidthCm : 0;
           dayUsedW += usedW;
-          rows.push({ sku:sku, skuName:d.skuName, bundles:d.bundles,
+          rows.push({ sku:sku, skuName:localProductNames[sku]||d.skuName||sku, bundles:d.bundles,
                       machHrs:d.machHrs, usedWidthCm: Math.round(usedW) });
         });
         return { date: day, rows: rows, dayUsedCm: Math.round(dayUsedW) };
@@ -10943,7 +10957,7 @@ function analyzeZoneCapacity(params) {
         var info = stackInfo(d.bundles, d.bw, d.bh);
         if (!info) return;
         aheadUsedW += info.usedWidthCm;
-        aheadList.push({ sku:sku, skuName:d.skuName, bundles:d.bundles, usedWidthCm:info.usedWidthCm });
+        aheadList.push({ sku:sku, skuName:localProductNames[sku]||d.skuName||sku, bundles:d.bundles, usedWidthCm:info.usedWidthCm });
       });
 
       // ขั้น 3: continuous SKUs ในโซนนี้
