@@ -88,6 +88,11 @@ function _handleApiPost(e) {
 }
 
 const SPREADSHEET_ID = '1uLXHWv6_jTb1wnaIzq652gn2gH0Odiw2KOlB8DyY2Us';
+
+// ── Supabase ──────────────────────────────────────────────────────────────────
+const SB_URL = 'https://lkuunmyrxugsoqwrvdby.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdXVubXlyeHVnc29xd3J2ZGJ5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTU4OTk4NywiZXhwIjoyMDk3MTY1OTg3fQ.EdbW2hweln4P0Wf6AS7gYIViOHDxumP5G-o2Z-RRlus'; // legacy service_role JWT
+// ─────────────────────────────────────────────────────────────────────────────
 const PRODUCT_MASTER_SS_ID = '1YK0duOxi1-LxIfBWRZb3KsRrnhxo14H0DaHJvqSQP_A';
 const PLAN_SHEET_NAME = 'Sheet Plan'; 
 const HOLIDAY_SHEET_NAME = 'Holiday-TST';
@@ -9173,7 +9178,7 @@ function syncZoneStockFromInventory(params) {
     Object.keys(zoneStock).forEach(function(zone) {
       Object.keys(zoneStock[zone]).forEach(function(sku) {
         var d = zoneStock[zone][sku];
-        if ((d.pcs||0) <= 0) return; // ข้ามโซนที่ถูกย้ายออกจนหมด
+        if ((d.pcs||0) <= 0) return;
         writeRows.push([zone, sku, d.name||'', d.pcs, d.ppb||1, d.bw||0, d.bh||0, now]);
       });
     });
@@ -9190,6 +9195,9 @@ function syncZoneStockFromInventory(params) {
       return Object.keys(zoneStock[z]).some(function(s){ return (zoneStock[z][s].pcs||0)>0; });
     }).length;
 
+    // Sync to Supabase (non-blocking — errors logged only)
+    try { _syncZoneStockToSupabase(ss); } catch(ex) { Logger.log('SB zone_stock sync error: '+ex); }
+
     return {
       success: true,
       message: 'Synced '+writeRows.length+' SKU-zone records across '+movedZones+' zones (Move Log replayed)',
@@ -9199,6 +9207,266 @@ function syncZoneStockFromInventory(params) {
     return { success: false, message: e.toString() };
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SUPABASE SYNC BRIDGE
+// Reads from Google Sheets → upserts into Supabase tables
+// Triggered every 15 minutes via Time-based trigger
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _sbFetch(method, path, body) {
+  var opts = {
+    method: method,
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    },
+    muteHttpExceptions: true
+  };
+  if (body) opts.payload = JSON.stringify(body);
+  var resp = UrlFetchApp.fetch(SB_URL + '/rest/v1/' + path, opts);
+  var code = resp.getResponseCode();
+  if (code >= 400) {
+    Logger.log('Supabase error ' + code + ': ' + resp.getContentText().substring(0, 300));
+    return false;
+  }
+  return true;
+}
+
+// Sync Products sheet → Supabase products table
+function _syncProductsToSupabase(ss) {
+  try {
+    var sheet = ss.getSheetByName('Product');
+    if (!sheet || sheet.getLastRow() < 2) return;
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+    var batch = [];
+    rows.forEach(function(r) {
+      var sku = String(r[0] || '').trim();
+      if (!sku) return;
+      batch.push({ sku: sku, name: String(r[1] || ''), lines_per_bundle: Number(r[2]) || 1, updated_at: new Date().toISOString() });
+    });
+    if (!batch.length) return;
+    // upsert in chunks of 200
+    for (var i = 0; i < batch.length; i += 200) {
+      _sbFetch('POST', 'products?on_conflict=sku', batch.slice(i, i + 200));
+    }
+    Logger.log('[SB Sync] products: ' + batch.length);
+  } catch(e) { Logger.log('[SB Sync] products error: ' + e); }
+}
+
+// Sync ZoneStock sheet → Supabase zone_stock table
+function _syncZoneStockToSupabase(ss) {
+  try {
+    var sheet = ss.getSheetByName(ZONE_STOCK_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
+    var batch = [];
+    rows.forEach(function(r) {
+      var zone = String(r[0] || '').trim();
+      var sku  = String(r[1] || '').trim();
+      if (!zone || !sku) return;
+      batch.push({
+        zone: zone, sku: sku, sku_name: String(r[2] || ''),
+        pcs: Number(r[3]) || 0, ppb: Number(r[4]) || 1,
+        bundle_width: Number(r[5]) || 0, bundle_height: Number(r[6]) || 0,
+        updated_at: new Date().toISOString()
+      });
+    });
+    if (!batch.length) return;
+    // clear old records first then insert
+    _sbFetch('DELETE', 'zone_stock?pcs=gte.0', null);
+    for (var i = 0; i < batch.length; i += 200) {
+      _sbFetch('POST', 'zone_stock?on_conflict=zone,sku', batch.slice(i, i + 200));
+    }
+    Logger.log('[SB Sync] zone_stock: ' + batch.length);
+  } catch(e) { Logger.log('[SB Sync] zone_stock error: ' + e); }
+}
+
+// Sync On-hand sheet → Supabase onhand table
+function _syncOnhandToSupabase() {
+  try {
+    var ohSS  = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
+    var sheet = ohSS.getSheetByName('On-hand');
+    if (!sheet || sheet.getLastRow() < 2) return;
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 14).getValues();
+    var map = {};
+    rows.forEach(function(r) {
+      var sku = String(r[1] || '').trim();
+      var qty = Number(r[4]) || 0;
+      var wh  = String(r[13] || '').trim();
+      if (!sku || (wh !== 'FG-BP' && wh !== 'QC')) return;
+      var key = sku + '|' + wh;
+      map[key] = { sku: sku, warehouse: wh, qty: (map[key] ? map[key].qty : 0) + qty };
+    });
+    var batch = Object.values(map).map(function(d) {
+      return { sku: d.sku, warehouse: d.warehouse, qty: d.qty, updated_at: new Date().toISOString() };
+    });
+    if (!batch.length) return;
+    for (var i = 0; i < batch.length; i += 200) {
+      _sbFetch('POST', 'onhand?on_conflict=sku,warehouse', batch.slice(i, i + 200));
+    }
+    Logger.log('[SB Sync] onhand: ' + batch.length);
+  } catch(e) { Logger.log('[SB Sync] onhand error: ' + e); }
+}
+
+// Sync Production Block → Supabase production_block table
+function _syncProductionBlockToSupabase() {
+  try {
+    var pbSS  = SpreadsheetApp.openById(PROD_BLOCK_SPREADSHEET_ID);
+    var sheet = pbSS.getSheetByName('Production Block');
+    if (!sheet || sheet.getLastRow() < 2) return;
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
+    var batch = [];
+    rows.forEach(function(r) {
+      var dt  = r[0]; // Col A = date
+      var mch = String(r[1] || '').trim(); // Col B = machine
+      var sku = String(r[2] || '').trim(); // Col C = SKU
+      var bnd = Number(r[3]) || 0;         // Col D = bundles
+      if (!sku || !mch || !dt) return;
+      var dateStr = dt instanceof Date ? Utilities.formatDate(dt, 'GMT+7', 'yyyy-MM-dd') : String(dt);
+      batch.push({ block_date: dateStr, machine: mch, sku: sku, bundles: bnd, updated_at: new Date().toISOString() });
+    });
+    if (!batch.length) return;
+    // Delete and re-insert (no stable PK in source)
+    _sbFetch('DELETE', 'production_block?id=gte.0', null);
+    for (var i = 0; i < batch.length; i += 200) {
+      _sbFetch('POST', 'production_block', batch.slice(i, i + 200));
+    }
+    Logger.log('[SB Sync] production_block: ' + batch.length);
+  } catch(e) { Logger.log('[SB Sync] production_block error: ' + e); }
+}
+
+// Sync Logistic_Plan_Item → Supabase delivery_items table
+function _syncDeliveryItemsToSupabase() {
+  try {
+    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(LOGI_ITEM_SHEET);
+    if (!sheet || sheet.getLastRow() < 2) {
+      Logger.log('[SB Sync] delivery_items: sheet empty, skipping');
+      return;
+    }
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues();
+    var batch = [];
+    var now = new Date().toISOString();
+    rows.forEach(function(r) {
+      var planId  = String(r[0] || '').trim();
+      var sku     = String(r[1] || '').trim();
+      var skuName = String(r[2] || '');
+      var pcs     = Number(r[3] || 0);
+      var rawDate = r[9];  // col J
+      var status  = String(r[10] || '').trim(); // col K
+      if (!sku || pcs <= 0 || !rawDate) return;
+      var d = rawDate instanceof Date ? rawDate : new Date(rawDate);
+      if (isNaN(d.getTime())) return;
+      var dateStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+      batch.push({
+        plan_id: planId, sku: sku, sku_name: skuName,
+        pcs: pcs, delivery_date: dateStr, status: status,
+        updated_at: now
+      });
+    });
+    // Delete all then re-insert
+    _sbFetch('DELETE', 'delivery_items?id=gte.0', null);
+    if (batch.length) {
+      for (var i = 0; i < batch.length; i += 200) {
+        _sbFetch('POST', 'delivery_items', batch.slice(i, i + 200));
+      }
+    }
+    Logger.log('[SB Sync] delivery_items: ' + batch.length);
+  } catch(e) { Logger.log('[SB Sync] delivery_items error: ' + e); }
+}
+
+// Sync Holiday-TST sheet → Supabase holidays table
+function _syncHolidaysToSupabase(ss) {
+  try {
+    var sheet = ss.getSheetByName(HOLIDAY_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) {
+      Logger.log('[SB Sync] holidays: sheet empty, skipping');
+      return;
+    }
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+    var now   = new Date().toISOString();
+    var batch = [];
+    rows.forEach(function(r) {
+      var raw = r[0];
+      if (!raw) return;
+      var d = raw instanceof Date ? raw : new Date(raw);
+      if (isNaN(d.getTime())) return;
+      var dateStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+      batch.push({ holiday_date: dateStr, updated_at: now });
+    });
+    // Delete all then re-insert
+    _sbFetch('DELETE', 'holidays?holiday_date=gte.1900-01-01', null);
+    if (batch.length) {
+      for (var i = 0; i < batch.length; i += 200) {
+        _sbFetch('POST', 'holidays?on_conflict=holiday_date', batch.slice(i, i + 200));
+      }
+    }
+    Logger.log('[SB Sync] holidays: ' + batch.length);
+  } catch(e) { Logger.log('[SB Sync] holidays error: ' + e); }
+}
+
+// Sync getProductionPlanData result → Supabase production_plan_cache table
+// Stores current month and next month
+function _syncProductionPlanCacheToSupabase() {
+  try {
+    var todayStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+    var curYear  = parseInt(todayStr.substring(0, 4));
+    var curMonth = parseInt(todayStr.substring(5, 7));
+    var now = new Date().toISOString();
+
+    var months = [
+      { year: curYear, month: curMonth },
+      curMonth === 12 ? { year: curYear + 1, month: 1 } : { year: curYear, month: curMonth + 1 }
+    ];
+
+    months.forEach(function(m) {
+      try {
+        var result = getProductionPlanData({ month: m.month, year: m.year });
+        var monthKey = m.year + '-' + (m.month < 10 ? '0' + m.month : String(m.month));
+        _sbFetch('POST', 'production_plan_cache?on_conflict=month_key', [{
+          month_key:  monthKey,
+          data:       result,   // JSONB — Supabase REST serializes the object
+          updated_at: now
+        }]);
+        Logger.log('[SB Sync] production_plan_cache: ' + monthKey);
+      } catch(ex) {
+        Logger.log('[SB Sync] production_plan_cache error for ' + m.month + '/' + m.year + ': ' + ex);
+      }
+    });
+  } catch(e) { Logger.log('[SB Sync] production_plan_cache error: ' + e); }
+}
+
+// Main sync entry — called by Time Trigger every 15 min
+function runSupabaseSync() {
+  try {
+    Logger.log('[SB Sync] Starting full sync...');
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    _syncProductsToSupabase(ss);
+    _syncZoneStockToSupabase(ss);
+    _syncOnhandToSupabase();
+    _syncProductionBlockToSupabase();
+    _syncDeliveryItemsToSupabase();
+    _syncHolidaysToSupabase(ss);
+    _syncProductionPlanCacheToSupabase();
+    Logger.log('[SB Sync] Done.');
+  } catch(e) {
+    Logger.log('[SB Sync] runSupabaseSync error: ' + e);
+  }
+}
+
+// ── Run this ONCE from GAS Editor to install 15-min trigger ──────────────────
+function setupSupabaseSyncTrigger() {
+  // Remove existing if any
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'runSupabaseSync') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('runSupabaseSync').timeBased().everyMinutes(15).create();
+  Logger.log('[SB Sync] Trigger installed: runSupabaseSync every 15 min');
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function _updateZoneStockForMove(ss, fromZone, toZone, sku, skuName, totalPCS, pcsPerBundle, bw, bh) {
   try {

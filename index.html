@@ -13,6 +13,847 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <!-- ═══════════════════════════════════════════════════════════
+         Supabase Client — direct DB access for WMS data
+         ═══════════════════════════════════════════════════════════ -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+    (function() {
+      var SUPA_URL = 'https://lkuunmyrxugsoqwrvdby.supabase.co';
+      var SUPA_KEY = 'sb_publishable_V8AFghqrEUyFGBCDzKrmjw_5p36_5g9';
+      window._sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+      // ── ID generator ──────────────────────────────────────────────
+      function _makeId(prefix) {
+        var now = new Date();
+        var pad = function(n,l){ return String(n).padStart(l,'0'); };
+        return prefix + now.getFullYear() + pad(now.getMonth()+1,2) + pad(now.getDate(),2)
+          + pad(now.getHours(),2) + pad(now.getMinutes(),2) + pad(now.getSeconds(),2)
+          + pad(Math.floor(Math.random()*1000),3);
+      }
+      window._makeWmsId = _makeId;
+
+      // ── Work Orders ──────────────────────────────────────────────
+      window._sbGetWorkOrders = async function(params) {
+        try {
+          var q = window._sb.from('work_orders').select('*').order('created_at', { ascending: false });
+          if (params && params.status) q = q.eq('status', params.status);
+          if (params && params.zone)   q = q.eq('zone', params.zone);
+          var { data, error } = await q;
+          if (error) throw error;
+          var orders = (data||[]).map(function(r) {
+            return {
+              orderId: r.id, createdAt: r.created_at, createdBy: r.created_by,
+              zone: r.zone, sku: r.sku, skuName: r.sku_name, bundles: r.bundles,
+              toZone: r.to_zone, reason: r.reason, dueDate: r.due_date,
+              status: r.status, assignedTo: r.assigned_to, updatedAt: r.updated_at, note: r.note
+            };
+          });
+          return { success: true, orders: orders };
+        } catch(e) { return { success: false, message: e.message }; }
+      };
+
+      window._sbCreateWorkOrder = async function(data) {
+        try {
+          var id = _makeId('WO');
+          var now = new Date().toISOString();
+          var row = {
+            id: id, created_at: now, created_by: data.createdBy||'',
+            zone: data.zone||'', sku: data.sku||'', sku_name: data.skuName||'',
+            bundles: Number(data.bundles||0), to_zone: data.toZone||'',
+            reason: data.reason||'', due_date: data.dueDate||'',
+            status: 'รอดำเนินการ', assigned_to: data.assignedTo||'',
+            updated_at: now, note: data.note||''
+          };
+          var { error } = await window._sb.from('work_orders').insert(row);
+          if (error) throw error;
+          return { success: true, orderId: id };
+        } catch(e) { return { success: false, message: e.message }; }
+      };
+
+      window._sbUpdateWorkOrder = async function(data) {
+        try {
+          var now = new Date().toISOString();
+          var updates = { status: data.status, updated_at: now };
+          if (data.note) updates.note = data.note;
+          var { error } = await window._sb.from('work_orders').update(updates).eq('id', data.orderId);
+          if (error) throw error;
+          // if completed + has toZone → write move_log + update zone_stock
+          if (data.status === 'เสร็จแล้ว') {
+            var { data: rows } = await window._sb.from('work_orders').select('*').eq('id', data.orderId).single();
+            if (rows && rows.to_zone && rows.zone && rows.sku && rows.bundles > 0) {
+              await _sbWriteMoveFromWorkOrder(rows);
+            }
+          }
+          return { success: true };
+        } catch(e) { return { success: false, message: e.message }; }
+      };
+
+      async function _sbWriteMoveFromWorkOrder(wo) {
+        try {
+          var id = _makeId('MV');
+          var now = new Date().toISOString();
+          var today = now.slice(0,10);
+          // get ppb from products table
+          var ppbRow = await window._sb.from('products').select('lines_per_bundle').eq('sku', wo.sku).single();
+          var ppb = (ppbRow.data && ppbRow.data.lines_per_bundle) ? ppbRow.data.lines_per_bundle : 1;
+          var totalPCS = wo.bundles * ppb;
+          // insert move_log
+          await window._sb.from('move_log').insert({
+            id: id, created_at: now, move_date: today,
+            from_zone: wo.zone, to_zone: wo.to_zone,
+            sku: wo.sku, sku_name: wo.sku_name||'',
+            bundles: wo.bundles, ppb: ppb, pcs: totalPCS,
+            recorded_by: 'WMS Auto', note: 'From WO ' + wo.id
+          });
+          // update zone_stock: subtract from source, add to destination
+          await _sbMoveZoneStock(wo.zone, wo.to_zone, wo.sku, wo.sku_name||'', totalPCS, ppb);
+        } catch(e) { console.error('_sbWriteMoveFromWorkOrder', e); }
+      }
+
+      async function _sbMoveZoneStock(fromZone, toZone, sku, skuName, pcs, ppb) {
+        var sb = window._sb;
+        // read current from-zone stock
+        var { data: fromRow } = await sb.from('zone_stock').select('*').eq('zone', fromZone).eq('sku', sku).single();
+        var fromPcs = fromRow ? fromRow.pcs : 0;
+        var newFrom = Math.max(0, fromPcs - pcs);
+        if (fromRow) {
+          await sb.from('zone_stock').update({ pcs: newFrom, updated_at: new Date().toISOString() }).eq('zone', fromZone).eq('sku', sku);
+        }
+        // add to destination
+        var { data: toRow } = await sb.from('zone_stock').select('*').eq('zone', toZone).eq('sku', sku).single();
+        var toNow = new Date().toISOString();
+        if (toRow) {
+          await sb.from('zone_stock').update({ pcs: toRow.pcs + pcs, updated_at: toNow }).eq('zone', toZone).eq('sku', sku);
+        } else {
+          await sb.from('zone_stock').insert({ zone: toZone, sku: sku, sku_name: skuName, pcs: pcs, ppb: ppb, updated_at: toNow });
+        }
+      }
+      window._sbMoveZoneStock = _sbMoveZoneStock;
+
+      // ── Move Log ─────────────────────────────────────────────────
+      window._sbSaveMove = async function(data) {
+        try {
+          var id = _makeId('MV');
+          var now = new Date().toISOString();
+          var today = now.slice(0,10);
+          var bundles = Number(data.bundles||0);
+          var ppb     = Number(data.pcsPerBundle||1);
+          var totalPCS = bundles * ppb;
+          var { error } = await window._sb.from('move_log').insert({
+            id: id, created_at: now, move_date: today,
+            from_zone: data.fromZone||'', to_zone: data.toZone||'',
+            sku: data.sku||'', sku_name: data.skuName||'',
+            bundles: bundles, ppb: ppb, pcs: totalPCS,
+            recorded_by: data.recordedBy||'', note: data.note||''
+          });
+          if (error) throw error;
+          await _sbMoveZoneStock(data.fromZone||'', data.toZone||'', data.sku||'', data.skuName||'', totalPCS, ppb);
+          return { success: true, moveId: id, bundles: bundles, totalPCS: totalPCS };
+        } catch(e) { return { success: false, message: e.message }; }
+      };
+
+      window._sbGetMoveLog = async function() {
+        try {
+          var { data, error } = await window._sb.from('move_log').select('*').order('created_at', { ascending: false }).limit(200);
+          if (error) throw error;
+          var summary = {};
+          var moves = (data||[]).map(function(r) {
+            return {
+              moveId: r.id, timestamp: r.created_at, date: r.move_date,
+              fromZone: r.from_zone, toZone: r.to_zone,
+              sku: r.sku, skuName: r.sku_name,
+              qty: r.pcs, bundles: r.bundles, pcsPerBundle: r.ppb,
+              recordedBy: r.recorded_by, note: r.note
+            };
+          });
+          return { success: true, moves: moves, summary: summary };
+        } catch(e) { return { success: false, message: e.message, moves: [], summary: {} }; }
+      };
+
+      // ── Zone Stock ───────────────────────────────────────────────
+      window._sbGetZoneStock = async function() {
+        try {
+          var { data, error } = await window._sb.from('zone_stock').select('*');
+          if (error) throw error;
+          var result = {};
+          (data||[]).forEach(function(r) {
+            if (!result[r.zone]) result[r.zone] = {};
+            result[r.zone][r.sku] = { pcs: r.pcs, ppb: r.ppb, name: r.sku_name, bw: r.bundle_width, bh: r.bundle_height };
+          });
+          return { success: true, data: result };
+        } catch(e) { return { success: false, message: e.message, data: {} }; }
+      };
+
+      // ── Zone Config ─────────────────────────────────────────────
+      window._sbGetZoneConfig = async function() {
+        try {
+          var { data, error } = await window._sb.from('zone_configs')
+            .select('key,value')
+            .in('key', ['WM_ZONE_CONFIG', 'WM_STACK_CONFIG']);
+          if (error) throw error;
+          var config = null, stackConfig = null;
+          (data || []).forEach(function(r) {
+            if (r.key === 'WM_ZONE_CONFIG')  config      = r.value;
+            if (r.key === 'WM_STACK_CONFIG') stackConfig = r.value;
+          });
+          return { success: true, config: config, stackConfig: stackConfig };
+        } catch(e) { return { success: false, message: e.message }; }
+      };
+
+      window._sbSaveZoneConfig = async function(data) {
+        try {
+          var rows = [{ key: 'WM_ZONE_CONFIG', value: data.zones, updated_at: new Date().toISOString() }];
+          if (data.stack) rows.push({ key: 'WM_STACK_CONFIG', value: data.stack, updated_at: new Date().toISOString() });
+          var { error } = await window._sb.from('zone_configs').upsert(rows, { onConflict: 'key' });
+          if (error) throw error;
+          return { success: true };
+        } catch(e) { return { success: false, message: e.message }; }
+      };
+
+      // ── Delivery Plan ────────────────────────────────────────────
+      window._sbGetDeliveryPlan = async function(daysAhead) {
+        try {
+          var today = new Date();
+          var todayStr = today.toISOString().slice(0, 10);
+          var cutoff = new Date(today);
+          cutoff.setDate(cutoff.getDate() + (daysAhead || 14));
+          var cutoffStr = cutoff.toISOString().slice(0, 10);
+
+          var { data, error } = await window._sb.from('delivery_items')
+            .select('plan_id,sku,sku_name,pcs,delivery_date,status')
+            .gte('delivery_date', todayStr)
+            .lte('delivery_date', cutoffStr)
+            .not('status', 'in', '("ยกเลิก","สำเร็จ")');
+          if (error) throw error;
+
+          var bySkuDate = {}; // { sku: { date: pcs } }
+          var byDate    = {}; // { date: { sku: { pcs, skuName, planIds[] } } }
+          (data || []).forEach(function(r) {
+            var sku  = r.sku;
+            var date = r.delivery_date;
+            var pcs  = Number(r.pcs || 0);
+            if (!sku || pcs <= 0 || !date) return;
+            if (!bySkuDate[sku]) bySkuDate[sku] = {};
+            bySkuDate[sku][date] = (bySkuDate[sku][date] || 0) + pcs;
+            if (!byDate[date]) byDate[date] = {};
+            if (!byDate[date][sku]) byDate[date][sku] = { pcs: 0, skuName: r.sku_name || sku, planIds: [] };
+            byDate[date][sku].pcs += pcs;
+            if (r.plan_id && byDate[date][sku].planIds.indexOf(r.plan_id) < 0)
+              byDate[date][sku].planIds.push(r.plan_id);
+          });
+          return { success: true, bySkuDate: bySkuDate, byDate: byDate };
+        } catch(e) { return { success: false, message: e.message, bySkuDate: {}, byDate: {} }; }
+      };
+
+      // ── Holidays ─────────────────────────────────────────────────
+      window._sbGetHolidays = async function() {
+        try {
+          var { data, error } = await window._sb.from('holidays').select('holiday_date');
+          if (error) throw error;
+          return (data || []).map(function(r) { return r.holiday_date; }); // ['yyyy-MM-dd', ...]
+        } catch(e) { return []; }
+      };
+
+      // ── Production Plan (from cache) ─────────────────────────────
+      window._sbGetProductionPlan = async function(month, year) {
+        try {
+          var monthKey = year + '-' + (month < 10 ? '0' + month : String(month));
+          var { data, error } = await window._sb.from('production_plan_cache')
+            .select('data')
+            .eq('month_key', monthKey)
+            .single();
+          if (error) {
+            if (error.code === 'PGRST116') return { success: false, message: 'ไม่พบข้อมูล' };
+            throw error;
+          }
+          // data.data is the JSONB object stored by GAS
+          var result = data.data;
+          if (typeof result === 'string') { try { result = JSON.parse(result); } catch(pe) {} }
+          return result && result.success !== false ? result : { success: false, message: 'ไม่พบข้อมูล' };
+        } catch(e) { return { success: false, message: e.message }; }
+      };
+
+      // ── Products map ─────────────────────────────────────────────
+      window._sbGetProducts = async function() {
+        try {
+          var { data, error } = await window._sb.from('products')
+            .select('sku,name,lines_per_bundle,bundle_width,bundle_height');
+          if (error) throw error;
+          var map = {};
+          (data || []).forEach(function(r) {
+            map[r.sku] = {
+              name: r.name || r.sku,
+              ppb:  Number(r.lines_per_bundle || 1) || 1,
+              bw:   Number(r.bundle_width  || 0),
+              bh:   Number(r.bundle_height || 0)
+            };
+          });
+          return map;
+        } catch(e) { return {}; }
+      };
+
+      // ── analyzeZoneCapacity — client-side port of GAS function ───
+      window._analyzeZoneCapacity = async function(params) {
+        try {
+          var ZONE_WIDTHS = {
+            'P4':[830,830,1330],'P1':[1650,1600,1300],
+            'C5':[500,2100,300,300],'P2':[500,1000,1300],'P3':[700,700,700,250,250],
+            'C4':[1330,1330,1330],'RE4':[500],'RE-C5':[2100,2100],'RE1':[850]
+          };
+          var MACHINE_ZONE = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
+          var THRESHOLD = 70;
+
+          var dateStr = (params && params.date && params.date !== '')
+            ? params.date
+            : new Date().toISOString().slice(0, 10);
+
+          // --- Helpers ---
+          function stackInfo(bundles, bw, bh) {
+            if (!bw || !bh || bundles <= 0) return null;
+            var maxL = Math.max(1, Math.floor(420 / bh));
+            var cols, layers;
+            if (bundles <= 3) {
+              cols = 1; layers = bundles;
+              if (layers > maxL) { cols = Math.ceil(bundles / maxL); layers = Math.ceil(bundles / cols); }
+            } else if (bundles <= 9) {
+              cols = 2; layers = Math.ceil(bundles / cols);
+              if (layers > maxL) { cols = Math.ceil(bundles / maxL); layers = Math.ceil(bundles / cols); }
+            } else {
+              cols = Math.max(3, Math.ceil(bundles / maxL));
+              layers = Math.ceil(bundles / cols);
+            }
+            return { cols: cols, layers: layers, usedWidthCm: cols * bw };
+          }
+
+          function parseYMD(s) {
+            var y = parseInt(s.substring(0,4)), mo = parseInt(s.substring(5,7))-1, d = parseInt(s.substring(8,10));
+            return new Date(y, mo, d);
+          }
+          function fmtYMD(dt) {
+            var y = dt.getFullYear(), m = dt.getMonth()+1, d = dt.getDate();
+            return y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
+          }
+          function nextWorkDays(fromStr, n, holidays) {
+            var days = [], dt = parseYMD(fromStr);
+            var hSet = {};
+            holidays.forEach(function(h){ hSet[h] = true; });
+            while (days.length < n) {
+              dt = new Date(dt.getTime() + 86400000);
+              var dow = dt.getDay();
+              if (dow === 0) continue;
+              var s = fmtYMD(dt);
+              if (hSet[s]) continue;
+              days.push(s);
+            }
+            return days;
+          }
+
+          // Load all data in parallel
+          var dt0 = parseYMD(dateStr);
+          var curM = dt0.getMonth() + 1, curY = dt0.getFullYear();
+          var nextM = curM === 12 ? 1 : curM + 1;
+          var nextY = curM === 12 ? curY + 1 : curY;
+
+          var [prodCur, prodNext, zsRes, holidays, prodMap] = await Promise.all([
+            window._sbGetProductionPlan(curM, curY),
+            window._sbGetProductionPlan(nextM, nextY),
+            window._sbGetZoneStock(),
+            window._sbGetHolidays(),
+            window._sbGetProducts()
+          ]);
+
+          var aheadDays = nextWorkDays(dateStr, 3, holidays);
+          var allDays   = [dateStr].concat(aheadDays);
+
+          // getProdBlockForMonth using cached data
+          function getMachinesForMonth(y, m) {
+            if (y === curY && m === curM) return (prodCur && prodCur.machines) ? prodCur.machines : [];
+            if (y === nextY && m === nextM) return (prodNext && prodNext.machines) ? prodNext.machines : [];
+            return [];
+          }
+
+          // Build dayPlan
+          var dayPlan = {};
+          allDays.forEach(function(day) {
+            var dt = parseYMD(day);
+            var machines = getMachinesForMonth(dt.getFullYear(), dt.getMonth() + 1);
+            var enriched = [];
+            machines.forEach(function(mach) {
+              var machId = String(mach.machineId || '').toUpperCase().replace(/\s/g,'');
+              var zoneId = MACHINE_ZONE[machId] || machId;
+              if (!ZONE_WIDTHS[zoneId]) return;
+              var machHrs = Number((mach.pdTime || {})[day] || 0);
+              (mach.products || []).forEach(function(p) {
+                var qty = Number((p.daily || {})[day] || 0);
+                if (qty <= 0) return;
+                var sku = String(p.sku || '');
+                if (!sku) return;
+                var pm  = prodMap[sku] || {};
+                var ppb = Number(p.pcsPerBundle || pm.ppb || 1) || 1;
+                var bw  = Number(p.bundleWidth  || pm.bw  || 0);
+                var bh  = Number(p.bundleHeight || pm.bh  || 0);
+                var bndls = Math.ceil(qty / ppb);
+                if (bndls <= 0) return;
+                enriched.push({
+                  zoneId: zoneId, machineId: machId,
+                  sku: sku, skuName: (pm.name || p.name || sku),
+                  shift: '-', plannedBundles: bndls,
+                  linesQty: qty, machHrs: machHrs, itemHrs: 0,
+                  bw: bw, bh: bh, ppb: ppb
+                });
+              });
+            });
+            dayPlan[day] = enriched;
+          });
+
+          // skuDayCount
+          var skuDayCount = {};
+          allDays.forEach(function(day) {
+            (dayPlan[day] || []).forEach(function(r) {
+              if (!skuDayCount[r.zoneId]) skuDayCount[r.zoneId] = {};
+              skuDayCount[r.zoneId][r.sku] = (skuDayCount[r.zoneId][r.sku] || 0) + 1;
+            });
+          });
+
+          function aggregateByZoneSku(rows) {
+            var out = {};
+            rows.forEach(function(r) {
+              if (!out[r.zoneId]) out[r.zoneId] = {};
+              if (!out[r.zoneId][r.sku]) {
+                out[r.zoneId][r.sku] = { bundles:0, bw:r.bw, bh:r.bh, ppb:r.ppb,
+                                         skuName:r.skuName, machHrs:0, itemHrs:0, shifts:[] };
+              }
+              var e = out[r.zoneId][r.sku];
+              e.bundles  += r.plannedBundles;
+              e.machHrs   = Math.max(e.machHrs, r.machHrs);
+              e.itemHrs  += r.itemHrs;
+              if (r.shift && e.shifts.indexOf(r.shift) < 0) e.shifts.push(r.shift);
+            });
+            return out;
+          }
+
+          var todayByZone = aggregateByZoneSku(dayPlan[dateStr] || []);
+          var aheadByZone = {};
+          aheadDays.forEach(function(day) {
+            var agg = aggregateByZoneSku(dayPlan[day] || []);
+            Object.keys(agg).forEach(function(z) {
+              if (!aheadByZone[z]) aheadByZone[z] = {};
+              Object.keys(agg[z]).forEach(function(sku) {
+                if (!aheadByZone[z][sku]) {
+                  aheadByZone[z][sku] = { bundles:0, bw:agg[z][sku].bw, bh:agg[z][sku].bh,
+                                          ppb:agg[z][sku].ppb, skuName:agg[z][sku].skuName };
+                }
+                aheadByZone[z][sku].bundles += agg[z][sku].bundles;
+              });
+            });
+          });
+
+          // Zone stock from Supabase
+          var zoneStock = (zsRes && zsRes.success && zsRes.data) ? JSON.parse(JSON.stringify(zsRes.data)) : {};
+          // Convert field names: zone_stock uses {pcs, ppb, bw, bh}
+          // _sbGetZoneStock already returns {pcs, ppb, bw, bh} — ensure pcsPerBundle alias
+          Object.keys(zoneStock).forEach(function(zone) {
+            Object.keys(zoneStock[zone]).forEach(function(sku) {
+              var s = zoneStock[zone][sku];
+              if (!s.pcsPerBundle && s.ppb) s.pcsPerBundle = s.ppb;
+            });
+          });
+
+          // homeZone2 from production plan
+          var homeZone2 = {};
+          var MZONE2 = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
+          var skuMachines2 = {};
+          var allMachs2 = getMachinesForMonth(dt0.getFullYear(), dt0.getMonth() + 1);
+          allMachs2.forEach(function(m) {
+            var mid = String(m.machineId || '').toUpperCase().replace(/\s/g,'');
+            (m.products || []).forEach(function(p) {
+              if (!p.sku) return;
+              if (!skuMachines2[p.sku]) skuMachines2[p.sku] = [];
+              if (skuMachines2[p.sku].indexOf(mid) < 0) skuMachines2[p.sku].push(mid);
+            });
+          });
+          Object.keys(skuMachines2).forEach(function(sku) {
+            homeZone2[sku] = MZONE2[skuMachines2[sku][0]] || skuMachines2[sku][0];
+          });
+          Object.keys(zoneStock).forEach(function(zone) {
+            Object.keys(zoneStock[zone]).forEach(function(sku) {
+              if (!homeZone2[sku]) homeZone2[sku] = zone;
+            });
+          });
+
+          // Delivery deduction
+          var delivBySku = {};
+          try {
+            var delivRes = await window._sbGetDeliveryPlan(14);
+            if (delivRes && delivRes.success && delivRes.bySkuDate) {
+              Object.keys(delivRes.bySkuDate).forEach(function(sku) {
+                var tot = 0;
+                var bd = delivRes.bySkuDate[sku];
+                Object.keys(bd).forEach(function(d){ tot += Number(bd[d]||0); });
+                if (tot > 0) delivBySku[sku] = tot;
+              });
+            }
+          } catch(e2) {}
+
+          var delivedPcsPerZoneSku = {};
+          Object.keys(delivBySku).forEach(function(sku) {
+            var remaining = Number(delivBySku[sku] || 0);
+            if (remaining <= 0) return;
+            var home = homeZone2[sku];
+            if (home && zoneStock[home] && zoneStock[home][sku] && zoneStock[home][sku].pcs > 0) {
+              var take = Math.min(remaining, zoneStock[home][sku].pcs);
+              zoneStock[home][sku].pcs -= take;
+              remaining -= take;
+              if (!delivedPcsPerZoneSku[home]) delivedPcsPerZoneSku[home] = {};
+              delivedPcsPerZoneSku[home][sku] = (delivedPcsPerZoneSku[home][sku] || 0) + take;
+            }
+            if (remaining > 0) {
+              Object.keys(zoneStock).forEach(function(zone) {
+                if (remaining <= 0 || zone === home) return;
+                if (!zoneStock[zone][sku] || zoneStock[zone][sku].pcs <= 0) return;
+                var take2 = Math.min(remaining, zoneStock[zone][sku].pcs);
+                zoneStock[zone][sku].pcs -= take2;
+                remaining -= take2;
+                if (!delivedPcsPerZoneSku[zone]) delivedPcsPerZoneSku[zone] = {};
+                delivedPcsPerZoneSku[zone][sku] = (delivedPcsPerZoneSku[zone][sku] || 0) + take2;
+              });
+            }
+          });
+
+          var results = [];
+          Object.keys(ZONE_WIDTHS).forEach(function(zoneId) {
+            var totalW = ZONE_WIDTHS[zoneId].reduce(function(s,w){ return s+w; }, 0);
+
+            var stockSkus    = zoneStock[zoneId] || {};
+            var currentUsedW = 0;
+            var stockDetails = [];
+            Object.keys(stockSkus).forEach(function(sku) {
+              var d   = stockSkus[sku];
+              var pm  = prodMap[sku] || {};
+              var bw  = Number(d.bw || pm.bw  || 0);
+              var bh  = Number(d.bh || pm.bh  || 0);
+              var ppb = Number(d.pcsPerBundle || d.ppb || pm.ppb || 1) || 1;
+              if (!bw || !bh || !d.pcs) return;
+              var bundles = Math.ceil(Number(d.pcs) / ppb);
+              if (bundles <= 0) return;
+              var info = stackInfo(bundles, bw, bh);
+              if (!info) return;
+              currentUsedW += info.usedWidthCm;
+              var hasDelivery = !!((delivedPcsPerZoneSku[zoneId] || {})[sku]);
+              stockDetails.push({
+                sku: sku, skuName: pm.name || d.name || d.skuName || sku,
+                pcs: d.pcs, bundles: bundles, availBundles: bundles,
+                bw: bw, bh: bh, ppb: ppb,
+                optCols: info.cols, usedWidthCm: info.usedWidthCm,
+                hasDelivery: hasDelivery,
+                efficiency: info.usedWidthCm / bundles
+              });
+            });
+
+            var todayIncoming  = todayByZone[zoneId]  || {};
+            var todayUsedW     = 0;
+            var todayList      = [];
+            Object.keys(todayIncoming).forEach(function(sku) {
+              var d = todayIncoming[sku];
+              if (!d.bw || !d.bh) return;
+              var info = stackInfo(d.bundles, d.bw, d.bh);
+              if (!info) return;
+              todayUsedW += info.usedWidthCm;
+              todayList.push({
+                sku: sku, skuName: d.skuName || sku, bundles: d.bundles,
+                usedWidthCm: info.usedWidthCm, cols: info.cols,
+                machHrs: d.machHrs, itemHrs: d.itemHrs, shifts: d.shifts
+              });
+            });
+
+            var aheadIncoming = aheadByZone[zoneId] || {};
+            var aheadUsedW    = 0;
+            var aheadList     = [];
+            var aheadBreakdown = aheadDays.map(function(day) {
+              var agg = aggregateByZoneSku(dayPlan[day] || []);
+              var rows2 = [];
+              var dayUsedW = 0;
+              Object.keys(agg[zoneId] || {}).forEach(function(sku) {
+                var d = agg[zoneId][sku];
+                var info = (!d.bw || !d.bh) ? null : stackInfo(d.bundles, d.bw, d.bh);
+                var usedW = info ? info.usedWidthCm : 0;
+                dayUsedW += usedW;
+                rows2.push({ sku:sku, skuName:d.skuName||sku, bundles:d.bundles,
+                             machHrs:d.machHrs, usedWidthCm: Math.round(usedW) });
+              });
+              return { date: day, rows: rows2, dayUsedCm: Math.round(dayUsedW) };
+            });
+            Object.keys(aheadIncoming).forEach(function(sku) {
+              var d = aheadIncoming[sku];
+              if (!d.bw || !d.bh) return;
+              var info = stackInfo(d.bundles, d.bw, d.bh);
+              if (!info) return;
+              aheadUsedW += info.usedWidthCm;
+              aheadList.push({ sku:sku, skuName:d.skuName||sku, bundles:d.bundles, usedWidthCm:info.usedWidthCm });
+            });
+
+            var continuousSkus = [];
+            var zDayCount = skuDayCount[zoneId] || {};
+            Object.keys(zDayCount).forEach(function(sku) {
+              if (zDayCount[sku] > 1) {
+                var totalB = 0;
+                allDays.forEach(function(day) {
+                  var agg = aggregateByZoneSku(dayPlan[day] || []);
+                  totalB += ((agg[zoneId] || {})[sku] || {}).bundles || 0;
+                });
+                continuousSkus.push({ sku: sku, skuName: (prodMap[sku]||{}).name||sku,
+                                      daysCount: zDayCount[sku], totalBundles: totalB });
+              }
+            });
+
+            var projectedUsedW = currentUsedW + todayUsedW + aheadUsedW;
+            var freeSpaceCm    = Math.max(0, totalW - projectedUsedW);
+            var currentPct     = totalW > 0 ? Math.min(100, Math.round(currentUsedW   / totalW * 100)) : 0;
+            var todayPct       = totalW > 0 ? Math.min(100, Math.round((currentUsedW + todayUsedW) / totalW * 100)) : 0;
+            var projectedPct   = totalW > 0 ? Math.min(100, Math.round(projectedUsedW / totalW * 100)) : 0;
+            var needCm         = Math.max(0, projectedUsedW - totalW * (THRESHOLD / 100));
+
+            var suggestions = [];
+            if (needCm > 0) {
+              stockDetails.forEach(function(s) {
+                var inc = todayIncoming[s.sku];
+                if (!inc || inc.bundles <= 0) return;
+                var totalB = s.bundles + inc.bundles;
+                var combined = stackInfo(totalB, s.bw, s.bh);
+                if (!combined) return;
+                var separate = (stackInfo(s.bundles,s.bw,s.bh)||{usedWidthCm:0}).usedWidthCm
+                             + (stackInfo(inc.bundles,s.bw,s.bh)||{usedWidthCm:0}).usedWidthCm;
+                var savedCm = Math.max(0, separate - combined.usedWidthCm);
+                suggestions.push({
+                  type: 'ยุบกอง', sku: s.sku, skuName: s.skuName,
+                  currentBundles: s.bundles, incomingBundles: inc.bundles, totalBundles: totalB,
+                  optCols: combined.cols, savedWidthCm: savedCm, hasDelivery: s.hasDelivery,
+                  note: 'จัดกองรวม '+s.bundles+'+'+inc.bundles+' = '+totalB+' มัด → '+combined.cols+' ฐาน'
+                });
+              });
+              var freed = 0;
+              var candidates = stockDetails
+                .filter(function(s){ return s.availBundles > 0 && s.efficiency > 0 && !todayIncoming[s.sku]; })
+                .sort(function(a,b){ return b.efficiency - a.efficiency; });
+              candidates.forEach(function(s) {
+                if (freed >= needCm) return;
+                var maxL      = Math.max(1, Math.floor(420 / s.bh));
+                var remaining = needCm - freed;
+                var colsNeeded = Math.ceil(remaining / s.bw);
+                var bndlsMove  = Math.min(s.availBundles, colsNeeded * maxL);
+                if (bndlsMove <= 0) return;
+                var freedThis = Math.ceil(bndlsMove / maxL) * s.bw;
+                suggestions.push({
+                  type: 'ย้ายสินค้า', sku: s.sku, skuName: s.skuName,
+                  bundlesToMove: bndlsMove, currentBundles: s.bundles,
+                  availBundles: s.availBundles, hasDelivery: s.hasDelivery,
+                  freedCm: freedThis, efficiency: Math.round(s.efficiency * 10) / 10,
+                  note: 'ย้าย '+bndlsMove+' มัด ได้พื้นที่คืน '+(freedThis/100).toFixed(2)+' ม.'
+                });
+                freed += freedThis;
+              });
+            }
+
+            var dayProgression = [];
+            var cumUsed = currentUsedW;
+            dayProgression.push({ label: 'ตอนนี้', date: dateStr,
+              usedCm: Math.round(cumUsed),
+              pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0 });
+            cumUsed += todayUsedW;
+            dayProgression.push({ label: 'วันนี้', date: dateStr,
+              usedCm: Math.round(cumUsed),
+              pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0,
+              addedCm: Math.round(todayUsedW) });
+            aheadBreakdown.forEach(function(bd) {
+              cumUsed += bd.dayUsedCm;
+              dayProgression.push({
+                label: bd.date.substring(5).replace('-','/'),
+                date: bd.date,
+                usedCm: Math.round(cumUsed),
+                pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0,
+                addedCm: bd.dayUsedCm
+              });
+            });
+            var fullOnDate = null;
+            for (var pi = 1; pi < dayProgression.length; pi++) {
+              if (dayProgression[pi].pct >= THRESHOLD) { fullOnDate = dayProgression[pi].date; break; }
+            }
+
+            results.push({
+              zoneId: zoneId, totalWidthCm: totalW,
+              currentUsedCm: Math.round(currentUsedW), currentPct: currentPct, stockDetails: stockDetails,
+              todayUsedCm: Math.round(todayUsedW), todayPct: todayPct, todayList: todayList,
+              aheadUsedCm: Math.round(aheadUsedW), aheadList: aheadList, aheadBreakdown: aheadBreakdown,
+              continuousSkus: continuousSkus,
+              freeSpaceCm: Math.round(freeSpaceCm),
+              projectedUsedCm: Math.round(projectedUsedW), projectedPct: projectedPct,
+              needsAction: projectedPct >= THRESHOLD, neededCm: Math.round(needCm),
+              dayProgression: dayProgression, fullOnDate: fullOnDate,
+              suggestions: suggestions
+            });
+          });
+
+          return { success: true, date: dateStr, aheadDays: aheadDays, zones: results };
+        } catch(e) {
+          return { success: false, message: e.message || String(e) };
+        }
+      };
+
+      // ── calcSmartMoveRecommendations — client-side ────────────────
+      window._calcSmartMoveRecommendations = async function(params) {
+        try {
+          var threshold = params && params.threshold ? Number(params.threshold) : 85;
+
+          var WM_ZONE_CONFIG_DATA = {
+            'P4': [830,830,1330], 'P1': [1650,1600,1300],
+            'C5': [500,2100,300,300], 'P2': [500,1000,1300], 'P3': [700,700,700,250,250]
+          };
+          var RE_ZONE_CONFIG = { 'C4': 1500, 'RE-C5': 900, 'RE4': 1200, 'RE1': 900 };
+
+          // Build zones structure from zone_stock + delivery plan (same logic as GAS getZoneStockSummary)
+          var [zsRes, delivRes] = await Promise.all([
+            window._sbGetZoneStock(),
+            window._sbGetDeliveryPlan(14)
+          ]);
+
+          var rawStock  = (zsRes && zsRes.success) ? (zsRes.data || {}) : {};
+          var bySkuDate = (delivRes && delivRes.success) ? (delivRes.bySkuDate || {}) : {};
+
+          // Build zones with bundles, pcsPerBundle, bw, bh, skuName
+          var WM_ZONE_IDS = ['P1','P2','P3','P4','C5','C4','RE-C5','RE4','RE1'];
+          var zones = {};
+          WM_ZONE_IDS.forEach(function(z){ zones[z] = {}; });
+
+          Object.keys(rawStock).forEach(function(zone) {
+            if (!zones[zone]) zones[zone] = {};
+            Object.keys(rawStock[zone]).forEach(function(sku) {
+              var s = rawStock[zone][sku];
+              zones[zone][sku] = {
+                pcs: Number(s.pcs || 0),
+                pcsPerBundle: Number(s.ppb || s.pcsPerBundle || 1) || 1,
+                bw: Number(s.bw || 0),
+                bh: Number(s.bh || 0),
+                skuName: s.name || s.skuName || sku
+              };
+            });
+          });
+
+          // Deduct delivery plan → compute plannedOutPcs, availableBundles
+          Object.keys(bySkuDate).forEach(function(sku) {
+            var totalPlannedPcs = 0;
+            Object.keys(bySkuDate[sku]).forEach(function(d){ totalPlannedPcs += Number(bySkuDate[sku][d]||0); });
+            if (totalPlannedPcs <= 0) return;
+            var remaining = totalPlannedPcs;
+            WM_ZONE_IDS.forEach(function(z) {
+              if (remaining <= 0 || !zones[z][sku] || zones[z][sku].pcs <= 0) return;
+              var deduct = Math.min(zones[z][sku].pcs, remaining);
+              zones[z][sku].plannedOutPcs = (zones[z][sku].plannedOutPcs || 0) + deduct;
+              remaining -= deduct;
+            });
+          });
+          WM_ZONE_IDS.forEach(function(zone) {
+            Object.keys(zones[zone]).forEach(function(sku) {
+              var s = zones[zone][sku];
+              s.plannedOutPcs    = s.plannedOutPcs || 0;
+              s.availablePcs     = Math.max(0, s.pcs - s.plannedOutPcs);
+              s.bundles          = s.pcsPerBundle > 0 ? Math.ceil(s.pcs / s.pcsPerBundle) : 0;
+              s.availableBundles = s.pcsPerBundle > 0 ? Math.ceil(s.availablePcs / s.pcsPerBundle) : 0;
+            });
+          });
+
+          function calcZoneWidth(zoneId) {
+            var totalW = 0;
+            var cols = WM_ZONE_CONFIG_DATA[zoneId];
+            if (cols) totalW = cols.reduce(function(s,w){return s+w;},0);
+            else if (RE_ZONE_CONFIG[zoneId]) totalW = RE_ZONE_CONFIG[zoneId];
+            if (!totalW) return null;
+            var usedW = 0;
+            Object.keys(zones[zoneId]||{}).forEach(function(sku) {
+              var s = zones[zoneId][sku];
+              if (!s.bw || !s.bh || s.bundles <= 0) return;
+              var maxL = Math.max(1, Math.floor(420/s.bh));
+              var minB = Math.min(3, s.bundles);
+              var c    = Math.max(minB, Math.ceil(s.bundles/maxL));
+              usedW   += c * s.bw;
+            });
+            return { totalW: totalW, usedW: usedW, pct: Math.min(100, Math.round(usedW/totalW*100)) };
+          }
+
+          function findBestDestination(excludeZone) {
+            var best = null, bestFree = 0;
+            Object.keys(RE_ZONE_CONFIG).forEach(function(z) {
+              if (z === excludeZone) return;
+              var w = calcZoneWidth(z);
+              var free = w ? (w.totalW - w.usedW) : RE_ZONE_CONFIG[z];
+              if (free > bestFree) { bestFree = free; best = z; }
+            });
+            return best || 'C4';
+          }
+
+          var recommendations = [];
+          Object.keys(WM_ZONE_CONFIG_DATA).forEach(function(zoneId) {
+            var w = calcZoneWidth(zoneId);
+            if (!w || w.pct < threshold) return;
+            var excessW = w.usedW - w.totalW * threshold / 100;
+            if (excessW <= 0) return;
+
+            var candidates = [];
+            Object.keys(zones[zoneId]||{}).forEach(function(sku) {
+              var s = zones[zoneId][sku];
+              if (!s.bw || !s.bh || s.bundles <= 0) return;
+              var maxL = Math.max(1, Math.floor(420/s.bh));
+              var minB = Math.min(3, s.bundles);
+              var curCols = Math.max(minB, Math.ceil(s.bundles/maxL));
+              var bundlesAtOneLessCol = (curCols-1) > 0 ? (curCols-1)*maxL : 0;
+              var bundlesToDrop1Col   = s.bundles - bundlesAtOneLessCol;
+              if (bundlesToDrop1Col <= 0 || curCols <= 1) return;
+              candidates.push({
+                sku: sku, skuName: s.skuName,
+                bundles: s.bundles, availableBundles: s.availableBundles,
+                bw: s.bw, bh: s.bh, maxLayers: maxL, curCols: curCols,
+                bundlesToDrop1Col: bundlesToDrop1Col,
+                efficiency: s.bw / bundlesToDrop1Col
+              });
+            });
+            candidates.sort(function(a,b){ return b.efficiency - a.efficiency; });
+
+            var movedWidth = 0;
+            candidates.forEach(function(c) {
+              if (movedWidth >= excessW) return;
+              var colsToMove = Math.ceil((excessW - movedWidth) / c.bw);
+              var bundlesToMove = Math.min(colsToMove * c.bundlesToDrop1Col, c.availableBundles);
+              if (bundlesToMove <= 0) return;
+              var actualWidthFreed = Math.floor(bundlesToMove / c.bundlesToDrop1Col) * c.bw;
+              movedWidth += actualWidthFreed;
+              recommendations.push({
+                zone: zoneId, sku: c.sku, skuName: c.skuName,
+                bundlesToMove: bundlesToMove,
+                toZone: findBestDestination(zoneId),
+                widthFreedCm: actualWidthFreed,
+                efficiency: Math.round(c.efficiency*100)/100,
+                currentBundles: c.bundles,
+                availableBundles: c.availableBundles,
+                reason: 'Zone ' + zoneId + ' ใช้งาน ' + w.pct + '% (เกิน ' + threshold + '%)'
+              });
+            });
+          });
+
+          var zoneStatus = {};
+          Object.keys(WM_ZONE_CONFIG_DATA).forEach(function(z){
+            var w = calcZoneWidth(z); if (w) zoneStatus[z] = w;
+          });
+
+          return { success: true, recommendations: recommendations, threshold: threshold, zoneStatus: zoneStatus };
+        } catch(e) {
+          return { success: false, message: e.message || String(e) };
+        }
+      };
+
+      console.log('[Supabase] Client initialized:', SUPA_URL);
+    })();
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════
          GAS Bridge — ใช้เมื่อรันบน GitHub Pages (ไม่ใช่ใน GAS)
          แทนที่ google.script.run ด้วย fetch() → GAS Web App URL
          ═══════════════════════════════════════════════════════════ -->
@@ -7837,13 +8678,10 @@ const _safeStorage = {
       window.wmmRefreshZones = function() {
         const g = safeGet('wmm-zone-grid');
         if (g) g.innerHTML = '<div class="col-span-full py-10 text-center text-slate-400"><i class="fas fa-spinner fa-spin text-xl mb-2 block"></i><span class="text-sm">กำลังโหลด...</span></div>';
-        google.script.run
-          .withSuccessHandler(function(res) {
-            if (res && res.success) _wmmRenderZoneGrid(res.data || {});
-            else showToast('โหลด Zone ไม่สำเร็จ');
-          })
-          .withFailureHandler(function(e){ showToast('Error: '+e.message); })
-          .getZoneStock();
+        window._sbGetZoneStock().then(function(res) {
+          if (res && res.success) _wmmRenderZoneGrid(res.data || {});
+          else showToast('โหลด Zone ไม่สำเร็จ');
+        });
       };
 
       function _wmmRenderZoneGrid(zoneStock) {
@@ -7908,18 +8746,15 @@ const _safeStorage = {
             <i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:12px;color:#3b82f6;"></i>
             <div style="font-size:13px;font-weight:700;">กำลังวิเคราะห์ทุกเครื่อง${dateStr?' วันที่ '+dateStr:''}...</div>
           </div>`;
-        google.script.run
-          .withSuccessHandler(function(res){
-            if (!res || !res.success){
-              if (container) container.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">วิเคราะห์ไม่สำเร็จ: ${(res&&res.message)||'unknown'}</div>`;
-              return;
-            }
-            _wmmRenderAnalysis(res);
-          })
-          .withFailureHandler(function(e){
-            if (container) container.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">Error: ${e.message}</div>`;
-          })
-          .analyzeZoneCapacity({ date: dateStr });
+        window._analyzeZoneCapacity({ date: dateStr }).then(function(res) {
+          if (!res || !res.success) {
+            if (container) container.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">วิเคราะห์ไม่สำเร็จ: ${(res&&res.message)||'unknown'}</div>`;
+            return;
+          }
+          _wmmRenderAnalysis(res);
+        }).catch(function(e) {
+          if (container) container.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;font-weight:700;">Error: ${e.message}</div>`;
+        });
       };
 
       // ── Zone detail popup ────────────────────────────────────────────
@@ -8258,17 +9093,15 @@ const _safeStorage = {
 
       // ── Work Orders ───────────────────────────────────────────────
       window.wmmLoadOrders = function() {
-        google.script.run
-          .withSuccessHandler(function(res){
-            if (!res||!res.success) return;
-            _wmmOrders = res.orders||[];
-            const active = _wmmOrders.filter(o=>o.status!=='เสร็จแล้ว').length;
-            if (_wmmLastActive>0 && active>_wmmLastActive) wmmShowNotification('มีใบงานใหม่ '+(active-_wmmLastActive)+' รายการ');
-            _wmmLastActive = active;
-            const c = safeGet('wmm-orders-count'); if(c) c.textContent = active>0?active+' งานค้าง':'';
-            _wmmRenderOrders();
-          })
-          .getWorkOrders({});
+        window._sbGetWorkOrders({}).then(function(res){
+          if (!res||!res.success) return;
+          _wmmOrders = res.orders||[];
+          const active = _wmmOrders.filter(o=>o.status!=='เสร็จแล้ว').length;
+          if (_wmmLastActive>0 && active>_wmmLastActive) wmmShowNotification('มีใบงานใหม่ '+(active-_wmmLastActive)+' รายการ');
+          _wmmLastActive = active;
+          const c = safeGet('wmm-orders-count'); if(c) c.textContent = active>0?active+' งานค้าง':'';
+          _wmmRenderOrders();
+        });
       };
 
       function _wmmRenderOrders() {
@@ -8317,16 +9150,14 @@ const _safeStorage = {
       };
 
       window.wmmUpdateStatus = function(orderId, newStatus) {
-        google.script.run
-          .withSuccessHandler(function(res){
+        window._sbUpdateWorkOrder({orderId:orderId,status:newStatus,note:newStatus==='เสร็จแล้ว'?'หน้างานยืนยันเสร็จสิ้น':''})
+          .then(function(res){
             if (res.success) {
               showToast(newStatus==='เสร็จแล้ว'?'✅ บันทึกเสร็จสิ้น':'🔄 เริ่มดำเนินการแล้ว');
               wmmLoadOrders();
               if (newStatus==='เสร็จแล้ว') { wmmRefreshZones(); wmmRunAnalysis(); }
             } else showToast('ไม่สำเร็จ: '+res.message);
-          })
-          .withFailureHandler(function(e){ showToast('Error: '+e.message); })
-          .updateWorkOrder({orderId:orderId,status:newStatus,note:newStatus==='เสร็จแล้ว'?'หน้างานยืนยันเสร็จสิ้น':''});
+          });
       };
 
       // ── Modal ─────────────────────────────────────────────────────
@@ -8419,17 +9250,11 @@ const _safeStorage = {
           note:(safeGet('wmm-f-note')||{}).value||'',
           createdBy:'WMS User'
         };
-        google.script.run
-          .withSuccessHandler(function(res){
-            if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-check mr-1"></i>สร้างใบงาน'; }
-            if (res.success){ showToast('✅ สร้างใบงาน '+res.orderId); wmmCloseModal(); wmmLoadOrders(); }
-            else showToast('ไม่สำเร็จ: '+res.message);
-          })
-          .withFailureHandler(function(e){
-            if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-check mr-1"></i>สร้างใบงาน'; }
-            showToast('Error: '+e.message);
-          })
-          .createWorkOrder(data);
+        window._sbCreateWorkOrder(data).then(function(res){
+          if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-check mr-1"></i>สร้างใบงาน'; }
+          if (res.success){ showToast('✅ สร้างใบงาน '+res.orderId); wmmCloseModal(); wmmLoadOrders(); }
+          else showToast('ไม่สำเร็จ: '+res.message);
+        });
       };
 
       // ── Notification & Polling ────────────────────────────────────
@@ -31409,47 +32234,31 @@ window.loadProductionPlan = function() {
     if (loadEl) loadEl.classList.remove('hidden');
     // โหลด Zone Config ก่อน แล้วค่อย load production data
     _wmLoadZoneConfig(() => {
-    try {
-        google.script.run
-            .withSuccessHandler(res => {
-                if (loadEl) loadEl.classList.add('hidden');
-                if (!res || !res.success) { showToast('❌ ' + (res?.message || 'โหลดไม่สำเร็จ'), true); return; }
-                _wmProdData   = res;
-                _wmProdLoaded = true;
-                const lbl = document.getElementById('wm-prod-sheet-label');
-                if (lbl) lbl.textContent = 'ชีต: ' + res.sheetName;
-                // โหลด move log + delivery plan แล้ว render พร้อมกัน
-                _wmLoadMoveLog(() => {
-                    res.moveSummary = _wmMoveSummary;
-                    let _dpDone = false, _zsDone = false;
-                    const _tryRender = () => { if (_dpDone && _zsDone) _wmRenderMachines(res); };
-                    try {
-                        google.script.run
-                            .withSuccessHandler(dp => {
-                                if (dp && dp.success) _wmDeliveryPlan = dp.bySkuDate || {};
-                                _dpDone = true; _tryRender();
-                            })
-                            .withFailureHandler(() => { _dpDone = true; _tryRender(); })
-                            .getDeliveryPlanByDate({ daysAhead: 14 });
-                        google.script.run
-                            .withSuccessHandler(zs => {
-                                if (zs && zs.success) _wmZoneStock = zs.data || {};
-                                _zsDone = true; _tryRender();
-                            })
-                            .withFailureHandler(() => { _zsDone = true; _tryRender(); })
-                            .getZoneStock();
-                    } catch(e) { _dpDone = true; _zsDone = true; _wmRenderMachines(res); }
-                });
-            })
-            .withFailureHandler(err => {
-                if (loadEl) loadEl.classList.add('hidden');
-                showToast('❌ ' + (err?.message || String(err)), true);
-            })
-            .getProductionPlanData({ month, year });
-    } catch (e) {
-        if (loadEl) loadEl.classList.add('hidden');
-        showToast('⚠️ ไม่สามารถเชื่อมต่อ GAS ได้ (Preview mode)', true);
-    }
+        window._sbGetProductionPlan(month, year).then(res => {
+            if (loadEl) loadEl.classList.add('hidden');
+            if (!res || !res.success) { showToast('❌ ' + (res?.message || 'โหลดไม่สำเร็จ'), true); return; }
+            _wmProdData   = res;
+            _wmProdLoaded = true;
+            const lbl = document.getElementById('wm-prod-sheet-label');
+            if (lbl) lbl.textContent = 'ชีต: ' + (res.sheetName || '');
+            // โหลด move log + delivery plan แล้ว render พร้อมกัน
+            _wmLoadMoveLog(() => {
+                res.moveSummary = _wmMoveSummary;
+                let _dpDone = false, _zsDone = false;
+                const _tryRender = () => { if (_dpDone && _zsDone) _wmRenderMachines(res); };
+                window._sbGetDeliveryPlan(14).then(dp => {
+                    if (dp && dp.success) _wmDeliveryPlan = dp.bySkuDate || {};
+                    _dpDone = true; _tryRender();
+                }).catch(() => { _dpDone = true; _tryRender(); });
+                window._sbGetZoneStock().then(zs => {
+                    if (zs && zs.success) _wmZoneStock = zs.data || {};
+                    _zsDone = true; _tryRender();
+                }).catch(() => { _zsDone = true; _tryRender(); });
+            });
+        }).catch(err => {
+            if (loadEl) loadEl.classList.add('hidden');
+            showToast('❌ ' + (err?.message || String(err)), true);
+        });
     }); // end _wmLoadZoneConfig
 };
 
@@ -31783,23 +32592,7 @@ let _wmMoveSummary = {};
 let _wmMoveList    = [];
 
 window.wmSyncZoneStock = function() {
-    const btn = document.getElementById('wm-sync-zone-btn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...'; }
-    google.script.run
-        .withSuccessHandler(res => {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sync Zone Stock'; }
-            if (res && res.success) {
-                showToast('✅ Sync สำเร็จ ' + res.count + ' records — กำลัง reload...', false);
-                setTimeout(() => { _wmProdLoaded = false; wmLoadProduction(); }, 1200);
-            } else {
-                showToast('❌ Sync ไม่สำเร็จ: ' + (res?.message||''), true);
-            }
-        })
-        .withFailureHandler(err => {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sync Zone Stock'; }
-            showToast('❌ Error: ' + err, true);
-        })
-        .syncZoneStockFromInventory({});
+    showToast('ℹ️ Sync รันอัตโนมัติทุก 15 นาที — ข้อมูลจะอัปเดตเองเร็วๆ นี้', false);
 };
 
 // ── Zone Settings Modal ───────────────────────────────────────
@@ -31919,50 +32712,38 @@ window.wmSaveZoneSettings = function() {
         tier3MinBase:parseInt(document.getElementById('wm-st-tier3')?.value)||3,
     };
 
-    google.script.run
-        .withSuccessHandler(res => {
-            if (res && res.success) {
-                // อัพเดต WM_ZONE_CONFIG + WM_STACK_CONFIG ใน memory ทันที
-                Object.assign(WM_ZONE_CONFIG, newConfig);
-                Object.assign(WM_STACK_CONFIG, newStack);
-                document.getElementById('wm-zone-settings-modal').classList.add('hidden');
-                showToast('✅ บันทึกตั้งค่าสำเร็จ — reload ผังคลัง...', false);
-                setTimeout(() => { _wmProdLoaded = false; wmLoadProduction(); }, 1000);
-            } else {
-                showToast('❌ บันทึกไม่สำเร็จ: '+(res?.message||''), true);
-            }
-        })
-        .withFailureHandler(err => { showToast('❌ Error: '+err, true); })
-        .saveZoneConfig({ zones: newConfig, stack: newStack });
+    window._sbSaveZoneConfig({ zones: newConfig, stack: newStack }).then(res => {
+        if (res && res.success) {
+            Object.assign(WM_ZONE_CONFIG, newConfig);
+            Object.assign(WM_STACK_CONFIG, newStack);
+            document.getElementById('wm-zone-settings-modal').classList.add('hidden');
+            showToast('✅ บันทึกตั้งค่าสำเร็จ — reload ผังคลัง...', false);
+            setTimeout(() => { _wmProdLoaded = false; wmLoadProduction(); }, 1000);
+        } else {
+            showToast('❌ บันทึกไม่สำเร็จ: '+(res?.message||''), true);
+        }
+    });
 };
 
-// โหลด Zone Config จาก GAS เมื่อเปิดหน้า WM
+// โหลด Zone Config จาก Supabase เมื่อเปิดหน้า WM
 function _wmLoadZoneConfig(callback) {
-    try {
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res && res.success) {
-                    if (res.config)      Object.assign(WM_ZONE_CONFIG,   res.config);
-                    if (res.stackConfig) Object.assign(WM_STACK_CONFIG,  res.stackConfig);
-                }
-                if (callback) callback();
-            })
-            .withFailureHandler(() => { if (callback) callback(); })
-            .getZoneConfig();
-    } catch(e) { if (callback) callback(); }
+    window._sbGetZoneConfig().then(res => {
+        if (res && res.success) {
+            if (res.config)      Object.assign(WM_ZONE_CONFIG,  res.config);
+            if (res.stackConfig) Object.assign(WM_STACK_CONFIG, res.stackConfig);
+        }
+        if (callback) callback();
+    }).catch(() => { if (callback) callback(); });
 }
 
 function _wmLoadMoveLog(callback) {
-    google.script.run
-        .withSuccessHandler(res => {
-            if (res && res.success) {
-                _wmMoveSummary = res.summary || {};
-                _wmMoveList    = res.moves   || [];
-            }
-            if (callback) callback();
-        })
-        .withFailureHandler(() => { if (callback) callback(); })
-        .getWarehouseMoveLog();
+    window._sbGetMoveLog().then(res => {
+        if (res && res.success) {
+            _wmMoveSummary = res.summary || {};
+            _wmMoveList    = res.moves   || [];
+        }
+        if (callback) callback();
+    });
 }
 
 // ── Move Modal ───────────────────────────────────────────────
@@ -32133,14 +32914,13 @@ window.confirmWmMove = function() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
     btn.disabled  = true;
 
-    google.script.run
-        .withSuccessHandler(res => {
+    window._sbSaveMove({ fromZone, toZone, sku, skuName: prod?.name||'', bundles, pcsPerBundle: ppb, recordedBy: emp, note })
+        .then(res => {
             btn.innerHTML = '<i class="fas fa-exchange-alt mr-2"></i>ยืนยันย้ายสินค้า';
             btn.disabled  = false;
             if (res?.success) {
                 closeWmMoveModal();
                 showToast(`✅ ย้าย ${bundles.toLocaleString('th-TH')} มัด (${(bundles*ppb).toLocaleString('th-TH')} เส้น) จาก ${fromZone} → ${toZone}`);
-                // reload ทั้ง MoveLog และ ZoneStock แล้ว re-render
                 let doneLog = false, doneStock = false;
                 const tryRerender = () => {
                     if (!doneLog || !doneStock) return;
@@ -32151,23 +32931,14 @@ window.confirmWmMove = function() {
                     }
                 };
                 _wmLoadMoveLog(() => { doneLog = true; tryRerender(); });
-                google.script.run
-                    .withSuccessHandler(zRes => {
-                        if (zRes?.success && zRes.data) _wmZoneStock = zRes.data;
-                        doneStock = true; tryRerender();
-                    })
-                    .withFailureHandler(() => { doneStock = true; tryRerender(); })
-                    .getZoneStock();
+                window._sbGetZoneStock().then(zRes => {
+                    if (zRes?.success && zRes.data) _wmZoneStock = zRes.data;
+                    doneStock = true; tryRerender();
+                });
             } else {
                 showErr(res?.message || 'บันทึกไม่สำเร็จ');
             }
-        })
-        .withFailureHandler(err => {
-            btn.innerHTML = '<i class="fas fa-exchange-alt mr-2"></i>ยืนยันย้ายสินค้า';
-            btn.disabled  = false;
-            showErr(err?.message || String(err));
-        })
-        .saveWarehouseMove({ fromZone, toZone, sku, skuName: prod?.name||'', bundles, pcsPerBundle: ppb, recordedBy: emp, note });
+        });
 };
 
 function _wmShowMoveLog() {
@@ -32193,42 +32964,35 @@ window.wmLoadWorkOrders = function(filter) {
     const listEl = document.getElementById('wm-workorder-list');
     if (!listEl) return;
     listEl.innerHTML = '<div class="text-center text-slate-500 text-xs py-4"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...</div>';
-    google.script.run
-        .withSuccessHandler(res => {
-            if (!res?.success) { listEl.innerHTML = `<div class="text-red-400 text-xs text-center py-4">${res?.message||'โหลดไม่สำเร็จ'}</div>`; return; }
-            const orders = res.orders || [];
-            if (!orders.length) { listEl.innerHTML = '<div class="text-slate-600 text-xs text-center py-6">ยังไม่มีใบงาน</div>'; return; }
-            listEl.innerHTML = orders.map(o => {
-                const sc = _woStatusColor[o.status] || 'text-slate-400';
-                return `<div class="bg-slate-800/70 border border-slate-700 rounded-xl px-3 py-2.5 flex items-start gap-3">
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <span class="text-amber-300 font-black text-xs">#${o.orderId}</span>
-                      <span class="bg-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-300">${o.zone}${o.toZone?'→'+o.toZone:''}</span>
-                      <span class="${sc} text-[10px] font-bold">${o.status}</span>
-                    </div>
-                    <div class="text-white text-xs font-bold mt-0.5 truncate">${o.sku} <span class="text-slate-400 font-normal">${o.skuName||''}</span> ${o.bundles?`<span class="text-sky-300">${o.bundles} มัด</span>`:''}</div>
-                    <div class="text-slate-500 text-[10px] mt-0.5">${o.reason||''} ${o.assignedTo?'· '+o.assignedTo:''} ${o.dueDate?'· กำหนด '+o.dueDate:''}</div>
-                  </div>
-                  <div class="flex gap-1 flex-shrink-0 flex-wrap justify-end">
-                    ${o.status!=='เสร็จแล้ว'&&o.status!=='ยกเลิก'?`<button onclick="wmUpdateWO('${o.orderId}','กำลังทำ')" class="bg-sky-700 hover:bg-sky-600 text-white text-[10px] px-2 py-1 rounded font-bold">กำลังทำ</button><button onclick="wmUpdateWO('${o.orderId}','เสร็จแล้ว')" class="bg-green-700 hover:bg-green-600 text-white text-[10px] px-2 py-1 rounded font-bold">เสร็จ</button>`:''}
-                  </div>
-                </div>`;
-            }).join('');
-        })
-        .withFailureHandler(err => {
-            if (listEl) listEl.innerHTML = `<div class="text-red-400 text-xs text-center py-4">${err?.message||String(err)}</div>`;
-        })
-        .getWorkOrders(filter || {});
+    window._sbGetWorkOrders(filter || {}).then(res => {
+        if (!res?.success) { listEl.innerHTML = `<div class="text-red-400 text-xs text-center py-4">${res?.message||'โหลดไม่สำเร็จ'}</div>`; return; }
+        const orders = res.orders || [];
+        if (!orders.length) { listEl.innerHTML = '<div class="text-slate-600 text-xs text-center py-6">ยังไม่มีใบงาน</div>'; return; }
+        listEl.innerHTML = orders.map(o => {
+            const sc = _woStatusColor[o.status] || 'text-slate-400';
+            return `<div class="bg-slate-800/70 border border-slate-700 rounded-xl px-3 py-2.5 flex items-start gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-amber-300 font-black text-xs">#${o.orderId}</span>
+                  <span class="bg-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-300">${o.zone}${o.toZone?'→'+o.toZone:''}</span>
+                  <span class="${sc} text-[10px] font-bold">${o.status}</span>
+                </div>
+                <div class="text-white text-xs font-bold mt-0.5 truncate">${o.sku} <span class="text-slate-400 font-normal">${o.skuName||''}</span> ${o.bundles?`<span class="text-sky-300">${o.bundles} มัด</span>`:''}</div>
+                <div class="text-slate-500 text-[10px] mt-0.5">${o.reason||''} ${o.assignedTo?'· '+o.assignedTo:''} ${o.dueDate?'· กำหนด '+o.dueDate:''}</div>
+              </div>
+              <div class="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                ${o.status!=='เสร็จแล้ว'&&o.status!=='ยกเลิก'?`<button onclick="wmUpdateWO('${o.orderId}','กำลังทำ')" class="bg-sky-700 hover:bg-sky-600 text-white text-[10px] px-2 py-1 rounded font-bold">กำลังทำ</button><button onclick="wmUpdateWO('${o.orderId}','เสร็จแล้ว')" class="bg-green-700 hover:bg-green-600 text-white text-[10px] px-2 py-1 rounded font-bold">เสร็จ</button>`:''}
+              </div>
+            </div>`;
+        }).join('');
+    });
 };
 
 window.wmUpdateWO = function(orderId, status) {
-    google.script.run
-        .withSuccessHandler(res => {
-            if (res?.success) { showToast(status==='เสร็จแล้ว'?'✅ ใบงานเสร็จแล้ว':'🔄 อัปเดตสถานะแล้ว'); wmLoadWorkOrders(); }
-            else showToast('❌ ' + (res?.message||'ไม่สำเร็จ'), true);
-        })
-        .updateWorkOrder({ orderId, status });
+    window._sbUpdateWorkOrder({ orderId, status }).then(res => {
+        if (res?.success) { showToast(status==='เสร็จแล้ว'?'✅ ใบงานเสร็จแล้ว':'🔄 อัปเดตสถานะแล้ว'); wmLoadWorkOrders(); }
+        else showToast('❌ ' + (res?.message||'ไม่สำเร็จ'), true);
+    });
 };
 
 window.wmOpenCreateWorkOrder = function(prefill) {
@@ -32254,16 +33018,14 @@ window.wmSaveWorkOrder = function() {
     if (bundles<=0) return showSt('กรุณาระบุจำนวน', false);
     const prod = _wmFindProd(sku);
     showSt('กำลังบันทึก...', true);
-    google.script.run
-        .withSuccessHandler(res => {
+    window._sbCreateWorkOrder({ zone, sku, skuName: prod?.name||'', bundles, toZone: g('wo-tozone'),
+        reason: g('wo-reason'), dueDate: g('wo-duedate'), assignedTo: g('wo-assignedto'), note: g('wo-note'), createdBy: '' })
+        .then(res => {
             if (res?.success) {
                 showSt('✅ บันทึกสำเร็จ #' + res.orderId, true);
                 setTimeout(() => { document.getElementById('wm-workorder-modal')?.classList.add('hidden'); wmLoadWorkOrders(); }, 1200);
             } else showSt('❌ ' + (res?.message||'ไม่สำเร็จ'), false);
-        })
-        .withFailureHandler(err => showSt('❌ ' + (err?.message||String(err)), false))
-        .createWorkOrder({ zone, sku, skuName: prod?.name||'', bundles, toZone: g('wo-tozone'),
-            reason: g('wo-reason'), dueDate: g('wo-duedate'), assignedTo: g('wo-assignedto'), note: g('wo-note'), createdBy: '' });
+        });
 };
 
 window.wmWoSkuInput = function(val) {
@@ -32289,9 +33051,7 @@ window.wmCheckAlerts = function() {
         banner.innerHTML = '<div class="text-slate-500 text-xs text-center py-3"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังคำนวณ Smart Move...</div>';
         banner.classList.remove('hidden');
     }
-    const now = new Date();
-    google.script.run
-        .withSuccessHandler(res => {
+    window._calcSmartMoveRecommendations({ threshold: 85 }).then(res => {
             if (!banner) return;
             if (!res?.success) {
                 banner.innerHTML = `<div class="text-red-400 text-xs text-center py-2">❌ ${res?.message||'ไม่สำเร็จ'}</div>`;
@@ -32350,14 +33110,8 @@ window.wmCheckAlerts = function() {
                   </div>
                 </div>`;
               }).join('')}`;
-        })
-        .withFailureHandler(err => {
+        }).catch(err => {
             if (banner) banner.innerHTML = `<div class="text-red-400 text-xs text-center py-2">${err?.message||String(err)}</div>`;
-        })
-        .calcSmartMoveRecommendations({
-            threshold: 85,
-            month: now.getMonth()+1,
-            year: now.getFullYear()
         });
 };
 
@@ -32865,8 +33619,7 @@ window.loadOutPlanChart = function() {
     const tableEl = document.getElementById('outplan-table');
     if (kpiEl) kpiEl.innerHTML = '<div class="col-span-4 text-center text-slate-400 text-sm py-4"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดข้อมูล...</div>';
 
-    google.script.run
-        .withSuccessHandler(function(res) {
+    window._sbGetDeliveryPlan(30).then(function(res) {
             if (!res || !res.success) {
                 if (kpiEl) kpiEl.innerHTML = '<div class="col-span-4 text-rose-500 text-sm p-3">โหลดข้อมูลไม่สำเร็จ</div>';
                 return;
@@ -32999,11 +33752,9 @@ window.loadOutPlanChart = function() {
                         </tfoot>
                     </table>`;
             }
-        })
-        .withFailureHandler(function(err) {
+        }).catch(function(err) {
             if (kpiEl) kpiEl.innerHTML = '<div class="col-span-4 text-rose-500 text-sm p-3">Error: '+err+'</div>';
-        })
-        .getDeliveryPlanByDate({ daysAhead: 30 });
+        });
 };
 
 // ══════════════════════════════════════════════════════════════
