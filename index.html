@@ -9004,13 +9004,6 @@ window.refreshCurrentView = function refreshCurrentView() {
 
     if (_isActive('nav-input')) {
         fetchPlanByDate();
-    } else if (_isActive('nav-report')) {
-        if (rawData.length > 0) {
-            renderManagerReport();
-            showToast("Refresh Report สำเร็จ");
-        } else {
-            fetchPlanByDate();
-        }
     } else if (_isActive('nav-printtag')) {
         loadPrintTagData();
     } else if (_isActive('nav-analytics')) {
@@ -9442,10 +9435,7 @@ function determineStatus(finishDate, startDateStr, hasM, hasN) {
             renderInputTable();
             showToast("โหลดแผนการผลิตเรียบร้อย");
             
-            // ✅ เพิ่ม: ถ้าอยู่ในหน้า Report ให้ render report อัตโนมัติด้วย
-            if (document.getElementById('nav-report').classList.contains('active')) {
-                setTimeout(() => renderManagerReport(), 500);
-            }
+
         } else showToast(res.message, true);
     }).getPlanByDate(date);
 }
@@ -9535,244 +9525,6 @@ function renderInputTable() {
             if(!inputValues[rowKey]) inputValues[rowKey] = { planned: 0, other: 0 };
             inputValues[rowKey][key] = parseFloat(val) || 0;
         };
-function renderManagerReport() {
-    const container = document.getElementById('report-container');
-    container.innerHTML = '';
-    
-    // ✅ เพิ่มการตรวจสอบและแสดงข้อความช่วยเหลือ
-    if (rawData.length === 0) {
-        container.innerHTML = `
-            <div class="p-20 text-center">
-                <div class="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <i class="fas fa-clipboard-list text-6xl text-slate-300"></i>
-                </div>
-                <h3 class="text-2xl font-black text-slate-700 mb-3">ยังไม่มีข้อมูลแผนการผลิต</h3>
-                <p class="text-slate-500 font-bold mb-6">กรุณาไปที่หน้า "STORAGE FG" และกดปุ่ม "VIEW PLAN" ก่อน</p>
-                <button onclick="switchView('input')" class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-black hover:from-blue-700 hover:to-indigo-700 shadow-lg transition-all">
-                    <i class="fas fa-arrow-left mr-2"></i>
-                    ไปที่หน้า STORAGE FG
-                </button>
-            </div>`;
-        return;
-    }
-    
-    let totalG = 0, alertCount = 0;
-    const grouped = groupByMachine(rawData);
-
-    Object.keys(grouped).forEach(mach => {
-        const rows = grouped[mach];
-
-        // 🚩 1. ตรวจสอบกะที่มีในแผนของเครื่องนั้นๆ
-        const hasM = rows.some(r => r.shift === 'M');
-        const hasN = rows.some(r => r.shift === 'N');
-
-        // 🚩 2. ดึงค่ารวมจากคอลัมน์ F (ชม./วัน) มาเป็นฐานการคำนวณ
-        const sumF = rows.reduce((acc, r) => acc + r.prodTimeDay, 0);
-
-        // 🚩 3. คำนวณ Capacity (F_norm) ตามเงื่อนไขกะและแผนงาน
-        const F_norm = getNormalizedF(sumF, hasM, hasN);
-
-        let machM = 0;
-        let rowHtml = rows.map(r => {
-            const rowKey = `${mach}_${r.shift}_${r.productId}`;
-            const inputs = inputValues[rowKey] || { planned: 0, other: 0 };
-            const K = (inputs.planned + inputs.other) * (r.linesPerBundle || 1);
-            const L = (r.speed > 0 ? (K / r.speed) / 60 : 0) + (r.pmTime || 0);
-            machM += L;
-            totalG += r.prodTimeItem;
-            
-            const shiftClass = r.shift === 'N' ? 'bg-slate-800 text-amber-400' : 'bg-slate-100 text-slate-500';
-            
-            return `<tr class="border-b border-slate-100 text-sm hover:bg-slate-50 transition-all font-sarabun">
-                <td class="p-4 text-center"><span class="font-black ${shiftClass} px-3 py-1 rounded-lg">${r.shift}</span></td>
-                <td class="p-4"><p class="font-black text-slate-800">${r.productName}</p><span class="text-[10px] font-bold text-slate-400">SKU: ${r.productId}</span></td>
-                <td class="p-4 text-center font-bold text-slate-500 font-mono italic">${r.prodTimeItem.toFixed(2)}</td>
-                <td class="p-4 text-right font-black text-blue-600 font-mono">${K.toLocaleString()}</td>
-                <td class="p-4 text-right font-black text-slate-800 font-mono italic">${L.toFixed(2)}</td>
-            </tr>`;
-        }).join('');
-        
-        const planDateInput = document.getElementById('plan-date').value;
-        const [y, m, d] = planDateInput.split('-');
-        const dateFormatted = `${d}/${m}/${y}`;
-        
-        // 🚩 4. คำนวณเวลาเสร็จสิ้น (Finish Time) - ✅ เพิ่ม hasM, hasN
-        const finish = calculateN(dateFormatted, F_norm, machM, hasM, hasN);
-        
-        // 🚩 5. ตัดสินสถานะสี ตามเกณฑ์เวลา "วันพรุ่งนี้" - ✅ เพิ่ม hasM, hasN
-        let status = determineStatus(finish, dateFormatted, hasM, hasN);
-        
-        // ❌ ลบเงื่อนไข Override นี้ออก - ให้ใช้ determineStatus() อย่างเดียว
-        // if (machM > F_norm) {
-        //     status = { status: 'SPACE OVERFLOW', class: 'status-badge-overflow' };
-        // }
-        
-        if(status.status !== 'SPACE OK') alertCount++;
-        
-        container.innerHTML += `
-            <div class="report-card exportable-machine">
-                <div class="p-8 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 bg-slate-50/50">
-                    <div class="flex items-center gap-6">
-                        <div class="w-20 h-20 bg-white rounded-3xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-300 text-3xl italic font-black">
-                            <i class="fas fa-warehouse text-slate-200"></i>
-                        </div>
-                        <div>
-                            <h4 class="text-5xl font-black italic text-slate-900 tracking-tighter">${mach}</h4>
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1 italic">
-                                ${hasM && hasN ? 'DUAL SHIFT MODE (M/N)' : (hasN ? 'NIGHT SHIFT ONLY' : 'DAY SHIFT ONLY')}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex flex-wrap gap-4 w-full xl:w-auto">
-                        <div class="flex-1 xl:flex-none bg-white p-5 rounded-3xl border border-slate-200 shadow-sm min-w-[140px] text-center flex flex-col justify-center h-[120px]">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Capacity (CALC)</p>
-                            <p class="text-4xl font-black text-slate-800 font-mono leading-none">${F_norm.toFixed(2)}H</p>
-                        </div>
-                        <div class="flex-1 xl:flex-none bg-slate-900 p-5 rounded-3xl shadow-xl min-w-[140px] text-center flex flex-col justify-center h-[120px]">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Total Used</p>
-                            <p class="text-4xl font-black text-amber-400 font-mono leading-none">${machM.toFixed(2)}H</p>
-                        </div>
-                        <div class="flex-1 xl:flex-none px-8 py-5 rounded-[2rem] min-w-[320px] text-center shadow-lg transition-all h-[120px] flex flex-col justify-center border-2 ${status.class}">
-                            <p class="text-[10px] font-black uppercase tracking-widest mb-1 opacity-70 italic">Status & Est. Finish</p>
-                            <div class="flex items-center justify-center gap-3 mb-1">
-                                <i class="fas fa-clock text-lg"></i>
-                                <p class="text-2xl font-black italic tracking-tight">${status.status}</p>
-                            </div>
-                            <div class="bg-white/40 py-2 px-4 rounded-xl border border-white/50 shadow-inner">
-                                <p class="text-2xl font-black font-mono tracking-tighter text-slate-900 leading-none">
-                                    ${finish ? finish.toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit',year:'numeric'}) : '-'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead class="bg-slate-900 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                            <tr>
-                                <th class="p-5 text-center">Shift</th>
-                                <th class="p-5">Product Details</th>
-                                <th class="p-5 text-center">Work HR</th>
-                                <th class="p-5 text-right">Plan Pcs</th>
-                                <th class="p-5 text-right">Cap HR</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rowHtml}</tbody>
-                    </table>
-                </div>
-            </div>`;
-    });
-    
-    document.getElementById('rep-total-item-hrs').innerText = totalG.toFixed(1);
-    document.getElementById('rep-total-products').innerText = rawData.length;
-    document.getElementById('rep-shortage-count').innerText = alertCount;
-}
-        window.exportAllMachinesAsImage = async function exportAllMachinesAsImage() {
-            const machines = document.querySelectorAll('.exportable-machine');
-            if (machines.length === 0) { 
-                showToast("ไม่พบข้อมูลเครื่องจักร กรุณาเรียกดูแผนก่อน", true); 
-                return; 
-            }
-            
-            showToast("กำลังสร้างรายงานระดับผู้บริหาร...");
-            
-            try {
-                const totalProducts = document.getElementById('rep-total-products')?.innerText || "0";
-                const totalAlerts = document.getElementById('rep-shortage-count')?.innerText || "0";
-                
-                let riskiestMachine = "Normal";
-                let maxUsed = -1;
-                machines.forEach(m => {
-                    const statusText = m.querySelector('.italic')?.innerText || "";
-                    const usedHrs = parseFloat(m.querySelector('.text-4xl.font-black.text-amber-400')?.innerText) || 0;
-                    const mName = m.querySelector('h4')?.innerText || "Unknown";
-                    
-                    if (statusText === 'SPACE OVERFLOW' || usedHrs > maxUsed) {
-                        riskiestMachine = mName;
-                        maxUsed = usedHrs;
-                    }
-                });
-                
-                const tempContainer = document.createElement('div');
-                tempContainer.style.padding = '60px'; 
-                tempContainer.style.backgroundColor = '#f1f5f9'; 
-                tempContainer.style.position = 'absolute'; 
-                tempContainer.style.left = '-9999px'; 
-                tempContainer.style.width = '1400px'; 
-                document.body.appendChild(tempContainer);
-                
-                const nowStr = new Date().toLocaleString('th-TH', { 
-                    year: 'numeric', month: 'long', day: 'numeric', 
-                    hour: '2-digit', minute: '2-digit' 
-                });
-                
-                const header = document.createElement('div');
-                header.style.backgroundColor = '#0f172a'; 
-                header.style.padding = '50px'; 
-                header.style.borderRadius = '40px';
-                header.style.marginBottom = '40px'; 
-                header.style.color = 'white'; 
-                header.style.borderLeft = '15px solid #f59e0b'; 
-                header.style.boxShadow = '0 20px 50px rgba(0,0,0,0.2)';
-                
-                header.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 25px; margin-bottom: 30px;">
-                        <div>
-                            <h1 style="font-size: 42px; font-weight: 900; margin: 0; font-family: 'Sarabun', sans-serif;">Warehouse Storage Capacity Analytics</h1>
-                            <p style="font-size: 18px; color: #94a3b8; margin: 5px 0 0 0; font-weight: 600;">Warehouse & Logistic Management System - Analytics Report</p>
-                        </div>
-                        <div style="text-align: right;">
-                            <p style="font-size: 14px; color: #f59e0b; font-weight: 800; margin: 0; text-transform: uppercase;">Report Generated On</p>
-                            <p style="font-size: 18px; font-weight: 700; margin: 0;">${nowStr}</p>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-                        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 20px; text-align: center;">
-                            <p style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 5px;">TOTAL MACHINES</p>
-                            <p style="font-size: 32px; font-weight: 900; margin: 0;">${machines.length}</p>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 20px; text-align: center;">
-                            <p style="font-size: 12px; color: #94a3b8; font-weight: 800; margin-bottom: 5px;">ACTIVE ITEMS</p>
-                            <p style="font-size: 32px; font-weight: 900; margin: 0;">${totalProducts}</p>
-                        </div>
-                        <div style="background: rgba(244, 63, 94, 0.15); padding: 20px; border-radius: 20px; text-align: center; border: 1px solid rgba(244, 63, 94, 0.3);">
-                            <p style="font-size: 12px; color: #fb7185; font-weight: 800; margin-bottom: 5px;">CAPACITY WARNINGS</p>
-                            <p style="font-size: 32px; font-weight: 900; color: #fb7185; margin: 0;">${totalAlerts}</p>
-                        </div>
-                        <div style="background: rgba(245, 158, 11, 0.15); padding: 20px; border-radius: 20px; text-align: center; border: 1px solid rgba(245, 158, 11, 0.3);">
-                            <p style="font-size: 12px; color: #f59e0b; font-weight: 800; margin-bottom: 5px;">HIGHEST RISK BAY</p>
-                            <p style="font-size: 24px; font-weight: 900; color: #f59e0b; margin: 5px 0 0 0;">${riskiestMachine}</p>
-                        </div>
-                    </div>
-                `;
-                tempContainer.appendChild(header);
-
-                machines.forEach(m => { 
-                    const clone = m.cloneNode(true); 
-                    clone.style.boxShadow = "0 10px 30px rgba(0,0,0,0.05)"; 
-                    clone.style.marginBottom = "30px"; 
-                    clone.style.border = "1px solid #e2e8f0";
-                    tempContainer.appendChild(clone); 
-                });
-
-                const canvas = await html2canvas(tempContainer, { 
-                    scale: 2, 
-                    backgroundColor: '#f1f5f9', 
-                    useCORS: true,
-                    logging: false
-                });
-                
-                document.body.removeChild(tempContainer);
-                const link = document.createElement('a'); 
-                link.download = `TST_Warehouse_Report_${new Date().getTime()}.png`;
-                link.href = canvas.toDataURL('image/png'); 
-                link.click();
-                
-                showToast("ส่งออกรายงานสำเร็จ!");
-            } catch (e) { 
-                showToast("Export Error: " + e.message, true); 
-            }
         }
 // ── Tag Start Date: load + save ───────────────────────────────────────────────
 window.loadTagStartDate = function loadTagStartDate() {
@@ -11151,7 +10903,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'report', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -11169,7 +10921,7 @@ window.switchView = function switchView(view) {
     if (titleEl) {
         titleEl.innerText = {
             'wm-manage': 'จัดการคลัง — Zone Capacity & Work Orders',
-            'report': 'Warehouse Capacity Report',
+
             'printtag': 'Print Tag FG System',
             'analytics': 'Warehouse Analytics & Flow',
             'overdue': 'Space Recovery Center',
@@ -11182,18 +10934,6 @@ window.switchView = function switchView(view) {
         }[view] || 'WL Management';
     }
 
-    // ✅ เปิดหน้า Report → refresh ทุกครั้งเพื่อให้ค่าที่กรอกใน Storage FG ส่งมาถูก
-    if (view === 'report') {
-        if (rawData.length === 0) {
-            const planDate = document.getElementById('plan-date').value;
-            if (planDate) {
-                showToast("กำลังโหลดข้อมูลสำหรับ Report...");
-                fetchPlanByDate();
-            }
-        } else {
-            renderManagerReport();
-        }
-    }
 
     // แก้ไข: ถ้าเข้าหน้า Overdue ให้โหลดข้อมูลอัตโนมัติถ้ายังไม่มี
     if (view === 'overdue' && !currentAnalysis) {
@@ -33927,7 +33667,7 @@ window.confirmSaveInvKPI = function() {
 
 <script>
 // AUTH & USER MANAGEMENT SYSTEM
-var WMS_VIEWS=[{id:'input',label:'Storage FG Input'},{id:'report',label:'Warehouse Report'},{id:'printtag',label:'Print Tag FG'},{id:'analytics',label:'Analytics'},{id:'overdue',label:'รายการจองค้าง'},{id:'whactivity',label:'WH Activity Log'},{id:'warehouse-map',label:'ผังคลังสินค้า'},{id:'logistic-plan',label:'วางแผนส่งมอบ'},{id:'truck-dispatch',label:'จัดรถส่งสินค้า'},{id:'kpi-wh',label:'KPI WH & Logistic'},{id:'kpi-stock',label:'KPI Inventory'}];
+var WMS_VIEWS=[{id:'input',label:'Storage FG Input'},{id:'printtag',label:'Print Tag FG'},{id:'analytics',label:'Analytics'},{id:'overdue',label:'รายการจองค้าง'},{id:'whactivity',label:'WH Activity Log'},{id:'warehouse-map',label:'ผังคลังสินค้า'},{id:'logistic-plan',label:'วางแผนส่งมอบ'},{id:'truck-dispatch',label:'จัดรถส่งสินค้า'},{id:'kpi-wh',label:'KPI WH & Logistic'},{id:'kpi-stock',label:'KPI Inventory'}];
 function _hashPw(s){var h=0x811c9dc5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h.toString(16);}
 // ── Users cache (โหลดจาก GAS ตอนเริ่ม, sync ทุกเครื่อง) ──────────────────────
 var _usersCache = null;
