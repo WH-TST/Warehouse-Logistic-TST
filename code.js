@@ -10699,7 +10699,7 @@ function analyzeZoneCapacity(params) {
     }
 
     // =============================================
-    // ขั้น 1+2: ดึงแผนผลิต วันนี้ + 3 วันล่วงหน้า
+    // ขั้น 1+2: ดึงแผนผลิต วันนี้ + 3 วันล่วงหน้า (จาก Production Block)
     // =============================================
     var extMap = getExternalProductMap();
     var holidays = getHolidays(); // string array
@@ -10707,36 +10707,49 @@ function analyzeZoneCapacity(params) {
     var aheadDays = nextWorkDays(dateStr, 3, holidays);
     var allDays   = [dateStr].concat(aheadDays); // [today, d+1, d+2, d+3]
 
+    // ดึง Production Block สำหรับทุกเดือนที่เกี่ยวข้อง
+    var prodBlockCache = {}; // "yyyy-M" → machines array
+    function getProdBlockForMonth(y, m) {
+      var key = y + '-' + m;
+      if (!prodBlockCache[key]) {
+        var res = getProductionPlanData({ month: m, year: y });
+        prodBlockCache[key] = (res.success && res.machines) ? res.machines : [];
+      }
+      return prodBlockCache[key];
+    }
+
+    // สร้าง dayPlan จาก Production Block
     // dayPlan[dateStr] = array of enriched row objects per zone
     var dayPlan = {};
     allDays.forEach(function(day) {
-      var res = getPlanByDate(day);
-      var rows = (res.success && res.rows) ? res.rows : [];
+      var dt = parseYMD(day);
+      var machines = getProdBlockForMonth(dt.getFullYear(), dt.getMonth() + 1);
       var enriched = [];
-      rows.forEach(function(row) {
-        var machId = String(row.machine || '').toUpperCase().replace(/\s/g, '');
+      machines.forEach(function(mach) {
+        var machId = String(mach.machineId || '').toUpperCase().replace(/\s/g,'');
         var zoneId = MACHINE_ZONE[machId] || machId;
         if (!ZONE_WIDTHS[zoneId]) return;
-        var sku  = String(row.productId || '');
-        if (!sku) return;
-        var ext  = extMap[sku] || {};
-        var ppb  = Number(row.linesPerBundle || ext.pcsPerBundle || 1) || 1;
-        var bw   = Number(ext.bundleWidth  || 0);
-        var bh   = Number(ext.bundleHeight || 0);
-        var bndls = row.plannedQtyBundles || Math.ceil((row.plannedQtyLines || 0) / ppb);
-        if (bndls <= 0) return;
-        // เวลาเครื่องวิ่งวันนี้: prodTimeDay (normalized F) เป็นชม.
-        var machHrs = Number(row.prodTimeDay || 0);
-        // เวลาที่ใช้ผลิต SKU นี้ใน shift นั้น
-        var itemHrs = Number(row.prodTimeItem || 0);
-        enriched.push({
-          zoneId: zoneId, machineId: machId,
-          sku: sku, skuName: row.productName || ext.name || sku,
-          shift: row.shift || '-',
-          plannedBundles: bndls,
-          linesQty: row.plannedQtyLines || 0,
-          machHrs: machHrs, itemHrs: itemHrs,
-          bw: bw, bh: bh, ppb: ppb
+        var machHrs = Number((mach.pdTime || {})[day] || 0);
+        (mach.products || []).forEach(function(p) {
+          var qty = Number((p.daily || {})[day] || 0);
+          if (qty <= 0) return;
+          var sku = String(p.sku || '');
+          if (!sku) return;
+          var ext = extMap[sku] || {};
+          var ppb = Number(p.pcsPerBundle || ext.pcsPerBundle || 1) || 1;
+          var bw  = Number(p.bundleWidth  || ext.bundleWidth  || 0);
+          var bh  = Number(p.bundleHeight || ext.bundleHeight || 0);
+          var bndls = Math.ceil(qty / ppb);
+          if (bndls <= 0) return;
+          enriched.push({
+            zoneId: zoneId, machineId: machId,
+            sku: sku, skuName: p.name || ext.name || sku,
+            shift: '-',
+            plannedBundles: bndls,
+            linesQty: qty,
+            machHrs: machHrs, itemHrs: 0,
+            bw: bw, bh: bh, ppb: ppb
+          });
         });
       });
       dayPlan[day] = enriched;
