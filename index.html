@@ -8149,6 +8149,10 @@ const _safeStorage = {
         let machineHtml = '', reserveHtml = '', totalWork = 0;
 
         zones.forEach(function(z) {
+          // fallback: คำนวณ freeSpaceCm เองถ้า GAS ไม่ส่งมาหรือเป็น NaN
+          if (z.freeSpaceCm == null || isNaN(z.freeSpaceCm)) {
+            z.freeSpaceCm = Math.max(0, (z.totalWidthCm || 0) - (z.currentUsedCm || 0));
+          }
           const isMachine = MACHINE_ZONES.has(z.zoneId);
           const statusC   = stColor(z.projectedPct);
           const machHrsMax = (z.todayList||[]).reduce(function(m,r){ return Math.max(m, r.machHrs||0); }, 0);
