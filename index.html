@@ -5783,6 +5783,181 @@ thead.sticky {
 <!-- ============================================================ -->
 <div id="view-kpi-stock-content" class="hidden space-y-6">
 
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- IMPORT DATA SECTION                                           -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div class="rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+    <!-- Header -->
+    <div class="flex items-center gap-4 px-6 py-4" style="background:linear-gradient(135deg,#0f172a,#1e3a5f);">
+      <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white text-2xl flex-shrink-0" style="background:#2563eb;">
+        <i class="fas fa-file-import"></i>
+      </div>
+      <div class="flex-1">
+        <h2 class="text-xl font-black text-white tracking-tight">Import ข้อมูลสต็อก</h2>
+        <p class="text-blue-300 text-xs font-bold mt-0.5">นำเข้าจากไฟล์ Excel/CSV หรือดึงจาก D365 API</p>
+      </div>
+    </div>
+    <!-- Import Cards -->
+    <div class="bg-white p-5 space-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="inv-import-cards-grid">
+        <!-- ON-HAND FG -->
+        <div id="inv-import-card-onhand_fg" onclick="invSelectImport('onhand_fg')"
+          class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-all">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 text-base flex-shrink-0">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <div>
+              <p class="font-black text-slate-800 text-sm">ON-HAND FG</p>
+              <p class="text-xs text-slate-500 font-bold">Supabase</p>
+            </div>
+            <span class="ml-auto text-xs font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg">FG</span>
+          </div>
+          <p class="text-xs text-slate-500">สต็อก FG • จอง + คงเหลือ</p>
+          <p class="text-xs mt-1" id="inv-import-lastdate-onhand_fg"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
+        </div>
+        <!-- ON-HAND SEMI -->
+        <div id="inv-import-card-onhand_semi" onclick="invSelectImport('onhand_semi')"
+          class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-purple-300 hover:bg-purple-50 transition-all">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 text-base flex-shrink-0">
+              <i class="fas fa-film"></i>
+            </div>
+            <div>
+              <p class="font-black text-slate-800 text-sm">ON-HAND SEMI</p>
+              <p class="text-xs text-slate-500 font-bold">Supabase</p>
+            </div>
+            <span class="ml-auto text-xs font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-lg">SEMI</span>
+          </div>
+          <p class="text-xs text-slate-500">สต็อก SEMI • Batch + Serial</p>
+          <p class="text-xs mt-1" id="inv-import-lastdate-onhand_semi"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
+        </div>
+        <!-- COUNTING -->
+        <div id="inv-import-card-counting" onclick="invSelectImport('counting')"
+          class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-teal-300 hover:bg-teal-50 transition-all">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 bg-teal-100 rounded-xl flex items-center justify-center text-teal-600 text-base flex-shrink-0">
+              <i class="fas fa-database"></i>
+            </div>
+            <div><p class="font-black text-slate-800 text-sm">COUNTING</p><p class="text-xs text-slate-500 font-bold">GAS Sheet</p></div>
+          </div>
+          <p class="text-xs text-slate-500">ยอดสต็อกจาก D365 • เทียบสต็อก</p>
+          <p class="text-xs mt-1" id="inv-import-lastdate-counting"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
+        </div>
+        <!-- TRANSACTION FG -->
+        <div id="inv-import-card-transection_fg" onclick="invSelectImport('transection_fg')"
+          class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 text-base flex-shrink-0">
+              <i class="fas fa-exchange-alt"></i>
+            </div>
+            <div><p class="font-black text-slate-800 text-sm">TRANSACTION FG</p><p class="text-xs text-slate-500 font-bold">GAS Sheet</p></div>
+          </div>
+          <p class="text-xs text-slate-500">การเคลื่อนไหว FG • ใบตรวจนับ</p>
+          <p class="text-xs mt-1" id="inv-import-lastdate-transection_fg"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
+        </div>
+        <!-- TRANSACTION SEMI -->
+        <div id="inv-import-card-transection_semi" onclick="invSelectImport('transection_semi')"
+          class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-rose-300 hover:bg-rose-50 transition-all">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600 text-base flex-shrink-0">
+              <i class="fas fa-retweet"></i>
+            </div>
+            <div><p class="font-black text-slate-800 text-sm">TRANSACTION SEMI</p><p class="text-xs text-slate-500 font-bold">GAS Sheet</p></div>
+          </div>
+          <p class="text-xs text-slate-500">การเคลื่อนไหว SEMI</p>
+          <p class="text-xs mt-1" id="inv-import-lastdate-transection_semi"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
+        </div>
+        <!-- INV BLOCKING -->
+        <div id="inv-import-card-inventory_blocking" onclick="invSelectImport('inventory_blocking')"
+          class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-red-300 hover:bg-red-50 transition-all">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center text-red-600 text-base flex-shrink-0">
+              <i class="fas fa-ban"></i>
+            </div>
+            <div><p class="font-black text-slate-800 text-sm">INV BLOCKING</p><p class="text-xs text-slate-500 font-bold">GAS Sheet</p></div>
+          </div>
+          <p class="text-xs text-slate-500">Inventory Blocking จาก D365</p>
+          <p class="text-xs mt-1" id="inv-import-lastdate-inventory_blocking"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
+        </div>
+      </div>
+
+      <!-- Upload Panel (hidden until card selected) -->
+      <div id="inv-upload-panel" class="hidden border-2 border-dashed border-slate-300 rounded-2xl p-5 bg-slate-50 space-y-4">
+        <!-- Title row -->
+        <div class="flex items-center gap-3">
+          <div id="inv-upload-icon" class="w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg bg-blue-600">
+            <i class="fas fa-boxes"></i>
+          </div>
+          <div class="flex-1">
+            <p id="inv-upload-title" class="font-black text-slate-800 text-base">ON-HAND FG</p>
+            <p id="inv-upload-desc" class="text-xs text-slate-500">สต็อก FG • จอง + คงเหลือ</p>
+          </div>
+          <button onclick="invCancelImport()" class="text-slate-400 hover:text-slate-600 transition-all">
+            <i class="fas fa-times text-lg"></i>
+          </button>
+        </div>
+
+        <!-- D365 Button (แสดงเฉพาะ onhand_fg, onhand_semi) -->
+        <div id="inv-d365-btn-wrap">
+          <button onclick="invFetchFromD365(invCurrentImportType)"
+            class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-xl text-sm transition-all shadow">
+            <i class="fas fa-cloud-download-alt"></i>
+            ดึงข้อมูลจาก D365 (API)
+            <span class="text-xs bg-indigo-800 px-2 py-0.5 rounded-lg ml-1">รอ API</span>
+          </button>
+          <p class="text-center text-xs text-slate-400 mt-1">— หรือ —</p>
+        </div>
+
+        <!-- File Drop Zone -->
+        <div ondrop="invImportHandleDrop(event)" ondragover="event.preventDefault()"
+          class="border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 p-6 text-center cursor-pointer hover:bg-blue-100 transition-all"
+          onclick="document.getElementById('inv-file-input').click()">
+          <i class="fas fa-file-excel text-3xl text-blue-400 mb-2 block"></i>
+          <p id="inv-file-label" class="font-black text-slate-600 text-sm">คลิกหรือลากไฟล์ Excel มาวาง</p>
+          <p class="text-xs text-slate-400 mt-1">.xlsx, .xls, .csv</p>
+          <input type="file" id="inv-file-input" accept=".xlsx,.xls,.csv" class="hidden"
+            onchange="invImportHandleFile(this)">
+        </div>
+
+        <!-- Preview -->
+        <div id="inv-import-preview" class="hidden bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div>
+              <p id="inv-preview-text" class="font-black text-slate-700 text-sm"></p>
+              <p id="inv-preview-sub" class="text-xs text-slate-400"></p>
+            </div>
+            <button onclick="invClearImportFile()" class="text-xs text-red-500 hover:text-red-700 font-bold">ล้าง</button>
+          </div>
+          <div class="overflow-x-auto max-h-48">
+            <table id="inv-preview-table" class="text-xs w-full border-collapse"></table>
+          </div>
+          <div class="px-4 py-3 bg-white flex gap-2">
+            <button onclick="invConfirmImport()"
+              class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-black py-2.5 rounded-xl text-sm transition-all">
+              <i class="fas fa-upload mr-1"></i> ยืนยันนำเข้า
+            </button>
+            <button onclick="invCancelImport()"
+              class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all">
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Import Log -->
+      <div>
+        <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">ประวัติการนำเข้า</p>
+        <div id="inv-import-log" class="text-center text-slate-300 py-6">
+          <i class="fas fa-database text-3xl mb-2 block opacity-20"></i>
+          <p class="text-xs font-bold">ยังไม่มีประวัติการนำเข้า</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="border-slate-200">
+
   <!-- Header -->
   <div class="rounded-2xl p-5 shadow-sm" style="background:#f4f6f9;border:1px solid #bec8d8;border-left:4px solid #2563eb;">
     <div class="flex items-center gap-5">
@@ -12611,6 +12786,9 @@ let blockingChartInstance = null;
         if (titleEl) titleEl.textContent = cfg.label;
         if (descEl)  descEl.textContent  = cfg.desc;
         if (sheetEl) sheetEl.textContent = cfg.sheet;
+        // Show/hide D365 button (only for onhand_fg and onhand_semi)
+        const d365Wrap = document.getElementById('inv-d365-btn-wrap');
+        if (d365Wrap) d365Wrap.style.display = (type === 'onhand_fg' || type === 'onhand_semi') ? '' : 'none';
         // Reset file state
         invImportBuffer = null;
         const preview = document.getElementById('inv-import-preview');
@@ -12692,51 +12870,115 @@ let blockingChartInstance = null;
         if (fileInput) fileInput.value = '';
     };
 
+    // ── Supabase import สำหรับ onhand_fg / onhand_semi ──────────────────────────
+    async function _invImportOnhandToSupabase(rows, tableType) {
+        const tableName = tableType === 'onhand_fg' ? 'onhand_fg' : 'onhand_semi';
+        const header = rows[0].map(h => String(h||'').trim().toLowerCase()
+            .replace(/ /g,'_').replace(/[^a-z0-9_]/g,''));
+        // map D365 column names → Supabase column names
+        const colMap = {
+            'item_number':'item_number', 'item_numbe':'item_number',
+            'product_name':'product_name',
+            'cw_ordered':'cw_ordered', 'cw_order':'cw_ordered',
+            'cw_physical_inventory':'cw_physical_inventory', 'cw_physical_inve':'cw_physical_inventory',
+            'cw_on_order':'cw_on_order',
+            'cw_physical_reserved':'cw_physical_reserved',
+            'cw_available_physical':'cw_available_physical',
+            'cw_total_available':'cw_total_available',
+            'ordered':'ordered',
+            'physical_inventory':'physical_inventory',
+            'on_order':'on_order',
+            'physical_reserved':'physical_reserved',
+            'warehouse':'warehouse',
+            'available_physical':'available_physical',
+            'total_available':'total_available'
+        };
+        const batch = [];
+        const now = new Date().toISOString();
+        rows.slice(1).forEach(function(row) {
+            if (!row || !row[0]) return;
+            const rec = { updated_at: now, imported_at: now };
+            header.forEach(function(h, i) {
+                const col = colMap[h];
+                if (!col) return;
+                let v = row[i];
+                if (v instanceof Date) { const p = n => String(n).padStart(2,'0'); v = v.getFullYear()+'-'+p(v.getMonth()+1)+'-'+p(v.getDate()); }
+                if (v === null || v === undefined || v === '') v = col === 'item_number' || col === 'product_name' || col === 'warehouse' ? '' : 0;
+                rec[col] = v;
+            });
+            if (!rec.item_number || !rec.warehouse) return;
+            batch.push(rec);
+        });
+        if (!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
+        // DELETE all + INSERT (replace strategy)
+        await window._sb.from(tableName).delete().gte('imported_at', '2000-01-01');
+        const CHUNK = 500;
+        for (let i = 0; i < batch.length; i += CHUNK) {
+            const { error } = await window._sb.from(tableName).insert(batch.slice(i, i + CHUNK));
+            if (error) throw error;
+        }
+        return batch.length;
+    }
+
     window.invConfirmImport = function() {
         if (!invImportBuffer || !invCurrentImportType) return showToast('กรุณาเลือกประเภทและไฟล์ก่อน', true);
         const cfg = INV_IMPORT_CONFIG[invCurrentImportType];
         if (!cfg) return;
         const rows = invImportBuffer;
-        // Sanitize for GAS
-        const cleanRows = rows.map(row => row.map(cell => {
-            if (cell instanceof Date) {
-                const d = cell;
-                const p = n => String(n).padStart(2,'0');
-                return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
-            }
-            if (cell === null || cell === undefined) return '';
-            if (typeof cell === 'number' && !isFinite(cell)) return 0;
-            return cell;
-        }));
+
         showConfirmModal(
             'ยืนยันนำเข้าข้อมูล',
-            'นำเข้า <strong class="text-white">' + (rows.length-1) + ' แถว</strong> → ชีต <strong class="text-white">' + cfg.sheet + '</strong>?',
+            'นำเข้า <strong class="text-white">' + (rows.length-1) + ' แถว</strong> → <strong class="text-white">' + cfg.label + '</strong>?',
             function() {
                 showToast('กำลังนำเข้าข้อมูล...');
+
+                // ── onhand_fg / onhand_semi → Supabase โดยตรง ──
+                if (invCurrentImportType === 'onhand_fg' || invCurrentImportType === 'onhand_semi') {
+                    _invImportOnhandToSupabase(rows, invCurrentImportType).then(function(count) {
+                        showToast('✅ นำเข้า ' + count + ' รายการ → Supabase สำเร็จ');
+                        invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: 'Supabase:' + (invCurrentImportType === 'onhand_fg' ? 'onhand_fg' : 'onhand_semi'), message: 'นำเข้า ' + count + ' รายการสำเร็จ' });
+                        invRenderImportLog();
+                        _invSaveImportDate(invCurrentImportType);
+                        window._cacheClear('onhand_' + invCurrentImportType);
+                        invClearImportFile();
+                    }).catch(function(err) { showToast('❌ ' + err.message, true); });
+                    return;
+                }
+
+                // ── ประเภทอื่น → GAS ──
+                const cleanRows = rows.map(row => row.map(cell => {
+                    if (cell instanceof Date) { const p = n => String(n).padStart(2,'0'); return cell.getFullYear()+'-'+p(cell.getMonth()+1)+'-'+p(cell.getDate()); }
+                    if (cell === null || cell === undefined) return '';
+                    if (typeof cell === 'number' && !isFinite(cell)) return 0;
+                    return cell;
+                }));
                 google.script.run
                     .withSuccessHandler(function(res) {
                         if (res.success) {
                             showToast('✅ ' + res.message);
-                            // Add log entry
                             invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: cfg.sheet, message: res.message });
                             invRenderImportLog();
-                            // บันทึกวันที่ import ลง localStorage + อัปเดต badge
                             _invSaveImportDate(invCurrentImportType);
                             invClearImportFile();
-                            // Auto detect วันที่ตรวจนับสำหรับ Morning Setup Panel
                             if (invCurrentImportType === 'transection_fg' || invCurrentImportType === 'transection_semi') {
                                 const _cycleMode = invCurrentImportType === 'transection_fg' ? 'fg' : 'semi';
                                 _invMorningDetectDate(_cycleMode);
                             }
-                        } else {
-                            showToast('❌ ' + res.message, true);
-                        }
+                        } else { showToast('❌ ' + res.message, true); }
                     })
                     .withFailureHandler(function(err) { showToast('Error: ' + err.message, true); })
                     .importInventoryData(cleanRows, invCurrentImportType);
             },
             { type: 'info', okText: 'นำเข้า' }
         );
+    };
+
+    // ── D365 API placeholder (รอ API จริงจากบริษัท) ─────────────────────────────
+    window.invFetchFromD365 = function(type) {
+        showToast('กำลังเชื่อมต่อ D365...', false);
+        setTimeout(function() {
+            showToast('⚠️ D365 API ยังไม่พร้อม — กรุณารอการเชื่อมต่อจากทีม IT', true);
+        }, 1000);
     };
 
     function invRenderImportLog() {
