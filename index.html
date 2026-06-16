@@ -5781,8 +5781,22 @@ thead.sticky {
 <!-- ============================================================ -->
 <!-- KPI สต็อก — Inventory Accuracy Calculator                   -->
 <!-- ============================================================ -->
-<div id="view-kpi-stock-content" class="hidden space-y-6">
+<div id="view-kpi-stock-content" class="hidden space-y-4">
 
+  <!-- Sub-tab bar -->
+  <div class="flex gap-2 p-1 bg-slate-100 rounded-2xl">
+    <button id="inv-subtab-btn-import" onclick="invSwitchSubTab('import')"
+      class="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-black text-sm transition-all bg-white shadow text-blue-700">
+      <i class="fas fa-file-import"></i> Import ข้อมูล
+    </button>
+    <button id="inv-subtab-btn-kpiaccuracy" onclick="invSwitchSubTab('kpiaccuracy')"
+      class="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-black text-sm transition-all text-slate-500 hover:text-slate-700">
+      <i class="fas fa-calculator"></i> KPI Accuracy
+    </button>
+  </div>
+
+  <!-- SUB-TAB: IMPORT -->
+  <div id="inv-sub-import" class="space-y-4">
   <!-- ══════════════════════════════════════════════════════════════ -->
   <!-- IMPORT DATA SECTION                                           -->
   <!-- ══════════════════════════════════════════════════════════════ -->
@@ -5956,8 +5970,10 @@ thead.sticky {
     </div>
   </div>
 
-  <hr class="border-slate-200">
+  </div><!-- end inv-sub-import -->
 
+  <!-- SUB-TAB: KPI ACCURACY -->
+  <div id="inv-sub-kpiaccuracy" class="space-y-4 hidden">
   <!-- Header -->
   <div class="rounded-2xl p-5 shadow-sm" style="background:#f4f6f9;border:1px solid #bec8d8;border-left:4px solid #2563eb;">
     <div class="flex items-center gap-5">
@@ -6644,6 +6660,7 @@ thead.sticky {
 
   </div><!-- end 2-column grid SEMI -->
   </div><!-- end kpi-semi-panel -->
+  </div><!-- end inv-sub-kpiaccuracy -->
 
 </div><!-- end view-kpi-stock-content -->
 
@@ -12746,6 +12763,23 @@ let blockingChartInstance = null;
         inventory_blocking: { label: 'INV BLOCKING',     sheet: 'Overdue Reservations', color: 'red',    icon: 'fa-ban',          desc: 'รายการ Inventory Blocking จาก D365' }
     };
     var invCurrentImportType = null;
+
+    window.invSwitchSubTab = function(tab) {
+        ['import','kpiaccuracy'].forEach(function(t) {
+            const panel = document.getElementById('inv-sub-' + t);
+            const btn = document.getElementById('inv-subtab-btn-' + t);
+            if (!panel || !btn) return;
+            if (t === tab) {
+                panel.classList.remove('hidden');
+                btn.classList.add('bg-white','shadow','text-blue-700');
+                btn.classList.remove('text-slate-500','hover:text-slate-700');
+            } else {
+                panel.classList.add('hidden');
+                btn.classList.remove('bg-white','shadow','text-blue-700');
+                btn.classList.add('text-slate-500','hover:text-slate-700');
+            }
+        });
+    };
     var invImportBuffer = null;
     var invImportLogs = [];
     var invCompareCurrentMode = 'fg';
