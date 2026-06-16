@@ -9013,38 +9013,67 @@ function syncZoneStockFromInventory(params) {
     var month = params && params.month ? Number(params.month) : (new Date().getMonth()+1);
     var year  = params && params.year  ? Number(params.year)  : new Date().getFullYear();
 
+    var MZONE = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
+
+    // ── Step 1: Production Block → skuMachines + skuMeta ──
     var planData = getProductionPlanData({ month: month, year: year });
     if (!planData.success) return { success: false, message: planData.message };
-
     var inventory = planData.inventory || {};
     var machines  = planData.machines  || [];
 
-    // ── Step 1: หาเครื่องที่ผลิต SKU ล่าสุด + มิติกล่อง ──
-    var today = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
-    var lastZone = {}, lastDate = {}, skuMeta = {};
+    var skuMachines = {}; // { sku: [machineId, ...] }
+    var skuMeta = {};
     machines.forEach(function(m) {
+      var mid = String(m.machineId||'').toUpperCase().replace(/\s/g,'');
       (m.products||[]).forEach(function(p) {
         if (!p.sku) return;
-        // กรองเฉพาะวันที่ผ่านมาแล้ว (≤ วันนี้) ไม่นับแผนอนาคต
-        var dates = Object.keys(p.daily||{}).filter(function(d){ return (p.daily[d]||0)>0 && d<=today; }).sort();
-        var ld = dates.length ? dates[dates.length-1] : '0000-00-00';
-        if (!lastDate[p.sku] || ld > lastDate[p.sku]) {
-          lastDate[p.sku] = ld;
-          lastZone[p.sku] = m.machineId;
-        }
-        // เก็บ meta ถ้ายังไม่มี หรือ bw/bh ดีกว่า
+        if (!skuMachines[p.sku]) skuMachines[p.sku] = [];
+        if (skuMachines[p.sku].indexOf(mid) < 0) skuMachines[p.sku].push(mid);
         if (!skuMeta[p.sku] || (!skuMeta[p.sku].bw && p.bundleWidth)) {
           skuMeta[p.sku] = { ppb: p.pcsPerBundle||1, bw: p.bundleWidth||0, bh: p.bundleHeight||0, name: p.name||'' };
         }
       });
     });
 
-    // ── Step 2: สร้าง zoneStock map (in-memory) จาก Inventory FG ──
-    // { zoneId: { sku: { pcs, ppb, bw, bh, name } } }
+    // ── Step 2: ถ้า SKU มีหลายเครื่อง → ดู Sheet Plan หาวันผลิตล่าสุด ──
+    var lastMachFromPlan = {}; // { sku: machineId }
+    var planSheet = ss.getSheetByName(PLAN_SHEET_NAME);
+    if (planSheet && planSheet.getLastRow() >= 2) {
+      var today8 = Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd');
+      var planRows = planSheet.getRange(2, 1, planSheet.getLastRow()-1, 5).getValues();
+      // col0=date(yyyyMMdd), col1=machine, col4=sku
+      planRows.forEach(function(r) {
+        var d   = String(r[0]||'').trim().replace(/-/g,'');
+        if (!d || d > today8) return;
+        var mid = String(r[1]||'').trim().toUpperCase().replace(/\s/g,'');
+        var sku = String(r[4]||'').trim();
+        if (!sku || !mid) return;
+        if (!lastMachFromPlan[sku] || d > lastMachFromPlan[sku].date) {
+          lastMachFromPlan[sku] = { date: d, machineId: mid };
+        }
+      });
+    }
+
+    // ── Step 3: กำหนด homeZone ต่อ SKU ──
+    // กฎ: 1 เครื่อง → ใช้ Production Block ตรงๆ
+    //      หลายเครื่อง → ดูจาก Sheet Plan ล่าสุด (ถ้า machine นั้นอยู่ใน skuMachines)
+    var homeZone = {};
+    Object.keys(skuMachines).forEach(function(sku) {
+      var mList = skuMachines[sku];
+      if (mList.length === 1) {
+        homeZone[sku] = MZONE[mList[0]] || mList[0];
+      } else {
+        var planMach = (lastMachFromPlan[sku]||{}).machineId || '';
+        var chosen   = (planMach && mList.indexOf(planMach) >= 0) ? planMach : mList[0];
+        homeZone[sku] = MZONE[chosen] || chosen;
+      }
+    });
+
+    // ── Step 4: สร้าง zoneStock map (in-memory) จาก Inventory FG → homeZone ──
     var zoneStock = {};
     Object.keys(inventory).forEach(function(sku) {
-      var zone = lastZone[sku];
-      if (!zone) return;
+      var zone = homeZone[sku];
+      if (!zone) return; // ไม่รู้โซน (ไม่อยู่ใน Production Block) → ข้าม
       var pcs = Math.max(0, Number((inventory[sku]||{}).pcs||0));
       if (pcs <= 0) return;
       var m = skuMeta[sku] || { ppb:1, bw:0, bh:0, name:'' };
@@ -9052,12 +9081,10 @@ function syncZoneStockFromInventory(params) {
       zoneStock[zone][sku] = { pcs: pcs, ppb: m.ppb, bw: m.bw, bh: m.bh, name: m.name };
     });
 
-    // ── Step 3: Replay Move Log ทั้งหมด (เก่า→ใหม่) ──
-    // ดึง bw/bh จาก skuMeta ถ้า Move Log ไม่มีข้อมูลมิติ (รายการเก่า)
+    // ── Step 5: Replay Move Log ทั้งหมด (เก่า→ใหม่) ──
     var moveSheet = _getOrCreateMoveSheet(ss);
     if (moveSheet.getLastRow() >= 2) {
       var moveRows = moveSheet.getRange(2,1,moveSheet.getLastRow()-1,12).getValues();
-      // เรียงจากเก่าสุด→ใหม่สุด (rows จาก sheet มาตามลำดับ)
       moveRows.forEach(function(r) {
         var fromZone = String(r[3]||'').trim();
         var toZone   = String(r[4]||'').trim();
@@ -9068,10 +9095,9 @@ function syncZoneStockFromInventory(params) {
         var totalPCS = Number(r[9]||0) || bundles * pcsPerB;
         if (!sku || bundles <= 0 || !fromZone || !toZone) return;
 
-        // ดึงมิติจาก skuMeta (ครอบคลุมรายการเก่าที่ไม่มี bw/bh)
         var meta = skuMeta[sku] || { ppb: pcsPerB, bw: 0, bh: 0, name: skuName };
 
-        // หัก fromZone — ถ้า fromZone มีไม่พอ ให้ดึงจาก zone อื่นที่มี SKU นั้น
+        // หัก fromZone
         if (!zoneStock[fromZone]) zoneStock[fromZone] = {};
         if (!zoneStock[fromZone][sku]) {
           zoneStock[fromZone][sku] = { pcs: 0, ppb: meta.ppb, bw: meta.bw, bh: meta.bh, name: meta.name };
@@ -9079,22 +9105,21 @@ function syncZoneStockFromInventory(params) {
         var available = zoneStock[fromZone][sku].pcs;
         var shortfall = Math.max(0, totalPCS - available);
         if (shortfall > 0) {
-          // หา donor zones เรียง lastProducedZone ก่อน แล้ว pcs มากสุด
+          // ดึงเพิ่มจาก homeZone ของ SKU นั้น (ผลิตใหม่แต่ยังไม่ sync)
+          var hz = homeZone[sku];
           var donors = Object.keys(zoneStock)
             .filter(function(z) { return z !== fromZone && (zoneStock[z][sku]||{}).pcs > 0; })
             .sort(function(a, b) {
-              if (a === lastZone[sku]) return -1;
-              if (b === lastZone[sku]) return  1;
+              if (a === hz) return -1;
+              if (b === hz) return  1;
               return ((zoneStock[b][sku]||{}).pcs||0) - ((zoneStock[a][sku]||{}).pcs||0);
             });
           var remaining = shortfall;
           for (var di = 0; di < donors.length && remaining > 0; di++) {
-            var donor = donors[di];
-            var take = Math.min(remaining, zoneStock[donor][sku].pcs);
-            zoneStock[donor][sku].pcs -= take;
+            var take = Math.min(remaining, zoneStock[donors[di]][sku].pcs);
+            zoneStock[donors[di]][sku].pcs -= take;
             remaining -= take;
           }
-          // เติม fromZone เท่าที่ดึงได้
           zoneStock[fromZone][sku].pcs += (shortfall - remaining);
         }
         zoneStock[fromZone][sku].pcs = Math.max(0, zoneStock[fromZone][sku].pcs - totalPCS);
@@ -9105,7 +9130,6 @@ function syncZoneStockFromInventory(params) {
           zoneStock[toZone][sku] = { pcs: 0, ppb: meta.ppb, bw: meta.bw, bh: meta.bh, name: meta.name };
         }
         zoneStock[toZone][sku].pcs += totalPCS;
-        // เติม bw/bh ถ้า toZone ยังไม่มี
         if (!zoneStock[toZone][sku].bw && meta.bw) zoneStock[toZone][sku].bw = meta.bw;
         if (!zoneStock[toZone][sku].bh && meta.bh) zoneStock[toZone][sku].bh = meta.bh;
       });
