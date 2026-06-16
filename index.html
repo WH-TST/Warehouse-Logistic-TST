@@ -21389,114 +21389,135 @@ window.saveLogisticPlan = function saveLogisticPlan() {
         shops: (payload.shops || []).map(s => ({ name: s.shopName, truck: s.truckLabel, items: (s.items||[]).length }))
     });
 
-    // ── บันทึกลง Supabase โดยตรง แล้วส่ง GAS ด้วย (backward compat) ──────
-    const _sbSavePlan = async (planId, pl) => {
-        const isTrailerSplit = !!(pl.truckType !== 'hire' && pl.childPlate && pl.trailerMode !== 'mother_only');
-        const basePlanId = planId.replace(/-[MC]$/, '');
-        const rows = [];
-        const buildRow = (pid, isMother, isChild, plate) => ({
-            plan_id:         pid,
-            plan_date:       pl.date,
-            job_type:        pl.jobType        || '',
-            status:          pl.status         || 'planned',
-            truck_type:      pl.truckType      || 'company',
-            truck_plate:     plate             || '',
-            child_plate:     isTrailerSplit ? (pl.childPlate || '') : '',
-            driver_transport: pl.truckType === 'hire' ? (pl.transportName || '') : (pl.driverName || ''),
-            driver_id:       pl.driverId       || '',
-            trip_no:         pl.tripNo         || '',
-            trailer_mode:    pl.trailerMode    || '',
-            wage:            pl.wage           || 0,
-            warehouse:       pl.warehouse      || '',
-            fail_reason:     pl.failReason     || pl.pmDetail || '',
-            shops:           pl.shops          || [],
-            total_weight:    pl.totalWeight    || 0,
-            return_distance: pl.returnDistance || 0,
-            is_mother:       isMother,
-            is_child:        isChild,
-            pair_id:         basePlanId,
-            created_by:      window._currentUser || '',
-            updated_at:      new Date().toISOString(),
-        });
-        if (isTrailerSplit) {
-            rows.push(buildRow(basePlanId + '-M', true,  false, pl.truckPlate  || ''));
-            rows.push(buildRow(basePlanId + '-C', false, true,  pl.childPlate  || ''));
-        } else {
-            rows.push(buildRow(basePlanId, false, false, pl.truckType === 'hire' ? '' : (pl.truckPlate || '')));
-        }
-        const { error } = await window._sb.from('logistic_plans').upsert(rows, { onConflict: 'plan_id' });
-        if (error) console.error('[Supabase] saveLogisticPlan error:', error);
-    };
-
-    // ── เรียก GAS ──────────────────────────────────────────────────────────
-    google.script.run
-        .withSuccessHandler(function(res) {
-            resetSaveBtn();
-            if (!res || !res.success) {
-                showToast('บันทึกไม่สำเร็จ: ' + (res?.message || 'ไม่ทราบสาเหตุ'), true);
-                return;
+    // ── บันทึกลง Supabase โดยตรง (ไม่ผ่าน GAS) ──────────────────────────
+    (async () => {
+        try {
+            // 1. Generate Plan ID จาก Supabase (query max seq ของเดือนนี้)
+            let planId;
+            if (isUpdate) {
+                planId = logiEditId;
+            } else {
+                const now    = new Date();
+                const yy     = String(now.getFullYear()).slice(-2);
+                const mm     = String(now.getMonth() + 1).padStart(2, '0');
+                const prefix = 'WLTST' + yy + mm;
+                const { data: existing } = await window._sb
+                    .from('logistic_plans')
+                    .select('plan_id')
+                    .like('plan_id', prefix + '%')
+                    .order('plan_id', { ascending: false })
+                    .limit(50);
+                let maxSeq = 0;
+                (existing || []).forEach(r => {
+                    const raw = r.plan_id.replace(/-[MC]$/, '');
+                    if (raw.startsWith(prefix)) {
+                        const seq = parseInt(raw.slice(prefix.length), 10);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                });
+                planId = prefix + String(maxSeq + 1).padStart(3, '0');
             }
 
-            const planId = res.planId || logiEditId;
-            _sbSavePlan(planId, payload);
+            // 2. Build rows (รองรับรถพ่วง -M / -C)
+            const isTrailerSplit = !!(payload.truckType !== 'hire' && payload.childPlate && payload.trailerMode !== 'mother_only');
+            const basePlanId = planId.replace(/-[MC]$/, '');
+            const buildRow = (pid, isMother, isChild, plate) => ({
+                plan_id:          pid,
+                plan_date:        payload.date,
+                job_type:         payload.jobType        || '',
+                status:           payload.status         || 'planned',
+                truck_type:       payload.truckType      || 'company',
+                truck_plate:      plate                  || '',
+                child_plate:      isTrailerSplit ? (payload.childPlate || '') : '',
+                driver_transport: payload.truckType === 'hire' ? (payload.transportName || '') : (payload.driverName || ''),
+                driver_id:        payload.driverId       || '',
+                trip_no:          payload.tripNo         || '',
+                trailer_mode:     payload.trailerMode    || '',
+                wage:             payload.wage           || 0,
+                warehouse:        payload.warehouse      || '',
+                fail_reason:      payload.failReason     || payload.pmDetail || '',
+                shops:            payload.shops          || [],
+                total_weight:     payload.totalWeight    || 0,
+                return_distance:  payload.returnDistance || 0,
+                is_mother:        isMother,
+                is_child:         isChild,
+                pair_id:          basePlanId,
+                created_by:       window._currentUser   || '',
+                updated_at:       new Date().toISOString(),
+            });
+            const rows = isTrailerSplit
+                ? [buildRow(basePlanId + '-M', true, false, payload.truckPlate || ''),
+                   buildRow(basePlanId + '-C', false, true, payload.childPlate || '')]
+                : [buildRow(basePlanId, false, false, payload.truckType === 'hire' ? '' : (payload.truckPlate || ''))];
+
+            // 3. Upsert ลง Supabase
+            const { error } = await window._sb.from('logistic_plans').upsert(rows, { onConflict: 'plan_id' });
+            if (error) throw error;
+
+            // 4. อัปเดต UI
+            resetSaveBtn();
             showLogiSuccessToast(planId);
 
             const updatedPlan = {
                 id:              planId,
+                pairId:          basePlanId,
+                isMother:        isTrailerSplit,
+                isChild:         false,
                 date:            payload.date,
                 jobType:         payload.jobType,
-                status:          payload.status,
+                status:          payload.status         || 'planned',
                 truckType:       payload.truckType,
-                trailerMode:     payload.trailerMode || '',
+                trailerMode:     payload.trailerMode    || '',
                 driverTransport: payload.truckType === 'hire' ? (payload.transportName || '') : (payload.driverName || ''),
                 driverId:        payload.driverId        || '',
                 driverName:      payload.driverName      || '',
                 transportId:     payload.transportId     || '',
                 transportName:   payload.transportName   || '',
                 truckPlate:      payload.truckType === 'hire' ? '' : (payload.truckPlate || ''),
-                tripNo:          payload.tripNo    || '',
+                childPlate:      payload.childPlate      || '',
+                tripNo:          payload.tripNo          || '',
                 distance:        (payload.shops || []).reduce((s, sh) => s + (parseFloat(sh.distance) || 0), 0),
-                returnDistance:  payload.returnDistance || 0,
-                stopFee:         payload.stopFee   || 0,
-                wage:            payload.wage      || 0,
-                warehouse:       payload.warehouse || '',
-                failReason:      payload.failReason || '',
-                whSource:        payload.whSource   || '',
-                whDest:          payload.whDest     || '',
-                transferRemark:  payload.transferRemark || '',
-                responsible:     payload.responsible || '',
-                totalWeight:     (payload.shops || []).reduce((s, sh) => s + (sh.items || []).reduce((s2, it) => s2 + (it.weight || 0), 0), 0),
-                shops:           payload.shops || [],
+                returnDistance:  payload.returnDistance  || 0,
+                stopFee:         payload.stopFee         || 0,
+                wage:            payload.wage            || 0,
+                warehouse:       payload.warehouse       || '',
+                failReason:      payload.failReason      || '',
+                whSource:        payload.whSource        || '',
+                whDest:          payload.whDest          || '',
+                transferRemark:  payload.transferRemark  || '',
+                totalWeight:     payload.totalWeight     || 0,
+                shops:           payload.shops           || [],
+                shopNames:       (payload.shops || []).map(s => s.shopName).filter(Boolean).join(', '),
             };
 
             if (isUpdate) {
-                // แทนที่แผนเดิมใน logiPlanList
                 const idx = logiPlanList.findIndex(x => x.id === planId);
                 if (idx !== -1) logiPlanList[idx] = updatedPlan;
-                // แทนที่ใน logiCalPlanList ด้วย (ถ้ามี)
                 if (typeof logiCalPlanList !== 'undefined') {
                     const ci = logiCalPlanList.findIndex(x => x.id === planId);
                     if (ci !== -1) logiCalPlanList[ci] = updatedPlan;
                 }
-                showToast('✅ อัปเดตแผน ' + planId + ' เรียบร้อยแล้ว');
             } else {
                 logiPlanList.unshift(updatedPlan);
+                // ถ้ารถพ่วง เพิ่ม -C ด้วย
+                if (isTrailerSplit) {
+                    logiPlanList.unshift({ ...updatedPlan, id: basePlanId + '-C', isMother: false, isChild: true, truckPlate: payload.childPlate || '' });
+                }
             }
 
-            // reset modal title + button กลับ
             const modalTitle = document.querySelector('#logistic-form-modal h3');
             if (modalTitle) modalTitle.textContent = 'บันทึกแผนการส่งมอบ';
             logiEditId = null;
-
             closeLogisticForm();
             renderLogisticList();
             updateLogiKPI();
-        })
-        .withFailureHandler(function(err) {
+
+        } catch(err) {
             resetSaveBtn();
-            showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-        })
-        .saveLogisticPlan(payload);
+            showToast('บันทึกไม่สำเร็จ: ' + (err?.message || String(err)), true);
+            console.error('[saveLogisticPlan Supabase]', err);
+        }
+    })();
 }
 
 // ── Toast พิเศษแสดง PlanID หลังบันทึกสำเร็จ ─────────────────────────────
