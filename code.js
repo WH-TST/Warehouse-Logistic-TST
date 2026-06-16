@@ -10741,16 +10741,20 @@ function analyzeZoneCapacity(params) {
       return days;
     }
 
-    // Load product names directly from Product sheet (so names show without needing Sync Zone Stock)
+    // Load product names + ppb directly from Product sheet
     var localProductNames = {};
+    var localProductPpb   = {};
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     try {
       var lpSS = SpreadsheetApp.openById('1uLXHWv6_jTb1wnaIzq652gn2gH0Odiw2KOlB8DyY2Us');
       var lpSheet = lpSS.getSheetByName('Product');
       if (lpSheet && lpSheet.getLastRow() >= 2) {
-        var lpRows = lpSheet.getRange(2, 1, lpSheet.getLastRow() - 1, 2).getValues();
+        var lpRows = lpSheet.getRange(2, 1, lpSheet.getLastRow() - 1, 3).getValues();
         lpRows.forEach(function(r) {
           var sku = String(r[0] || '').trim();
-          if (sku) localProductNames[sku] = String(r[1] || '');
+          if (!sku) return;
+          localProductNames[sku] = String(r[1] || '');
+          localProductPpb[sku]   = Number(r[2]) || 1;
         });
       }
     } catch(e) {}
@@ -10861,10 +10865,123 @@ function analyzeZoneCapacity(params) {
     });
 
     // =============================================
-    // ขั้น 4: สต็อคปัจจุบัน + ฐานวาง
+    // ขั้น 4: สต็อคปัจจุบัน — อ่านจาก On-hand sheet โดยตรง (real-time)
     // =============================================
-    var zsRes = getZoneStock();
-    var zoneStock = (zsRes.success && zsRes.data) ? zsRes.data : {};
+    var zoneStock = {};
+    try {
+      // 4.1 อ่านยอด On-hand (FG-BP + QC)
+      var ohSS    = SpreadsheetApp.openById('1YMwI8sbtInCBWVEYr877GrgkoYcmLe83T0z884Xx7sQ');
+      var ohSheet = ohSS.getSheetByName('On-hand');
+      var rawStock = {}; // sku → pcs
+      if (ohSheet && ohSheet.getLastRow() >= 2) {
+        var ohRows = ohSheet.getRange(2, 1, ohSheet.getLastRow() - 1, 14).getValues();
+        ohRows.forEach(function(r) {
+          var sku = String(r[1]  || '').trim();  // Col B
+          var wh  = String(r[13] || '').trim();  // Col N
+          var qty = Number(r[4]  || 0);          // Col E
+          if (!sku || qty <= 0) return;
+          if (wh !== 'FG-BP' && wh !== 'QC') return;
+          rawStock[sku] = (rawStock[sku] || 0) + qty;
+        });
+      }
+
+      // 4.2 Production Block → skuMachines + skuMeta (เดือนปัจจุบัน)
+      var dt0 = parseYMD(dateStr);
+      var allMachs = getProdBlockForMonth(dt0.getFullYear(), dt0.getMonth() + 1);
+      var MZONE2 = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
+      var skuMachines2 = {}; // sku → [machId,...]
+      var skuMeta2     = {}; // sku → {ppb,bw,bh}
+      allMachs.forEach(function(m) {
+        var mid = String(m.machineId || '').toUpperCase().replace(/\s/g, '');
+        (m.products || []).forEach(function(p) {
+          if (!p.sku) return;
+          if (!skuMachines2[p.sku]) skuMachines2[p.sku] = [];
+          if (skuMachines2[p.sku].indexOf(mid) < 0) skuMachines2[p.sku].push(mid);
+          if (!skuMeta2[p.sku]) {
+            skuMeta2[p.sku] = {
+              ppb: localProductPpb[p.sku] || Number(p.pcsPerBundle) || 1,
+              bw:  Number(p.bundleWidth)  || 0,
+              bh:  Number(p.bundleHeight) || 0
+            };
+          }
+        });
+      });
+
+      // 4.3 Sheet Plan → last machine สำหรับ SKU ที่มีหลายเครื่อง
+      var lastMach2 = {}; // sku → machineId
+      var planSh2 = ss.getSheetByName(PLAN_SHEET_NAME);
+      if (planSh2 && planSh2.getLastRow() >= 2) {
+        var today8 = Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMdd');
+        var planR2 = planSh2.getRange(2, 1, planSh2.getLastRow() - 1, 5).getValues();
+        planR2.forEach(function(r) {
+          var d   = String(r[0] || '').trim().replace(/-/g, '');
+          if (!d || d > today8) return;
+          var mid = String(r[1] || '').trim().toUpperCase().replace(/\s/g, '');
+          var sku = String(r[4] || '').trim();
+          if (!sku || !mid) return;
+          if (!lastMach2[sku] || d > lastMach2[sku].date) {
+            lastMach2[sku] = { date: d, machineId: mid };
+          }
+        });
+      }
+
+      // 4.4 homeZone ต่อ SKU
+      var homeZone2 = {};
+      Object.keys(skuMachines2).forEach(function(sku) {
+        var mList = skuMachines2[sku];
+        if (mList.length === 1) {
+          homeZone2[sku] = MZONE2[mList[0]] || mList[0];
+        } else {
+          var planMach = (lastMach2[sku] || {}).machineId || '';
+          var chosen   = (planMach && mList.indexOf(planMach) >= 0) ? planMach : mList[0];
+          homeZone2[sku] = MZONE2[chosen] || chosen;
+        }
+      });
+
+      // 4.5 จัดสต๊อกเข้าโซน
+      Object.keys(rawStock).forEach(function(sku) {
+        var zone = homeZone2[sku];
+        if (!zone) return;
+        var pcs  = rawStock[sku];
+        var meta = skuMeta2[sku] || { ppb: 1, bw: 0, bh: 0 };
+        if (!zoneStock[zone]) zoneStock[zone] = {};
+        zoneStock[zone][sku] = {
+          pcs: pcs, pcsPerBundle: meta.ppb,
+          bw: meta.bw, bh: meta.bh,
+          skuName: localProductNames[sku] || ''
+        };
+      });
+
+      // 4.6 Replay Move Log
+      var moveSh = _getOrCreateMoveSheet(ss);
+      if (moveSh.getLastRow() >= 2) {
+        var moveR = moveSh.getRange(2, 1, moveSh.getLastRow() - 1, 12).getValues();
+        moveR.forEach(function(r) {
+          var fromZone = String(r[3] || '').trim();
+          var toZone   = String(r[4] || '').trim();
+          var sku      = String(r[5] || '').trim();
+          var bundles  = Number(r[7] || 0);
+          var pcsPerB  = Number(r[8] || 1);
+          var totalPCS = Number(r[9] || 0) || bundles * pcsPerB;
+          if (!sku || bundles <= 0 || !fromZone || !toZone) return;
+          var meta = skuMeta2[sku] || { ppb: pcsPerB, bw: 0, bh: 0 };
+
+          if (!zoneStock[fromZone]) zoneStock[fromZone] = {};
+          if (!zoneStock[fromZone][sku]) {
+            zoneStock[fromZone][sku] = { pcs: 0, pcsPerBundle: meta.ppb, bw: meta.bw, bh: meta.bh, skuName: localProductNames[sku] || '' };
+          }
+          zoneStock[fromZone][sku].pcs = Math.max(0, zoneStock[fromZone][sku].pcs - totalPCS);
+
+          if (!zoneStock[toZone]) zoneStock[toZone] = {};
+          if (!zoneStock[toZone][sku]) {
+            zoneStock[toZone][sku] = { pcs: 0, pcsPerBundle: meta.ppb, bw: meta.bw, bh: meta.bh, skuName: localProductNames[sku] || '' };
+          }
+          zoneStock[toZone][sku].pcs += totalPCS;
+        });
+      }
+    } catch(e4) {
+      Logger.log('analyzeZoneCapacity zone stock error: ' + e4.toString());
+    }
 
     // =============================================
     // ขั้น 6+7: เทียบ และสรุปงาน (per zone)
