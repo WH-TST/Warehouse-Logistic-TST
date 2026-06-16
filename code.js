@@ -9812,6 +9812,39 @@ function updateWorkOrder(data) {
     }
     if (rowIdx === -1) return { success: false, message: 'ไม่พบ OrderID: ' + data.orderId };
     var now = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+
+    // ถ้าเปลี่ยนสถานะเป็น "เสร็จแล้ว" และเป็นใบงานย้ายสินค้า → บันทึก Move Log
+    if (data.status === 'เสร็จแล้ว') {
+      var woRow = sheet.getRange(rowIdx, 1, 1, 14).getValues()[0];
+      var woFromZone = String(woRow[3] || '').trim();
+      var woToZone   = String(woRow[7] || '').trim();
+      var woSku      = String(woRow[4] || '').trim();
+      var woSkuName  = String(woRow[5] || '').trim();
+      var woBundles  = Number(woRow[6] || 0);
+      if (woToZone && woFromZone && woSku && woBundles > 0) {
+        // หา pcsPerBundle จาก Product sheet
+        var ppb = 1;
+        try {
+          var pSheet = ss.getSheetByName('Product');
+          if (pSheet && pSheet.getLastRow() >= 2) {
+            var pRows = pSheet.getRange(2,1,pSheet.getLastRow()-1,3).getValues();
+            for (var pi = 0; pi < pRows.length; pi++) {
+              if (String(pRows[pi][0]||'').trim() === woSku) { ppb = Number(pRows[pi][2]||1)||1; break; }
+            }
+          }
+        } catch(pe) {}
+        var moveSheet2 = _getOrCreateMoveSheet(ss);
+        var moveId2   = 'MV' + Utilities.formatDate(new Date(), 'GMT+7', 'yyyyMMddHHmmss');
+        var moveDate2 = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
+        moveSheet2.appendRow([
+          moveId2, now, moveDate2,
+          woFromZone, woToZone, woSku, woSkuName,
+          woBundles, ppb, woBundles * ppb,
+          String(data.assignedTo || ''), 'WO:' + data.orderId
+        ]);
+      }
+    }
+
     if (data.status)     sheet.getRange(rowIdx,11).setValue(data.status);
     if (data.assignedTo !== undefined) sheet.getRange(rowIdx,12).setValue(data.assignedTo);
     sheet.getRange(rowIdx,13).setValue(now);
