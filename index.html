@@ -323,7 +323,9 @@
             'C4':[1330,1330,1330],'RE4':[500],'RE-C5':[2100,2100],'RE1':[850]
           };
           var MACHINE_ZONE = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
-          var THRESHOLD = 70;
+          var THRESHOLD = 70; // fallback
+          // P4/P1 = heavy zone (threshold 60%), P2/P3/C5 = light zone (threshold 80%)
+          var ZONE_THRESHOLD = {'P4':60,'P1':60,'P2':80,'P3':80,'C5':80};
 
           var dateStr = (params && params.date && params.date !== '')
             ? params.date
@@ -697,8 +699,9 @@
               });
             });
             var fullOnDate = null;
+            var zoneThresh = ZONE_THRESHOLD[zoneId] || THRESHOLD;
             for (var pi = 1; pi < dayProgression.length; pi++) {
-              if (dayProgression[pi].pct >= THRESHOLD) { fullOnDate = dayProgression[pi].date; break; }
+              if (dayProgression[pi].pct >= zoneThresh) { fullOnDate = dayProgression[pi].date; break; }
             }
 
             results.push({
@@ -709,7 +712,7 @@
               continuousSkus: continuousSkus,
               freeSpaceCm: Math.round(freeSpaceCm),
               projectedUsedCm: Math.round(projectedUsedW), projectedPct: projectedPct,
-              needsAction: projectedPct >= THRESHOLD, neededCm: Math.round(needCm),
+              needsAction: projectedPct >= zoneThresh, neededCm: Math.round(needCm),
               dayProgression: dayProgression, fullOnDate: fullOnDate,
               suggestions: suggestions
             });
@@ -8834,7 +8837,8 @@ const _safeStorage = {
         const body = document.getElementById('wmm-zone-popup-body');
         if (!el || !body) return;
         const CRIT='#ef4444',WARN='#f59e0b',OK='#10b981',INFO='#3b82f6';
-        function sc(p){return p>=80?CRIT:p>=55?WARN:OK;}
+        const _isHeavy = zoneId==='P4'||zoneId==='P1';
+        function sc(p){return _isHeavy?(p>=60?CRIT:p>=50?WARN:OK):(p>=80?CRIT:p>=60?WARN:OK);}
         function fd(s){if(!s)return'';const p=s.split('-');return p[2]+'/'+p[1];}
         const statusC = sc(z.projectedPct);
         let html = '';
@@ -8920,7 +8924,7 @@ const _safeStorage = {
             <div style="font-size:11px;font-weight:800;color:#475569;letter-spacing:.05em;margin-bottom:8px;">⑥ คาดการณ์จะเต็มเมื่อไหร่</div>
             <div style="display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;">`;
           z.dayProgression.forEach(function(pt,i) {
-            const c = pt.pct>=80?CRIT:pt.pct>=55?WARN:OK;
+            const c = _isHeavy?(pt.pct>=60?CRIT:pt.pct>=50?WARN:OK):(pt.pct>=80?CRIT:pt.pct>=60?WARN:OK);
             html += `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:52px;">
               <div style="font-size:10px;font-weight:700;color:${c};">${pt.pct}%</div>
               <div style="width:48px;background:#e2e8f0;border-radius:6px;height:36px;overflow:hidden;display:flex;align-items:flex-end;">
@@ -8973,7 +8977,7 @@ const _safeStorage = {
 
         // สีตามสถานะ
         const CRIT = '#ef4444', WARN = '#f59e0b', OK = '#10b981', INFO = '#3b82f6';
-        function stColor(pct) { return pct >= 80 ? CRIT : pct >= 55 ? WARN : OK; }
+        function stColor(pct, zid) { var h=zid==='P4'||zid==='P1'; return h?(pct>=60?CRIT:pct>=50?WARN:OK):(pct>=80?CRIT:pct>=60?WARN:OK); }
 
         function fmtD(s) {
           if (!s) return '';
@@ -8989,7 +8993,8 @@ const _safeStorage = {
             + '<div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.05em;margin-bottom:6px;">&#9318; คาดการณ์จะเต็มเมื่อไหร่</div>'
             + '<div style="display:flex;align-items:flex-end;gap:3px;flex-wrap:nowrap;overflow-x:auto;">';
           prog.forEach(function(pt, i) {
-            var c = pt.pct >= 80 ? '#ef4444' : pt.pct >= 55 ? '#f59e0b' : '#10b981';
+            var h = z.zoneId==='P4'||z.zoneId==='P1';
+            var c = h?(pt.pct>=60?'#ef4444':pt.pct>=50?'#f59e0b':'#10b981'):(pt.pct>=80?'#ef4444':pt.pct>=60?'#f59e0b':'#10b981');
             var isFull = z.fullOnDate && pt.date === z.fullOnDate;
             tl += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:44px;flex-shrink:0;">'
               + '<div style="font-size:9px;font-weight:900;color:' + c + ';">' + pt.pct + '%</div>'
@@ -9010,11 +9015,11 @@ const _safeStorage = {
         }
 
         // Timeline: dayProgression boxes (popup version)
-        function renderTimeline(prog, fullOnDate) {
+        function renderTimeline(prog, fullOnDate, zid) {
           if (!prog || !prog.length) return '';
           let tl = `<div style="display:flex;align-items:flex-end;gap:4px;flex-wrap:wrap;margin-top:4px;">`;
           prog.forEach(function(pt, i) {
-            const c   = stColor(pt.pct);
+            const c   = stColor(pt.pct, zid);
             const isNow   = i === 0;
             const isFull  = fullOnDate && pt.date === fullOnDate;
             const addedStr = pt.addedCm > 0 ? `+${(pt.addedCm/100).toFixed(1)}ม.` : '';
@@ -9046,7 +9051,7 @@ const _safeStorage = {
           }
           window._wmmZoneData[z.zoneId] = z;
           const isMachine  = MACHINE_ZONES.has(z.zoneId);
-          const statusC    = stColor(z.projectedPct);
+          const statusC    = stColor(z.projectedPct, z.zoneId);
           const machHrsMax = (z.todayList||[]).reduce(function(m,r){ return Math.max(m, r.machHrs||0); }, 0);
 
           if (isMachine) {
