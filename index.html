@@ -26719,7 +26719,10 @@ window.editLogiPlan = function editLogiPlan(planId) {
 
     // ── ใช้ memory ก่อน — ถ้าเจอก็ render ทันที ไม่ต้อง fetch ──────────────
     const _baseId   = planId.replace(/-[MC]$/, '');
-    const _allInMem = (logiPlanList || []).concat(typeof logiCalPlanList !== 'undefined' ? (logiCalPlanList || []) : []);
+    // dedup: รวม 2 list แต่กัน duplicate plan_id (อาจซ้ำถ้าโหลดทั้ง รายการ+ปฏิทิน)
+    const _seenIds  = new Set();
+    const _allInMem = (logiPlanList || []).concat(typeof logiCalPlanList !== 'undefined' ? (logiCalPlanList || []) : [])
+        .filter(r => { if (_seenIds.has(r.id)) return false; _seenIds.add(r.id); return true; });
     const _memRows  = _allInMem.filter(r => r.id === planId || r.id === _baseId + '-M' || r.id === _baseId + '-C' || r.id === _baseId);
     const _memMother = _memRows.find(r => r.isMother || r.id.endsWith('-M')) || _memRows.find(r => !r.isChild) || _memRows[0];
 
