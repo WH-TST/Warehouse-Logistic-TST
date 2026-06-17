@@ -21569,6 +21569,29 @@ window.loadLogisticList = async function loadLogisticList() {
             .order('plan_id');
         if (error) throw error;
 
+        const planIds = (data || []).map(r => r.plan_id);
+        // โหลด trip_logs พร้อมกัน เพื่อ sync สถานะจริงจาก Driver App
+        let tripLogMap = {};
+        if (planIds.length) {
+            const { data: tl } = await window._sb.from('trip_logs').select('plan_id,status').in('plan_id', planIds);
+            (tl || []).forEach(t => { tripLogMap[t.plan_id] = t.status; });
+        }
+
+        // sync status ถ้า trip_log บอกว่าเริ่มแล้วแต่ plan ยังเป็น planned
+        const syncJobs = [];
+        (data || []).forEach(row => {
+            const tlStatus = tripLogMap[row.plan_id];
+            if (!tlStatus) return;
+            const want = tlStatus === 'completed' ? 'success' : tlStatus !== 'idle' ? 'inprogress' : null;
+            if (want && row.status !== want) {
+                syncJobs.push({ id: row.plan_id, status: want });
+                row.status = want; // อัพเดท local ทันที
+            }
+        });
+        if (syncJobs.length) {
+            syncJobs.forEach(j => window._sb.from('logistic_plans').update({ status: j.status }).eq('plan_id', j.id));
+        }
+
         logiPlanList = (data || []).map(row => ({
             id:              row.plan_id,
             pairId:          row.pair_id || row.plan_id,
