@@ -6305,6 +6305,90 @@ function saveDriverActivityRows(rows) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// migrateDriverActivityLogToSupabase — ดึงข้อมูลทั้งหมดจากชีต Driver_Activity_Log
+// แล้ว insert เข้า Supabase ตาราง driver_activity_log ทีละ 500 แถว
+// รันจาก Apps Script editor ครั้งเดียว ไม่ต้อง deploy
+// ════════════════════════════════════════════════════════════════════════
+function migrateDriverActivityLogToSupabase() {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DRIVER_ACTIVITY_SHEET);
+  if (!sheet) { Logger.log('ไม่พบชีต ' + DRIVER_ACTIVITY_SHEET); return; }
+
+  var rows  = sheet.getDataRange().getValues();
+  var batch = [];
+  var total = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    var r = rows[i];
+    if (!r[0] && !r[1]) continue;
+
+    var dateStr = '';
+    if (r[0] instanceof Date) {
+      dateStr = Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd');
+    } else {
+      var raw = String(r[0] || '').trim();
+      // แปลง dd/MM/yyyy → yyyy-MM-dd
+      var parts = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (parts) {
+        dateStr = parts[3] + '-' + ('0'+parts[2]).slice(-2) + '-' + ('0'+parts[1]).slice(-2);
+      } else {
+        dateStr = raw;
+      }
+    }
+
+    batch.push({
+      delivery_date:    dateStr || null,
+      driver_name:      String(r[1] || '').trim() || null,
+      truck_plate:      String(r[2] || '').trim() || null,
+      mileage_start:    r[3] !== '' ? (parseFloat(r[3]) || null) : null,
+      mileage_end:      r[4] !== '' ? (parseFloat(r[4]) || null) : null,
+      time_depart:      String(r[5] || '').trim() || null,
+      time_arrive:      String(r[6] || '').trim() || null,
+      shop_code:        String(r[7] || '').trim() || null,
+      shop_name:        String(r[8] || '').trim() || null,
+      distance_km:      r[9]  !== '' ? (parseFloat(r[9])  || null) : null,
+      travel_minutes:   r[10] !== '' ? (parseFloat(r[10]) || null) : null,
+      km_per_hr:        r[11] !== '' ? (parseFloat(r[11]) || null) : null,
+      planned_distance: r[12] !== '' ? (parseFloat(r[12]) || null) : null,
+      sale:             String(r[13] || '').trim() || null,
+      recorded_at:      String(r[14] || '').trim() || null,
+    });
+
+    if (batch.length >= 500) {
+      _sbInsertDriverBatch(batch);
+      total += batch.length;
+      batch = [];
+      Utilities.sleep(500);
+    }
+  }
+  if (batch.length) {
+    _sbInsertDriverBatch(batch);
+    total += batch.length;
+  }
+
+  Logger.log('✅ migrate เสร็จ: ' + total + ' แถว');
+}
+
+function _sbInsertDriverBatch(batch) {
+  var res = UrlFetchApp.fetch(SB_URL + '/rest/v1/driver_activity_log', {
+    method: 'POST',
+    headers: {
+      'apikey':        SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type':  'application/json',
+      'Prefer':        'return=minimal'
+    },
+    payload: JSON.stringify(batch),
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() >= 300) {
+    Logger.log('❌ Error: ' + res.getContentText());
+  } else {
+    Logger.log('✅ inserted ' + batch.length + ' rows');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // getLogisticPlanSummary — สรุป ส่งสำเร็จ/ไม่สำเร็จ จากชีต Logistic_Plan จริง
 // params: { dateFrom: string, dateTo: string }  (รับหลายรูปแบบวันที่)
 // คอลัมน์ที่ใช้:
