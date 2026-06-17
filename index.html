@@ -21371,9 +21371,12 @@ window.saveLogisticPlan = function saveLogisticPlan() {
         if (!isTransfer && (shops.length === 0 || shops.every(s => !s.shopId))) {
             return showToast('กรุณาเพิ่มและเลือกร้านค้าอย่างน้อย 1 ร้าน', true);
         }
-        payload.shops          = shops;
-        payload.totalWeight    = totalWt;
-        payload.stopFee        = shops.reduce((sum, s) => sum + (parseFloat(s.freeDistance) || 0), 0);
+        // Transfer: payload.shops ถูกตั้งไว้แล้วในบล็อก Transfer ด้านบน ไม่ต้อง overwrite
+        if (!isTransfer) {
+            payload.shops       = shops;
+            payload.totalWeight = totalWt;
+            payload.stopFee     = shops.reduce((sum, s) => sum + (parseFloat(s.freeDistance) || 0), 0);
+        }
         payload.returnDistance = parseFloat(document.getElementById('logi-return-distance')?.value) || 0;
         payload.failReason     = document.getElementById('logi-fail-reason')?.value || '';
     }
