@@ -21469,9 +21469,27 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             const { error } = await window._sb.from('logistic_plans').upsert(rows, { onConflict: 'plan_id' });
             if (error) throw error;
 
-            // 3b. ถ้าแก้ไขแผนแล้วสถานะเป็น planned → ล้าง trip_logs + shop_visits เก่าทิ้ง
+            // 3b. ถ้าแก้ไขแผนแล้วสถานะเป็น planned → ล้าง trip_logs + shop_visits + รูปเก่าทิ้ง
             if (isUpdate && (payload.status || 'planned') === 'planned') {
                 const planIdsToReset = rows.map(r => r.plan_id);
+                // ลบรูปใน Storage ก่อน (list แล้ว remove)
+                await Promise.all(planIdsToReset.map(async function(pid) {
+                    const { data: files } = await window._sb.storage.from('delivery-photos').list(pid, { limit: 200 });
+                    if (!files || !files.length) return;
+                    // list subfolder (shop_seq level)
+                    const allPaths = [];
+                    for (const f of files) {
+                        if (f.id) {
+                            allPaths.push(pid + '/' + f.name);
+                        } else {
+                            // เป็น folder → list ข้างใน
+                            const { data: inner } = await window._sb.storage.from('delivery-photos').list(pid + '/' + f.name, { limit: 200 });
+                            (inner || []).forEach(function(fi) { allPaths.push(pid + '/' + f.name + '/' + fi.name); });
+                        }
+                    }
+                    if (allPaths.length) await window._sb.storage.from('delivery-photos').remove(allPaths);
+                }));
+                // ลบ records
                 await Promise.all([
                     window._sb.from('shop_visits').delete().in('plan_id', planIdsToReset),
                     window._sb.from('trip_logs').delete().in('plan_id', planIdsToReset),
