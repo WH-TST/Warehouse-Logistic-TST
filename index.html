@@ -22,6 +22,61 @@
       var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdXVubXlyeHVnc29xd3J2ZGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODk5ODcsImV4cCI6MjA5NzE2NTk4N30.rpcJKRMDumcsgYx-JrgxFKeO26TKrIULxBJm0jWpBZw';
       window._sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
+      // ── Supabase Realtime — push อัพเดตทันทีเมื่อ DB เปลี่ยน ────────
+      var _rtDebounce = {};
+      function _rtRefresh(key, fn, delay) {
+        clearTimeout(_rtDebounce[key]);
+        _rtDebounce[key] = setTimeout(fn, delay || 400);
+      }
+      window._sb.channel('wms-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'logistic_plans' }, function() {
+          // รายการแผน
+          _rtRefresh('plan-list', function() {
+            if (!document.getElementById('logi-panel-list')?.classList.contains('hidden')
+                && typeof window.loadLogisticList === 'function') {
+              window.loadLogisticList();
+            }
+          });
+          // ปฏิทิน
+          _rtRefresh('plan-cal', function() {
+            if (!document.getElementById('logi-panel-cal')?.classList.contains('hidden')
+                && typeof window.loadAndRenderLogiCalendar === 'function') {
+              window.loadAndRenderLogiCalendar();
+            }
+          });
+          // ติดตามการส่ง
+          _rtRefresh('dt', function() {
+            if (!document.getElementById('logi-panel-delivery-tracking')?.classList.contains('hidden')
+                && typeof window.dtLoad === 'function') {
+              window.dtLoad();
+            }
+          });
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_logs' }, function() {
+          _rtRefresh('dt', function() {
+            if (!document.getElementById('logi-panel-delivery-tracking')?.classList.contains('hidden')
+                && typeof window.dtLoad === 'function') {
+              window.dtLoad();
+            }
+          });
+          // sync สถานะแผนในรายการด้วย
+          _rtRefresh('plan-list', function() {
+            if (!document.getElementById('logi-panel-list')?.classList.contains('hidden')
+                && typeof window.loadLogisticList === 'function') {
+              window.loadLogisticList();
+            }
+          });
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_visits' }, function() {
+          _rtRefresh('dt', function() {
+            if (!document.getElementById('logi-panel-delivery-tracking')?.classList.contains('hidden')
+                && typeof window.dtLoad === 'function') {
+              window.dtLoad();
+            }
+          });
+        })
+        .subscribe();
+
       // ── Simple in-memory cache (TTL 5 min) ───────────────────────
       var _cache = {};
       var _CACHE_TTL = 5 * 60 * 1000;
