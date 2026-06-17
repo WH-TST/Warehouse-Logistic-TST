@@ -21594,11 +21594,10 @@ window.loadLogisticList = async function loadLogisticList() {
         (data || []).forEach(row => {
             const tlStatus = tripLogMap[row.plan_id];
             if (!tlStatus) return;
-            const want = tlStatus === 'completed' ? 'success' : tlStatus !== 'idle' ? 'inprogress' : null;
-            // sync เฉพาะ planned → inprogress/success เท่านั้น
-            // ถ้า user แก้เป็น failed/extra/planned เองแล้ว ให้เคารพ ไม่ override
-            const allowSync = want && row.status === 'planned';
-            if (allowSync) {
+            // sync เฉพาะ planned → inprogress (ไดรเวอร์เริ่มแล้วแต่ plan ยังค้าง planned)
+            // ไม่ auto-sync เป็น success — ต้องให้ Driver App หรือ user ตั้งเอง
+            const want = (tlStatus !== 'idle' && tlStatus !== 'completed') ? 'inprogress' : null;
+            if (want && row.status === 'planned') {
                 syncJobs.push({ id: row.plan_id, status: want });
                 row.status = want;
             }
@@ -26058,7 +26057,7 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
                     rows.forEach(function(row) {
                         var tlStatus = tlMap[row.plan_id];
                         if (!tlStatus) return;
-                        var want = tlStatus === 'completed' ? 'success' : tlStatus !== 'idle' ? 'inprogress' : null;
+                        var want = (tlStatus !== 'idle' && tlStatus !== 'completed') ? 'inprogress' : null;
                         if (want && row.status === 'planned') {
                             syncJobs.push({ id: row.plan_id, status: want });
                             row.status = want;
@@ -35924,8 +35923,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
     plans.forEach(function(p){
       var log = tripMap[p.plan_id];
       if (!log) return;
-      var want = log.status==='completed' ? 'success'
-               : log.status!=='idle'      ? 'inprogress' : null;
+      var want = (log.status!=='idle' && log.status!=='completed') ? 'inprogress' : null;
       if (want && p.status === 'planned') syncJobs.push({id:p.plan_id, status:want});
     });
     if (syncJobs.length) {
