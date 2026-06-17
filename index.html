@@ -3870,6 +3870,14 @@ thead.sticky {
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-rose-600">
       <i class="fas fa-user-shield mr-2"></i>พฤติกรรม & KPI
     </button>
+    <button id="logi-tab-delivery-tracking" onclick="switchLogiTab('delivery-tracking')"
+      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-blue-600">
+      <i class="fas fa-satellite-dish mr-2"></i>ติดตามการส่ง
+    </button>
+    <button id="logi-tab-driver-users" onclick="switchLogiTab('driver-users')"
+      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-purple-600">
+      <i class="fas fa-id-card mr-2"></i>จัดการคนขับ
+    </button>
   </div>
 
   <!-- ── TAB: รายการแผน ── -->
@@ -5623,6 +5631,137 @@ thead.sticky {
     </div><!-- end perf-panel-summary -->
 
   </div><!-- end logi-panel-driverperf -->
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- TAB: ติดตามการส่ง (Delivery Tracking)                   -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div id="logi-panel-delivery-tracking" class="hidden space-y-4">
+
+    <!-- Filter bar -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="text-xs font-black text-slate-400 uppercase mb-1 block">วันที่</label>
+        <input type="date" id="dt-date" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2 font-bold text-slate-700 outline-none focus:border-blue-400 text-sm">
+      </div>
+      <button onclick="dtLoad()" class="px-5 py-2.5 rounded-xl font-black text-sm text-white flex items-center gap-2" style="background:#2563eb;">
+        <i class="fas fa-search"></i> โหลดข้อมูล
+      </button>
+      <div class="ml-auto flex items-center gap-3">
+        <label class="flex items-center gap-2 text-sm font-bold text-slate-500 cursor-pointer">
+          <input type="checkbox" id="dt-autorefresh" onchange="dtToggleAuto()" class="rounded">
+          รีเฟรชอัตโนมัติ (30s)
+        </label>
+        <span id="dt-last-refresh" class="text-xs text-slate-400"></span>
+      </div>
+    </div>
+
+    <!-- Summary chips -->
+    <div id="dt-summary" class="hidden grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-center">
+        <div id="dt-sum-plans" class="text-2xl font-black text-slate-800">–</div>
+        <div class="text-xs font-black text-slate-400 uppercase mt-1">แผน</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-center">
+        <div id="dt-sum-shops" class="text-2xl font-black text-slate-800">–</div>
+        <div class="text-xs font-black text-slate-400 uppercase mt-1">จุดส่งทั้งหมด</div>
+      </div>
+      <div class="rounded-2xl border shadow-sm p-4 text-center" style="background:#f0fdf4;border-color:#bbf7d0;">
+        <div id="dt-sum-done" class="text-2xl font-black text-emerald-600">–</div>
+        <div class="text-xs font-black text-emerald-500 uppercase mt-1">ส่งสำเร็จ</div>
+      </div>
+      <div class="rounded-2xl border shadow-sm p-4 text-center" style="background:#fff1f2;border-color:#fecdd3;">
+        <div id="dt-sum-fail" class="text-2xl font-black text-rose-600">–</div>
+        <div class="text-xs font-black text-rose-400 uppercase mt-1">ส่งไม่ได้</div>
+      </div>
+    </div>
+
+    <!-- Per-plan cards -->
+    <div id="dt-plan-list">
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-400">
+        <i class="fas fa-satellite-dish text-4xl mb-3 block opacity-30"></i>
+        <p class="font-bold">เลือกวันที่แล้วกด "โหลดข้อมูล"</p>
+      </div>
+    </div>
+
+  </div><!-- end logi-panel-delivery-tracking -->
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- TAB: จัดการคนขับ (Driver Users)                         -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div id="logi-panel-driver-users" class="hidden space-y-4">
+
+    <!-- Action bar -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex flex-wrap gap-3 items-center justify-between">
+      <h3 class="font-black text-slate-700 text-base flex items-center gap-2">
+        <i class="fas fa-id-card text-purple-500"></i> บัญชีผู้ใช้งาน (Driver App)
+      </h3>
+      <button onclick="duOpenForm(null)" class="px-5 py-2.5 rounded-xl font-black text-sm text-white flex items-center gap-2" style="background:#7c3aed;">
+        <i class="fas fa-plus"></i> เพิ่มคนขับใหม่
+      </button>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-100">
+              <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">ชื่อผู้ใช้</th>
+              <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">ชื่อคนขับ</th>
+              <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">Driver ID</th>
+              <th class="px-4 py-3 text-center font-black text-slate-500 text-xs uppercase">สถานะ</th>
+              <th class="px-4 py-3 text-center font-black text-slate-500 text-xs uppercase">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="du-tbody">
+            <tr><td colspan="5" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Form modal (inline slide-down) -->
+    <div id="du-form-wrap" class="hidden bg-white rounded-2xl border-2 border-purple-200 shadow-xl p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h4 id="du-form-title" class="font-black text-slate-700 text-base">เพิ่มคนขับใหม่</h4>
+        <button onclick="duCloseForm()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-sm font-bold flex items-center justify-center hover:bg-slate-200"><i class="fas fa-times"></i></button>
+      </div>
+      <input type="hidden" id="du-id">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="text-xs font-black text-slate-400 uppercase mb-1 block">ชื่อผู้ใช้ (login)</label>
+          <input id="du-username" type="text" placeholder="เช่น driver01" autocomplete="off"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-400 text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-400 uppercase mb-1 block">รหัสผ่าน</label>
+          <input id="du-password" type="text" placeholder="(ว่างเปล่า = ไม่เปลี่ยน)" autocomplete="new-password"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-400 text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-400 uppercase mb-1 block">ชื่อ-นามสกุล</label>
+          <input id="du-name" type="text" placeholder="ชื่อแสดงในแอพ"
+            class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-400 text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-400 uppercase mb-1 block">Driver ID (logi_drivers)</label>
+          <select id="du-driver-id" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-400 text-sm cursor-pointer">
+            <option value="">– ไม่ระบุ –</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 pt-2">
+        <button onclick="duSave()" class="px-6 py-2.5 rounded-xl font-black text-sm text-white flex items-center gap-2" style="background:#7c3aed;">
+          <i class="fas fa-save"></i> บันทึก
+        </button>
+        <button onclick="duCloseForm()" class="px-6 py-2.5 rounded-xl font-black text-sm bg-slate-100 text-slate-500 hover:bg-slate-200">
+          ยกเลิก
+        </button>
+        <div id="du-form-err" class="text-sm font-bold text-rose-500 hidden"></div>
+      </div>
+    </div>
+
+  </div><!-- end logi-panel-driver-users -->
 
   <!-- ════════════════════════════════════════════════════════ -->
   <!-- TAB: วางแผนการส่งมอบอัตโนมัติ (Auto Delivery Planner)   -->
@@ -22055,27 +22194,33 @@ function updateLogiKPI() {
 // ── Tab switching ──────────────────────────────────────────────────────────
 window.switchLogiTab = function switchLogiTab(tab) {
     const panels = {
-        list:         'logi-panel-list',
-        cal:          'logi-panel-cal',
-        preshipment:  'logi-panel-preshipment',
-        loadorder:    'logi-panel-loadorder',
-        driverlog:    'logi-panel-driverlog',
-        driverperf:   'logi-panel-driverperf',
+        list:              'logi-panel-list',
+        cal:               'logi-panel-cal',
+        preshipment:       'logi-panel-preshipment',
+        loadorder:         'logi-panel-loadorder',
+        driverlog:         'logi-panel-driverlog',
+        driverperf:        'logi-panel-driverperf',
+        'delivery-tracking': 'logi-panel-delivery-tracking',
+        'driver-users':    'logi-panel-driver-users',
     };
     const tabColors = {
-        list:        ' bg-amber-600 text-white shadow',
-        cal:         ' bg-amber-600 text-white shadow',
-        preshipment: ' bg-amber-600 text-white shadow',
-        loadorder:   ' bg-emerald-700 text-white shadow',
-        driverlog:   ' bg-amber-600 text-white shadow',
-        driverperf:  ' bg-amber-600 text-white shadow',
+        list:              ' bg-emerald-600 text-white shadow',
+        cal:               ' bg-amber-600 text-white shadow',
+        preshipment:       ' bg-amber-600 text-white shadow',
+        loadorder:         ' bg-emerald-700 text-white shadow',
+        driverlog:         ' bg-teal-600 text-white shadow',
+        driverperf:        ' bg-rose-600 text-white shadow',
+        'delivery-tracking': ' bg-blue-600 text-white shadow',
+        'driver-users':    ' bg-purple-600 text-white shadow',
     };
     const tabHover = {
-        list:        ' text-gray-500 hover:bg-white hover:text-amber-700',
-        cal:         ' text-gray-500 hover:bg-white hover:text-amber-700',
-        preshipment: ' text-gray-500 hover:bg-white hover:text-amber-700',
-        driverlog:   ' text-gray-500 hover:bg-white hover:text-amber-700',
-        driverperf:  ' text-gray-500 hover:bg-white hover:text-amber-700',
+        list:              ' text-gray-500 hover:bg-white hover:text-emerald-700',
+        cal:               ' text-gray-500 hover:bg-white hover:text-amber-700',
+        preshipment:       ' text-gray-500 hover:bg-white hover:text-orange-600',
+        driverlog:         ' text-gray-500 hover:bg-white hover:text-teal-700',
+        driverperf:        ' text-gray-500 hover:bg-white hover:text-rose-600',
+        'delivery-tracking': ' text-gray-500 hover:bg-white hover:text-blue-600',
+        'driver-users':    ' text-gray-500 hover:bg-white hover:text-purple-600',
     };
     const btnBase = 'flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all';
     Object.keys(panels).forEach(function(t) {
@@ -22090,10 +22235,12 @@ window.switchLogiTab = function switchLogiTab(tab) {
             if (btn) btn.className = btnBase + tabHover[t];
         }
     });
-    if (tab === 'cal')         loadAndRenderLogiCalendar();
-    if (tab === 'preshipment') initPreShipmentTab();
-    if (tab === 'driverlog')   dlogInit();
-    if (tab === 'driverperf')  perfInit();
+    if (tab === 'cal')               loadAndRenderLogiCalendar();
+    if (tab === 'preshipment')       initPreShipmentTab();
+    if (tab === 'driverlog')         dlogInit();
+    if (tab === 'driverperf')        perfInit();
+    if (tab === 'delivery-tracking') dtInit();
+    if (tab === 'driver-users')      duInit();
     if (tab === 'autoplan') {
         initAutoDeliveryPlanner();
         if (typeof window.autoplanRenderDateChips === 'function') window.autoplanRenderDateChips();
@@ -35604,6 +35751,296 @@ window.loRefreshOrderList = window.loRefreshHistory;
             }
         };
     }
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DELIVERY TRACKING — ติดตามการส่งแบบ real-time
+// ══════════════════════════════════════════════════════════════════════════════
+(function(){
+  var _dtTimer = null;
+
+  window.dtInit = function() {
+    var inp = document.getElementById('dt-date');
+    if (inp && !inp.value) inp.value = new Date().toISOString().slice(0,10);
+    dtLoad();
+  };
+
+  window.dtToggleAuto = function() {
+    var chk = document.getElementById('dt-autorefresh');
+    if (!chk) return;
+    if (chk.checked) {
+      _dtTimer = setInterval(dtLoad, 30000);
+    } else {
+      clearInterval(_dtTimer); _dtTimer = null;
+    }
+  };
+
+  window.dtLoad = async function() {
+    var dateVal = (document.getElementById('dt-date')||{}).value || new Date().toISOString().slice(0,10);
+    var listEl  = document.getElementById('dt-plan-list');
+    var sumEl   = document.getElementById('dt-summary');
+    if (listEl) listEl.innerHTML = '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+    if (sumEl)  sumEl.classList.add('hidden');
+
+    // โหลด plans ของวันนั้น
+    var {data: plans, error: pe} = await window._sb.from('logistic_plans')
+      .select('plan_id,status,truck_plate,child_plate,driver_id,shops,is_mother,is_child')
+      .eq('plan_date', dateVal).order('plan_id');
+    if (pe || !plans || !plans.length) {
+      if (listEl) listEl.innerHTML = '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-400"><i class="fas fa-inbox text-4xl mb-3 block opacity-30"></i><p class="font-bold">ไม่พบแผนสำหรับวันที่นี้</p></div>';
+      return;
+    }
+
+    // โหลด delivery_confirmations ทุก plan ของวันนั้น
+    var planIds = plans.map(function(p){ return p.plan_id; });
+    var {data: confs} = await window._sb.from('delivery_confirmations')
+      .select('*').in('plan_id', planIds);
+
+    // โหลด logi_drivers สำหรับ map driver_id → name
+    var {data: drivers} = await window._sb.from('logi_drivers').select('id,name');
+    var driverMap = {};
+    (drivers||[]).forEach(function(d){ driverMap[d.id] = d.name; });
+
+    // โหลด driver_users สำหรับ map driver_id → username
+    var {data: dusers} = await window._sb.from('driver_users').select('driver_id,driver_name,username').eq('active',true);
+    var dUserMap = {};
+    (dusers||[]).forEach(function(u){ dUserMap[u.driver_id] = u.driver_name||u.username; });
+
+    // index confs by plan_id|shop_seq
+    var confMap = {};
+    (confs||[]).forEach(function(c){ confMap[c.plan_id+'|'+c.shop_seq] = c; });
+
+    // คำนวณ summary
+    var totalShops=0, totalDone=0, totalFail=0;
+    plans.forEach(function(p){
+      (p.shops||[]).forEach(function(sh,si){
+        totalShops++;
+        var c = confMap[p.plan_id+'|'+si];
+        if(c&&c.status==='delivered') totalDone++;
+        if(c&&c.status==='failed')    totalFail++;
+      });
+    });
+
+    // แสดง summary
+    if (sumEl) {
+      sumEl.classList.remove('hidden');
+      document.getElementById('dt-sum-plans').textContent  = plans.length;
+      document.getElementById('dt-sum-shops').textContent  = totalShops;
+      document.getElementById('dt-sum-done').textContent   = totalDone;
+      document.getElementById('dt-sum-fail').textContent   = totalFail;
+    }
+
+    // Last refresh
+    var lr = document.getElementById('dt-last-refresh');
+    if (lr) { var n=new Date(); lr.textContent='อัพเดท '+p2t(n.getHours())+':'+p2t(n.getMinutes())+':'+p2t(n.getSeconds()); }
+
+    // render plan cards
+    var statusLabel = {pending:'รอวางแผน',inprogress:'กำลังดำเนินการ',success:'เสร็จสิ้น',cancelled:'ยกเลิก'};
+    var sMeta = {pending:'#94a3b8',delivered:'#059669',failed:'#dc2626'};
+    var sBg   = {pending:'#f8fafc',delivered:'#f0fdf4',failed:'#fff1f2'};
+    var sBdr  = {pending:'#e2e8f0',delivered:'#bbf7d0',failed:'#fecdd3'};
+
+    if (listEl) listEl.innerHTML = plans.map(function(p){
+      var shops = p.shops||[];
+      var total = shops.length, done=0, fail=0, pending=0;
+      shops.forEach(function(sh,si){
+        var c=confMap[p.plan_id+'|'+si];
+        if(!c||c.status==='pending') pending++;
+        else if(c.status==='delivered') done++;
+        else if(c.status==='failed') fail++;
+      });
+      var pct = total>0 ? Math.round((done+fail)/total*100) : 0;
+      var donePct = total>0 ? Math.round(done/total*100) : 0;
+      var allDone = done+fail===total && total>0;
+      var cardBorder = allDone?(fail===0?'#059669':fail===total?'#dc2626':'#d97706'):'#e2e8f0';
+      var driverName = dUserMap[p.driver_id] || driverMap[p.driver_id] || p.driver_id || '–';
+
+      var shopRows = shops.map(function(sh,si){
+        var c = confMap[p.plan_id+'|'+si];
+        var st = c?c.status:'pending';
+        var qty = (sh.items||[]).reduce(function(s,it){return s+(it.qty||0);},0);
+        var confirmedBy = c ? (c.driver_username||'') : '';
+        var confirmedAt = c&&c.confirmed_at ? c.confirmed_at.slice(11,16) : '';
+        return '<tr style="border-bottom:1px solid #f1f5f9;background:'+sBg[st]+';">'
+          +'<td style="padding:8px 12px;font-weight:700;color:#334155;font-size:12px;width:28px;">'+(si+1)+'</td>'
+          +'<td style="padding:8px 12px;font-size:12px;color:#1e293b;font-weight:600;">'
+            +'<div>'+escH(sh.shopName||sh.shopId||'–')+'</div>'
+            +(sh.shopId?'<div style="font-size:10px;color:#94a3b8;">'+escH(sh.shopId)+'</div>':'')
+          +'</td>'
+          +'<td style="padding:8px 12px;font-size:11px;color:#64748b;text-align:center;">'+(qty>0?qty.toLocaleString()+' ชิ้น':'–')+'</td>'
+          +'<td style="padding:8px 12px;text-align:center;">'
+            +'<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:900;color:'+sMeta[st]+';background:'+(st==='delivered'?'#f0fdf4':st==='failed'?'#fff1f2':'#f8fafc')+';border:1px solid '+sBdr[st]+';padding:3px 8px;border-radius:20px;">'
+            +(st==='delivered'?'✓ ส่งสำเร็จ':st==='failed'?'✗ ส่งไม่ได้':'⏳ รอส่ง')+'</span>'
+          +'</td>'
+          +'<td style="padding:8px 12px;font-size:10px;color:#94a3b8;text-align:center;">'+(confirmedAt?confirmedAt:'–')+(confirmedBy?'<br>'+escH(confirmedBy):'')+'</td>'
+          +(c&&c.note?'<td style="padding:8px 12px;font-size:10px;color:#f59e0b;max-width:120px;">'+escH(c.note)+'</td>':'<td style="padding:8px 12px;"></td>')
+          +'</tr>';
+      }).join('');
+
+      return '<div style="background:#fff;border-radius:16px;border:2px solid '+cardBorder+';box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:14px;">'
+        // Card header
+        +'<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid #f1f5f9;">'
+          +'<div style="flex:1;min-width:0;">'
+            +'<div style="font-weight:900;font-size:15px;color:#0f172a;">'+escH(p.plan_id)+'</div>'
+            +'<div style="font-size:11px;color:#64748b;margin-top:2px;">🚛 '+(p.truck_plate||'–')+(p.child_plate?' + '+p.child_plate:'')+'  &bull;  <i class="fas fa-user" style="margin-right:3px;"></i>'+escH(driverName)+'</div>'
+          +'</div>'
+          +'<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">'
+            +'<span style="font-size:12px;font-weight:900;color:'+(allDone&&fail===0?'#059669':allDone&&fail>0?'#d97706':'#3b82f6')+';background:'+(allDone&&fail===0?'#f0fdf4':allDone&&fail>0?'#fffbeb':'#eff6ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+(allDone&&fail===0?'#bbf7d0':allDone&&fail>0?'#fde68a':'#bfdbfe')+';">'
+              +(allDone&&fail===0?'✓ เสร็จสิ้น':allDone&&fail>0?'⚠ มีปัญหา':pending===total?'⏳ รอเริ่ม':'🚚 กำลังส่ง')+'</span>'
+            +'<span style="font-size:13px;font-weight:900;color:#0f172a;">'+done+' / '+total+'</span>'
+          +'</div>'
+        +'</div>'
+        // Progress bar
+        +'<div style="height:5px;background:#f1f5f9;">'
+          +'<div style="height:100%;background:'+(donePct===100?'#059669':donePct>0?'#3b82f6':'#e2e8f0')+';width:'+donePct+'%;transition:width .4s;"></div>'
+        +'</div>'
+        // Shop table
+        +'<div style="overflow-x:auto;">'
+          +'<table style="width:100%;border-collapse:collapse;">'
+            +'<thead><tr style="background:#f8fafc;border-bottom:2px solid #f1f5f9;">'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:left;width:28px;">#</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:left;">ร้านค้า</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">จำนวน</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">สถานะ</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">เวลา / คนขับ</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:left;">หมายเหตุ</th>'
+            +'</tr></thead>'
+            +'<tbody>'+shopRows+'</tbody>'
+          +'</table>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+  };
+
+  function p2t(n){ return String(n).padStart(2,'0'); }
+  function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DRIVER USERS — จัดการบัญชีผู้ใช้งาน Driver App
+// ══════════════════════════════════════════════════════════════════════════════
+(function(){
+  var _duList = [];
+  var _duDrivers = [];
+  var _duEditId = null;
+
+  window.duInit = async function() {
+    // โหลด logi_drivers สำหรับ dropdown
+    var {data: drivers} = await window._sb.from('logi_drivers').select('id,name').order('name');
+    _duDrivers = drivers||[];
+    var sel = document.getElementById('du-driver-id');
+    if (sel) {
+      sel.innerHTML = '<option value="">– ไม่ระบุ –</option>'
+        + _duDrivers.map(function(d){ return '<option value="'+escDU(d.id)+'">'+escDU(d.name)+' ('+escDU(d.id)+')</option>'; }).join('');
+    }
+    await duLoadList();
+  };
+
+  async function duLoadList() {
+    var tbody = document.getElementById('du-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
+    var {data, error} = await window._sb.from('driver_users').select('*').order('username');
+    if (error) { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-rose-400 font-bold">โหลดไม่สำเร็จ: '+escDU(error.message)+'</td></tr>'; return; }
+    _duList = data||[];
+    if (!_duList.length) { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-slate-400">ยังไม่มีบัญชีคนขับ — กด "เพิ่มคนขับใหม่"</td></tr>'; return; }
+    tbody.innerHTML = _duList.map(function(u){
+      var driverLabel = u.driver_id
+        ? ((_duDrivers.find(function(d){return d.id===u.driver_id;})||{}).name||u.driver_id)
+        : '–';
+      return '<tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">'
+        +'<td class="px-4 py-3 font-black text-slate-700">'+escDU(u.username)+'</td>'
+        +'<td class="px-4 py-3 font-semibold text-slate-600">'+escDU(u.driver_name||'–')+'</td>'
+        +'<td class="px-4 py-3 text-sm text-slate-500">'+escDU(driverLabel)+'</td>'
+        +'<td class="px-4 py-3 text-center">'
+          +'<button onclick="duToggleActive('+u.id+','+u.active+')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border transition-all cursor-pointer '
+          +(u.active?'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100':'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200')+'">'
+          +(u.active?'<i class="fas fa-check-circle"></i> ใช้งาน':'<i class="fas fa-ban"></i> ปิดใช้')+'</button>'
+        +'</td>'
+        +'<td class="px-4 py-3 text-center">'
+          +'<button onclick="duOpenForm('+u.id+')" class="px-3 py-1.5 rounded-lg text-xs font-black bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100 mr-1"><i class="fas fa-edit mr-1"></i>แก้ไข</button>'
+          +'<button onclick="duDelete('+u.id+',\''+escDU(u.username)+'\')" class="px-3 py-1.5 rounded-lg text-xs font-black bg-rose-50 text-rose-500 border border-rose-200 hover:bg-rose-100"><i class="fas fa-trash mr-1"></i>ลบ</button>'
+        +'</td>'
+        +'</tr>';
+    }).join('');
+  }
+
+  window.duOpenForm = function(id) {
+    _duEditId = id;
+    var wrap = document.getElementById('du-form-wrap');
+    var titleEl = document.getElementById('du-form-title');
+    var errEl = document.getElementById('du-form-err');
+    if (errEl) { errEl.textContent=''; errEl.classList.add('hidden'); }
+    if (id) {
+      var u = _duList.find(function(x){return x.id===id;});
+      if (!u) return;
+      if (titleEl) titleEl.textContent = 'แก้ไขข้อมูล: '+u.username;
+      document.getElementById('du-id').value      = u.id;
+      document.getElementById('du-username').value = u.username;
+      document.getElementById('du-password').value = '';
+      document.getElementById('du-name').value     = u.driver_name||'';
+      document.getElementById('du-driver-id').value = u.driver_id||'';
+    } else {
+      if (titleEl) titleEl.textContent = 'เพิ่มคนขับใหม่';
+      ['du-id','du-username','du-password','du-name'].forEach(function(id){ var el=document.getElementById(id); if(el)el.value=''; });
+      document.getElementById('du-driver-id').value='';
+    }
+    if (wrap) { wrap.classList.remove('hidden'); wrap.scrollIntoView({behavior:'smooth',block:'start'}); }
+  };
+
+  window.duCloseForm = function() {
+    var wrap = document.getElementById('du-form-wrap');
+    if (wrap) wrap.classList.add('hidden');
+    _duEditId = null;
+  };
+
+  window.duSave = async function() {
+    var username  = (document.getElementById('du-username').value||'').trim();
+    var password  = (document.getElementById('du-password').value||'').trim();
+    var name      = (document.getElementById('du-name').value||'').trim();
+    var driverId  = (document.getElementById('du-driver-id').value||'').trim();
+    var errEl     = document.getElementById('du-form-err');
+    function showErr(msg){ if(errEl){errEl.textContent=msg;errEl.classList.remove('hidden');} }
+    if (!username) { showErr('กรุณาระบุชื่อผู้ใช้'); return; }
+    if (!_duEditId && !password) { showErr('กรุณาระบุรหัสผ่านสำหรับบัญชีใหม่'); return; }
+
+    var payload = { username: username, driver_name: name, driver_id: driverId };
+    if (password) payload.password = password;
+
+    var res;
+    if (_duEditId) {
+      res = await window._sb.from('driver_users').update(payload).eq('id', _duEditId);
+    } else {
+      if (!payload.password) { showErr('กรุณาระบุรหัสผ่าน'); return; }
+      res = await window._sb.from('driver_users').insert(Object.assign({active:true}, payload));
+    }
+    if (res.error) { showErr('❌ '+res.error.message); return; }
+    duCloseForm();
+    showWMSToast('✅ บันทึกข้อมูลเรียบร้อย');
+    await duLoadList();
+  };
+
+  window.duToggleActive = async function(id, current) {
+    var res = await window._sb.from('driver_users').update({active: !current}).eq('id', id);
+    if (res.error) { showWMSToast('❌ '+res.error.message, true); return; }
+    showWMSToast(current ? '🔒 ปิดใช้งานแล้ว' : '✅ เปิดใช้งานแล้ว');
+    await duLoadList();
+  };
+
+  window.duDelete = async function(id, username) {
+    if (!confirm('ลบบัญชี "'+username+'" ออกจากระบบ?\nการกระทำนี้ไม่สามารถย้อนกลับได้')) return;
+    var res = await window._sb.from('driver_users').delete().eq('id', id);
+    if (res.error) { showWMSToast('❌ '+res.error.message, true); return; }
+    showWMSToast('🗑 ลบบัญชีเรียบร้อย');
+    await duLoadList();
+  };
+
+  function escDU(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  function showWMSToast(msg, isErr) {
+    if (typeof showToast === 'function') { showToast(msg, isErr); return; }
+    alert(msg);
+  }
 })();
 </script>
 
