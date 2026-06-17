@@ -26024,35 +26024,59 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
                 renderLogiCalendar();
                 return;
             }
-            logiCalPlanList = (result.data || []).map(function(row) {
-                return {
-                    id:              row.plan_id,
-                    pairId:          row.pair_id          || row.plan_id,
-                    isMother:        row.is_mother        || false,
-                    isChild:         row.is_child         || false,
-                    date:            row.plan_date,
-                    truckType:       row.truck_type       || 'company',
-                    driverTransport: row.driver_transport || '',
-                    driverId:        row.driver_id        || '',
-                    tripNo:          row.trip_no          || '',
-                    jobType:         row.job_type         || '',
-                    status:          row.status           || 'planned',
-                    truckPlate:      row.truck_plate      || '',
-                    childPlate:      row.child_plate      || '',
-                    trailerMode:     row.trailer_mode     || '',
-                    wage:            row.wage             || 0,
-                    warehouse:       row.warehouse        || '',
-                    failReason:      row.fail_reason      || '',
-                    transferRemark:  row.fail_reason      || '',
-                    returnDistance:  row.return_distance  || 0,
-                    totalWeight:     row.total_weight     || 0,
-                    shops:           row.shops            || [],
-                    shopNames:       (row.shops||[]).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
-                    distance:        (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
-                    stopFee:         (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.freeDistance)||0); }, 0),
-                };
-            });
-            renderLogiCalendar();
+            const rows = result.data || [];
+            const calPlanIds = rows.map(function(r){ return r.plan_id; });
+            // sync สถานะจาก trip_logs เหมือน loadLogisticList
+            window._sb.from('trip_logs').select('plan_id,status').in('plan_id', calPlanIds)
+                .then(function(tlRes) {
+                    var tlMap = {};
+                    (tlRes.data || []).forEach(function(t){ tlMap[t.plan_id] = t.status; });
+                    var syncJobs = [];
+                    rows.forEach(function(row) {
+                        var tlStatus = tlMap[row.plan_id];
+                        if (!tlStatus) return;
+                        var want = tlStatus === 'completed' ? 'success' : tlStatus !== 'idle' ? 'inprogress' : null;
+                        if (want && row.status !== want) {
+                            syncJobs.push({ id: row.plan_id, status: want });
+                            row.status = want;
+                        }
+                    });
+                    if (syncJobs.length) {
+                        syncJobs.forEach(function(j){
+                            window._sb.from('logistic_plans').update({ status: j.status }).eq('plan_id', j.id);
+                        });
+                    }
+                    logiCalPlanList = rows.map(function(row) {
+                        return {
+                            id:              row.plan_id,
+                            pairId:          row.pair_id          || row.plan_id,
+                            isMother:        row.is_mother        || false,
+                            isChild:         row.is_child         || false,
+                            date:            row.plan_date,
+                            truckType:       row.truck_type       || 'company',
+                            driverTransport: row.driver_transport || '',
+                            driverId:        row.driver_id        || '',
+                            tripNo:          row.trip_no          || '',
+                            jobType:         row.job_type         || '',
+                            status:          row.status           || 'planned',
+                            truckPlate:      row.truck_plate      || '',
+                            childPlate:      row.child_plate      || '',
+                            trailerMode:     row.trailer_mode     || '',
+                            wage:            row.wage             || 0,
+                            warehouse:       row.warehouse        || '',
+                            failReason:      row.fail_reason      || '',
+                            transferRemark:  row.fail_reason      || '',
+                            returnDistance:  row.return_distance  || 0,
+                            totalWeight:     row.total_weight     || 0,
+                            shops:           row.shops            || [],
+                            shopNames:       (row.shops||[]).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
+                            distance:        (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
+                            stopFee:         (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.freeDistance)||0); }, 0),
+                        };
+                    });
+                    renderLogiCalendar();
+                });
+            return; // renderLogiCalendar ถูกเรียกใน .then ด้านบนแล้ว
         });
 }
 
