@@ -1995,6 +1995,9 @@ thead.sticky {
             <button onclick="switchView('wm-manage')" id="nav-wm-manage" class="nav-btn active" data-tip="จัดการคลัง">
                 <span class="nav-icon"><i class="fas fa-layer-group"></i></span> จัดการคลัง
             </button>
+            <button onclick="switchView('products')" id="nav-products" class="nav-btn" data-tip="จัดการสินค้า">
+                <span class="nav-icon"><i class="fas fa-boxes"></i></span> สินค้า
+            </button>
             <button onclick="switchView('printtag')" id="nav-printtag" class="nav-btn" data-tip="PRINT TAG FG">
                 <span class="nav-icon"><i class="fas fa-tags"></i></span> PRINT TAG FG
             </button>
@@ -6977,6 +6980,105 @@ thead.sticky {
 </div><!-- end view-truck-dispatch-content -->
 
 
+<!-- ============================================================ -->
+<!-- VIEW: จัดการสินค้า                                          -->
+<!-- ============================================================ -->
+<div id="view-products-content" class="hidden space-y-4">
+  <!-- Header -->
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-xl font-black text-slate-800"><i class="fas fa-boxes mr-2 text-emerald-500"></i>จัดการสินค้า</h2>
+      <p class="text-xs text-slate-400 mt-0.5">ข้อมูลสินค้าใน Supabase — แก้ไข เพิ่ม ลบ หรือ import จากไฟล์</p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="prodExport()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm hover:bg-emerald-100 transition"><i class="fas fa-file-excel"></i> Export Excel</button>
+      <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 font-bold text-sm hover:bg-sky-100 transition cursor-pointer">
+        <i class="fas fa-file-import"></i> Import จากไฟล์
+        <input type="file" id="prod-import-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="prodImport(this)">
+      </label>
+      <button onclick="prodOpenAdd()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500 transition shadow"><i class="fas fa-plus"></i> เพิ่มสินค้า</button>
+    </div>
+  </div>
+
+  <!-- Import status -->
+  <div id="prod-import-status" class="hidden rounded-xl border p-4 text-sm font-bold"></div>
+
+  <!-- Search + stats -->
+  <div class="flex flex-wrap items-center gap-3">
+    <input type="text" id="prod-search" placeholder="🔍 ค้นหา SKU / ชื่อสินค้า..." oninput="prodRender()" class="flex-1 min-w-[220px] border-2 border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-emerald-400 bg-slate-50">
+    <span id="prod-count" class="text-xs font-bold text-slate-400"></span>
+  </div>
+
+  <!-- Table -->
+  <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-500 uppercase tracking-wider">
+          <th class="px-4 py-3 text-left">SKU / Item</th>
+          <th class="px-4 py-3 text-left">ชื่อสินค้า</th>
+          <th class="px-4 py-3 text-center">เส้น/มัด</th>
+          <th class="px-4 py-3 text-center">มัด/รอบยก</th>
+          <th class="px-4 py-3 text-center">W Min</th>
+          <th class="px-4 py-3 text-center">W Max</th>
+          <th class="px-4 py-3 text-center">W(std)</th>
+          <th class="px-4 py-3 text-center">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody id="prod-tbody">
+        <tr><td colspan="8" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div><!-- end view-products-content -->
+
+<!-- MODAL: เพิ่ม/แก้ไขสินค้า -->
+<div id="prod-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-center justify-center backdrop-blur-sm px-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h3 id="prod-modal-title" class="text-lg font-black text-slate-800"></h3>
+      <button onclick="prodCloseModal()" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition flex items-center justify-center"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="px-6 py-5 space-y-3">
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">SKU / Item *</label>
+        <input id="prod-f-sku" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400 font-mono" placeholder="เช่น 0RTG3001000">
+      </div>
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อสินค้า *</label>
+        <input id="prod-f-name" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="เช่น PG 3x1.5 ทองฟ้า...">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">เส้น/มัด</label>
+          <input id="prod-f-lpb" type="number" min="1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="50">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">มัด/รอบยก</label>
+          <input id="prod-f-lpr" type="number" min="1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="3">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">W Min (kg)</label>
+          <input id="prod-f-wmin" type="number" step="0.1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="10.0">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">W Max (kg)</label>
+          <input id="prod-f-wmax" type="number" step="0.1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="10.4">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">W(std) (kg)</label>
+          <input id="prod-f-wstd" type="number" step="0.1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="10.2">
+        </div>
+      </div>
+    </div>
+    <div class="px-6 pb-5 flex gap-3 justify-end">
+      <button onclick="prodCloseModal()" class="px-5 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition">ยกเลิก</button>
+      <button onclick="prodSave()" class="px-5 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-500 transition shadow">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
 <!-- ============================================================ -->
 <div id="view-kpi-wh-content" class="hidden space-y-6">
@@ -11951,7 +12053,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock', 'products'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -36334,6 +36436,232 @@ window.loRefreshOrderList = window.loRefreshHistory;
     alert(msg);
   }
 })();
+</script>
+<script>
+// ── Product Management ────────────────────────────────────────────────────────
+(function() {
+  var _prodList = [];
+  var _prodEditSku = null; // null = add mode, string = edit mode
+
+  async function prodLoad() {
+    var tbody = document.getElementById('prod-tbody');
+    if (!tbody) return;
+    var { data, error } = await window._sb.from('products')
+      .select('sku,name,lines_per_bundle,lifts_per_round,min_w,max_w,likely_w')
+      .order('sku');
+    if (error) { tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
+    _prodList = data || [];
+    prodRender();
+  }
+
+  window.prodRender = function() {
+    var q = (document.getElementById('prod-search')?.value || '').toLowerCase();
+    var list = q ? _prodList.filter(p => (p.sku||'').toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q)) : _prodList;
+    var countEl = document.getElementById('prod-count');
+    if (countEl) countEl.textContent = list.length + ' รายการ';
+    var tbody = document.getElementById('prod-tbody');
+    if (!tbody) return;
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-slate-400">ไม่พบสินค้า</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function(p) {
+      var wRange = (p.min_w||p.max_w) ? ((p.min_w||'–') + ' – ' + (p.max_w||'–')) : '–';
+      return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
+        + '<td class="px-4 py-2.5 font-mono font-bold text-slate-700 text-xs">' + esc(p.sku) + '</td>'
+        + '<td class="px-4 py-2.5 text-slate-700 text-xs">' + esc(p.name) + '</td>'
+        + '<td class="px-4 py-2.5 text-center font-bold text-slate-700">' + (p.lines_per_bundle||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center text-slate-600">' + (p.lifts_per_round||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.min_w||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.max_w||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center font-bold text-emerald-700 text-xs">' + (p.likely_w||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center">'
+          + '<div class="flex justify-center gap-1">'
+          + '<button onclick="prodOpenEdit(' + JSON.stringify(p.sku) + ')" class="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>'
+          + '<button onclick="prodDelete(' + JSON.stringify(p.sku) + ')" class="w-7 h-7 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>'
+          + '</div></td>'
+        + '</tr>';
+    }).join('');
+  };
+
+  window.prodOpenAdd = function() {
+    _prodEditSku = null;
+    document.getElementById('prod-modal-title').textContent = '➕ เพิ่มสินค้าใหม่';
+    ['sku','name','lpb','lpr','wmin','wmax','wstd'].forEach(function(k) {
+      var el = document.getElementById('prod-f-' + k);
+      if (el) el.value = '';
+    });
+    document.getElementById('prod-f-sku').disabled = false;
+    document.getElementById('prod-modal').classList.remove('hidden');
+  };
+
+  window.prodOpenEdit = function(sku) {
+    var p = _prodList.find(function(x) { return x.sku === sku; });
+    if (!p) return;
+    _prodEditSku = sku;
+    document.getElementById('prod-modal-title').textContent = '✏️ แก้ไขสินค้า';
+    document.getElementById('prod-f-sku').value = p.sku || '';
+    document.getElementById('prod-f-sku').disabled = true;
+    document.getElementById('prod-f-name').value = p.name || '';
+    document.getElementById('prod-f-lpb').value = p.lines_per_bundle || '';
+    document.getElementById('prod-f-lpr').value = p.lifts_per_round || '';
+    document.getElementById('prod-f-wmin').value = p.min_w || '';
+    document.getElementById('prod-f-wmax').value = p.max_w || '';
+    document.getElementById('prod-f-wstd').value = p.likely_w || '';
+    document.getElementById('prod-modal').classList.remove('hidden');
+  };
+
+  window.prodCloseModal = function() {
+    document.getElementById('prod-modal').classList.add('hidden');
+  };
+
+  window.prodSave = async function() {
+    var sku  = document.getElementById('prod-f-sku').value.trim();
+    var name = document.getElementById('prod-f-name').value.trim();
+    if (!sku || !name) { showToast('❌ กรอก SKU และชื่อสินค้าด้วยครับ', true); return; }
+    var row = {
+      sku: sku, name: name,
+      lines_per_bundle: parseInt(document.getElementById('prod-f-lpb').value) || 0,
+      lifts_per_round:  parseInt(document.getElementById('prod-f-lpr').value) || 0,
+      min_w:    parseFloat(document.getElementById('prod-f-wmin').value) || 0,
+      max_w:    parseFloat(document.getElementById('prod-f-wmax').value) || 0,
+      likely_w: parseFloat(document.getElementById('prod-f-wstd').value) || 0,
+      updated_at: new Date().toISOString()
+    };
+    var { error } = await window._sb.from('products').upsert(row, { onConflict: 'sku' });
+    if (error) { showToast('❌ ' + error.message, true); return; }
+    prodCloseModal();
+    showToast(_prodEditSku ? '✅ แก้ไขสินค้าแล้ว' : '✅ เพิ่มสินค้าแล้ว');
+    await prodLoad();
+  };
+
+  window.prodDelete = async function(sku) {
+    if (!confirm('ลบสินค้า "' + sku + '" ออกจากระบบ?\nไม่สามารถย้อนกลับได้')) return;
+    var { error } = await window._sb.from('products').delete().eq('sku', sku);
+    if (error) { showToast('❌ ' + error.message, true); return; }
+    showToast('🗑 ลบ ' + sku + ' แล้ว');
+    await prodLoad();
+  };
+
+  window.prodExport = function() {
+    if (!_prodList.length) { showToast('ไม่มีข้อมูลให้ export', true); return; }
+    var rows = [['ITem','Product name','เส้นต่อมัด','มัดต่อรอบยก','W(Min)','W(Max)','W(std)']];
+    _prodList.forEach(function(p) {
+      rows.push([p.sku, p.name, p.lines_per_bundle, p.lifts_per_round, p.min_w, p.max_w, p.likely_w]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Product');
+    XLSX.writeFile(wb, 'Product_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  };
+
+  window.prodImport = async function(input) {
+    var file = input.files[0]; if (!file) return;
+    var statusEl = document.getElementById('prod-import-status');
+    statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-blue-50 border-blue-200 text-blue-700';
+    statusEl.textContent = '⏳ กำลังอ่านไฟล์...';
+    statusEl.classList.remove('hidden');
+
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var wb = XLSX.read(e.target.result, { type: 'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (raw.length < 2) throw new Error('ไม่พบข้อมูล');
+
+        // หา header row (แถวที่มี ITem หรือ SKU)
+        var hIdx = raw.findIndex(function(r) {
+          return r.some(function(c) { return /item|sku/i.test(String(c)); });
+        });
+        if (hIdx < 0) hIdx = 0;
+        var headers = raw[hIdx].map(function(h) { return String(h).toLowerCase().trim(); });
+
+        // map column index
+        var col = function(keys) {
+          for (var i = 0; i < keys.length; i++) {
+            var idx = headers.findIndex(function(h) { return h.includes(keys[i]); });
+            if (idx >= 0) return idx;
+          }
+          return -1;
+        };
+        var iSku  = col(['item','sku']);
+        var iName = col(['product name','name','ชื่อ']);
+        var iLpb  = col(['เส้นต่อมัด','เส้น/มัด','lines_per','lpb']);
+        var iLpr  = col(['มัดต่อรอบ','lifts','lpr','มัด/รอบ']);
+        var iWmin = col(['w(min','min_w','w min','wmin']);
+        var iWmax = col(['w(max','max_w','w max','wmax']);
+        var iWstd = col(['w(std','likely','wstd','w std']);
+
+        if (iSku < 0) throw new Error('ไม่พบ column ITem/SKU');
+
+        var rows = [];
+        for (var i = hIdx + 1; i < raw.length; i++) {
+          var r = raw[i];
+          var sku = String(r[iSku]||'').trim();
+          if (!sku) continue;
+
+          // parse W(Min-Max) ถ้ามี format "10.0 - 10.4" ใน single column
+          var wmin = iWmin >= 0 ? parseFloat(r[iWmin]) || 0 : 0;
+          var wmax = iWmax >= 0 ? parseFloat(r[iWmax]) || 0 : 0;
+          if (!wmin && !wmax) {
+            // ลองหาว่า column เดียวกันมี "min - max"
+            var wRange = String(r[col(['w(min','w min'])] || '');
+            var parts = wRange.split(/\s*[-–]\s*/);
+            if (parts.length === 2) { wmin = parseFloat(parts[0])||0; wmax = parseFloat(parts[1])||0; }
+          }
+
+          rows.push({
+            sku: sku,
+            name: iName >= 0 ? String(r[iName]||'').trim() : '',
+            lines_per_bundle: iLpb >= 0 ? parseInt(r[iLpb])||0 : 0,
+            lifts_per_round:  iLpr >= 0 ? parseInt(r[iLpr])||0 : 0,
+            min_w: wmin,
+            max_w: wmax,
+            likely_w: iWstd >= 0 ? parseFloat(r[iWstd])||0 : 0,
+            updated_at: new Date().toISOString()
+          });
+        }
+
+        if (!rows.length) throw new Error('ไม่พบแถวข้อมูล');
+        statusEl.textContent = '⏳ กำลัง upsert ' + rows.length + ' รายการ...';
+
+        // upsert ทีละ 500
+        var errors = 0;
+        for (var s = 0; s < rows.length; s += 500) {
+          var chunk = rows.slice(s, s + 500);
+          var { error } = await window._sb.from('products').upsert(chunk, { onConflict: 'sku' });
+          if (error) { errors++; console.error(error); }
+        }
+
+        input.value = '';
+        if (errors) {
+          statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700';
+          statusEl.textContent = '⚠️ import ' + rows.length + ' รายการ — มีบาง batch error (' + errors + ')';
+        } else {
+          statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-emerald-50 border-emerald-200 text-emerald-700';
+          statusEl.textContent = '✅ import สำเร็จ ' + rows.length + ' รายการ (upsert ทับข้อมูลเดิม)';
+        }
+        await prodLoad();
+      } catch(err) {
+        statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700';
+        statusEl.textContent = '❌ ' + err.message;
+        input.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // โหลดเมื่อเปิด tab สินค้า
+  var _origSwitchView = window.switchView;
+  window.switchView = function(view) {
+    _origSwitchView(view);
+    if (view === 'products') prodLoad();
+  };
+})();
+</script>
 </script>
 <script>
 // ── Trip Result Modal ─────────────────────────────────────────────────────────
