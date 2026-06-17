@@ -19549,6 +19549,7 @@ let LOGI_PRODUCTS_MASTER = []; // alias → ชี้ไปที่ LOGI_MASTER
 // ── เก็บข้อมูลแผนที่กำลังสร้าง ──
 let logiShopList         = [];   // รายการร้านค้าในเที่ยวนี้
 let logiPlanList         = [];   // รายการแผนที่โหลดมาแสดง
+let logiShopVisitsMap    = {};   // {plan_id: {shop_seq: {arrived_at, departed_at}}}
 let logiEditId           = null; // id ของแผนที่กำลังแก้ไข
 let logiShopCounter      = 0;    // นับลำดับร้านค้า
 let logiTrailerMode      = null; // null | 'mother_only' | 'full_trailer'
@@ -21577,6 +21578,17 @@ window.loadLogisticList = async function loadLogisticList() {
             (tl || []).forEach(t => { tripLogMap[t.plan_id] = t.status; });
         }
 
+        // โหลด shop_visits เพื่อแสดงสถานะรายร้านในตาราง
+        logiShopVisitsMap = {};
+        if (planIds.length) {
+            const { data: sv } = await window._sb.from('shop_visits')
+                .select('plan_id,shop_seq,arrived_at,departed_at').in('plan_id', planIds);
+            (sv || []).forEach(function(v) {
+                if (!logiShopVisitsMap[v.plan_id]) logiShopVisitsMap[v.plan_id] = {};
+                logiShopVisitsMap[v.plan_id][v.shop_seq] = v;
+            });
+        }
+
         // sync status ถ้า trip_log บอกว่าเริ่มแล้วแต่ plan ยังเป็น planned
         const syncJobs = [];
         (data || []).forEach(row => {
@@ -21960,14 +21972,22 @@ window.renderLogisticList = function renderLogisticList() {
 
                 // Col 5: ชื่อร้าน — rowspan ต่อร้าน, align top
                 if (isFirstItem) {
+                    const shopSeqKey = s.shopSeq != null ? s.shopSeq : si;
+                    const sv = (logiShopVisitsMap[p.id] || {})[shopSeqKey];
+                    const shopStatusBadge = sv && sv.departed_at
+                        ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#f0fdf4;color:#059669;border-color:#bbf7d0;">✓ ส่งแล้ว</span>`
+                        : sv && sv.arrived_at
+                        ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#fffbeb;color:#d97706;border-color:#fde68a;">📦 อยู่ที่ร้าน</span>`
+                        : '';
                     row += `
                     <td rowspan="${shopRows}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200 ${shopSepClass}" style="vertical-align:top">
                         <div class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full text-white text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5" style="background:${accent.dotColor};">${(s.shopSeq != null ? s.shopSeq : si) + 1}</span>
+                            <span class="w-5 h-5 rounded-full text-white text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5" style="background:${accent.dotColor};">${shopSeqKey + 1}</span>
                             <div>
                                 <div class="font-bold text-xs text-slate-800 leading-snug">${s.shopName}</div>
                                 ${s.sale ? `<div class="text-[10px] font-semibold mt-0.5" style="color:${accent.textColor};"><i class="fas fa-user-tie mr-1 opacity-70"></i>${s.sale}</div>` : ''}
                                 ${s.distance ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="fas fa-route mr-1"></i>${s.distance} กม.</div>` : ''}
+                                ${shopStatusBadge}
                             </div>
                         </div>
                     </td>`;
