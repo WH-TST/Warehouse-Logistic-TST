@@ -35980,6 +35980,20 @@ window.loRefreshOrderList = window.loRefreshHistory;
     var visitMap = {};
     (visits||[]).forEach(function(v){ visitMap[v.plan_id+'|'+v.shop_seq] = v; });
 
+    // reverse-sync: ถ้า plan เป็น inprogress/success แต่ไม่มี trip_log → reset เป็น planned
+    var reverseSync = [];
+    plans.forEach(function(p) {
+      if ((p.status === 'inprogress' || p.status === 'success') && !tripMap[p.plan_id]) {
+        reverseSync.push(p.plan_id);
+        p.status = 'planned';
+      }
+    });
+    if (reverseSync.length) {
+      reverseSync.forEach(function(id) {
+        window._sb.from('logistic_plans').update({ status: 'planned' }).eq('plan_id', id);
+      });
+    }
+
     // โหลด driver_users สำหรับ username → ชื่อแสดง
     var {data: dusers} = await window._sb.from('driver_users').select('driver_id,driver_name,username').eq('active',true);
     var dUserByUN = {};   // username → ชื่อ
