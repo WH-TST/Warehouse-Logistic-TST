@@ -612,9 +612,10 @@
               if (!d.bw || !d.bh) return;
               var info = stackInfo(d.bundles, d.bw, d.bh);
               if (!info) return;
-              aheadUsedW += info.usedWidthCm;
               aheadList.push({ sku:sku, skuName:d.skuName||sku, bundles:d.bundles, usedWidthCm:info.usedWidthCm });
             });
+            // ใช้ผลรวมจาก aheadBreakdown (per-day) เหมือนกับ dayProgression เพื่อให้ % ตรงกัน
+            aheadUsedW = aheadBreakdown.reduce(function(s, bd) { return s + bd.dayUsedCm; }, 0);
 
             var continuousSkus = [];
             var zDayCount = skuDayCount[zoneId] || {};
