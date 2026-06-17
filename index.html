@@ -13082,8 +13082,9 @@ let blockingChartInstance = null;
         const tableName = tableType === 'onhand_fg' ? 'onhand_fg' : 'onhand_semi';
         const header = rows[0].map(h => String(h||'').trim().toLowerCase()
             .replace(/ /g,'_').replace(/[^a-z0-9_]/g,''));
-        // map D365 column names → Supabase column names
-        const colMap = {
+
+        // FG columns (D365 CW format)
+        const colMapFG = {
             'item_number':'item_number', 'item_numbe':'item_number',
             'product_name':'product_name',
             'cw_ordered':'cw_ordered', 'cw_order':'cw_ordered',
@@ -13100,6 +13101,24 @@ let blockingChartInstance = null;
             'available_physical':'available_physical',
             'total_available':'total_available'
         };
+
+        // SEMI columns (Batch/Serial level)
+        const colMapSEMI = {
+            'item_number':'item_number', 'item_numbe':'item_number',
+            'product_name':'product_name',
+            'warehouse':'warehouse',
+            'batch_number':'batch_number', 'batch_numbe':'batch_number',
+            'serial_number':'serial_number', 'serial_numbe':'serial_number',
+            'physical_inventory':'physical_inventory', 'physical_inve':'physical_inventory',
+            'available_physical':'available_physical', 'available_ph':'available_physical',
+            'total_available':'total_available'
+        };
+
+        const colMap = tableType === 'onhand_fg' ? colMapFG : colMapSEMI;
+        const textCols = tableType === 'onhand_fg'
+            ? ['item_number','product_name','warehouse']
+            : ['item_number','product_name','warehouse','batch_number','serial_number'];
+
         const batch = [];
         const now = new Date().toISOString();
         rows.slice(1).forEach(function(row) {
@@ -13110,14 +13129,14 @@ let blockingChartInstance = null;
                 if (!col) return;
                 let v = row[i];
                 if (v instanceof Date) { const p = n => String(n).padStart(2,'0'); v = v.getFullYear()+'-'+p(v.getMonth()+1)+'-'+p(v.getDate()); }
-                if (v === null || v === undefined || v === '') v = col === 'item_number' || col === 'product_name' || col === 'warehouse' ? '' : 0;
+                if (v === null || v === undefined || v === '') v = textCols.includes(col) ? '' : 0;
                 rec[col] = v;
             });
-            if (!rec.item_number || !rec.warehouse) return;
+            if (!rec.item_number) return;
             batch.push(rec);
         });
         if (!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
-        // DELETE all + INSERT (replace strategy)
+        // DELETE all → INSERT ใหม่ (replace strategy)
         await window._sb.from(tableName).delete().gte('imported_at', '2000-01-01');
         const CHUNK = 500;
         for (let i = 0; i < batch.length; i += CHUNK) {
