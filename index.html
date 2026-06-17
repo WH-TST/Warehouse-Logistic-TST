@@ -12080,7 +12080,8 @@ window.switchView = function switchView(view) {
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
             'truck-dispatch': 'จัดรถส่งสินค้า — Truck Dispatch',
-            'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ'
+            'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
+            'products': 'จัดการสินค้า — Product Master'
         }[view] || 'WL Management';
     }
 
@@ -12125,6 +12126,11 @@ window.switchView = function switchView(view) {
     // จัดรถ — init เมื่อเข้า
     if (view === 'truck-dispatch') {
         tdInit();
+    }
+
+    // จัดการสินค้า — โหลดจาก Supabase เมื่อเปิดครั้งแรก
+    if (view === 'products') {
+        if (typeof window.prodLoad === 'function') window.prodLoad();
     }
 }
 
@@ -36446,6 +36452,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
   async function prodLoad() {
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
     var { data, error } = await window._sb.from('products')
       .select('sku,name,lines_per_bundle,lifts_per_round,min_w,max_w,likely_w')
       .order('sku');
@@ -36654,12 +36661,8 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // โหลดเมื่อเปิด tab สินค้า
-  var _origSwitchView = window.switchView;
-  window.switchView = function(view) {
-    _origSwitchView(view);
-    if (view === 'products') prodLoad();
-  };
+  // expose ให้ switchView เรียกได้
+  window.prodLoad = prodLoad;
 })();
 </script>
 </script>
