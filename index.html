@@ -22318,6 +22318,8 @@ window.switchLogiTab = function switchLogiTab(tab) {
             if (btn) btn.className = btnBase + tabHover[t];
         }
     });
+    // หยุด auto-refresh ติดตามเมื่อออกจากแท็บ
+    if (tab !== 'delivery-tracking' && typeof window.dtDestroy === 'function') window.dtDestroy();
     if (tab === 'cal')               loadAndRenderLogiCalendar();
     if (tab === 'preshipment')       initPreShipmentTab();
     if (tab === 'driverlog')         dlogInit();
@@ -35873,6 +35875,17 @@ window.loRefreshOrderList = window.loRefreshHistory;
     var inp = document.getElementById('dt-date');
     if (inp && !inp.value) inp.value = new Date().toISOString().slice(0,10);
     dtLoad();
+    // เปิด auto-refresh อัตโนมัติเมื่อเข้าแท็บ
+    clearInterval(_dtTimer);
+    _dtTimer = setInterval(dtLoad, 30000);
+    var chk = document.getElementById('dt-autorefresh');
+    if (chk) chk.checked = true;
+  };
+
+  window.dtDestroy = function() {
+    clearInterval(_dtTimer); _dtTimer = null;
+    var chk = document.getElementById('dt-autorefresh');
+    if (chk) chk.checked = false;
   };
 
   window.dtToggleAuto = function() {
