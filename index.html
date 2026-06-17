@@ -7675,6 +7675,24 @@ thead.sticky {
 </div>
 
 <!-- ============================================================ -->
+<!-- MODAL: ผลการส่งมอบจาก Driver App                           -->
+<!-- ============================================================ -->
+<div id="trip-result-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-start justify-center backdrop-blur-sm overflow-y-auto py-8 px-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div>
+        <h3 class="text-lg font-black text-slate-800"><i class="fas fa-truck-moving mr-2 text-emerald-500"></i>ผลการส่งมอบ</h3>
+        <div id="tr-plan-id" class="text-xs text-slate-400 mt-0.5"></div>
+      </div>
+      <button onclick="closeTripResult()" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition flex items-center justify-center"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="tr-body" class="px-6 py-5 space-y-4">
+      <div class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i><div class="mt-2 text-sm">กำลังโหลด...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
 <!-- MODAL: สร้าง/แก้ไขแผนการส่งมอบ                            -->
 <!-- ============================================================ -->
 <div id="logistic-form-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[70] flex items-start justify-center backdrop-blur-sm overflow-y-auto py-8 px-4">
@@ -21869,6 +21887,7 @@ window.renderLogisticList = function renderLogisticList() {
         const statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border whitespace-nowrap" style="${st.style || ''}"><span class="w-1.5 h-1.5 rounded-full" style="background:currentColor"></span>${st.label}</span>`;
 
         // แถว -C (รถลูก): ไม่มีปุ่มจัดการ (จัดการผ่านแถวรถแม่)
+        const hasTripData = ['inprogress','success'].includes(p.status);
         const actionBtns = p.isChild
             ? `<div class="text-[10px] text-purple-300 text-center">—</div>`
             : `<div class="grid grid-cols-2 gap-1">
@@ -21876,6 +21895,7 @@ window.renderLogisticList = function renderLogisticList() {
                     <button onclick="editLogiPlan('${p.id}')" title="แก้ไข" class="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>
                     <button onclick="deleteLogiPlan('${p.id}')" title="${p.isMother ? 'ลบ (แม่+ลูกพร้อมกัน)' : 'ลบ'}" class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>
                     <button onclick="printPreShipmentFromPlan('${p.id}')" title="พิมพ์ PRE-SHIPMENT" class="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 text-orange-500 hover:bg-orange-500 hover:text-white transition text-xs"><i class="fas fa-file-invoice"></i></button>
+                    ${hasTripData ? `<button onclick="viewTripResult('${p.id}')" title="ดูผลการส่ง (Driver App)" class="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-600 hover:text-white transition text-xs col-span-2"><i class="fas fa-route mr-1"></i>ผลการส่ง</button>` : ''}
                </div>`;
 
         // Col 1-4: ทะเบียน / เที่ยว / คนขับ / ประเภทงาน — rowspan ทั้งเที่ยว, align top
@@ -36314,6 +36334,98 @@ window.loRefreshOrderList = window.loRefreshHistory;
     alert(msg);
   }
 })();
+</script>
+<script>
+// ── Trip Result Modal ─────────────────────────────────────────────────────────
+window.closeTripResult = function() {
+  document.getElementById('trip-result-modal').classList.add('hidden');
+};
+
+window.viewTripResult = async function(planId) {
+  var modal = document.getElementById('trip-result-modal');
+  var body  = document.getElementById('tr-body');
+  document.getElementById('tr-plan-id').textContent = planId;
+  body.innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i><div class="mt-2 text-sm">กำลังโหลด...</div></div>';
+  modal.classList.remove('hidden');
+
+  var [tlRes, svRes] = await Promise.all([
+    window._sb.from('trip_logs').select('*').eq('plan_id', planId).maybeSingle(),
+    window._sb.from('shop_visits').select('*').eq('plan_id', planId).order('shop_seq')
+  ]);
+
+  var tl = tlRes.data;
+  var visits = svRes.data || [];
+
+  if (!tl) {
+    body.innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fas fa-inbox text-3xl"></i><div class="mt-2">ยังไม่มีข้อมูลจาก Driver App</div></div>';
+    return;
+  }
+
+  function fmt(iso) {
+    if (!iso) return '–';
+    var d = new Date(iso);
+    return d.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+  }
+  function fmtDate(iso) {
+    if (!iso) return '–';
+    return new Date(iso).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'numeric'});
+  }
+  function km(a, b) { return (a && b) ? (b - a) + ' กม.' : '–'; }
+
+  var STATUS_BADGE = {
+    traveling:  '<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">กำลังเดินทาง</span>',
+    at_shop:    '<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">อยู่ที่ร้าน</span>',
+    returning:  '<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">กำลังกลับ</span>',
+    completed:  '<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">เสร็จสิ้น</span>',
+  };
+
+  var statusBadge = STATUS_BADGE[tl.status] || '<span class="text-[10px] text-slate-400">' + (tl.status||'–') + '</span>';
+
+  var summaryHtml = `
+    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+      <div class="flex justify-between items-center">
+        <span class="text-xs font-black text-slate-500 uppercase tracking-wider">สรุปเที่ยว</span>
+        ${statusBadge}
+      </div>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+        <div><span class="text-slate-400">คนขับ:</span> <span class="font-bold text-slate-700">${tl.driver_username||'–'}</span></div>
+        <div><span class="text-slate-400">วันที่:</span> <span class="font-bold text-slate-700">${fmtDate(tl.started_at)}</span></div>
+        <div><span class="text-slate-400">เริ่ม:</span> <span class="font-bold text-slate-700">${fmt(tl.started_at)}</span></div>
+        <div><span class="text-slate-400">เสร็จ:</span> <span class="font-bold text-slate-700">${fmt(tl.completed_at)}</span></div>
+        <div><span class="text-slate-400">ไมล์ออก:</span> <span class="font-bold text-slate-700">${tl.mileage_start||'–'}</span></div>
+        <div><span class="text-slate-400">ไมล์กลับ:</span> <span class="font-bold text-slate-700">${tl.mileage_end||'–'}</span></div>
+        <div class="col-span-2"><span class="text-slate-400">ระยะทางรวม:</span> <span class="font-black text-emerald-700">${km(tl.mileage_start, tl.mileage_end)}</span></div>
+      </div>
+    </div>`;
+
+  var shopsHtml = visits.length === 0
+    ? '<div class="text-center text-slate-400 text-sm py-4">ยังไม่มีข้อมูลร้าน</div>'
+    : visits.map(function(v) {
+        var photo = v.photo_url
+          ? `<a href="${v.photo_url}" target="_blank"><img src="${v.photo_url}" class="w-full max-h-40 object-cover rounded-lg mt-2 border border-slate-200 cursor-pointer hover:opacity-90 transition"></a>`
+          : '<div class="text-xs text-slate-400 mt-1"><i class="fas fa-image mr-1"></i>ไม่มีรูป</div>';
+        var departed = v.departed_at
+          ? `<span class="text-xs text-slate-500">ออก: <span class="font-bold text-slate-700">${fmt(v.departed_at)}</span></span>`
+          : '<span class="text-xs text-amber-500">ยังไม่ออก</span>';
+        return `
+          <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <div class="flex justify-between items-start mb-1">
+              <div class="font-black text-slate-800">${v.shop_name||'ร้าน '+(v.shop_seq+1)}</div>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">#${v.shop_seq+1}</span>
+            </div>
+            <div class="flex gap-4 text-xs text-slate-500 mb-1">
+              <span>ถึง: <span class="font-bold text-slate-700">${fmt(v.arrived_at)}</span></span>
+              ${departed}
+            </div>
+            <div class="text-xs text-slate-500">ไมล์ถึง: <span class="font-bold">${v.mileage_arrival||'–'}</span></div>
+            ${photo}
+          </div>`;
+      }).join('');
+
+  body.innerHTML = summaryHtml
+    + `<div class="text-xs font-black text-slate-500 uppercase tracking-wider mt-2">รายร้าน (${visits.length} ร้าน)</div>`
+    + shopsHtml;
+};
 </script>
 
 
