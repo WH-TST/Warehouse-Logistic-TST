@@ -35887,14 +35887,18 @@ window.loRefreshOrderList = window.loRefreshHistory;
         if (log.mileage_end) mileInfo += ' → '+log.mileage_end.toLocaleString()+' (Δ'+(log.mileage_end-log.mileage_start)+')';
       }
 
-      // Shop rows — status จาก shop_visits
+      // Shop rows — status จาก shop_visits + trip_log state
       var shopRows = shops.map(function(sh,si){
         var v = visitMap[p.plan_id+'|'+si];
-        // สถานะ: departed=ส่งแล้ว, arrived=อยู่ที่ร้าน, null=รอ
-        var vSt = v&&v.departed_at?'delivered':v&&v.arrived_at?'at_shop':'pending';
-        var vColor={delivered:'#059669',at_shop:'#d97706',pending:'#94a3b8'}[vSt];
-        var vBg   ={delivered:'#f0fdf4',at_shop:'#fffbeb',pending:'#f8fafc'}[vSt];
-        var vLabel={delivered:'✓ ส่งแล้ว',at_shop:'📦 อยู่ที่ร้าน',pending:'⏳ รอส่ง'}[vSt];
+        // ร้านนี้คือปลายทางปัจจุบันของคนขับหรือเปล่า
+        var isTarget = log && log.current_shop_seq===si && (log.status==='traveling'||log.status==='at_shop');
+        var vSt = v&&v.departed_at ? 'delivered'
+                : v&&v.arrived_at  ? 'at_shop'
+                : (log&&log.status==='traveling'&&log.current_shop_seq===si) ? 'traveling'
+                : 'pending';
+        var vColor={delivered:'#059669',at_shop:'#d97706',traveling:'#2563eb',pending:'#94a3b8'}[vSt];
+        var vBg   ={delivered:'#f0fdf4',at_shop:'#fffbeb',traveling:'#eff6ff',pending:'#f8fafc'}[vSt];
+        var vLabel={delivered:'✓ ส่งแล้ว',at_shop:'📦 อยู่ที่ร้าน',traveling:'🚚 กำลังเดินทางมา',pending:'⏳ รอส่ง'}[vSt];
         var arrivedT = v&&v.arrived_at  ? v.arrived_at.slice(11,16)  : '';
         var departedT= v&&v.departed_at ? v.departed_at.slice(11,16) : '';
         var arrMile  = v&&v.mileage_arrival ? v.mileage_arrival.toLocaleString()+' กม.' : '';
@@ -35909,7 +35913,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
             +(sh.shopId?'<div style="font-size:10px;color:#94a3b8;">'+escH(sh.shopId)+'</div>':'')
           +'</td>'
           +'<td style="padding:8px 12px;text-align:center;">'
-            +'<span style="font-size:11px;font-weight:900;color:'+vColor+';padding:3px 8px;border-radius:20px;background:'+vBg+';border:1px solid '+(vSt==='delivered'?'#bbf7d0':vSt==='at_shop'?'#fde68a':'#e2e8f0')+' ;">'+vLabel+'</span>'
+            +'<span style="font-size:11px;font-weight:900;color:'+vColor+';padding:3px 8px;border-radius:20px;background:'+vBg+';border:1px solid '+(vSt==='delivered'?'#bbf7d0':vSt==='at_shop'?'#fde68a':vSt==='traveling'?'#bfdbfe':'#e2e8f0')+' ;">'+vLabel+'</span>'
           +'</td>'
           +'<td style="padding:8px 12px;font-size:11px;color:#64748b;text-align:center;white-space:nowrap;">'
             +(arrivedT?'ถึง '+arrivedT:'–')
