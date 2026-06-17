@@ -35788,131 +35788,170 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
     // โหลด plans ของวันนั้น
     var {data: plans, error: pe} = await window._sb.from('logistic_plans')
-      .select('plan_id,status,truck_plate,child_plate,driver_id,shops,is_mother,is_child')
+      .select('plan_id,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child')
       .eq('plan_date', dateVal).order('plan_id');
     if (pe || !plans || !plans.length) {
       if (listEl) listEl.innerHTML = '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-400"><i class="fas fa-inbox text-4xl mb-3 block opacity-30"></i><p class="font-bold">ไม่พบแผนสำหรับวันที่นี้</p></div>';
       return;
     }
-
-    // โหลด delivery_confirmations ทุก plan ของวันนั้น
     var planIds = plans.map(function(p){ return p.plan_id; });
-    var {data: confs} = await window._sb.from('delivery_confirmations')
-      .select('*').in('plan_id', planIds);
 
-    // โหลด logi_drivers สำหรับ map driver_id → name
-    var {data: drivers} = await window._sb.from('logi_drivers').select('id,name');
-    var driverMap = {};
-    (drivers||[]).forEach(function(d){ driverMap[d.id] = d.name; });
+    // โหลด trip_logs (สถานะเที่ยวจาก Driver App)
+    var {data: trips} = await window._sb.from('trip_logs').select('*').in('plan_id', planIds);
+    var tripMap = {};
+    (trips||[]).forEach(function(t){ tripMap[t.plan_id] = t; });
 
-    // โหลด driver_users สำหรับ map driver_id → displayName และ username → displayName
+    // โหลด shop_visits (บันทึกแต่ละจุดส่ง)
+    var {data: visits} = await window._sb.from('shop_visits').select('*').in('plan_id', planIds);
+    var visitMap = {};
+    (visits||[]).forEach(function(v){ visitMap[v.plan_id+'|'+v.shop_seq] = v; });
+
+    // โหลด driver_users สำหรับ username → ชื่อแสดง
     var {data: dusers} = await window._sb.from('driver_users').select('driver_id,driver_name,username').eq('active',true);
-    var dUserMap = {};      // driver_id  → ชื่อแสดง
-    var dUserByUN = {};     // username   → ชื่อแสดง
+    var dUserByUN = {};   // username → ชื่อ
+    var dUserByDID = {};  // driver_id → ชื่อ
     (dusers||[]).forEach(function(u){
       var dn = u.driver_name||u.username;
-      if (u.driver_id) dUserMap[u.driver_id] = dn;
       dUserByUN[u.username] = dn;
+      if (u.driver_id) dUserByDID[u.driver_id] = dn;
     });
 
-    // index confs by plan_id|shop_seq
-    var confMap = {};
-    (confs||[]).forEach(function(c){ confMap[c.plan_id+'|'+c.shop_seq] = c; });
-
     // คำนวณ summary
-    var totalShops=0, totalDone=0, totalFail=0;
+    var totalShops=0, totalDelivered=0, totalCompleted=0;
     plans.forEach(function(p){
+      var log = tripMap[p.plan_id];
+      if (log && log.status==='completed') totalCompleted++;
       (p.shops||[]).forEach(function(sh,si){
         totalShops++;
-        var c = confMap[p.plan_id+'|'+si];
-        if(c&&c.status==='delivered') totalDone++;
-        if(c&&c.status==='failed')    totalFail++;
+        var v = visitMap[p.plan_id+'|'+si];
+        if (v && v.departed_at) totalDelivered++;
       });
     });
 
-    // แสดง summary
+    // Summary chips
     if (sumEl) {
       sumEl.classList.remove('hidden');
-      document.getElementById('dt-sum-plans').textContent  = plans.length;
-      document.getElementById('dt-sum-shops').textContent  = totalShops;
-      document.getElementById('dt-sum-done').textContent   = totalDone;
-      document.getElementById('dt-sum-fail').textContent   = totalFail;
+      document.getElementById('dt-sum-plans').textContent = plans.length;
+      document.getElementById('dt-sum-shops').textContent = totalShops;
+      document.getElementById('dt-sum-done').textContent  = totalDelivered;
+      document.getElementById('dt-sum-fail').textContent  = totalCompleted;
+      // ปรับ label chip ที่ 4 ให้ถูกต้อง
+      var failLbl = sumEl.querySelector('#dt-sum-fail + div, #dt-sum-fail ~ div');
+      var failBox = document.getElementById('dt-sum-fail').parentElement;
+      if (failBox) {
+        failBox.style.background='#eff6ff'; failBox.style.borderColor='#bfdbfe';
+        var lbl = failBox.querySelector('div:last-child');
+        if (lbl) { lbl.textContent='เที่ยวเสร็จ'; lbl.style.color='#3b82f6'; }
+        document.getElementById('dt-sum-fail').style.color='#2563eb';
+      }
     }
 
     // Last refresh
     var lr = document.getElementById('dt-last-refresh');
     if (lr) { var n=new Date(); lr.textContent='อัพเดท '+p2t(n.getHours())+':'+p2t(n.getMinutes())+':'+p2t(n.getSeconds()); }
 
-    // render plan cards
-    var statusLabel = {pending:'รอวางแผน',inprogress:'กำลังดำเนินการ',success:'เสร็จสิ้น',cancelled:'ยกเลิก'};
-    var sMeta = {pending:'#94a3b8',delivered:'#059669',failed:'#dc2626'};
-    var sBg   = {pending:'#f8fafc',delivered:'#f0fdf4',failed:'#fff1f2'};
-    var sBdr  = {pending:'#e2e8f0',delivered:'#bbf7d0',failed:'#fecdd3'};
+    // Trip status metadata
+    var tripStatusMeta = {
+      idle:      {label:'รอเริ่ม',      color:'#94a3b8', bg:'#f8fafc', border:'#e2e8f0'},
+      traveling: {label:'🚚 กำลังเดินทาง',color:'#2563eb', bg:'#eff6ff', border:'#bfdbfe'},
+      at_shop:   {label:'📦 อยู่ที่ร้าน', color:'#d97706', bg:'#fffbeb', border:'#fde68a'},
+      returning: {label:'↩ กำลังกลับ',  color:'#7c3aed', bg:'#f5f3ff', border:'#ddd6fe'},
+      completed: {label:'✓ เสร็จสิ้น',  color:'#059669', bg:'#f0fdf4', border:'#bbf7d0'},
+    };
 
     if (listEl) listEl.innerHTML = plans.map(function(p){
       var shops = p.shops||[];
-      var total = shops.length, done=0, fail=0, pending=0;
-      shops.forEach(function(sh,si){
-        var c=confMap[p.plan_id+'|'+si];
-        if(!c||c.status==='pending') pending++;
-        else if(c.status==='delivered') done++;
-        else if(c.status==='failed') fail++;
-      });
-      var pct = total>0 ? Math.round((done+fail)/total*100) : 0;
-      var donePct = total>0 ? Math.round(done/total*100) : 0;
-      var allDone = done+fail===total && total>0;
-      var cardBorder = allDone?(fail===0?'#059669':fail===total?'#dc2626':'#d97706'):'#e2e8f0';
-      var driverName = dUserMap[p.driver_id] || driverMap[p.driver_id] || (p.driver_id?p.driver_id:'–');
+      var total = shops.length;
+      var log   = tripMap[p.plan_id]||null;
+      var tSt   = log ? log.status : 'idle';
+      var tm    = tripStatusMeta[tSt]||tripStatusMeta.idle;
 
+      // นับจุดส่งที่ออกแล้ว (departed = delivered)
+      var delivered=0, atShop=0;
+      shops.forEach(function(sh,si){
+        var v=visitMap[p.plan_id+'|'+si];
+        if(v&&v.departed_at) delivered++;
+        else if(v&&v.arrived_at) atShop++;
+      });
+      var donePct = total>0 ? Math.round(delivered/total*100) : 0;
+      var cardBorder = tSt==='completed'?'#059669':tSt==='idle'?'#e2e8f0':'#bfdbfe';
+
+      // ชื่อคนขับ: จาก trip_log.driver_username → lookup, หรือ plan.driver_transport
+      var driverName = (log&&log.driver_username ? dUserByUN[log.driver_username]||log.driver_username : null)
+                    || dUserByDID[p.driver_id] || p.driver_transport || '–';
+
+      // ไมล์ (ถ้ามี)
+      var mileInfo = '';
+      if (log && log.mileage_start) {
+        mileInfo += ' &bull; ออก '+log.mileage_start.toLocaleString()+' กม.';
+        if (log.mileage_end) mileInfo += ' → '+log.mileage_end.toLocaleString()+' (Δ'+(log.mileage_end-log.mileage_start)+')';
+      }
+
+      // Shop rows — status จาก shop_visits
       var shopRows = shops.map(function(sh,si){
-        var c = confMap[p.plan_id+'|'+si];
-        var st = c?c.status:'pending';
-        var qty = (sh.items||[]).reduce(function(s,it){return s+(it.qty||0);},0);
-        var confirmedBy = c&&c.driver_username ? (dUserByUN[c.driver_username]||c.driver_username) : '';
-        var confirmedAt = c&&c.confirmed_at ? c.confirmed_at.slice(11,16) : '';
-        return '<tr style="border-bottom:1px solid #f1f5f9;background:'+sBg[st]+';">'
-          +'<td style="padding:8px 12px;font-weight:700;color:#334155;font-size:12px;width:28px;">'+(si+1)+'</td>'
+        var v = visitMap[p.plan_id+'|'+si];
+        // สถานะ: departed=ส่งแล้ว, arrived=อยู่ที่ร้าน, null=รอ
+        var vSt = v&&v.departed_at?'delivered':v&&v.arrived_at?'at_shop':'pending';
+        var vColor={delivered:'#059669',at_shop:'#d97706',pending:'#94a3b8'}[vSt];
+        var vBg   ={delivered:'#f0fdf4',at_shop:'#fffbeb',pending:'#f8fafc'}[vSt];
+        var vLabel={delivered:'✓ ส่งแล้ว',at_shop:'📦 อยู่ที่ร้าน',pending:'⏳ รอส่ง'}[vSt];
+        var arrivedT = v&&v.arrived_at  ? v.arrived_at.slice(11,16)  : '';
+        var departedT= v&&v.departed_at ? v.departed_at.slice(11,16) : '';
+        var arrMile  = v&&v.mileage_arrival ? v.mileage_arrival.toLocaleString()+' กม.' : '';
+        var gpsIcon  = v&&v.lat_arrival ? '<span title="lat:'+v.lat_arrival.toFixed(5)+' lng:'+v.lng_arrival.toFixed(5)+'" style="color:#34d399;font-size:11px;cursor:help;">📍</span>' : '';
+        var photoHtml= v&&v.photo_url
+          ? '<a href="'+v.photo_url+'" target="_blank" style="display:inline-block;width:36px;height:36px;border-radius:6px;overflow:hidden;vertical-align:middle;"><img src="'+v.photo_url+'" style="width:100%;height:100%;object-fit:cover;"></a>'
+          : '<span style="color:#e2e8f0;font-size:18px;">–</span>';
+        return '<tr style="border-bottom:1px solid #f1f5f9;background:'+vBg+';">'
+          +'<td style="padding:8px 12px;font-weight:700;color:#334155;font-size:12px;width:24px;">'+(si+1)+'</td>'
           +'<td style="padding:8px 12px;font-size:12px;color:#1e293b;font-weight:600;">'
             +'<div>'+escH(sh.shopName||sh.shopId||'–')+'</div>'
             +(sh.shopId?'<div style="font-size:10px;color:#94a3b8;">'+escH(sh.shopId)+'</div>':'')
           +'</td>'
-          +'<td style="padding:8px 12px;font-size:11px;color:#64748b;text-align:center;">'+(qty>0?qty.toLocaleString()+' ชิ้น':'–')+'</td>'
           +'<td style="padding:8px 12px;text-align:center;">'
-            +'<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:900;color:'+sMeta[st]+';background:'+(st==='delivered'?'#f0fdf4':st==='failed'?'#fff1f2':'#f8fafc')+';border:1px solid '+sBdr[st]+';padding:3px 8px;border-radius:20px;">'
-            +(st==='delivered'?'✓ ส่งสำเร็จ':st==='failed'?'✗ ส่งไม่ได้':'⏳ รอส่ง')+'</span>'
+            +'<span style="font-size:11px;font-weight:900;color:'+vColor+';padding:3px 8px;border-radius:20px;background:'+vBg+';border:1px solid '+(vSt==='delivered'?'#bbf7d0':vSt==='at_shop'?'#fde68a':'#e2e8f0')+' ;">'+vLabel+'</span>'
           +'</td>'
-          +'<td style="padding:8px 12px;font-size:10px;color:#94a3b8;text-align:center;">'+(confirmedAt?confirmedAt:'–')+(confirmedBy?'<br>'+escH(confirmedBy):'')+'</td>'
-          +(c&&c.note?'<td style="padding:8px 12px;font-size:10px;color:#f59e0b;max-width:120px;">'+escH(c.note)+'</td>':'<td style="padding:8px 12px;"></td>')
+          +'<td style="padding:8px 12px;font-size:11px;color:#64748b;text-align:center;white-space:nowrap;">'
+            +(arrivedT?'ถึง '+arrivedT:'–')
+          +'</td>'
+          +'<td style="padding:8px 12px;font-size:11px;color:#64748b;text-align:center;white-space:nowrap;">'
+            +(departedT?'ออก '+departedT:'–')
+          +'</td>'
+          +'<td style="padding:8px 12px;font-size:11px;color:#64748b;text-align:center;white-space:nowrap;">'
+            +arrMile+' '+gpsIcon
+          +'</td>'
+          +'<td style="padding:8px 12px;text-align:center;">'+photoHtml+'</td>'
           +'</tr>';
       }).join('');
 
       return '<div style="background:#fff;border-radius:16px;border:2px solid '+cardBorder+';box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:14px;">'
-        // Card header
         +'<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid #f1f5f9;">'
           +'<div style="flex:1;min-width:0;">'
             +'<div style="font-weight:900;font-size:15px;color:#0f172a;">'+escH(p.plan_id)+'</div>'
-            +'<div style="font-size:11px;color:#64748b;margin-top:2px;">🚛 '+(p.truck_plate||'–')+(p.child_plate?' + '+p.child_plate:'')+'  &bull;  <i class="fas fa-user" style="margin-right:3px;"></i>'+escH(driverName)+'</div>'
+            +'<div style="font-size:11px;color:#64748b;margin-top:2px;">'
+              +'🚛 '+(p.truck_plate||'–')+(p.child_plate?' + '+p.child_plate:'')
+              +'  &bull;  <i class="fas fa-user" style="margin-right:3px;"></i>'+escH(driverName)
+              +mileInfo
+            +'</div>'
           +'</div>'
           +'<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">'
-            +'<span style="font-size:12px;font-weight:900;color:'+(allDone&&fail===0?'#059669':allDone&&fail>0?'#d97706':'#3b82f6')+';background:'+(allDone&&fail===0?'#f0fdf4':allDone&&fail>0?'#fffbeb':'#eff6ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+(allDone&&fail===0?'#bbf7d0':allDone&&fail>0?'#fde68a':'#bfdbfe')+';">'
-              +(allDone&&fail===0?'✓ เสร็จสิ้น':allDone&&fail>0?'⚠ มีปัญหา':pending===total?'⏳ รอเริ่ม':'🚚 กำลังส่ง')+'</span>'
-            +'<span style="font-size:13px;font-weight:900;color:#0f172a;">'+done+' / '+total+'</span>'
+            +'<span style="font-size:12px;font-weight:900;color:'+tm.color+';background:'+tm.bg+';padding:4px 10px;border-radius:20px;border:1px solid '+tm.border+';">'+tm.label+'</span>'
+            +'<span style="font-size:13px;font-weight:900;color:#0f172a;">'+delivered+' / '+total+'</span>'
           +'</div>'
         +'</div>'
-        // Progress bar
         +'<div style="height:5px;background:#f1f5f9;">'
           +'<div style="height:100%;background:'+(donePct===100?'#059669':donePct>0?'#3b82f6':'#e2e8f0')+';width:'+donePct+'%;transition:width .4s;"></div>'
         +'</div>'
-        // Shop table
         +'<div style="overflow-x:auto;">'
           +'<table style="width:100%;border-collapse:collapse;">'
             +'<thead><tr style="background:#f8fafc;border-bottom:2px solid #f1f5f9;">'
-              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:left;width:28px;">#</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:left;width:24px;">#</th>'
               +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:left;">ร้านค้า</th>'
-              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">จำนวน</th>'
               +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">สถานะ</th>'
-              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">เวลา / คนขับ</th>'
-              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:left;">หมายเหตุ</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">ถึงร้าน</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">ออกร้าน</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">ไมล์ / GPS</th>'
+              +'<th style="padding:8px 12px;font-size:10px;font-weight:900;color:#94a3b8;text-align:center;">รูป</th>'
             +'</tr></thead>'
             +'<tbody>'+shopRows+'</tbody>'
           +'</table>'
