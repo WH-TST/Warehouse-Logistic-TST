@@ -5727,6 +5727,16 @@ thead.sticky {
         <button onclick="duCloseForm()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-sm font-bold flex items-center justify-center hover:bg-slate-200"><i class="fas fa-times"></i></button>
       </div>
       <input type="hidden" id="du-id">
+      <!-- เลือกคนขับจากฐานข้อมูล (สำคัญ — ต้องเลือกก่อน) -->
+      <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-1">
+        <label class="text-xs font-black text-purple-600 uppercase mb-2 block flex items-center gap-2">
+          <i class="fas fa-user-tie"></i> เลือกคนขับจากฐานข้อมูล (logi_drivers) <span class="text-rose-500">*</span>
+        </label>
+        <select id="du-driver-id" onchange="duPickDriver()" class="w-full bg-white border-2 border-purple-300 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-500 text-sm cursor-pointer">
+          <option value="">– เลือกชื่อคนขับ –</option>
+        </select>
+        <p class="text-xs text-purple-400">เลือกชื่อจากนี้เพื่อเชื่อมกับแผนการส่งมอบ</p>
+      </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label class="text-xs font-black text-slate-400 uppercase mb-1 block">ชื่อผู้ใช้ (login)</label>
@@ -5738,16 +5748,10 @@ thead.sticky {
           <input id="du-password" type="text" placeholder="(ว่างเปล่า = ไม่เปลี่ยน)" autocomplete="new-password"
             class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-400 text-sm">
         </div>
-        <div>
-          <label class="text-xs font-black text-slate-400 uppercase mb-1 block">ชื่อ-นามสกุล</label>
-          <input id="du-name" type="text" placeholder="ชื่อแสดงในแอพ"
+        <div class="sm:col-span-2">
+          <label class="text-xs font-black text-slate-400 uppercase mb-1 block">ชื่อแสดงในแอพ</label>
+          <input id="du-name" type="text" placeholder="ดึงอัตโนมัติเมื่อเลือกคนขับ หรือแก้ไขได้"
             class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-400 text-sm">
-        </div>
-        <div>
-          <label class="text-xs font-black text-slate-400 uppercase mb-1 block">Driver ID (logi_drivers)</label>
-          <select id="du-driver-id" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:border-purple-400 text-sm cursor-pointer">
-            <option value="">– ไม่ระบุ –</option>
-          </select>
         </div>
       </div>
       <div class="flex items-center gap-3 pt-2">
@@ -35801,10 +35805,15 @@ window.loRefreshOrderList = window.loRefreshHistory;
     var driverMap = {};
     (drivers||[]).forEach(function(d){ driverMap[d.id] = d.name; });
 
-    // โหลด driver_users สำหรับ map driver_id → username
+    // โหลด driver_users สำหรับ map driver_id → displayName และ username → displayName
     var {data: dusers} = await window._sb.from('driver_users').select('driver_id,driver_name,username').eq('active',true);
-    var dUserMap = {};
-    (dusers||[]).forEach(function(u){ dUserMap[u.driver_id] = u.driver_name||u.username; });
+    var dUserMap = {};      // driver_id  → ชื่อแสดง
+    var dUserByUN = {};     // username   → ชื่อแสดง
+    (dusers||[]).forEach(function(u){
+      var dn = u.driver_name||u.username;
+      if (u.driver_id) dUserMap[u.driver_id] = dn;
+      dUserByUN[u.username] = dn;
+    });
 
     // index confs by plan_id|shop_seq
     var confMap = {};
@@ -35853,13 +35862,13 @@ window.loRefreshOrderList = window.loRefreshHistory;
       var donePct = total>0 ? Math.round(done/total*100) : 0;
       var allDone = done+fail===total && total>0;
       var cardBorder = allDone?(fail===0?'#059669':fail===total?'#dc2626':'#d97706'):'#e2e8f0';
-      var driverName = dUserMap[p.driver_id] || driverMap[p.driver_id] || p.driver_id || '–';
+      var driverName = dUserMap[p.driver_id] || driverMap[p.driver_id] || (p.driver_id?p.driver_id:'–');
 
       var shopRows = shops.map(function(sh,si){
         var c = confMap[p.plan_id+'|'+si];
         var st = c?c.status:'pending';
         var qty = (sh.items||[]).reduce(function(s,it){return s+(it.qty||0);},0);
-        var confirmedBy = c ? (c.driver_username||'') : '';
+        var confirmedBy = c&&c.driver_username ? (dUserByUN[c.driver_username]||c.driver_username) : '';
         var confirmedAt = c&&c.confirmed_at ? c.confirmed_at.slice(11,16) : '';
         return '<tr style="border-bottom:1px solid #f1f5f9;background:'+sBg[st]+';">'
           +'<td style="padding:8px 12px;font-weight:700;color:#334155;font-size:12px;width:28px;">'+(si+1)+'</td>'
@@ -35930,10 +35939,22 @@ window.loRefreshOrderList = window.loRefreshHistory;
     _duDrivers = drivers||[];
     var sel = document.getElementById('du-driver-id');
     if (sel) {
-      sel.innerHTML = '<option value="">– ไม่ระบุ –</option>'
-        + _duDrivers.map(function(d){ return '<option value="'+escDU(d.id)+'">'+escDU(d.name)+' ('+escDU(d.id)+')</option>'; }).join('');
+      sel.innerHTML = '<option value="">– เลือกชื่อคนขับ –</option>'
+        + _duDrivers.map(function(d){
+            return '<option value="'+escDU(d.id)+'" data-name="'+escDU(d.name)+'">'+escDU(d.name)+'</option>';
+          }).join('');
     }
     await duLoadList();
+  };
+
+  // auto-fill ชื่อเมื่อเลือก driver จาก dropdown
+  window.duPickDriver = function() {
+    var sel = document.getElementById('du-driver-id');
+    var nameEl = document.getElementById('du-name');
+    if (!sel || !nameEl) return;
+    var opt = sel.options[sel.selectedIndex];
+    var dName = opt ? (opt.getAttribute('data-name')||'') : '';
+    if (dName) nameEl.value = dName;
   };
 
   async function duLoadList() {
