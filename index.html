@@ -21595,9 +21595,12 @@ window.loadLogisticList = async function loadLogisticList() {
             const tlStatus = tripLogMap[row.plan_id];
             if (!tlStatus) return;
             const want = tlStatus === 'completed' ? 'success' : tlStatus !== 'idle' ? 'inprogress' : null;
-            if (want && row.status !== want) {
+            // sync เฉพาะ planned → inprogress/success เท่านั้น
+            // ถ้า user แก้เป็น failed/extra/planned เองแล้ว ให้เคารพ ไม่ override
+            const allowSync = want && row.status === 'planned';
+            if (allowSync) {
                 syncJobs.push({ id: row.plan_id, status: want });
-                row.status = want; // อัพเดท local ทันที
+                row.status = want;
             }
         });
         if (syncJobs.length) {
@@ -26056,7 +26059,7 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
                         var tlStatus = tlMap[row.plan_id];
                         if (!tlStatus) return;
                         var want = tlStatus === 'completed' ? 'success' : tlStatus !== 'idle' ? 'inprogress' : null;
-                        if (want && row.status !== want) {
+                        if (want && row.status === 'planned') {
                             syncJobs.push({ id: row.plan_id, status: want });
                             row.status = want;
                         }
@@ -35923,7 +35926,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
       if (!log) return;
       var want = log.status==='completed' ? 'success'
                : log.status!=='idle'      ? 'inprogress' : null;
-      if (want && p.status !== want) syncJobs.push({id:p.plan_id, status:want});
+      if (want && p.status === 'planned') syncJobs.push({id:p.plan_id, status:want});
     });
     if (syncJobs.length) {
       await Promise.all(syncJobs.map(function(j){
