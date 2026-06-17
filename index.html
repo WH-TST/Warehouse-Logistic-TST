@@ -35846,6 +35846,26 @@ window.loRefreshOrderList = window.loRefreshHistory;
       }
     }
 
+    // Auto-sync plan status จาก trip_logs (กรณี Driver App เก่าหรือ miss update)
+    var syncJobs = [];
+    plans.forEach(function(p){
+      var log = tripMap[p.plan_id];
+      if (!log) return;
+      var want = log.status==='completed' ? 'success'
+               : log.status!=='idle'      ? 'inprogress' : null;
+      if (want && p.status !== want) syncJobs.push({id:p.plan_id, status:want});
+    });
+    if (syncJobs.length) {
+      await Promise.all(syncJobs.map(function(j){
+        return window._sb.from('logistic_plans').update({status:j.status}).eq('plan_id',j.id);
+      }));
+      // อัพเดท local copy ด้วย
+      syncJobs.forEach(function(j){
+        var p=plans.find(function(x){return x.plan_id===j.id;});
+        if(p) p.status=j.status;
+      });
+    }
+
     // Last refresh
     var lr = document.getElementById('dt-last-refresh');
     if (lr) { var n=new Date(); lr.textContent='อัพเดท '+p2t(n.getHours())+':'+p2t(n.getMinutes())+':'+p2t(n.getSeconds()); }
