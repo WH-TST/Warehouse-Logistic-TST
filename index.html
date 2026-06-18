@@ -7139,23 +7139,23 @@ thead.sticky {
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อผู้ใช้ *</label>
-          <input id="um-new-username" type="text" placeholder="Username" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+          <input id="ua-new-username" type="text" placeholder="Username" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
         </div>
         <div>
           <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">รหัสผ่าน *</label>
-          <input id="um-new-password" type="text" placeholder="Password" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+          <input id="ua-new-password" type="text" placeholder="Password" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
         </div>
         <div>
           <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อ-นามสกุล</label>
-          <input id="um-new-name" type="text" placeholder="ชื่อที่แสดง" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+          <input id="ua-new-name" type="text" placeholder="ชื่อที่แสดง" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
         </div>
         <div>
           <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ตำแหน่ง</label>
-          <input id="um-new-role" type="text" placeholder="เช่น พนักงานคลัง" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+          <input id="ua-new-role" type="text" placeholder="เช่น พนักงานคลัง" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
         </div>
       </div>
       <p class="text-xs font-black text-slate-500 uppercase tracking-wider">สิทธิ์เข้าถึงหน้า:</p>
-      <div id="um-new-perms" class="grid grid-cols-3 gap-1.5 text-xs"></div>
+      <div id="ua-new-perms" class="grid grid-cols-3 gap-1.5 text-xs"></div>
       <button onclick="umAddUser()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl font-black text-sm transition shadow-sm">
         <i class="fas fa-plus mr-1"></i> เพิ่มผู้ใช้
       </button>
@@ -35654,16 +35654,16 @@ window.umRefreshList = async function(){
 };
 
 window.umAddUser = async function(){
-  var un=(document.getElementById('um-new-username').value||'').trim(),pw=(document.getElementById('um-new-password').value||'').trim();
-  var nm=(document.getElementById('um-new-name').value||'').trim(),rl=(document.getElementById('um-new-role').value||'').trim();
+  var un=(document.getElementById('ua-new-username').value||'').trim(),pw=(document.getElementById('ua-new-password').value||'').trim();
+  var nm=(document.getElementById('ua-new-name').value||'').trim(),rl=(document.getElementById('ua-new-role').value||'').trim();
   if(!un||!pw){showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน',true);return;}
   var users=_loadUsers();
   for(var i=0;i<users.length;i++){if(users[i].username===un){showToast('ชื่อผู้ใช้นี้มีอยู่แล้ว',true);return;}}
-  var newUser={username:un,pwHash:_hashPw(pw),name:nm,role:rl,isAdmin:false,perms:_getChecked('um-new-perms'),active:true};
+  var newUser={username:un,pwHash:_hashPw(pw),name:nm,role:rl,isAdmin:false,perms:_getChecked('ua-new-perms'),active:true};
   var res = await _sbUpsertUser(newUser);
   if(res.error){showToast('❌ '+res.error.message,true);return;}
-  ['um-new-username','um-new-password','um-new-name','um-new-role'].forEach(function(id){document.getElementById(id).value='';});
-  _renderPermCb('um-new-perms',[]);
+  ['ua-new-username','ua-new-password','ua-new-name','ua-new-role'].forEach(function(id){document.getElementById(id).value='';});
+  _renderPermCb('ua-new-perms',[]);
   await umRefreshList();
   showToast('✅ เพิ่มผู้ใช้ '+un+' สำเร็จ');
 };
@@ -37174,7 +37174,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
       _uaLoaded.whstaff = true;
     }
     if (tab === 'wms') {
-      if (typeof window._renderPermCb === 'function') window._renderPermCb('um-new-perms', []);
+      if (typeof window._renderPermCb === 'function') window._renderPermCb('ua-new-perms', []);
       if (typeof window.umRefreshList === 'function') window.umRefreshList();
     }
   };
