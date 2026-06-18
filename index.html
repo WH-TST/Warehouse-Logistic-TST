@@ -2605,7 +2605,7 @@ thead.sticky {
       </div>
       <div class="flex gap-3 flex-wrap items-center">
         <button id="btn-wha-save-all" onclick="whaSaveAll()" class="text-white font-black px-5 py-2.5 rounded-xl flex items-center gap-2 shadow transition-all text-sm" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
-          <i class="fas fa-save"></i> บันทึกลง GAS
+          <i class="fas fa-save"></i> บันทึกลง Supabase
         </button>
         <button onclick="whaExport()" class="text-white font-black px-5 py-2.5 rounded-xl flex items-center gap-2 shadow transition-all text-sm" style="background:linear-gradient(135deg,#4a6741,#6b9c60);">
           <i class="fas fa-file-excel"></i> Export Excel
@@ -3935,6 +3935,10 @@ thead.sticky {
     <button id="logi-tab-driver-users" onclick="switchLogiTab('driver-users')"
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-purple-600">
       <i class="fas fa-id-card mr-2"></i>จัดการคนขับ
+    </button>
+    <button id="logi-tab-wh-staff" onclick="switchLogiTab('wh-staff')"
+      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-emerald-600">
+      <i class="fas fa-hard-hat mr-2"></i>พนักงาน WH
     </button>
   </div>
 
@@ -5826,6 +5830,34 @@ thead.sticky {
 
   </div><!-- end logi-panel-driver-users -->
 
+  <!-- ── TAB: พนักงาน WH ── -->
+  <div id="logi-panel-wh-staff" class="hidden space-y-4">
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex flex-wrap gap-3 items-center justify-between">
+      <h3 class="font-black text-slate-700 text-base flex items-center gap-2">
+        <i class="fas fa-hard-hat text-emerald-500"></i> พนักงานคลังสินค้า (WH Staff)
+      </h3>
+      <button onclick="whStaffOpenAdd()" class="px-5 py-2.5 rounded-xl font-black text-sm text-white flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 transition">
+        <i class="fas fa-plus"></i> เพิ่มพนักงาน
+      </button>
+    </div>
+    <div id="wh-staff-err" class="hidden rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700"></div>
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-500 uppercase tracking-wider">
+            <th class="px-4 py-3 text-left">รหัส</th>
+            <th class="px-4 py-3 text-left">ชื่อ</th>
+            <th class="px-4 py-3 text-left">ทีม</th>
+            <th class="px-4 py-3 text-center w-24">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="wh-staff-tbody">
+          <tr><td colspan="4" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div><!-- end logi-panel-wh-staff -->
+
   <!-- ════════════════════════════════════════════════════════ -->
   <!-- TAB: วางแผนการส่งมอบอัตโนมัติ (Auto Delivery Planner)   -->
   <!-- ════════════════════════════════════════════════════════ -->
@@ -7122,6 +7154,35 @@ thead.sticky {
 </div>
 
 <!-- MODAL: เพิ่ม/แก้ไขสินค้า -->
+<!-- MODAL: เพิ่ม/แก้ไข WH Staff -->
+<div id="wh-staff-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-center justify-center backdrop-blur-sm px-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h3 id="wh-staff-modal-title" class="text-lg font-black text-slate-800">เพิ่มพนักงาน</h3>
+      <button onclick="whStaffCloseModal()" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition flex items-center justify-center"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="px-6 py-5 space-y-3">
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">รหัสพนักงาน *</label>
+        <input id="wh-staff-f-id" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-emerald-400" placeholder="เช่น WH001">
+      </div>
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อ-นามสกุล *</label>
+        <input id="wh-staff-f-name" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="ชื่อพนักงาน">
+      </div>
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ทีม *</label>
+        <input id="wh-staff-f-team" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="เช่น ทีม A">
+      </div>
+      <div id="wh-staff-modal-err" class="hidden text-rose-600 text-sm font-bold"></div>
+    </div>
+    <div class="px-6 pb-5 flex gap-3 justify-end">
+      <button onclick="whStaffCloseModal()" class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition">ยกเลิก</button>
+      <button onclick="whStaffSave()" class="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition shadow-sm"><i class="fas fa-save mr-1"></i>บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <div id="prod-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-center justify-center backdrop-blur-sm px-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -22577,6 +22638,7 @@ window.switchLogiTab = function switchLogiTab(tab) {
         driverperf:        'logi-panel-driverperf',
         'delivery-tracking': 'logi-panel-delivery-tracking',
         'driver-users':    'logi-panel-driver-users',
+        'wh-staff':        'logi-panel-wh-staff',
     };
     const tabColors = {
         list:              ' bg-emerald-600 text-white shadow',
@@ -22587,6 +22649,7 @@ window.switchLogiTab = function switchLogiTab(tab) {
         driverperf:        ' bg-rose-600 text-white shadow',
         'delivery-tracking': ' bg-blue-600 text-white shadow',
         'driver-users':    ' bg-purple-600 text-white shadow',
+        'wh-staff':        ' bg-emerald-600 text-white shadow',
     };
     const tabHover = {
         list:              ' text-gray-500 hover:bg-white hover:text-emerald-700',
@@ -22596,6 +22659,7 @@ window.switchLogiTab = function switchLogiTab(tab) {
         driverperf:        ' text-gray-500 hover:bg-white hover:text-rose-600',
         'delivery-tracking': ' text-gray-500 hover:bg-white hover:text-blue-600',
         'driver-users':    ' text-gray-500 hover:bg-white hover:text-purple-600',
+        'wh-staff':        ' text-gray-500 hover:bg-white hover:text-emerald-600',
     };
     const btnBase = 'flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all';
     Object.keys(panels).forEach(function(t) {
@@ -22618,6 +22682,7 @@ window.switchLogiTab = function switchLogiTab(tab) {
     if (tab === 'driverperf')        perfInit();
     if (tab === 'delivery-tracking') dtInit();
     if (tab === 'driver-users')      duInit();
+    if (tab === 'wh-staff')          whStaffInit();
     if (tab === 'autoplan') {
         initAutoDeliveryPlanner();
         if (typeof window.autoplanRenderDateChips === 'function') window.autoplanRenderDateChips();
@@ -31009,22 +31074,21 @@ window.whaUpdateKPI = function whaUpdateKPI() {
 };
 
 // ── บันทึกทั้งหมดไปยัง GAS ────────────────────────────────────────────
-window.whaSaveAll = function whaSaveAll() {
+window.whaSaveAll = async function whaSaveAll() {
     const dateVal = safeGet('wha-date')?.value;
     if (!dateVal) { showToast('กรุณาเลือกวันที่ก่อนบันทึก', true); return; }
     const unsaved = whaData.filter(r => !r.saved);
     if (!unsaved.length) { showToast('ไม่มีข้อมูลใหม่ที่ต้องบันทึก'); return; }
 
-    // ── ป้องกันกดซ้ำ: disable ปุ่ม + แสดง loading ────────────────────
     const btn = safeGet('btn-wha-save-all');
     const _setBtnLoading = function(loading) {
         if (!btn) return;
         btn.disabled = loading;
         btn.innerHTML = loading
             ? '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...'
-            : '<i class="fas fa-save"></i> บันทึกข้อมูลทั้งหมด';
-        btn.style.opacity   = loading ? '0.7' : '';
-        btn.style.cursor    = loading ? 'not-allowed' : '';
+            : '<i class="fas fa-save"></i> บันทึกลง Supabase';
+        btn.style.opacity = loading ? '0.7' : '';
+        btn.style.cursor  = loading ? 'not-allowed' : '';
     };
     _setBtnLoading(true);
 
@@ -31036,47 +31100,45 @@ window.whaSaveAll = function whaSaveAll() {
         const mpi  = _whaCalcMinPerItem(mins, r.qty);
         const wpu  = r.weightPerUnit || _whaCalcWPU(r.weight, r.qty);
         return {
-            type:          r.type,
-            date:          dateVal,
-            empId:         r.empId,
-            empName:       r.empName,
-            team:          r.team,
-            timeStart:     r.timeStart,
-            timeEnd:       r.timeEnd,
-            mins:          mins,
-            qty:           r.qty,
-            weight:        r.weight,
-            minPerItem:    mpi,
-            weightPerUnit: wpu,
-            skuA:          r.skuA,
-            nameA:         r.nameA,
-            damageQty:     r.damageQty,
-            causeP:        r.causeP,
-            remarkQ:       r.remarkQ,
-            savedAt:       savedAt,
-            skuB:          r.skuB,
-            nameB:         r.nameB,
-            truckPlate:    r.truckPlate || ''  // Col U: ทะเบียนรถ (optional)
+            type:           r.type         || '',
+            date:           dateVal,
+            emp_id:         r.empId        || '',
+            emp_name:       r.empName      || '',
+            team:           r.team         || '',
+            time_start:     r.timeStart    || '',
+            time_end:       r.timeEnd      || '',
+            mins:           parseFloat(mins)    || 0,
+            qty:            parseFloat(r.qty)   || 0,
+            weight:         parseFloat(r.weight)|| 0,
+            min_per_item:   parseFloat(mpi)     || 0,
+            weight_per_unit:parseFloat(wpu)     || 0,
+            sku_a:          r.skuA         || '',
+            name_a:         r.nameA        || '',
+            damage_qty:     parseFloat(r.damageQty) || 0,
+            cause_p:        r.causeP       || '',
+            remark_q:       r.remarkQ      || '',
+            sku_b:          r.skuB         || '',
+            name_b:         r.nameB        || '',
+            truck_plate:    r.truckPlate   || '',
+            saved_at:       savedAt
         };
     });
 
-    google.script.run
-        .withSuccessHandler(function(res) {
-            _setBtnLoading(false);
-            if (res?.success) {
-                unsaved.forEach(r => { r.saved = true; });
-                _whaSaveDraft();
-                whaRenderTable();
-                showToast('✅ บันทึกสำเร็จ ' + (res.saved || rows.length) + ' แถว → WH_Activity_Log');
-            } else {
-                showToast('❌ บันทึกไม่สำเร็จ: ' + (res?.message || ''), true);
-            }
-        })
-        .withFailureHandler(function(err) {
-            _setBtnLoading(false);
-            showToast('❌ เกิดข้อผิดพลาด: ' + err.message, true);
-        })
-        .saveWHActivityRows(rows);
+    try {
+        const { error } = await window._sb.from('wh_activity_log').insert(rows);
+        _setBtnLoading(false);
+        if (!error) {
+            unsaved.forEach(r => { r.saved = true; });
+            _whaSaveDraft();
+            whaRenderTable();
+            showToast('✅ บันทึกสำเร็จ ' + rows.length + ' แถว → Supabase');
+        } else {
+            showToast('❌ บันทึกไม่สำเร็จ: ' + error.message, true);
+        }
+    } catch(err) {
+        _setBtnLoading(false);
+        showToast('❌ เกิดข้อผิดพลาด: ' + err.message, true);
+    }
 };
 
 // ── Toggle History Panel ────────────────────────────────────────────────
@@ -31096,26 +31158,49 @@ window.whaToggleHistory = function whaToggleHistory() {
     }
 };
 
-// ── โหลด History จาก GAS ───────────────────────────────────────────────
-window.whaLoadHistory = function whaLoadHistory() {
+// ── โหลด History จาก Supabase ─────────────────────────────────────────
+window.whaLoadHistory = async function whaLoadHistory() {
     const fromEl  = safeGet('wha-hist-from');
     const toEl    = safeGet('wha-hist-to');
     const typeEl  = safeGet('wha-hist-type');
     const countEl = safeGet('wha-hist-count');
     if (!fromEl?.value || !toEl?.value) { showToast('⚠️ กรุณาเลือกช่วงวันที่', true); return; }
-    const fromFmt = fromEl.value.split('-').reverse().join('/');
-    const toFmt   = toEl.value.split('-').reverse().join('/');
     if (countEl) countEl.textContent = '⏳ กำลังโหลด...';
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (!res.success) { showToast('❌ โหลดไม่สำเร็จ: ' + (res.message||''), true); if (countEl) countEl.textContent = ''; return; }
-            const rows = (res.rows || []).filter(r => !typeEl?.value || r.type === typeEl.value);
-            if (countEl) countEl.textContent = rows.length + ' รายการ';
-            whaRenderHistTable(rows);
-            showToast('✅ โหลดข้อมูลย้อนหลังสำเร็จ ' + rows.length + ' รายการ');
-        })
-        .withFailureHandler(function(err) { showToast('❌ ' + err.message, true); if (countEl) countEl.textContent = ''; })
-        .getWHActivityLog({ dateFrom: fromFmt, dateTo: toFmt });
+    try {
+        let q = window._sb.from('wh_activity_log').select('*')
+            .gte('date', fromEl.value).lte('date', toEl.value).order('date').order('id');
+        if (typeEl?.value) q = q.eq('type', typeEl.value);
+        const { data, error } = await q;
+        if (error) throw error;
+        const rows = (data || []).map(r => ({
+            type:          r.type,
+            date:          r.date,
+            empId:         r.emp_id,
+            empName:       r.emp_name,
+            team:          r.team,
+            timeStart:     r.time_start,
+            timeEnd:       r.time_end,
+            mins:          r.mins,
+            qty:           r.qty,
+            weight:        r.weight,
+            minPerItem:    r.min_per_item,
+            weightPerUnit: r.weight_per_unit,
+            skuA:          r.sku_a,
+            nameA:         r.name_a,
+            damageQty:     r.damage_qty,
+            causeP:        r.cause_p,
+            remarkQ:       r.remark_q,
+            skuB:          r.sku_b,
+            nameB:         r.name_b,
+            truckPlate:    r.truck_plate
+        }));
+        if (countEl) countEl.textContent = rows.length + ' รายการ';
+        whaRenderHistTable(rows);
+        showToast('✅ โหลดข้อมูลย้อนหลังสำเร็จ ' + rows.length + ' รายการ');
+    } catch(err) {
+        showToast('❌ ' + err.message, true);
+        if (countEl) countEl.textContent = '';
+    }
 };
 
 // Sanitize time string from GAS -> always HH:mm
@@ -36973,6 +37058,118 @@ window.loRefreshOrderList = window.loRefreshHistory;
       if (acts) acts.classList.toggle('hidden', t !== tab);
     });
     if (tab === 'mapping' && !_mapLoaded) { mapLoad(); _mapLoaded = true; }
+  };
+})();
+</script>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+// WH STAFF MANAGEMENT
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var _staffList = [];
+  var _staffEditId = null;
+
+  function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  window.whStaffInit = async function() {
+    var tbody = document.getElementById('wh-staff-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
+    var res = await window._sb.from('logi_wh_staff').select('*').order('team').order('name');
+    if (res.error) { tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-rose-500">❌ ' + escH(res.error.message) + '</td></tr>'; return; }
+    _staffList = res.data || [];
+    whStaffRender();
+  };
+
+  function whStaffRender() {
+    var tbody = document.getElementById('wh-staff-tbody');
+    if (!tbody) return;
+    if (!_staffList.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-slate-400">ยังไม่มีพนักงาน</td></tr>'; return; }
+    var teams = [...new Set(_staffList.map(function(s){ return s.team||''; }))].sort();
+    var html = '';
+    teams.forEach(function(team) {
+      var members = _staffList.filter(function(s){ return (s.team||'') === team; });
+      html += '<tr class="bg-emerald-50"><td colspan="4" class="px-4 py-2 text-xs font-black text-emerald-700 uppercase tracking-wider"><i class="fas fa-users mr-1"></i>' + escH(team||'ไม่ระบุทีม') + ' (' + members.length + ' คน)</td></tr>';
+      members.forEach(function(s) {
+        var sid = String(s.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        html += '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
+          + '<td class="px-4 py-2.5 font-mono font-bold text-slate-700 text-xs">' + escH(s.id) + '</td>'
+          + '<td class="px-4 py-2.5 text-sm font-bold text-slate-800">' + escH(s.name) + '</td>'
+          + '<td class="px-4 py-2.5 text-sm text-slate-500">' + escH(s.team) + '</td>'
+          + '<td class="px-4 py-2.5 text-center">'
+          + '<button onclick="whStaffOpenEdit(\'' + sid + '\')" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold transition mr-1"><i class="fas fa-pen"></i></button>'
+          + '<button onclick="whStaffDelete(\'' + sid + '\')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 text-xs font-bold transition"><i class="fas fa-trash"></i></button>'
+          + '</td></tr>';
+      });
+    });
+    tbody.innerHTML = html;
+  }
+
+  window.whStaffOpenAdd = function() {
+    _staffEditId = null;
+    document.getElementById('wh-staff-modal-title').textContent = 'เพิ่มพนักงาน';
+    document.getElementById('wh-staff-f-id').value = '';
+    document.getElementById('wh-staff-f-id').disabled = false;
+    document.getElementById('wh-staff-f-name').value = '';
+    document.getElementById('wh-staff-f-team').value = '';
+    document.getElementById('wh-staff-modal-err').classList.add('hidden');
+    document.getElementById('wh-staff-modal').classList.remove('hidden');
+    document.getElementById('wh-staff-f-id').focus();
+  };
+
+  window.whStaffOpenEdit = function(id) {
+    var s = _staffList.find(function(x){ return String(x.id) === String(id); });
+    if (!s) return;
+    _staffEditId = s.id;
+    document.getElementById('wh-staff-modal-title').textContent = 'แก้ไขพนักงาน';
+    document.getElementById('wh-staff-f-id').value = s.id || '';
+    document.getElementById('wh-staff-f-id').disabled = true;
+    document.getElementById('wh-staff-f-name').value = s.name || '';
+    document.getElementById('wh-staff-f-team').value = s.team || '';
+    document.getElementById('wh-staff-modal-err').classList.add('hidden');
+    document.getElementById('wh-staff-modal').classList.remove('hidden');
+    document.getElementById('wh-staff-f-name').focus();
+  };
+
+  window.whStaffCloseModal = function() {
+    document.getElementById('wh-staff-modal').classList.add('hidden');
+    document.getElementById('wh-staff-f-id').disabled = false;
+  };
+
+  window.whStaffSave = async function() {
+    var id   = document.getElementById('wh-staff-f-id').value.trim();
+    var name = document.getElementById('wh-staff-f-name').value.trim();
+    var team = document.getElementById('wh-staff-f-team').value.trim();
+    var errEl = document.getElementById('wh-staff-modal-err');
+    if (!id)   { errEl.textContent = 'กรุณากรอกรหัสพนักงาน'; errEl.classList.remove('hidden'); return; }
+    if (!name) { errEl.textContent = 'กรุณากรอกชื่อพนักงาน'; errEl.classList.remove('hidden'); return; }
+    if (!team) { errEl.textContent = 'กรุณากรอกชื่อทีม';     errEl.classList.remove('hidden'); return; }
+    errEl.classList.add('hidden');
+    var row = { id: id, name: name, team: team };
+    var res;
+    if (_staffEditId !== null) {
+      res = await window._sb.from('logi_wh_staff').update({ name: name, team: team }).eq('id', _staffEditId);
+    } else {
+      res = await window._sb.from('logi_wh_staff').insert([row]);
+    }
+    if (res.error) { errEl.textContent = '❌ ' + res.error.message; errEl.classList.remove('hidden'); return; }
+    whStaffCloseModal();
+    await whStaffInit();
+    // อัปเดต cache ให้ WH Activity Log ใช้ได้ทันที
+    if (window.LOGI_MASTER_CACHE) {
+      var r2 = await window._sb.from('logi_wh_staff').select('*').order('name');
+      if (!r2.error) window.LOGI_MASTER_CACHE.whStaff = (r2.data||[]).map(function(s){ return { id: s.id, name: s.name, team: s.team }; });
+    }
+  };
+
+  window.whStaffDelete = async function(id) {
+    var s = _staffList.find(function(x){ return String(x.id) === String(id); });
+    if (!confirm('ลบพนักงาน "' + (s ? s.name : id) + '" ใช่ไหม?')) return;
+    var res = await window._sb.from('logi_wh_staff').delete().eq('id', id);
+    if (res.error) { alert('❌ ' + res.error.message); return; }
+    _staffList = _staffList.filter(function(x){ return String(x.id) !== String(id); });
+    whStaffRender();
   };
 })();
 </script>
