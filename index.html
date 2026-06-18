@@ -34919,7 +34919,7 @@ window.viewTripResult = async function(planId) {
         console.log('[Rec] querying stock_count_items...');
         var savedRes = await window._sb
           .from('stock_count_items')
-          .select('sku,wh,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,session_id')
+          .select('sku,warehouse,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,session_id')
           .limit(10000);
         console.log('[Rec] items:', savedRes.error||'ok', (savedRes.data||[]).length);
         if(!savedRes.error) savedResData = savedRes.data||[];
@@ -34927,7 +34927,7 @@ window.viewTripResult = async function(planId) {
       // หา record ล่าสุดต่อ sku+wh — เรียงตาม count_date ก่อน ถ้าวันเดียวกันใช้ session_id สูงสุด
       var savedMap = {};
       savedResData.forEach(function(r){
-        var key    = r.sku+'|'+(r.wh||'');
+        var key    = r.sku+'|'+(r.warehouse||r.wh||'');
         var sessId = r.session_id||0;
         var date   = sessDateMap[sessId]||'';
         var prev   = savedMap[key];
@@ -35178,7 +35178,7 @@ window.viewTripResult = async function(planId) {
     // upsert items
     var itemsPayload = _scItems.map(function(item){
       var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
-      return { session_id: sessionId, sku: item.sku, product_name: item.name, wh: item.wh,
+      return { session_id: sessionId, sku: item.sku, product_name: item.name, warehouse: item.wh,
         ppb: item.ppb||0, bundle_1: item.bundle1||0, bundle_2: item.bundle2||0,
         pcs_1: item.pcs1||0, pcs_2: item.pcs2||0, hold_pcs: item.holdPcs||0,
         counted_qty: counted, system_qty: item.systemQty, diff_qty: counted - item.systemQty,
