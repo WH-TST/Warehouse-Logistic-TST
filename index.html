@@ -34519,16 +34519,20 @@ window.viewTripResult = async function(planId) {
         return;
       }
 
-      // 2. ดึง system qty จาก counting (sum quantity ต่อ item_number+warehouse)
+      // 2. ดึง system qty จาก counting (onhand = ยอดระบบ, รวมทุก row ต่อ item_number)
       var itemNums = [...new Set(skuList.map(function(s){ return s.sku; }))];
-      var cntQuery = window._sb.from('counting').select('item_number,warehouse,quantity,cw_onhand').in('item_number', itemNums);
-      if(whFilter) cntQuery = cntQuery.eq('warehouse', whFilter);
-      var cntRes = await cntQuery;
-      var cntMap = {};
+      var cntRes = await window._sb.from('counting')
+        .select('item_number,warehouse,onhand,cw_onhand')
+        .in('item_number', itemNums);
+      // counting รวมทุก warehouse ต่อ SKU (zone_stock ครบ)
+      var cntMapAll = {};  // key = item_number (รวมทุก WH)
+      var cntMapWH  = {};  // key = item_number|warehouse
       (cntRes.data||[]).forEach(function(r){
-        var key = r.item_number + '|' + (r.warehouse||'');
-        if(!cntMap[key]) cntMap[key] = 0;
-        cntMap[key] += Number(r.quantity)||0;
+        var sku = r.item_number;
+        var v   = Number(r.onhand)||0;
+        cntMapAll[sku] = (cntMapAll[sku]||0) + v;
+        var key = sku + '|' + (r.warehouse||'');
+        cntMapWH[key]  = (cntMapWH[key]||0) + v;
       });
 
       // 3. ดึง PPB จาก products
@@ -34539,8 +34543,8 @@ window.viewTripResult = async function(planId) {
       // 4. รวมเป็น _scItems
       _scItems = skuList.map(function(s){
         var cntKey = s.sku + '|' + s.wh;
-        var cntKeyAll = s.sku + '|';
-        var sysQty = cntMap[cntKey] !== undefined ? cntMap[cntKey] : (cntMap[cntKeyAll]||0);
+        // ใช้ยอด WH ตรงก่อน ถ้าไม่มีให้ใช้ยอดรวมทุก WH ต่อ SKU
+        var sysQty = cntMapWH[cntKey] !== undefined ? cntMapWH[cntKey] : (cntMapAll[s.sku]||0);
         return {
           sku:       s.sku,
           name:      s.name,
