@@ -34824,17 +34824,72 @@ window.viewTripResult = async function(planId) {
   };
 
   // ── render Reconcile table ───────────────────────────────────────
+  // ── โหลด Reconcile จาก counting โดยตรง (ไม่ต้องผ่าน Count Sheet) ──
+  window.scLoadReconcile = async function(){
+    var tbody  = document.getElementById('sc-reconcile-tbody');
+    var whFilter = (document.getElementById('sc-wh-filter')||{}).value||'';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
+    try {
+      var q = window._sb.from('counting').select('item_number,product_name,warehouse,onhand');
+      if(whFilter) q = q.eq('warehouse', whFilter);
+      var res = await q;
+      if(res.error) throw res.error;
+      var rows = res.data || [];
+      if(!rows.length){ tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบข้อมูลใน Counting</td></tr>'; return; }
+
+      // รวม onhand ต่อ item_number+warehouse (หลาย batch)
+      var map = {};
+      rows.forEach(function(r){
+        var key = r.item_number+'|'+(r.warehouse||'');
+        if(!map[key]) map[key] = { sku:r.item_number, name:r.product_name||'', wh:r.warehouse||'', systemQty:0 };
+        map[key].systemQty += Number(r.onhand)||0;
+      });
+      var skus = Object.values(map).map(function(s){ return s.sku; });
+
+      // ดึง PPB
+      var ppbRes = await window._sb.from('products').select('sku,lines_per_bundle').in('sku', skus);
+      var ppbMap = {};
+      (ppbRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
+
+      // merge กับ _scItems ที่มีอยู่ (ถ้าโหลด Count Sheet แล้ว)
+      var scMap = {};
+      _scItems.forEach(function(it){ scMap[it.sku+'|'+it.wh] = it; });
+
+      _scItems = Object.values(map).map(function(s){
+        var existing = scMap[s.sku+'|'+s.wh] || {};
+        return {
+          sku:       s.sku,
+          name:      s.name,
+          wh:        s.wh,
+          ppb:       ppbMap[s.sku]||0,
+          systemQty: s.systemQty,
+          bundle1:   existing.bundle1||0,  bundle1_expr: existing.bundle1_expr||'',
+          bundle2:   existing.bundle2||0,  bundle2_expr: existing.bundle2_expr||'',
+          pcs1:      existing.pcs1||0,     pcs1_expr:    existing.pcs1_expr||'',
+          pcs2:      existing.pcs2||0,     pcs2_expr:    existing.pcs2_expr||'',
+          holdPcs:   existing.holdPcs||0,  holdPcs_expr: existing.holdPcs_expr||'',
+          note:      existing.note||''
+        };
+      });
+      _scRenderReconcile();
+    } catch(err) {
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#ef4444;padding:32px">❌ '+_esc(err.message||String(err))+'</td></tr>';
+    }
+  };
+
   function _scRenderReconcile(){
     var title = document.getElementById('sc-reconcile-title');
     var tbody  = document.getElementById('sc-reconcile-tbody');
     var sumDiv = document.getElementById('sc-reconcile-summary');
 
     if(!_scItems.length){
-      title.textContent = 'กรุณาโหลด Count Sheet ก่อน';
-      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ยังไม่มีข้อมูล</td></tr>';
+      title.textContent = 'ยังไม่มีข้อมูล';
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px">'
+        + '<button onclick="scLoadReconcile()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm"><i class="fas fa-sync mr-2"></i>โหลดจาก Counting</button>'
+        + '</td></tr>';
       return;
     }
-    title.textContent = 'Reconcile — ' + _scDate + ' (' + _scItems.length + ' รายการ)';
+    title.textContent = 'Reconcile — ' + (_scDate||'') + ' (' + _scItems.length + ' รายการ)';
 
     var total=0, okCount=0, diffCount=0, emptyCount=0;
     var rowBg = ['#ffffff','#f8fafc'];
