@@ -7143,15 +7143,25 @@ thead.sticky {
     </div>
   </div>
 
-  <!-- Sub-tabs -->
-  <div class="flex gap-2">
-    <button id="sc-tab-sheet" onclick="scSwitchTab('sheet')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all">
-      <i class="fas fa-list-alt"></i> Count Sheet
-    </button>
-    <button id="sc-tab-reconcile" onclick="scSwitchTab('reconcile')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">
-      <i class="fas fa-balance-scale"></i> Reconcile
+  <!-- Main Tabs (FG / ...) -->
+  <div class="flex gap-2 border-b-2 border-slate-200 pb-0">
+    <button id="sc-main-tab-fg" onclick="scSwitchMain('fg')"
+      class="flex items-center gap-2 px-6 py-2.5 rounded-t-xl text-sm font-bold border-2 border-b-0 border-blue-500 bg-blue-500 text-white transition-all">
+      <i class="fas fa-boxes"></i> FG
     </button>
   </div>
+
+  <!-- Main Panel: FG -->
+  <div id="sc-main-fg" class="space-y-4">
+    <!-- Sub-tabs -->
+    <div class="flex gap-2">
+      <button id="sc-tab-sheet" onclick="scSwitchTab('sheet')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all">
+        <i class="fas fa-list-alt"></i> Count Sheet
+      </button>
+      <button id="sc-tab-reconcile" onclick="scSwitchTab('reconcile')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">
+        <i class="fas fa-balance-scale"></i> Reconcile
+      </button>
+    </div>
 
   <!-- Panel: Count Sheet -->
   <div id="sc-panel-sheet" class="space-y-4">
@@ -7379,6 +7389,7 @@ thead.sticky {
       <button onclick="scCloseAddItem()" class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition">ยกเลิก</button>
     </div>
   </div>
+</div><!-- end sc-main-fg -->
 </div>
 </div><!-- end view-stock-count-content -->
 
@@ -34540,6 +34551,21 @@ window.viewTripResult = async function(planId) {
   var _scItems = [];   // Count Sheet items (transection_fg + manual)
   var _recItems = [];  // Reconcile items (counting + saved counts) — แยกจาก _scItems
   var _scDate  = '';
+
+  // ── main tab switch (FG / ...) ──────────────────────────────────
+  window.scSwitchMain = function(main){
+    // ตอนนี้มีแค่ FG — รองรับ tab เพิ่มในอนาคต
+    document.querySelectorAll('[id^="sc-main-"]').forEach(function(el){
+      el.classList.add('hidden');
+    });
+    var panel = document.getElementById('sc-main-' + main);
+    if(panel) panel.classList.remove('hidden');
+    document.querySelectorAll('[id^="sc-main-tab-"]').forEach(function(btn){
+      btn.className = 'flex items-center gap-2 px-6 py-2.5 rounded-t-xl text-sm font-bold border-2 border-b-0 border-slate-200 bg-white text-slate-500 transition-all';
+    });
+    var activeBtn = document.getElementById('sc-main-tab-' + main);
+    if(activeBtn) activeBtn.className = 'flex items-center gap-2 px-6 py-2.5 rounded-t-xl text-sm font-bold border-2 border-b-0 border-blue-500 bg-blue-500 text-white transition-all';
+  };
 
   // ── tab switch ──────────────────────────────────────────────────
   window.scSwitchTab = function(tab){
