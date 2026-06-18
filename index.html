@@ -34908,20 +34908,20 @@ window.viewTripResult = async function(planId) {
       var ppbMap = {};
       (ppbRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
 
-      // ดึงจำนวนนับล่าสุดต่อ SKU+WH จาก stock_count_items (join session เพื่อเอา count_date)
-      // ดึง sessions ทั้งหมดก่อน → map id→count_date
-      var sessRes = await window._sb.from('stock_count_sessions').select('id,count_date');
-      var sessDateMap = {};
-      (sessRes.data||[]).forEach(function(s){ sessDateMap[s.id] = s.count_date||''; });
-
-      // ดึง stock_count_items ทั้งหมด (ไม่ filter ด้วย SKU เพราะ URL จะยาวเกิน)
-      var savedRes = await window._sb
-        .from('stock_count_items')
-        .select('sku,wh,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,session_id')
-        .limit(10000);
+      // ดึงจำนวนนับล่าสุดต่อ SKU+WH จาก stock_count_items
+      var sessDateMap = {}, savedResData = [];
+      try {
+        var sessRes = await window._sb.from('stock_count_sessions').select('id,count_date');
+        if(!sessRes.error) (sessRes.data||[]).forEach(function(s){ sessDateMap[s.id] = s.count_date||''; });
+        var savedRes = await window._sb
+          .from('stock_count_items')
+          .select('sku,wh,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,session_id')
+          .limit(10000);
+        if(!savedRes.error) savedResData = savedRes.data||[];
+      } catch(e){ console.warn('stock_count_items query failed:', e); }
       // หา record ล่าสุดต่อ sku+wh — เรียงตาม count_date ก่อน ถ้าวันเดียวกันใช้ session_id สูงสุด
       var savedMap = {};
-      (savedRes.data||[]).forEach(function(r){
+      savedResData.forEach(function(r){
         var key    = r.sku+'|'+(r.wh||'');
         var sessId = r.session_id||0;
         var date   = sessDateMap[sessId]||'';
