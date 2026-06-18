@@ -2041,6 +2041,10 @@ thead.sticky {
                 <span class="nav-icon"><i class="fas fa-chart-bar"></i></span> KPI WH &amp; LOGISTIC
             </button>
             <div style="height:1px;background:rgba(255,255,255,0.08);margin:6px 0;"></div>
+            <button onclick="switchView('user-accounts')" id="nav-user-accounts" class="nav-btn" data-tip="ตั้งค่าบัญชีผู้ใช้">
+                <span class="nav-icon"><i class="fas fa-users-cog"></i></span> ตั้งค่าบัญชีผู้ใช้
+            </button>
+            <div style="height:1px;background:rgba(255,255,255,0.08);margin:6px 0;"></div>
             <button onclick="openAuditLogModal()" class="nav-btn" data-tip="Audit Log" title="ประวัติการแก้ไขข้อมูล">
                 <span class="nav-icon"><i class="fas fa-history"></i></span> Audit Log
             </button>
@@ -3931,14 +3935,6 @@ thead.sticky {
     <button id="logi-tab-delivery-tracking" onclick="switchLogiTab('delivery-tracking')"
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-blue-600">
       <i class="fas fa-satellite-dish mr-2"></i>ติดตามการส่ง
-    </button>
-    <button id="logi-tab-driver-users" onclick="switchLogiTab('driver-users')"
-      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-purple-600">
-      <i class="fas fa-id-card mr-2"></i>จัดการคนขับ
-    </button>
-    <button id="logi-tab-wh-staff" onclick="switchLogiTab('wh-staff')"
-      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-emerald-600">
-      <i class="fas fa-hard-hat mr-2"></i>พนักงาน WH
     </button>
   </div>
 
@@ -7101,6 +7097,39 @@ thead.sticky {
     </div>
   </div>
 </div><!-- end view-products-content -->
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- VIEW: ตั้งค่าบัญชีผู้ใช้ (User Accounts)                       -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="view-user-accounts-content" class="hidden space-y-5">
+  <div class="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-5 flex items-center gap-4">
+    <div class="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+      <i class="fas fa-users-cog text-indigo-600 text-xl"></i>
+    </div>
+    <div>
+      <h2 class="text-2xl font-black text-slate-800">ตั้งค่าบัญชีผู้ใช้</h2>
+      <p class="text-sm text-slate-400">จัดการบัญชีคนขับ (Driver App) และพนักงานคลังสินค้า (WH Staff)</p>
+    </div>
+  </div>
+
+  <!-- Sub-tabs -->
+  <div class="flex gap-2 border-b border-slate-200">
+    <button id="ua-tab-driver" onclick="uaSwitchTab('driver')"
+      class="px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 border-purple-500 text-purple-600 bg-purple-50 transition">
+      <i class="fas fa-id-card mr-2"></i>จัดการคนขับ
+    </button>
+    <button id="ua-tab-whstaff" onclick="uaSwitchTab('whstaff')"
+      class="px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">
+      <i class="fas fa-hard-hat mr-2"></i>พนักงาน WH
+    </button>
+  </div>
+
+  <!-- Panel: จัดการคนขับ -->
+  <div id="ua-panel-driver"></div>
+
+  <!-- Panel: พนักงาน WH -->
+  <div id="ua-panel-whstaff" class="hidden"></div>
+</div><!-- end view-user-accounts-content -->
 
 <!-- MODAL: เพิ่ม/แก้ไข SEMI→FG Mapping -->
 <div id="map-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-center justify-center backdrop-blur-sm px-4">
@@ -12219,7 +12248,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock', 'products'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -12247,7 +12276,8 @@ window.switchView = function switchView(view) {
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
             'truck-dispatch': 'จัดรถส่งสินค้า — Truck Dispatch',
             'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
-            'products': 'จัดการสินค้า — Product Master'
+            'products': 'จัดการสินค้า — Product Master',
+            'user-accounts': 'ตั้งค่าบัญชีผู้ใช้ — Driver & WH Staff'
         }[view] || 'WL Management';
     }
 
@@ -12297,6 +12327,9 @@ window.switchView = function switchView(view) {
     // จัดการสินค้า — โหลดจาก Supabase เมื่อเปิดครั้งแรก
     if (view === 'products') {
         if (typeof window.prodLoad === 'function') window.prodLoad();
+    }
+    if (view === 'user-accounts') {
+        if (typeof window.uaInit === 'function') window.uaInit();
     }
 }
 
@@ -37079,6 +37112,45 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
 <script>
 // ════════════════════════════════════════════════════════════════════
+// USER ACCOUNTS VIEW — sub-tab controller
+(function() {
+  var _uaLoaded = { driver: false, whstaff: false };
+
+  window.uaInit = function() {
+    uaSwitchTab('driver');
+  };
+
+  window.uaSwitchTab = function(tab) {
+    ['driver','whstaff'].forEach(function(t) {
+      var panel = document.getElementById('ua-panel-' + t);
+      var btn   = document.getElementById('ua-tab-' + t);
+      if (panel) panel.classList.toggle('hidden', t !== tab);
+      if (btn) {
+        btn.className = t === tab
+          ? 'px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 ' + (t === 'driver' ? 'border-purple-500 text-purple-600 bg-purple-50' : 'border-emerald-500 text-emerald-600 bg-emerald-50') + ' transition'
+          : 'px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition';
+      }
+    });
+
+    if (tab === 'driver' && !_uaLoaded.driver) {
+      // ย้าย logi-panel-driver-users มาใส่ ua-panel-driver
+      var src = document.getElementById('logi-panel-driver-users');
+      var dst = document.getElementById('ua-panel-driver');
+      if (src && dst && !dst.children.length) { dst.appendChild(src); src.classList.remove('hidden'); }
+      if (typeof window.duInit === 'function') window.duInit();
+      _uaLoaded.driver = true;
+    }
+    if (tab === 'whstaff' && !_uaLoaded.whstaff) {
+      // ย้าย logi-panel-wh-staff มาใส่ ua-panel-whstaff
+      var src2 = document.getElementById('logi-panel-wh-staff');
+      var dst2 = document.getElementById('ua-panel-whstaff');
+      if (src2 && dst2 && !dst2.children.length) { dst2.appendChild(src2); src2.classList.remove('hidden'); }
+      if (typeof window.whStaffInit === 'function') window.whStaffInit();
+      _uaLoaded.whstaff = true;
+    }
+  };
+})();
+
 // WH STAFF MANAGEMENT
 // ════════════════════════════════════════════════════════════════════
 (function() {
