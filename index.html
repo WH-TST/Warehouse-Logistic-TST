@@ -35520,87 +35520,53 @@ function _defaultAdminUser(){
 }
 
 function _loadUsers(){
-  // คืน cache เสมอ (เติมจาก GAS แล้ว หรือ fallback admin)
   if(_usersCache) return _usersCache;
-  // ระหว่างรอ GAS → fallback localStorage (migration path)
-  try{var r=localStorage.getItem('wms_users');if(r){var u=JSON.parse(r);if(u&&u.length)return u;}}catch(e){}
   return _defaultAdminUser();
 }
 
-function _saveUsers(users){
-  _usersCache = users;
-  // backup localStorage เผื่อ offline ชั่วคราว
-  try{localStorage.setItem('wms_users',JSON.stringify(users));}catch(e){}
-  // บันทึกลง GAS Sheet — ใช้ POST โดยตรง (JSONP/GET ไม่เหมาะกับ write operation)
-  var gasUrl = window._WMS_GAS_URL;
-  if(gasUrl){
-    fetch(gasUrl,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'wmsSaveUsers',args:[JSON.stringify(users)]})
-    })
-    .then(function(r){return r.json();})
-    .then(function(res){
-      if(!res||!res.success){console.error('[WMS] wmsSaveUsers failed:',res&&res.message);}
-      else{console.log('[WMS] wmsSaveUsers OK — saved',users.length,'users');}
-    })
-    .catch(function(err){console.error('[WMS] wmsSaveUsers error:',err);});
-  } else {
-    // Native GAS environment
-    google.script.run
-      .withFailureHandler(function(e){console.error('[WMS] wmsSaveUsers GAS error:',e);})
-      .wmsSaveUsers(JSON.stringify(users));
-  }
+// ── Supabase user helpers ────────────────────────────────────────────────
+async function _sbLoadUsers(){
+  var res = await window._sb.from('wms_users').select('*').order('username');
+  if(res.error){ console.error('[WMS] _sbLoadUsers error:',res.error.message); return null; }
+  return (res.data||[]).map(function(r){
+    return { username:r.username, pwHash:r.password, name:r.name||'', role:r.role||'',
+             isAdmin:r.is_admin||false, perms:r.perms||[], active:r.active!==false };
+  });
 }
 
-// เรียกตอน app เริ่ม — โหลด users จาก GAS แล้ว migrate localStorage ถ้า GAS ว่าง
-function _initUsers(callback){
-  var gasUrl = window._WMS_GAS_URL;
+async function _sbUpsertUser(u){
+  return window._sb.from('wms_users').upsert({
+    username:u.username, password:u.pwHash||'', name:u.name||'', role:u.role||'',
+    is_admin:u.isAdmin||false, perms:u.perms||[], active:u.active!==false,
+    updated_at: new Date().toISOString()
+  }, { onConflict:'username' });
+}
 
-  function _onSuccess(res){
-    if(res && res.success && res.users && res.users.length > 0){
-      _usersCache = res.users;
+async function _sbDeleteUser(username){
+  return window._sb.from('wms_users').delete().eq('username', username);
+}
+
+// เรียกตอน app เริ่ม — โหลด users จาก Supabase
+async function _initUsers(callback){
+  try {
+    var users = await _sbLoadUsers();
+    if(users && users.length > 0){
+      _usersCache = users;
       _usersLoaded = true;
-      try{localStorage.setItem('wms_users',JSON.stringify(_usersCache));}catch(e){}
-      console.log('[WMS] _initUsers loaded',_usersCache.length,'users from GAS');
+      console.log('[WMS] _initUsers loaded',_usersCache.length,'users from Supabase');
     } else {
-      // GAS sheet ว่าง → migrate จาก localStorage หรือใช้ default admin
-      var local = null;
-      try{var r=localStorage.getItem('wms_users');if(r)local=JSON.parse(r);}catch(e){}
-      _usersCache = (local && local.length) ? local : _defaultAdminUser();
+      // ยังไม่มี user → สร้าง admin default แล้ว insert
+      _usersCache = _defaultAdminUser();
       _usersLoaded = true;
-      console.log('[WMS] _initUsers GAS empty → using local/default, pushing up');
-      if(gasUrl){
-        fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({action:'wmsSaveUsers',args:[JSON.stringify(_usersCache)]})}).catch(function(){});
-      }
+      console.log('[WMS] _initUsers Supabase empty → creating default admin');
+      await _sbUpsertUser(_usersCache[0]);
     }
-    if(typeof callback==='function') callback();
-  }
-
-  function _onFail(err){
+  } catch(err) {
     console.error('[WMS] _initUsers failed:',err);
-    var local = null;
-    try{var r=localStorage.getItem('wms_users');if(r)local=JSON.parse(r);}catch(e){}
-    _usersCache = (local && local.length) ? local : _defaultAdminUser();
+    _usersCache = _defaultAdminUser();
     _usersLoaded = true;
-    if(typeof callback==='function') callback();
   }
-
-  if(gasUrl){
-    // ใช้ POST โดยตรง — เชื่อถือได้กว่า JSONP GET บนทุกเครื่อง
-    fetch(gasUrl,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'wmsGetUsers',args:[]})
-    })
-    .then(function(r){return r.json();})
-    .then(_onSuccess)
-    .catch(_onFail);
-  } else {
-    // Native GAS environment
-    google.script.run.withSuccessHandler(_onSuccess).withFailureHandler(_onFail).wmsGetUsers();
-  }
+  if(typeof callback==='function') callback();
 }
 var _cu=null;
 function _loadSess(){try{var s=sessionStorage.getItem('wms_sess');if(s)return JSON.parse(s);}catch(e){}return null;}
@@ -35609,13 +35575,24 @@ function _clearSess(){sessionStorage.removeItem('wms_sess');}
 
 window.toggleLoginPw=function(){var i=document.getElementById('login-password'),ic=document.getElementById('login-pw-icon');if(!i)return;if(i.type==='password'){i.type='text';ic.className='fas fa-eye-slash text-sm';}else{i.type='password';ic.className='fas fa-eye text-sm';}};
 
-window.doLogin=function(){
+window.doLogin = async function(){
   var uname=(document.getElementById('login-username').value||'').trim();
   var pw=document.getElementById('login-password').value||'';
   var err=document.getElementById('login-error');
   err.classList.add('hidden');
-  var users=_loadUsers(),user=null;
-  for(var i=0;i<users.length;i++){if(users[i].username===uname&&users[i].pwHash===_hashPw(pw)){user=users[i];break;}}
+  var hash=_hashPw(pw);
+  // ดึงจาก Supabase โดยตรง
+  var res = await window._sb.from('wms_users').select('*').eq('username',uname).eq('password',hash).eq('active',true).maybeSingle();
+  var user = null;
+  if(res.data){
+    var r=res.data;
+    user={username:r.username,pwHash:r.password,name:r.name||'',role:r.role||'',isAdmin:r.is_admin||false,perms:r.perms||[],active:true};
+  }
+  // fallback cache (กรณี offline)
+  if(!user){
+    var cached=_loadUsers();
+    for(var i=0;i<cached.length;i++){if(cached[i].username===uname&&cached[i].pwHash===hash){user=cached[i];break;}}
+  }
   if(!user){err.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';err.classList.remove('hidden');document.getElementById('login-password').value='';return;}
   _cu=user;_saveSess(user);_applySession();
 };
@@ -35657,8 +35634,11 @@ function _renderPermCb(id,checked){
 
 function _getChecked(id){var el=document.getElementById(id);if(!el)return[];var cbs=el.querySelectorAll('.perm-cb:checked'),r=[];for(var i=0;i<cbs.length;i++)r.push(cbs[i].value);return r;}
 
-window.umRefreshList=function(){
-  var users=_loadUsers(),el=document.getElementById('um-user-list');if(!el)return;var h='';
+window.umRefreshList = async function(){
+  var users = await _sbLoadUsers();
+  if(users) { _usersCache = users; }
+  else { users = _loadUsers(); }
+  var el = document.getElementById('um-user-list'); if(!el) return; var h='';
   for(var i=0;i<users.length;i++){
     var u=users[i],del='';
     if(!u.isAdmin)del='<button onclick="umDeleteUser(this.dataset.u)" data-u="'+u.username+'" style="background:rgba(136,19,55,0.4);color:#fca5a5;border:none;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;"><i class="fas fa-trash"></i></button>';
@@ -35675,16 +35655,19 @@ window.umRefreshList=function(){
   el.innerHTML=h;
 };
 
-window.umAddUser=function(){
+window.umAddUser = async function(){
   var un=(document.getElementById('um-new-username').value||'').trim(),pw=(document.getElementById('um-new-password').value||'').trim();
   var nm=(document.getElementById('um-new-name').value||'').trim(),rl=(document.getElementById('um-new-role').value||'').trim();
   if(!un||!pw){showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน',true);return;}
   var users=_loadUsers();
   for(var i=0;i<users.length;i++){if(users[i].username===un){showToast('ชื่อผู้ใช้นี้มีอยู่แล้ว',true);return;}}
-  users.push({username:un,pwHash:_hashPw(pw),name:nm,role:rl,isAdmin:false,perms:_getChecked('um-new-perms')});
-  _saveUsers(users);
+  var newUser={username:un,pwHash:_hashPw(pw),name:nm,role:rl,isAdmin:false,perms:_getChecked('um-new-perms'),active:true};
+  var res = await _sbUpsertUser(newUser);
+  if(res.error){showToast('❌ '+res.error.message,true);return;}
   ['um-new-username','um-new-password','um-new-name','um-new-role'].forEach(function(id){document.getElementById(id).value='';});
-  _renderPermCb('um-new-perms',[]);umRefreshList();showToast('เพิ่มผู้ใช้ '+un+' สำเร็จ');
+  _renderPermCb('um-new-perms',[]);
+  await umRefreshList();
+  showToast('✅ เพิ่มผู้ใช้ '+un+' สำเร็จ');
 };
 
 window.umOpenEdit=function(un){
@@ -35698,23 +35681,29 @@ window.umOpenEdit=function(un){
   document.getElementById('um-edit-modal').classList.remove('hidden');
 };
 
-window.umSaveEdit=function(){
-  var un=document.getElementById('um-edit-username').value,users=_loadUsers(),idx=-1;
+window.umSaveEdit = async function(){
+  var un=document.getElementById('um-edit-username').value;
+  var users=_loadUsers(),idx=-1;
   for(var i=0;i<users.length;i++){if(users[i].username===un){idx=i;break;}}if(idx<0)return;
   var np=(document.getElementById('um-edit-password').value||'').trim();
-  if(np)users[idx].pwHash=_hashPw(np);
+  if(np) users[idx].pwHash=_hashPw(np);
   users[idx].name=(document.getElementById('um-edit-name').value||'').trim();
   users[idx].role=(document.getElementById('um-edit-role').value||'').trim();
-  if(!users[idx].isAdmin)users[idx].perms=_getChecked('um-edit-perms');
-  _saveUsers(users);
+  if(!users[idx].isAdmin) users[idx].perms=_getChecked('um-edit-perms');
+  var res = await _sbUpsertUser(users[idx]);
+  if(res.error){showToast('❌ '+res.error.message,true);return;}
   if(_cu&&_cu.username===un){_cu=users[idx];_saveSess(_cu);}
-  document.getElementById('um-edit-modal').classList.add('hidden');umRefreshList();showToast('บันทึกสำเร็จ');
+  document.getElementById('um-edit-modal').classList.add('hidden');
+  await umRefreshList();
+  showToast('✅ บันทึกสำเร็จ');
 };
 
-window.umDeleteUser=function(un){
+window.umDeleteUser = async function(un){
   if(!confirm('ลบผู้ใช้ "'+un+'" ใช่ไหมครับ?'))return;
-  var users=_loadUsers(),n=[];for(var i=0;i<users.length;i++){if(users[i].username!==un)n.push(users[i]);}
-  _saveUsers(n);umRefreshList();showToast('ลบผู้ใช้สำเร็จ');
+  var res = await _sbDeleteUser(un);
+  if(res.error){showToast('❌ '+res.error.message,true);return;}
+  await umRefreshList();
+  showToast('✅ ลบผู้ใช้สำเร็จ');
 };
 
 // Guard switchView
