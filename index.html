@@ -34581,23 +34581,42 @@ window.viewTripResult = async function(planId) {
 
   // ── print count sheet (FM-WH-03Rev.00) ──────────────────────────
   window.scPrintSheet = function(){
-    if(!_scItems.length){ showToast('กรุณาโหลดรายการก่อน', true); return; }
     var checker = (document.getElementById('sc-checker').value||'').trim();
     var wh      = (document.getElementById('sc-wh-filter').value||'ทั้งหมด');
-    var dateStr = _scDate || '';
-    var rows = _scItems.map(function(item,i){
-      return '<tr style="border-bottom:1px solid #ccc">'
-        + '<td style="padding:6px 8px;text-align:center;border-right:1px solid #ccc">'+(i+1)+'</td>'
-        + '<td style="padding:6px 8px;border-right:1px solid #ccc">'+item.wh+'</td>'
-        + '<td style="padding:6px 8px;border-right:1px solid #ccc;font-family:monospace;font-size:11px">'+item.sku+'</td>'
-        + '<td style="padding:6px 10px;border-right:1px solid #ccc">'+item.name+'</td>'
-        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
-        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
-        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
-        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
-        + '<td style="padding:6px 8px">&nbsp;</td>'
-        + '</tr>';
-    }).join('');
+    var dateStr = document.getElementById('sc-date').value || _scDate || '';
+    // ถ้าโหลดรายการแล้ว — พิมพ์พร้อม SKU; ถ้ายังไม่โหลด — พิมพ์ใบเปล่า 30 แถว
+    var BLANK_ROWS = 30;
+    var rows;
+    if(_scItems.length){
+      rows = _scItems.map(function(item,i){
+        return '<tr style="height:28px;border-bottom:1px solid #ccc">'
+          + '<td style="padding:4px 6px;text-align:center;border-right:1px solid #ccc">'+(i+1)+'</td>'
+          + '<td style="padding:4px 6px;border-right:1px solid #ccc">'+item.wh+'</td>'
+          + '<td style="padding:4px 6px;border-right:1px solid #ccc;font-family:monospace;font-size:11px">'+item.sku+'</td>'
+          + '<td style="padding:4px 8px;border-right:1px solid #ccc">'+item.name+'</td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td></td>'
+          + '</tr>';
+      }).join('');
+    } else {
+      // ใบเปล่า — แถวว่างสำหรับเขียน
+      rows = Array.from({length: BLANK_ROWS}, function(_,i){
+        return '<tr style="height:28px;border-bottom:1px solid #ccc">'
+          + '<td style="padding:4px 6px;text-align:center;border-right:1px solid #ccc;color:#aaa">'+(i+1)+'</td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td style="border-right:1px solid #ccc"></td>'
+          + '<td></td>'
+          + '</tr>';
+      }).join('');
+    }
     var html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
       + '<title>FM-WH-03Rev.00</title>'
       + '<style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}'
