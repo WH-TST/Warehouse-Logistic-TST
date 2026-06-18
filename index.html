@@ -7168,6 +7168,9 @@ thead.sticky {
         <button onclick="scExportSheet()" class="bg-slate-500 hover:bg-slate-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-file-excel"></i> Export Excel
         </button>
+        <button onclick="scOpenAddItem()" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-plus"></i> เพิ่มรายการ
+        </button>
         <button onclick="scSwitchTab('reconcile')" id="sc-btn-reconcile" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-balance-scale"></i> ไปหน้าเทียบ →
         </button>
@@ -7258,6 +7261,43 @@ thead.sticky {
       </div>
     </div>
   </div>
+<!-- Modal: เพิ่มรายการนับ -->
+<div id="sc-add-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.45)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div class="bg-violet-600 px-5 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-2 text-white font-black"><i class="fas fa-plus-circle"></i> เพิ่มรายการตรวจนับ</div>
+      <button onclick="scCloseAddItem()" class="text-white opacity-70 hover:opacity-100"><i class="fas fa-times text-lg"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-xs font-black text-slate-500 mb-1 block">ค้นหา SKU / ชื่อสินค้า</label>
+        <input id="sc-add-search" type="text" placeholder="พิมพ์เพื่อค้นหา..." oninput="scSearchProduct(this.value)"
+          class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-violet-400">
+      </div>
+      <div id="sc-add-results" class="max-h-64 overflow-y-auto space-y-1.5 rounded-xl border border-slate-100 p-1">
+        <div class="text-center text-slate-400 text-sm py-6">พิมพ์เพื่อค้นหาสินค้า</div>
+      </div>
+      <div id="sc-add-selected" class="hidden bg-violet-50 border border-violet-200 rounded-xl px-4 py-3">
+        <div class="text-xs font-black text-violet-600 mb-1">เลือกแล้ว</div>
+        <div id="sc-add-selected-name" class="text-sm font-bold text-slate-800"></div>
+        <div id="sc-add-selected-sku" class="text-xs text-slate-500 font-mono"></div>
+        <div class="mt-2 flex items-center gap-2">
+          <label class="text-xs font-black text-slate-500">WH</label>
+          <select id="sc-add-wh" class="border border-violet-300 rounded-lg px-2 py-1 text-xs bg-white outline-none focus:border-violet-500">
+            <option value="FG-BP">FG-BP</option>
+            <option value="FG-BB">FG-BB</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="px-5 pb-5 flex gap-2">
+      <button onclick="scConfirmAddItem()" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-black py-2.5 rounded-xl text-sm transition">
+        <i class="fas fa-plus mr-1"></i> เพิ่มในใบนับ
+      </button>
+      <button onclick="scCloseAddItem()" class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition">ยกเลิก</button>
+    </div>
+  </div>
+</div>
 </div><!-- end view-stock-count-content -->
 
 <!-- ════════════════════════════════════════════════════════════════ -->
@@ -34722,6 +34762,87 @@ window.viewTripResult = async function(planId) {
     a.href = url; a.download = filename; a.click();
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
   }
+
+  // ── Add Item modal ──────────────────────────────────────────────
+  var _scAddSelected = null;  // { sku, name, ppb, systemQty }
+  var _scProductCache = null; // cache products list
+
+  window.scOpenAddItem = function(){
+    _scAddSelected = null;
+    document.getElementById('sc-add-modal').classList.remove('hidden');
+    document.getElementById('sc-add-search').value = '';
+    document.getElementById('sc-add-results').innerHTML = '<div class="text-center text-slate-400 text-sm py-6">พิมพ์เพื่อค้นหาสินค้า</div>';
+    document.getElementById('sc-add-selected').classList.add('hidden');
+    setTimeout(function(){ document.getElementById('sc-add-search').focus(); }, 100);
+    // preload products
+    if(!_scProductCache){
+      window._sb.from('products').select('sku,name,lines_per_bundle').order('sku').then(function(r){
+        _scProductCache = r.data || [];
+      });
+    }
+  };
+
+  window.scCloseAddItem = function(){
+    document.getElementById('sc-add-modal').classList.add('hidden');
+  };
+
+  window.scSearchProduct = function(q){
+    var res = document.getElementById('sc-add-results');
+    q = (q||'').trim().toLowerCase();
+    if(!q){ res.innerHTML = '<div class="text-center text-slate-400 text-sm py-6">พิมพ์เพื่อค้นหาสินค้า</div>'; return; }
+    var list = (_scProductCache||[]).filter(function(p){
+      return p.sku.toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q);
+    }).slice(0, 20);
+    if(!list.length){ res.innerHTML = '<div class="text-center text-slate-400 text-sm py-6">ไม่พบสินค้า</div>'; return; }
+    res.innerHTML = list.map(function(p){
+      return '<div onclick="scSelectProduct(\''+p.sku+'\')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-violet-50 border border-transparent hover:border-violet-200 transition">'
+        + '<div class="flex-1 min-w-0">'
+        + '<div class="font-bold text-slate-800 text-sm truncate">'+(p.name||'')+'</div>'
+        + '<div class="font-mono text-xs text-slate-400">'+p.sku+'</div>'
+        + '</div>'
+        + '<span class="text-xs text-violet-600 font-bold bg-violet-50 px-2 py-0.5 rounded-lg flex-shrink-0">PPB '+(p.lines_per_bundle||'—')+'</span>'
+        + '</div>';
+    }).join('');
+  };
+
+  window.scSelectProduct = async function(sku){
+    var prod = (_scProductCache||[]).find(function(p){ return p.sku===sku; });
+    if(!prod) return;
+    // ดึง system qty จาก counting
+    var cntRes = await window._sb.from('counting').select('quantity').eq('item_number', sku);
+    var sysQty = (cntRes.data||[]).reduce(function(s,r){ return s + (Number(r.quantity)||0); }, 0);
+    _scAddSelected = { sku: sku, name: prod.name||'', ppb: Number(prod.lines_per_bundle)||0, systemQty: sysQty };
+    document.getElementById('sc-add-selected-name').textContent = prod.name||'';
+    document.getElementById('sc-add-selected-sku').textContent  = sku;
+    document.getElementById('sc-add-selected').classList.remove('hidden');
+    // ไฮไลต์แถวที่เลือก
+    var items = document.getElementById('sc-add-results').querySelectorAll('div[onclick]');
+    items.forEach(function(el){ el.classList.remove('bg-violet-100','border-violet-400'); });
+    var clicked = Array.from(items).find(function(el){ return el.getAttribute('onclick').includes("'"+sku+"'"); });
+    if(clicked){ clicked.classList.add('bg-violet-100','border-violet-400'); }
+  };
+
+  window.scConfirmAddItem = function(){
+    if(!_scAddSelected){ showToast('กรุณาเลือกสินค้าก่อน', true); return; }
+    var wh = document.getElementById('sc-add-wh').value;
+    // ตรวจซ้ำ
+    var dup = _scItems.some(function(it){ return it.sku===_scAddSelected.sku && it.wh===wh; });
+    if(dup){ showToast('SKU นี้อยู่ในรายการแล้ว ('+wh+')', true); return; }
+    _scItems.push({
+      sku: _scAddSelected.sku, name: _scAddSelected.name,
+      wh: wh, ppb: _scAddSelected.ppb, systemQty: _scAddSelected.systemQty,
+      bundle1:0, bundle2:0, pcs1:0, pcs2:0, holdPcs:0, note:'',
+      isManual: true  // flag ว่าเพิ่มเอง
+    });
+    _scRenderSheet();
+    // อัพเดต info bar
+    var info = document.getElementById('sc-sheet-info');
+    info.textContent = 'รายการทั้งหมด ' + _scItems.length + ' รายการ';
+    info.classList.remove('hidden');
+    document.getElementById('sc-btn-reconcile').classList.remove('hidden');
+    scCloseAddItem();
+    showToast('✅ เพิ่ม ' + _scAddSelected.name + ' (' + wh + ') แล้ว');
+  };
 
   // ── init: set today's date ───────────────────────────────────────
   (function _init(){
