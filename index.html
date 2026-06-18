@@ -34899,14 +34899,19 @@ window.viewTripResult = async function(planId) {
       // ดึงจำนวนนับล่าสุดต่อ SKU+WH จาก stock_count_items (join session เพื่อเอา count_date)
       var savedRes = await window._sb
         .from('stock_count_items')
-        .select('sku,wh,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,stock_count_sessions(count_date)')
+        .select('sku,wh,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,session_id,stock_count_sessions(count_date)')
         .in('sku', skus);
-      // หา record ล่าสุดต่อ sku+wh (เรียงตาม count_date มากสุด)
+      // หา record ล่าสุดต่อ sku+wh — เรียงตาม count_date ก่อน ถ้าวันเดียวกันใช้ session_id สูงสุด
       var savedMap = {};
       (savedRes.data||[]).forEach(function(r){
-        var key  = r.sku+'|'+(r.wh||'');
-        var date = (r.stock_count_sessions||{}).count_date||'';
-        if(!savedMap[key] || date > savedMap[key]._date){
+        var key    = r.sku+'|'+(r.wh||'');
+        var date   = (r.stock_count_sessions||{}).count_date||'';
+        var sessId = r.session_id||0;
+        var prev   = savedMap[key];
+        var isNewer = !prev
+          || date > prev._date
+          || (date === prev._date && sessId > prev._sessId);
+        if(isNewer){
           savedMap[key] = {
             bundle1:  Number(r.bundle_1)||0,
             bundle2:  Number(r.bundle_2)||0,
@@ -34914,7 +34919,8 @@ window.viewTripResult = async function(planId) {
             pcs2:     Number(r.pcs_2)||0,
             holdPcs:  Number(r.hold_pcs)||0,
             note:     r.note||'',
-            _date:    date
+            _date:    date,
+            _sessId:  sessId
           };
         }
       });
