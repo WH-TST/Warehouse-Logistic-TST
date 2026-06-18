@@ -7397,10 +7397,101 @@ thead.sticky {
 
   <!-- Main Panel: Semi -->
   <div id="sc-main-semi" class="hidden space-y-4">
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 text-center">
-      <i class="fas fa-layer-group text-4xl text-slate-300 mb-4"></i>
-      <p class="text-slate-400 font-bold text-lg">Semi</p>
-      <p class="text-slate-400 text-sm mt-1">อยู่ระหว่างพัฒนา</p>
+    <!-- Semi Sub-tabs -->
+    <div class="flex gap-2">
+      <button id="sc-semi-tab-sheet" onclick="scSemiSwitchTab('sheet')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all">
+        <i class="fas fa-list-alt"></i> Count Sheet
+      </button>
+      <button id="sc-semi-tab-rec" onclick="scSemiSwitchTab('rec')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">
+        <i class="fas fa-balance-scale"></i> Reconcile
+      </button>
+    </div>
+
+    <!-- Semi Count Sheet Panel -->
+    <div id="sc-semi-panel-sheet" class="space-y-4">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <div class="flex flex-wrap items-end gap-3 mb-4">
+          <div>
+            <label class="text-slate-500 text-xs font-bold mb-1 block">วันที่นับ</label>
+            <input type="date" id="sc-semi-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+          </div>
+          <button onclick="scSemiLoadSheet()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+            <i class="fas fa-search"></i> โหลดรายการ
+          </button>
+          <button onclick="scSemiSave()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+            <i class="fas fa-save"></i> บันทึก
+          </button>
+          <button onclick="scSemiExport()" class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+            <i class="fas fa-file-excel"></i> Export Excel
+          </button>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100" style="overflow:hidden">
+        <div style="overflow-x:auto;max-height:65vh;overflow-y:auto">
+          <table id="sc-semi-table" style="border-collapse:collapse;font-size:12px;table-layout:fixed;width:100%;min-width:900px">
+            <thead>
+              <tr style="background:#f8fafc;position:sticky;top:0;z-index:2">
+                <th style="width:36px;padding:8px 6px;border:1px solid #e2e8f0;text-align:center;font-size:11px;color:#64748b">#</th>
+                <th style="width:100px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">รหัส SEMI</th>
+                <th style="width:150px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">ชื่อ SEMI</th>
+                <th colspan="3" style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#3b6d11;background:#eaf3de;text-align:center">FG 1</th>
+                <th colspan="3" style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#185fa5;background:#e6f1fb;text-align:center">FG 2</th>
+                <th style="width:70px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">รวมนับ</th>
+                <th style="width:80px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#534ab7;text-align:center">ยอดระบบ (ม้วน)</th>
+                <th style="width:80px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">Diff</th>
+              </tr>
+              <tr style="background:#f8fafc;position:sticky;top:33px;z-index:2">
+                <th style="border:1px solid #e2e8f0"></th>
+                <th style="border:1px solid #e2e8f0"></th>
+                <th style="border:1px solid #e2e8f0"></th>
+                <th style="width:90px;padding:4px 6px;border:1px solid #e2e8f0;font-size:10px;color:#3b6d11;background:#eaf3de">รหัส FG</th>
+                <th style="width:130px;padding:4px 6px;border:1px solid #e2e8f0;font-size:10px;color:#3b6d11;background:#eaf3de">ชื่อ FG</th>
+                <th style="width:70px;padding:4px 6px;border:1px solid #e2e8f0;font-size:10px;color:#3b6d11;background:#eaf3de;text-align:center">นับจริง</th>
+                <th style="width:90px;padding:4px 6px;border:1px solid #e2e8f0;font-size:10px;color:#185fa5;background:#e6f1fb">รหัส FG</th>
+                <th style="width:130px;padding:4px 6px;border:1px solid #e2e8f0;font-size:10px;color:#185fa5;background:#e6f1fb">ชื่อ FG</th>
+                <th style="width:70px;padding:4px 6px;border:1px solid #e2e8f0;font-size:10px;color:#185fa5;background:#e6f1fb;text-align:center">นับจริง</th>
+                <th style="border:1px solid #e2e8f0"></th>
+                <th style="border:1px solid #e2e8f0"></th>
+                <th style="border:1px solid #e2e8f0"></th>
+              </tr>
+            </thead>
+            <tbody id="sc-semi-tbody">
+              <tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">เลือกวันที่แล้วกด "โหลดรายการ"</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Semi Reconcile Panel -->
+    <div id="sc-semi-panel-rec" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-wrap items-center gap-3">
+        <button onclick="scSemiLoadRec()" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-sync"></i> โหลด Reconcile
+        </button>
+        <span id="sc-semi-rec-title" class="text-slate-500 text-sm font-bold"></span>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100" style="overflow:hidden">
+        <div style="overflow-x:auto;max-height:65vh;overflow-y:auto">
+          <table style="border-collapse:collapse;font-size:12px;width:100%;min-width:700px">
+            <thead>
+              <tr style="background:#f8fafc;position:sticky;top:0;z-index:2">
+                <th style="width:36px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">#</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">รหัส SEMI</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">ชื่อ SEMI</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">วันที่นับ</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">รวมนับจริง (ม้วน)</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#534ab7;text-align:center">ยอดระบบ (ม้วน)</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">Diff</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="sc-semi-rec-tbody">
+              <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">กด "โหลด Reconcile"</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div><!-- end sc-main-semi -->
 </div>
@@ -35456,6 +35547,225 @@ window.viewTripResult = async function(planId) {
     }
   })();
 
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// Stock Count — SEMI
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+  var _semiItems = []; // { semi_item, semi_name, fg_code_1, fg_name_1, fg_code_2, fg_name_2, count1, count2, systemQty }
+
+  // ── set today as default date ──
+  (function(){
+    var el = document.getElementById('sc-semi-date');
+    if(el && !el.value) el.value = new Date().toISOString().slice(0,10);
+  })();
+
+  // ── switch subtab ──
+  window.scSemiSwitchTab = function(tab){
+    var isSheet = tab === 'sheet';
+    document.getElementById('sc-semi-panel-sheet').classList.toggle('hidden', !isSheet);
+    document.getElementById('sc-semi-panel-rec').classList.toggle('hidden', isSheet);
+    var btnSheet = document.getElementById('sc-semi-tab-sheet');
+    var btnRec   = document.getElementById('sc-semi-tab-rec');
+    if(isSheet){
+      btnSheet.className = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all';
+      btnRec.className   = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all';
+    } else {
+      btnRec.className   = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-violet-500 bg-violet-500 text-white transition-all';
+      btnSheet.className = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all';
+      scSemiLoadRec();
+    }
+  };
+
+  // ── load sheet ──
+  window.scSemiLoadSheet = async function(){
+    var date = (document.getElementById('sc-semi-date').value||'').trim();
+    if(!date){ if(typeof showToast==='function') showToast('กรุณาเลือกวันที่ก่อน', true); return; }
+    var tbody = document.getElementById('sc-semi-tbody');
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">กำลังโหลด...</td></tr>';
+
+    try {
+      // 1. load mapping
+      var { data: mapping } = await window._sb.from('semi_fg_mapping').select('*').order('semi_item');
+      if(!mapping||!mapping.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">ไม่พบข้อมูล mapping</td></tr>'; return; }
+
+      // 2. count rows in onhand_semi per item_number = system qty (ม้วน)
+      var { data: onhand } = await window._sb.from('onhand_semi').select('item_number');
+      var sysMap = {};
+      (onhand||[]).forEach(function(r){ sysMap[r.item_number] = (sysMap[r.item_number]||0) + 1; });
+
+      // 3. build _semiItems (preserve existing count if reloading same date)
+      var prevMap = {};
+      _semiItems.forEach(function(it){ prevMap[it.semi_item] = it; });
+      _semiItems = mapping.map(function(m){
+        var prev = prevMap[m.semi_item] || {};
+        return {
+          semi_item: m.semi_item, semi_name: m.semi_name||'',
+          fg_code_1: m.fg_code_1||'', fg_name_1: m.fg_name_1||'',
+          fg_code_2: m.fg_code_2||'', fg_name_2: m.fg_name_2||'',
+          count1: prev.count1||0, count2: prev.count2||0,
+          systemQty: sysMap[m.semi_item]||0
+        };
+      });
+      _scSemiRender();
+    } catch(e){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#ef4444;padding:30px">Error: '+e.message+'</td></tr>'; }
+  };
+
+  function _scSemiRender(){
+    var tbody = document.getElementById('sc-semi-tbody');
+    if(!_semiItems.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">ไม่มีข้อมูล</td></tr>'; return; }
+    var html = '';
+    _semiItems.forEach(function(it, i){
+      var total = (it.count1||0) + (it.count2||0);
+      var diff  = total - it.systemQty;
+      var diffColor = diff === 0 ? '#16a34a' : diff > 0 ? '#d97706' : '#dc2626';
+      var badge = diff === 0
+        ? '<span style="background:#dcfce7;color:#166534;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">OK</span>'
+        : diff > 0
+          ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Over</span>'
+          : '<span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Under</span>';
+      var hasFG2 = it.fg_code_2 && it.fg_code_2 !== '–' && it.fg_code_2 !== '-';
+      html += '<tr style="border-bottom:1px solid #f1f5f9">'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px">'+(i+1)+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;font-weight:600;font-size:12px">'+it.semi_item+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b;font-size:11px">'+it.semi_name+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;font-size:11px;background:#f0fdf4">'+it.fg_code_1+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b;font-size:11px;background:#f0fdf4">'+it.fg_name_1+'</td>'
+        + '<td data-semi-idx="'+i+'" data-semi-fg="1" contenteditable="true" onkeydown="_semiCellKey(event)" onblur="_semiCellBlur(this)" onclick="_semiCellClick(this)" style="padding:6px;border:1px solid #e2e8f0;background:#fefce8;text-align:right;cursor:text;min-width:60px;position:relative">'+(it.count1_expr||it.count1||'')+(it.count1_expr?'<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:#7c3aed;pointer-events:none"></span>':'')+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;font-size:11px;background:#eff6ff">'+(hasFG2?it.fg_code_2:'<span style="color:#cbd5e1">—</span>')+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b;font-size:11px;background:#eff6ff">'+(hasFG2?it.fg_name_2:'<span style="color:#cbd5e1">—</span>')+'</td>'
+        + '<td data-semi-idx="'+i+'" data-semi-fg="2" '+(hasFG2?'contenteditable="true" onkeydown="_semiCellKey(event)" onblur="_semiCellBlur(this)" onclick="_semiCellClick(this)"':'')+' style="padding:6px;border:1px solid #e2e8f0;background:'+(hasFG2?'#fefce8':'#f8fafc')+';text-align:right;'+(hasFG2?'cursor:text;':'')+'min-width:60px;position:relative">'
+          + (hasFG2 ? (it.count2_expr||it.count2||'')+(it.count2_expr?'<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:#7c3aed;pointer-events:none"></span>':'') : '<span style="color:#cbd5e1;display:block;text-align:center">—</span>')
+          + '</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;font-weight:600">'+(total||'—')+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:#534ab7;font-weight:600">'+it.systemQty+'</td>'
+        + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:'+diffColor+';font-weight:600">'+(diff>0?'+':'')+diff+' '+badge+'</td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  window._semiCellKey = function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); e.target.blur(); return; }
+    if(e.key === 'Tab'){ e.preventDefault(); e.target.blur(); return; }
+    if(/[0-9+\-*\/().]/.test(e.key) || ['Backspace','Delete','ArrowLeft','ArrowRight'].includes(e.key)) return;
+    e.preventDefault();
+  };
+
+  window._semiCellClick = function(td){
+    td.style.outline = '2px solid #3b82f6';
+    td.style.background = '#eff6ff';
+  };
+
+  window._semiCellBlur = function(td){
+    td.style.outline = '';
+    td.style.background = '#fefce8';
+    var idx = parseInt(td.dataset.semiIdx);
+    var fg  = parseInt(td.dataset.semiFg);
+    var raw = td.innerText.trim();
+    var num = typeof _scEval === 'function' ? _scEval(raw) : (parseInt(raw)||0);
+    num = Math.round(num);
+    var isExpr = raw && raw !== String(num) && /[+\-*\/()]/.test(raw);
+    if(!_semiItems[idx]) return;
+    if(fg === 1){ _semiItems[idx].count1 = num; _semiItems[idx].count1_expr = isExpr ? raw : ''; }
+    else        { _semiItems[idx].count2 = num; _semiItems[idx].count2_expr = isExpr ? raw : ''; }
+    var display = isExpr ? raw : (num ? String(num) : '');
+    td.innerHTML = display + (isExpr ? '<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:#7c3aed;pointer-events:none"></span>' : '');
+    // อัปเดต total + diff
+    var total = (_semiItems[idx].count1||0) + (_semiItems[idx].count2||0);
+    var diff  = total - _semiItems[idx].systemQty;
+    var diffColor = diff===0?'#16a34a':diff>0?'#d97706':'#dc2626';
+    var badge = diff===0
+      ? '<span style="background:#dcfce7;color:#166534;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">OK</span>'
+      : diff>0
+        ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Over</span>'
+        : '<span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Under</span>';
+    var row = document.querySelectorAll('#sc-semi-tbody tr')[idx];
+    if(row){
+      row.cells[9].textContent = total || '';
+      row.cells[11].innerHTML  = (diff>0?'+':'')+diff+' '+badge;
+      row.cells[11].style.color = diffColor;
+    }
+  };
+
+  // ── save ──
+  window.scSemiSave = async function(){
+    var date = (document.getElementById('sc-semi-date').value||'').trim();
+    if(!date||!_semiItems.length){ if(typeof showToast==='function') showToast('กรุณาโหลดรายการก่อนบันทึก', true); return; }
+    if(typeof showToast==='function') showToast('กำลังบันทึก...');
+    try {
+      var payload = _semiItems.map(function(it){
+        return {
+          count_date: date, semi_item: it.semi_item, semi_name: it.semi_name,
+          fg_code_1: it.fg_code_1, fg_name_1: it.fg_name_1, count1: it.count1||0,
+          fg_code_2: it.fg_code_2||null, fg_name_2: it.fg_name_2||null, count2: it.count2||0,
+          total_count: (it.count1||0)+(it.count2||0), system_qty: it.systemQty,
+          diff: ((it.count1||0)+(it.count2||0)) - it.systemQty
+        };
+      });
+      // upsert by count_date + semi_item
+      var { error } = await window._sb.from('stock_count_semi')
+        .upsert(payload, { onConflict: 'count_date,semi_item' });
+      if(error) throw error;
+      if(typeof showToast==='function') showToast('✅ บันทึก Semi Count สำเร็จ');
+    } catch(e){ if(typeof showToast==='function') showToast('❌ '+e.message, true); }
+  };
+
+  // ── export ──
+  window.scSemiExport = function(){
+    if(!_semiItems.length){ if(typeof showToast==='function') showToast('กรุณาโหลดรายการก่อน', true); return; }
+    var date = document.getElementById('sc-semi-date').value||'';
+    var rows = [['รหัส SEMI','ชื่อ SEMI','รหัส FG 1','ชื่อ FG 1','นับจริง 1','รหัส FG 2','ชื่อ FG 2','นับจริง 2','รวมนับ','ยอดระบบ','Diff']];
+    _semiItems.forEach(function(it){
+      var total = (it.count1||0)+(it.count2||0);
+      rows.push([it.semi_item,it.semi_name,it.fg_code_1,it.fg_name_1,it.count1||0,it.fg_code_2||'',it.fg_name_2||'',it.count2||0,total,it.systemQty,total-it.systemQty]);
+    });
+    if(typeof XLSX !== 'undefined'){
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Semi Count');
+      XLSX.writeFile(wb, 'semi-count-'+date+'.xlsx');
+    }
+  };
+
+  // ── load reconcile ──
+  window.scSemiLoadRec = async function(){
+    var tbody = document.getElementById('sc-semi-rec-tbody');
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px">กำลังโหลด...</td></tr>';
+    try {
+      var { data } = await window._sb.from('stock_count_semi').select('*').order('count_date',{ascending:false});
+      if(!data||!data.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px">ยังไม่มีข้อมูลบันทึก</td></tr>'; return; }
+      var titleEl = document.getElementById('sc-semi-rec-title');
+      if(titleEl) titleEl.textContent = 'Reconcile — '+data.length+' รายการ';
+      var html = '';
+      data.forEach(function(r, i){
+        var diff = r.diff||0;
+        var diffColor = diff===0?'#16a34a':diff>0?'#d97706':'#dc2626';
+        var badge = diff===0
+          ? '<span style="background:#dcfce7;color:#166534;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">OK</span>'
+          : diff>0
+            ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Over</span>'
+            : '<span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Under</span>';
+        html += '<tr>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px">'+(i+1)+'</td>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">'+r.semi_item+'</td>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b;font-size:11px">'+r.semi_name+'</td>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;font-size:11px">'+r.count_date+'</td>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;font-weight:600">'+(r.total_count||0)+'</td>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:#534ab7;font-weight:600">'+(r.system_qty||0)+'</td>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:'+diffColor+';font-weight:600">'+(diff>0?'+':'')+diff+'</td>'
+          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center">'+badge+'</td>'
+          + '</tr>';
+      });
+      tbody.innerHTML = html;
+    } catch(e){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:30px">Error: '+e.message+'</td></tr>'; }
+  };
+
+  // set default date
+  (function(){
+    var el = document.getElementById('sc-semi-date');
+    if(el && !el.value) el.value = new Date().toISOString().slice(0,10);
+  })();
 })();
 </script>
 
