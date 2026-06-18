@@ -34896,24 +34896,51 @@ window.viewTripResult = async function(planId) {
       var ppbMap = {};
       (ppbRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
 
-      // merge กับ _scItems ที่มีอยู่ (ถ้าโหลด Count Sheet แล้ว)
-      var scMap = {};
-      _scItems.forEach(function(it){ scMap[it.sku+'|'+it.wh] = it; });
+      // ดึงจำนวนนับล่าสุดต่อ SKU+WH จาก stock_count_items (join session เพื่อเอา count_date)
+      var savedRes = await window._sb
+        .from('stock_count_items')
+        .select('sku,wh,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,stock_count_sessions(count_date)')
+        .in('sku', skus);
+      // หา record ล่าสุดต่อ sku+wh (เรียงตาม count_date มากสุด)
+      var savedMap = {};
+      (savedRes.data||[]).forEach(function(r){
+        var key  = r.sku+'|'+(r.wh||'');
+        var date = (r.stock_count_sessions||{}).count_date||'';
+        if(!savedMap[key] || date > savedMap[key]._date){
+          savedMap[key] = {
+            bundle1:  Number(r.bundle_1)||0,
+            bundle2:  Number(r.bundle_2)||0,
+            pcs1:     Number(r.pcs_1)||0,
+            pcs2:     Number(r.pcs_2)||0,
+            holdPcs:  Number(r.hold_pcs)||0,
+            note:     r.note||'',
+            _date:    date
+          };
+        }
+      });
+
+      // memory session มีลำดับความสำคัญสูงกว่า (กรอกในหน้านี้ยังไม่บันทึก)
+      var memMap = {};
+      _scItems.forEach(function(it){ memMap[it.sku+'|'+it.wh] = it; });
 
       _scItems = Object.values(map).map(function(s){
-        var existing = scMap[s.sku+'|'+s.wh] || {};
+        var mem  = memMap[s.sku+'|'+s.wh] || {};
+        var saved = savedMap[s.sku+'|'+s.wh] || {};
+        // ถ้ามีข้อมูลใน memory (กรอกค้างไว้) ให้ใช้ก่อน ไม่งั้นใช้ค่าที่บันทึกล่าสุด
+        var hasMem = mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs;
+        var src = hasMem ? mem : saved;
         return {
           sku:       s.sku,
           name:      s.name,
           wh:        s.wh,
           ppb:       ppbMap[s.sku]||0,
           systemQty: s.systemQty,
-          bundle1:   existing.bundle1||0,  bundle1_expr: existing.bundle1_expr||'',
-          bundle2:   existing.bundle2||0,  bundle2_expr: existing.bundle2_expr||'',
-          pcs1:      existing.pcs1||0,     pcs1_expr:    existing.pcs1_expr||'',
-          pcs2:      existing.pcs2||0,     pcs2_expr:    existing.pcs2_expr||'',
-          holdPcs:   existing.holdPcs||0,  holdPcs_expr: existing.holdPcs_expr||'',
-          note:      existing.note||''
+          bundle1:   src.bundle1||0,  bundle1_expr: mem.bundle1_expr||'',
+          bundle2:   src.bundle2||0,  bundle2_expr: mem.bundle2_expr||'',
+          pcs1:      src.pcs1||0,     pcs1_expr:    mem.pcs1_expr||'',
+          pcs2:      src.pcs2||0,     pcs2_expr:    mem.pcs2_expr||'',
+          holdPcs:   src.holdPcs||0,  holdPcs_expr: mem.holdPcs_expr||'',
+          note:      src.note||''
         };
       });
       _scRenderReconcile();
