@@ -7186,6 +7186,9 @@ thead.sticky {
         <button onclick="scOpenAddItem()" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-plus"></i> เพิ่มรายการ
         </button>
+        <button onclick="scSaveReconcile()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-save"></i> บันทึก
+        </button>
         <button onclick="scSwitchTab('reconcile')" id="sc-btn-reconcile" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-balance-scale"></i> ไปหน้าเทียบ →
         </button>
@@ -7236,9 +7239,6 @@ thead.sticky {
           <p class="text-slate-700 font-bold text-sm" id="sc-reconcile-title">กรุณาโหลด Count Sheet ก่อน</p>
           <p class="text-slate-400 text-xs mt-0.5">ยอดในระบบ = zone_stock (Counting) รวมทุก zone ต่อ SKU</p>
         </div>
-        <button onclick="scSaveReconcile()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
-          <i class="fas fa-save"></i> บันทึก
-        </button>
         <button onclick="scExportReconcile()" class="bg-slate-600 hover:bg-slate-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-file-excel"></i> Export
         </button>
@@ -35143,7 +35143,7 @@ window.viewTripResult = async function(planId) {
 
   // ── save reconcile to Supabase ───────────────────────────────────
   window.scSaveReconcile = async function(){
-    if(!_recItems.length){ showToast('ไม่มีข้อมูลให้บันทึก', true); return; }
+    if(!_scItems.length){ showToast('กรุณาโหลดรายการใน Count Sheet ก่อน', true); return; }
     var checker = (document.getElementById('sc-checker').value||'').trim();
     var user    = window._currentUser || 'unknown';
 
@@ -35160,7 +35160,7 @@ window.viewTripResult = async function(planId) {
     var sessionId = Array.isArray(sData) ? sData[0].id : sData.id;
 
     // upsert items
-    var itemsPayload = _recItems.map(function(item){
+    var itemsPayload = _scItems.map(function(item){
       var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
       return { session_id: sessionId, sku: item.sku, product_name: item.name, wh: item.wh,
         ppb: item.ppb||0, bundle_1: item.bundle1||0, bundle_2: item.bundle2||0,
@@ -35175,7 +35175,7 @@ window.viewTripResult = async function(planId) {
         body: JSON.stringify(itemsPayload) });
     if(!iRes.ok){ var e=await iRes.json(); showToast('❌ บันทึก items ล้มเหลว', true); console.error(e); return; }
     showToast('✅ บันทึกสำเร็จ — session #'+sessionId);
-    _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _recItems.length + ' รายการ)');
+    _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _scItems.length + ' รายการ)');
   };
 
   function _scLogAudit(action){
