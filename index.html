@@ -34588,11 +34588,12 @@ window.viewTripResult = async function(planId) {
 
   function _scEditCell(idx, field){
     var cur = _scItems[idx] ? (_scItems[idx][field]||0) : 0;
+    var display = cur ? String(cur) : '';
     return '<td contenteditable="true" data-idx="'+idx+'" data-field="'+field+'"'
       + ' onblur="scCellBlur(this)" onkeydown="scCellKey(event,this)"'
       + ' onfocus="scCellFocus(this)" oninput="scCellInput(this)"'
-      + ' style="padding:0;text-align:center;border-right:1px solid #e2e8f0;height:40px;vertical-align:middle;font-size:15px;font-weight:600;color:#1e293b;cursor:text;outline:none;min-width:60px">'
-      + (cur||'0')
+      + ' style="padding:0;text-align:center;border-right:1px solid #e2e8f0;height:40px;vertical-align:middle;font-size:15px;font-weight:600;color:#1e293b;cursor:text;outline:none">'
+      + display
       + '</td>';
   }
 
@@ -34632,7 +34633,7 @@ window.viewTripResult = async function(planId) {
     var field = td.dataset.field;
     var num = Number(v)||0;
     if(_scItems[idx]) _scItems[idx][field] = num;
-    td.innerText = num;
+    td.innerText = num ? String(num) : '';
   };
   window.scCellKey = function(e, td){
     // allow: digits, backspace, delete, arrows, tab, enter
@@ -34666,22 +34667,36 @@ window.viewTripResult = async function(planId) {
     e.preventDefault();
   };
 
-  // ── column resize ────────────────────────────────────────────────
+  // ── column resize (ขยายตารางขวา ไม่ดันคอลัมน์อื่น) ──────────────
   var _scResizeState = null;
   window.scColResizeStart = function(e, colIdx){
     e.preventDefault();
+    e.stopPropagation();
     var table = document.getElementById('sc-sheet-table');
     if(!table) return;
     var cols = table.querySelectorAll('col');
-    _scResizeState = { colIdx: colIdx, startX: e.clientX, startW: cols[colIdx].offsetWidth || parseInt(cols[colIdx].style.width)||88, cols: cols };
+    // snapshot width ทุก col ก่อน เพื่อ lock ไม่ให้ขยับ
+    var widths = Array.from(cols).map(function(c){
+      return c.offsetWidth || parseInt(c.style.width) || 88;
+    });
+    // set explicit px width ทุก col ทันที
+    widths.forEach(function(w, i){ cols[i].style.width = w + 'px'; });
+    // set table min-width = sum ทั้งหมด
+    var total = widths.reduce(function(s,w){ return s+w; }, 0);
+    table.style.width = total + 'px';
+    _scResizeState = { colIdx: colIdx, startX: e.clientX, startW: widths[colIdx], cols: cols, table: table };
     document.addEventListener('mousemove', _scResizeMove);
     document.addEventListener('mouseup',   _scResizeEnd);
   };
   function _scResizeMove(e){
     if(!_scResizeState) return;
     var dx = e.clientX - _scResizeState.startX;
-    var newW = Math.max(60, _scResizeState.startW + dx);
+    var newW = Math.max(40, _scResizeState.startW + dx);
     _scResizeState.cols[_scResizeState.colIdx].style.width = newW + 'px';
+    // ขยาย table width ตาม delta เพื่อไม่ให้คอลัมน์อื่นขยับ
+    var cols = _scResizeState.cols;
+    var total = Array.from(cols).reduce(function(s,c){ return s + (parseInt(c.style.width)||0); }, 0);
+    _scResizeState.table.style.width = total + 'px';
   }
   function _scResizeEnd(){
     _scResizeState = null;
