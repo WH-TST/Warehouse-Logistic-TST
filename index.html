@@ -5848,6 +5848,8 @@ thead.sticky {
             <th class="px-4 py-3 text-left">รหัส</th>
             <th class="px-4 py-3 text-left">ชื่อ</th>
             <th class="px-4 py-3 text-left">ทีม</th>
+            <th class="px-4 py-3 text-left">Username</th>
+            <th class="px-4 py-3 text-left">Password</th>
             <th class="px-4 py-3 text-center w-24">จัดการ</th>
           </tr>
         </thead>
@@ -7172,7 +7174,20 @@ thead.sticky {
       </div>
       <div>
         <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ทีม *</label>
-        <input id="wh-staff-f-team" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="เช่น ทีม A">
+        <input id="wh-staff-f-team" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="เช่น A, B">
+      </div>
+      <div class="border-t border-slate-100 pt-3">
+        <p class="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">ข้อมูลเข้าสู่ระบบแอพโหลดสินค้า</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-bold text-slate-500 block mb-1">Username</label>
+            <input id="wh-staff-f-username" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-emerald-400" placeholder="เช่น phoe.than">
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-500 block mb-1">Password</label>
+            <input id="wh-staff-f-password" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-emerald-400" placeholder="รหัสผ่าน">
+          </div>
+        </div>
       </div>
       <div id="wh-staff-modal-err" class="hidden text-rose-600 text-sm font-bold"></div>
     </div>
@@ -37090,13 +37105,15 @@ window.loRefreshOrderList = window.loRefreshHistory;
     var html = '';
     teams.forEach(function(team) {
       var members = _staffList.filter(function(s){ return (s.team||'') === team; });
-      html += '<tr class="bg-emerald-50"><td colspan="4" class="px-4 py-2 text-xs font-black text-emerald-700 uppercase tracking-wider"><i class="fas fa-users mr-1"></i>' + escH(team||'ไม่ระบุทีม') + ' (' + members.length + ' คน)</td></tr>';
+      html += '<tr class="bg-emerald-50"><td colspan="6" class="px-4 py-2 text-xs font-black text-emerald-700 uppercase tracking-wider"><i class="fas fa-users mr-1"></i>' + escH(team||'ไม่ระบุทีม') + ' (' + members.length + ' คน)</td></tr>';
       members.forEach(function(s) {
         var sid = String(s.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
         html += '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
           + '<td class="px-4 py-2.5 font-mono font-bold text-slate-700 text-xs">' + escH(s.id) + '</td>'
           + '<td class="px-4 py-2.5 text-sm font-bold text-slate-800">' + escH(s.name) + '</td>'
           + '<td class="px-4 py-2.5 text-sm text-slate-500">' + escH(s.team) + '</td>'
+          + '<td class="px-4 py-2.5 text-xs font-mono text-indigo-600">' + (s.username ? escH(s.username) : '<span class="text-slate-300">—</span>') + '</td>'
+          + '<td class="px-4 py-2.5 text-xs font-mono text-slate-400">' + (s.password ? '••••••' : '<span class="text-slate-300">—</span>') + '</td>'
           + '<td class="px-4 py-2.5 text-center">'
           + '<button onclick="whStaffOpenEdit(\'' + sid + '\')" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold transition mr-1"><i class="fas fa-pen"></i></button>'
           + '<button onclick="whStaffDelete(\'' + sid + '\')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 text-xs font-bold transition"><i class="fas fa-trash"></i></button>'
@@ -37113,6 +37130,8 @@ window.loRefreshOrderList = window.loRefreshHistory;
     document.getElementById('wh-staff-f-id').disabled = false;
     document.getElementById('wh-staff-f-name').value = '';
     document.getElementById('wh-staff-f-team').value = '';
+    document.getElementById('wh-staff-f-username').value = '';
+    document.getElementById('wh-staff-f-password').value = '';
     document.getElementById('wh-staff-modal-err').classList.add('hidden');
     document.getElementById('wh-staff-modal').classList.remove('hidden');
     document.getElementById('wh-staff-f-id').focus();
@@ -37127,6 +37146,8 @@ window.loRefreshOrderList = window.loRefreshHistory;
     document.getElementById('wh-staff-f-id').disabled = true;
     document.getElementById('wh-staff-f-name').value = s.name || '';
     document.getElementById('wh-staff-f-team').value = s.team || '';
+    document.getElementById('wh-staff-f-username').value = s.username || '';
+    document.getElementById('wh-staff-f-password').value = s.password || '';
     document.getElementById('wh-staff-modal-err').classList.add('hidden');
     document.getElementById('wh-staff-modal').classList.remove('hidden');
     document.getElementById('wh-staff-f-name').focus();
@@ -37146,10 +37167,12 @@ window.loRefreshOrderList = window.loRefreshHistory;
     if (!name) { errEl.textContent = 'กรุณากรอกชื่อพนักงาน'; errEl.classList.remove('hidden'); return; }
     if (!team) { errEl.textContent = 'กรุณากรอกชื่อทีม';     errEl.classList.remove('hidden'); return; }
     errEl.classList.add('hidden');
-    var row = { id: id, name: name, team: team };
+    var username = document.getElementById('wh-staff-f-username').value.trim();
+    var password = document.getElementById('wh-staff-f-password').value.trim();
+    var row = { id: id, name: name, team: team, username: username, password: password };
     var res;
     if (_staffEditId !== null) {
-      res = await window._sb.from('logi_wh_staff').update({ name: name, team: team }).eq('id', _staffEditId);
+      res = await window._sb.from('logi_wh_staff').update({ name: name, team: team, username: username, password: password }).eq('id', _staffEditId);
     } else {
       res = await window._sb.from('logi_wh_staff').insert([row]);
     }
