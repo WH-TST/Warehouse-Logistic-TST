@@ -7133,39 +7133,56 @@ thead.sticky {
   <!-- Panel: Count Sheet -->
   <div id="sc-panel-sheet" class="space-y-4">
     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-      <div class="flex flex-wrap items-end gap-3 mb-5">
+      <div class="flex flex-wrap items-end gap-3 mb-4">
         <div>
           <label class="text-slate-500 text-xs font-bold mb-1 block">วันที่นับ</label>
           <input type="date" id="sc-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
         </div>
+        <div>
+          <label class="text-slate-500 text-xs font-bold mb-1 block">WH</label>
+          <select id="sc-wh-filter" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 bg-white">
+            <option value="">ทั้งหมด</option>
+            <option value="FG-BP">FG-BP</option>
+            <option value="FG-BB">FG-BB</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-slate-500 text-xs font-bold mb-1 block">Checker Name</label>
+          <input type="text" id="sc-checker" placeholder="ชื่อผู้ตรวจเช็ค" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 w-40">
+        </div>
         <button onclick="scLoadSheet()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition shadow-sm flex items-center gap-2">
           <i class="fas fa-search"></i> โหลดรายการ
         </button>
-        <button onclick="scExportSheet()" class="bg-slate-600 hover:bg-slate-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
-          <i class="fas fa-print"></i> Export ใบนับ
+        <button onclick="scPrintSheet()" class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-print"></i> พิมพ์ใบนับ
+        </button>
+        <button onclick="scExportSheet()" class="bg-slate-500 hover:bg-slate-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-file-excel"></i> Export Excel
         </button>
         <button onclick="scSwitchTab('reconcile')" id="sc-btn-reconcile" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-balance-scale"></i> ไปหน้าเทียบ →
         </button>
       </div>
       <div id="sc-sheet-info" class="hidden mb-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700 font-medium"></div>
-      <div class="overflow-x-auto rounded-xl border border-slate-100">
-        <table class="w-full text-sm">
+      <!-- Excel-style table: border-collapse, fixed col widths, larger inputs -->
+      <div class="overflow-x-auto" style="border:1px solid #e2e8f0;border-radius:10px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px">
           <thead>
-            <tr class="bg-slate-50 text-slate-500 text-xs font-bold uppercase">
-              <th class="px-3 py-3 text-left w-8">#</th>
-              <th class="px-3 py-3 text-left">SKU</th>
-              <th class="px-3 py-3 text-left">ชื่อสินค้า</th>
-              <th class="px-3 py-3 text-center">มัดละ (PPB)</th>
-              <th class="px-3 py-3 text-center">มัดนับ 1</th>
-              <th class="px-3 py-3 text-center">มัดนับ 2</th>
-              <th class="px-3 py-3 text-center">เศษกอง 1</th>
-              <th class="px-3 py-3 text-center">เศษกอง 2</th>
-              <th class="px-3 py-3 text-left">NOTE</th>
+            <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
+              <th style="padding:9px 8px;text-align:center;width:38px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">#</th>
+              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">WH</th>
+              <th style="padding:9px 10px;text-align:left;width:130px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Item number</th>
+              <th style="padding:9px 10px;text-align:left;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Product name</th>
+              <th style="padding:9px 8px;text-align:center;width:80px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_1</th>
+              <th style="padding:9px 8px;text-align:center;width:80px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_2</th>
+              <th style="padding:9px 8px;text-align:center;width:76px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(1)</th>
+              <th style="padding:9px 8px;text-align:center;width:76px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(2)</th>
+              <th style="padding:9px 8px;text-align:center;width:80px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Hold pcs.</th>
+              <th style="padding:9px 10px;text-align:left;width:130px;color:#64748b;font-size:11px;font-weight:700">NOTE</th>
             </tr>
           </thead>
           <tbody id="sc-sheet-tbody">
-            <tr><td colspan="9" class="text-center text-slate-400 py-10 text-sm">เลือกวันที่แล้วกด "โหลดรายการ"</td></tr>
+            <tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">เลือกวันที่แล้วกด "โหลดรายการ"</td></tr>
           </tbody>
         </table>
       </div>
@@ -7206,26 +7223,27 @@ thead.sticky {
           <div id="sc-sum-empty" class="text-yellow-700 font-black text-xl">0</div>
         </div>
       </div>
-      <div class="overflow-x-auto rounded-xl border border-slate-100">
-        <table class="w-full text-sm">
+      <div class="overflow-x-auto" style="border:1px solid #e2e8f0;border-radius:10px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:1100px">
           <thead>
-            <tr class="bg-slate-50 text-slate-500 text-xs font-bold uppercase">
-              <th class="px-3 py-3 text-left w-8">#</th>
-              <th class="px-3 py-3 text-left">SKU</th>
-              <th class="px-3 py-3 text-left">ชื่อสินค้า</th>
-              <th class="px-3 py-3 text-center">PPB</th>
-              <th class="px-3 py-3 text-center">มัดนับ 1</th>
-              <th class="px-3 py-3 text-center">มัดนับ 2</th>
-              <th class="px-3 py-3 text-center">เศษกอง 1</th>
-              <th class="px-3 py-3 text-center">เศษกอง 2</th>
-              <th class="px-3 py-3 text-center">เส้นรวม</th>
-              <th class="px-3 py-3 text-center">ระบบ (Counting)</th>
-              <th class="px-3 py-3 text-center">Diff</th>
-              <th class="px-3 py-3 text-left">NOTE</th>
+            <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
+              <th style="padding:9px 8px;text-align:center;width:38px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">#</th>
+              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">WH</th>
+              <th style="padding:9px 10px;text-align:left;width:130px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Item number</th>
+              <th style="padding:9px 10px;text-align:left;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Product name</th>
+              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_1</th>
+              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_2</th>
+              <th style="padding:9px 8px;text-align:center;width:68px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(1)</th>
+              <th style="padding:9px 8px;text-align:center;width:68px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(2)</th>
+              <th style="padding:9px 8px;text-align:center;width:74px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Hold pcs.</th>
+              <th style="padding:9px 8px;text-align:center;width:80px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">นับได้ (เส้น)</th>
+              <th style="padding:9px 8px;text-align:center;width:90px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">ระบบ (Counting)</th>
+              <th style="padding:9px 8px;text-align:center;width:64px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Diff</th>
+              <th style="padding:9px 10px;text-align:left;width:140px;color:#64748b;font-size:11px;font-weight:700">NOTE</th>
             </tr>
           </thead>
           <tbody id="sc-reconcile-tbody">
-            <tr><td colspan="12" class="text-center text-slate-400 py-10 text-sm">ยังไม่มีข้อมูล — โหลด Count Sheet ก่อน</td></tr>
+            <tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">ยังไม่มีข้อมูล — โหลด Count Sheet ก่อน</td></tr>
           </tbody>
         </table>
       </div>
@@ -34172,6 +34190,341 @@ window.viewTripResult = async function(planId) {
     + `<div class="text-xs font-black text-slate-500 uppercase tracking-wider mt-2">รายร้าน (${visits.length} ร้าน)</div>`
     + shopsHtml;
 };
+</script>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- Stock Count IIFE                                                 -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  // ── state ───────────────────────────────────────────────────────
+  var _scItems = [];   // loaded from GAS: [{sku,name,wh,ppb,systemQty,...}]
+  var _scDate  = '';
+
+  // ── tab switch ──────────────────────────────────────────────────
+  window.scSwitchTab = function(tab){
+    var isSheet = tab === 'sheet';
+    document.getElementById('sc-panel-sheet').classList.toggle('hidden', !isSheet);
+    document.getElementById('sc-panel-reconcile').classList.toggle('hidden', isSheet);
+    var tabSheet = document.getElementById('sc-tab-sheet');
+    var tabRec   = document.getElementById('sc-tab-reconcile');
+    if(isSheet){
+      tabSheet.className = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all';
+      tabRec.className   = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all';
+    } else {
+      tabRec.className   = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-emerald-500 bg-emerald-500 text-white transition-all';
+      tabSheet.className = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all';
+      _scRenderReconcile();
+    }
+  };
+
+  // ── load sheet from GAS ─────────────────────────────────────────
+  window.scLoadSheet = function(){
+    var dateVal = document.getElementById('sc-date').value;
+    if(!dateVal){ showToast('กรุณาเลือกวันที่', true); return; }
+    _scDate = dateVal;
+    var tbody = document.getElementById('sc-sheet-tbody');
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
+
+    try {
+      google.script.run
+        .withSuccessHandler(function(rows){
+          _scItems = (rows || []).map(function(r){
+            return {
+              sku:       r.sku || r.SKU || '',
+              name:      r.name || r.productName || r.product_name || '',
+              wh:        r.wh || r.WH || 'FG-BP',
+              ppb:       Number(r.ppb || r.PPB || 0),
+              systemQty: Number(r.systemQty || r.system_qty || r.onhand || 0),
+              // count inputs — filled later
+              bundle1: 0, bundle2: 0, pcs1: 0, pcs2: 0, holdPcs: 0, note: ''
+            };
+          });
+          var whFilter = document.getElementById('sc-wh-filter').value;
+          if(whFilter) _scItems = _scItems.filter(function(r){ return r.wh === whFilter; });
+          _scRenderSheet();
+          var info = document.getElementById('sc-sheet-info');
+          info.textContent = 'พบ ' + _scItems.length + ' SKU ที่มีการเคลื่อนไหวในวันที่ ' + dateVal + (whFilter ? ' — WH: ' + whFilter : '');
+          info.classList.remove('hidden');
+          document.getElementById('sc-btn-reconcile').classList.remove('hidden');
+        })
+        .withFailureHandler(function(err){
+          var tbody2 = document.getElementById('sc-sheet-tbody');
+          tbody2.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#ef4444;padding:40px">❌ ' + (err.message||err) + '</td></tr>';
+        })
+        .getCycleCountItems(dateVal, 'fg');
+    } catch(e) {
+      // dev/preview fallback: dummy data
+      _scItems = _scDummyItems();
+      var whFilter2 = document.getElementById('sc-wh-filter').value;
+      if(whFilter2) _scItems = _scItems.filter(function(r){ return r.wh === whFilter2; });
+      _scRenderSheet();
+      var info2 = document.getElementById('sc-sheet-info');
+      info2.textContent = '[DEV] พบ ' + _scItems.length + ' รายการ (ข้อมูลทดสอบ)';
+      info2.classList.remove('hidden');
+      document.getElementById('sc-btn-reconcile').classList.remove('hidden');
+    }
+  };
+
+  function _scDummyItems(){
+    return [
+      {sku:'0CGI4001201',name:'CG 4 ชมพู Pink',   wh:'FG-BP',ppb:40,systemQty:760,bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
+      {sku:'0CGI4001600',name:'CG 4 แดง Red',     wh:'FG-BP',ppb:40,systemQty:212,bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
+      {sku:'0CGI4001900',name:'CG 4 ส้ม Orange',  wh:'FG-BP',ppb:40,systemQty:80, bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
+      {sku:'0RTG2001200',name:'PG 2×1 ขาว',       wh:'FG-BB',ppb:35,systemQty:450,bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
+    ];
+  }
+
+  // ── render Count Sheet table ─────────────────────────────────────
+  function _scRenderSheet(){
+    var tbody = document.getElementById('sc-sheet-tbody');
+    if(!_scItems.length){
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการ</td></tr>';
+      return;
+    }
+    var rowBg = ['#ffffff','#f8fafc'];
+    tbody.innerHTML = _scItems.map(function(item, i){
+      var bg = rowBg[i % 2];
+      var whColor = item.wh === 'FG-BP' ? '#1d4ed8' : '#0f766e';
+      var whBg    = item.wh === 'FG-BP' ? '#dbeafe'  : '#ccfbf1';
+      return '<tr style="background:' + bg + ';border-bottom:1px solid #f1f5f9" data-idx="' + i + '">'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">' + (i+1) + '</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'
+        +   '<span style="background:' + whBg + ';color:' + whColor + ';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">' + item.wh + '</span>'
+        + '</td>'
+        + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:#334155">' + item.sku + '</td>'
+        + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:13px">' + item.name + '</td>'
+        + _scInputCell(i,'bundle1') + _scInputCell(i,'bundle2')
+        + _scInputCell(i,'pcs1')    + _scInputCell(i,'pcs2')
+        + _scInputCell(i,'holdPcs')
+        + '<td style="padding:6px 8px;border-right:none">'
+        +   '<input type="text" placeholder="หมายเหตุ" oninput="scSetNote('+i+',this.value)" value="'+_esc(item.note)+'"'
+        +   ' style="width:120px;height:34px;padding:4px 8px;font-size:12px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;color:#334155;outline:none">'
+        + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function _scInputCell(idx, field){
+    return '<td style="padding:6px 8px;text-align:center;border-right:1px solid #f1f5f9">'
+      + '<input type="number" min="0" value="0" oninput="scSetVal('+idx+',\''+field+'\',this.value)"'
+      + ' style="width:68px;height:36px;text-align:center;font-size:14px;font-weight:600;border:1.5px solid #e2e8f0;border-radius:6px;background:#fff;color:#1e293b;outline:none"'
+      + ' onfocus="this.select()">'
+      + '</td>';
+  }
+
+  function _esc(s){ return String(s||'').replace(/"/g,'&quot;'); }
+
+  window.scSetVal = function(idx, field, val){
+    if(_scItems[idx]) _scItems[idx][field] = Number(val)||0;
+  };
+  window.scSetNote = function(idx, val){
+    if(_scItems[idx]) _scItems[idx].note = val;
+  };
+
+  // ── render Reconcile table ───────────────────────────────────────
+  function _scRenderReconcile(){
+    var title = document.getElementById('sc-reconcile-title');
+    var tbody  = document.getElementById('sc-reconcile-tbody');
+    var sumDiv = document.getElementById('sc-reconcile-summary');
+
+    if(!_scItems.length){
+      title.textContent = 'กรุณาโหลด Count Sheet ก่อน';
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ยังไม่มีข้อมูล</td></tr>';
+      return;
+    }
+    title.textContent = 'Reconcile — ' + _scDate + ' (' + _scItems.length + ' รายการ)';
+
+    var total=0, okCount=0, diffCount=0, emptyCount=0;
+    var rowBg = ['#ffffff','#f8fafc'];
+
+    tbody.innerHTML = _scItems.map(function(item, i){
+      total++;
+      var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
+      var diff     = counted - item.systemQty;
+      var isEmpty  = (item.bundle1===0 && item.bundle2===0 && item.pcs1===0 && item.pcs2===0 && item.holdPcs===0);
+      var rowStyle = '';
+      var diffHtml = '';
+      if(isEmpty){
+        emptyCount++;
+        rowStyle  = 'opacity:0.5';
+        diffHtml  = '<span style="color:#94a3b8">?</span>';
+      } else if(diff===0){
+        okCount++;
+        rowStyle  = 'background:#f0fdf4';
+        diffHtml  = '<span style="color:#15803d;font-weight:700">0</span>';
+      } else {
+        diffCount++;
+        rowStyle  = 'background:#fff1f2';
+        diffHtml  = '<span style="color:#dc2626;font-weight:700">' + (diff>0?'+':'') + diff + '</span>';
+      }
+      var whColor = item.wh==='FG-BP'?'#1d4ed8':'#0f766e';
+      var whBg    = item.wh==='FG-BP'?'#dbeafe':'#ccfbf1';
+      var bg = rowBg[i % 2];
+      return '<tr style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">' + (i+1) + '</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'
+        +   '<span style="background:'+whBg+';color:'+whColor+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">'+item.wh+'</span>'
+        + '</td>'
+        + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:#334155">'+item.sku+'</td>'
+        + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:13px">'+item.name+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.bundle1)+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.bundle2)+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.pcs1)+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.pcs2)+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.holdPcs)+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:700;color:#1e293b">'+(isEmpty?'—':counted)+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#475569">'+item.systemQty+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'+diffHtml+'</td>'
+        + '<td style="padding:8px 10px;font-size:12px;color:#64748b">'+_esc(item.note)+'</td>'
+        + '</tr>';
+    }).join('');
+
+    // summary cards
+    sumDiv.classList.remove('hidden');
+    document.getElementById('sc-sum-total').textContent = total;
+    document.getElementById('sc-sum-ok').textContent    = okCount;
+    document.getElementById('sc-sum-diff').textContent  = diffCount;
+    document.getElementById('sc-sum-empty').textContent = emptyCount;
+  }
+
+  // ── print count sheet (FM-WH-03Rev.00) ──────────────────────────
+  window.scPrintSheet = function(){
+    if(!_scItems.length){ showToast('กรุณาโหลดรายการก่อน', true); return; }
+    var checker = (document.getElementById('sc-checker').value||'').trim();
+    var wh      = (document.getElementById('sc-wh-filter').value||'ทั้งหมด');
+    var dateStr = _scDate || '';
+    var rows = _scItems.map(function(item,i){
+      return '<tr style="border-bottom:1px solid #ccc">'
+        + '<td style="padding:6px 8px;text-align:center;border-right:1px solid #ccc">'+(i+1)+'</td>'
+        + '<td style="padding:6px 8px;border-right:1px solid #ccc">'+item.wh+'</td>'
+        + '<td style="padding:6px 8px;border-right:1px solid #ccc;font-family:monospace;font-size:11px">'+item.sku+'</td>'
+        + '<td style="padding:6px 10px;border-right:1px solid #ccc">'+item.name+'</td>'
+        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
+        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
+        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
+        + '<td style="padding:6px 8px;border-right:1px solid #ccc">&nbsp;</td>'
+        + '<td style="padding:6px 8px">&nbsp;</td>'
+        + '</tr>';
+    }).join('');
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+      + '<title>FM-WH-03Rev.00</title>'
+      + '<style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}'
+      + 'table{width:100%;border-collapse:collapse;border:1px solid #000}'
+      + 'th{padding:6px 8px;background:#f0f0f0;border:1px solid #000;font-size:11px}'
+      + 'td{border-right:1px solid #ccc}'
+      + '.hd{display:flex;justify-content:space-between;margin-bottom:10px}'
+      + '.title{font-size:14px;font-weight:bold}'
+      + '.meta{font-size:11px;text-align:right;line-height:1.6}'
+      + '.checker{font-size:12px;margin-bottom:8px;border-bottom:1px solid #333;min-width:250px;display:inline-block;padding-bottom:2px}'
+      + '@media print{@page{size:A4 landscape}}'
+      + '</style></head><body>'
+      + '<div class="hd">'
+      + '  <div><div class="title">แบบฟอร์มตรวจนับสต๊อกสินค้า FG — '+wh+'</div>'
+      + '  <div style="margin-top:6px;font-size:12px">ลงชื่อผู้ตรวจเช็ค / Checker Name: <span class="checker">'+checker+'</span></div></div>'
+      + '  <div class="meta">'+dateStr+'<br>FM-WH-03Rev.00</div>'
+      + '</div>'
+      + '<table><thead><tr>'
+      + '<th style="width:32px">No.</th><th style="width:60px">WH</th>'
+      + '<th style="width:110px">Item number</th><th>Product name</th>'
+      + '<th style="width:70px">bundle_1</th><th style="width:70px">bundle_2</th>'
+      + '<th style="width:65px">Pcs.(1)</th><th style="width:65px">Pcs.(2)</th>'
+      + '<th style="width:70px">Hold pcs.</th>'
+      + '</tr></thead><tbody>'+rows+'</tbody></table>'
+      + '<script>window.print();<\/script></body></html>';
+    var w = window.open('','_blank');
+    w.document.write(html);
+    w.document.close();
+  };
+
+  // ── export count sheet to Excel (CSV) ───────────────────────────
+  window.scExportSheet = function(){
+    if(!_scItems.length){ showToast('กรุณาโหลดรายการก่อน', true); return; }
+    var csv = 'No.,WH,Item number,Product name,bundle_1,bundle_2,Pcs.(1),Pcs.(2),Hold pcs.,NOTE\n';
+    _scItems.forEach(function(item,i){
+      csv += [(i+1), item.wh, item.sku, '"'+item.name+'"',
+              item.bundle1||'', item.bundle2||'', item.pcs1||'', item.pcs2||'', item.holdPcs||'',
+              '"'+(item.note||'')+'"'].join(',') + '\n';
+    });
+    _scDownloadCSV(csv, 'stock-count-' + _scDate + '.csv');
+  };
+
+  // ── save reconcile to Supabase ───────────────────────────────────
+  window.scSaveReconcile = async function(){
+    if(!_scItems.length){ showToast('ไม่มีข้อมูลให้บันทึก', true); return; }
+    var checker = (document.getElementById('sc-checker').value||'').trim();
+    var user    = window._currentUser || 'unknown';
+
+    // upsert session
+    var sessionPayload = { count_date: _scDate, wh: document.getElementById('sc-wh-filter').value||null,
+      checker_name: checker||null, created_by: user, status: 'completed' };
+    var sRes = await fetch(
+      'https://lkuunmyrxugsoqwrvdby.supabase.co/rest/v1/stock_count_sessions',
+      { method:'POST', headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
+        'Content-Type':'application/json','Prefer':'return=representation,resolution=merge-duplicates'},
+        body: JSON.stringify(sessionPayload) });
+    var sData = await sRes.json();
+    if(!sRes.ok){ showToast('❌ บันทึก session ล้มเหลว', true); console.error(sData); return; }
+    var sessionId = Array.isArray(sData) ? sData[0].id : sData.id;
+
+    // upsert items
+    var itemsPayload = _scItems.map(function(item){
+      var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+      return { session_id: sessionId, sku: item.sku, product_name: item.name, wh: item.wh,
+        ppb: item.ppb||0, bundle_1: item.bundle1||0, bundle_2: item.bundle2||0,
+        pcs_1: item.pcs1||0, pcs_2: item.pcs2||0, hold_pcs: item.holdPcs||0,
+        counted_qty: counted, system_qty: item.systemQty, diff_qty: counted - item.systemQty,
+        note: item.note||null };
+    });
+    var iRes = await fetch(
+      'https://lkuunmyrxugsoqwrvdby.supabase.co/rest/v1/stock_count_items',
+      { method:'POST', headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
+        'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
+        body: JSON.stringify(itemsPayload) });
+    if(!iRes.ok){ var e=await iRes.json(); showToast('❌ บันทึก items ล้มเหลว', true); console.error(e); return; }
+    showToast('✅ บันทึกสำเร็จ — session #'+sessionId);
+    _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _scItems.length + ' รายการ)');
+  };
+
+  function _scLogAudit(action){
+    try { if(typeof logAudit === 'function') logAudit('Stock Count', action, _scDate); } catch(e){}
+  }
+
+  // ── export reconcile to CSV ──────────────────────────────────────
+  window.scExportReconcile = function(){
+    if(!_scItems.length){ showToast('ไม่มีข้อมูล', true); return; }
+    var csv = 'No.,WH,Item number,Product name,bundle_1,bundle_2,Pcs.(1),Pcs.(2),Hold pcs.,นับได้ (เส้น),ระบบ (Counting),Diff,NOTE\n';
+    _scItems.forEach(function(item,i){
+      var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+      var diff    = counted - item.systemQty;
+      csv += [(i+1), item.wh, item.sku, '"'+item.name+'"',
+              item.bundle1, item.bundle2, item.pcs1, item.pcs2, item.holdPcs,
+              counted, item.systemQty, diff, '"'+(item.note||'')+'"'].join(',') + '\n';
+    });
+    _scDownloadCSV(csv, 'reconcile-' + _scDate + '.csv');
+  };
+
+  function _scDownloadCSV(csv, filename){
+    var bom = '﻿';
+    var blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8'});
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // ── init: set today's date ───────────────────────────────────────
+  (function _init(){
+    var el = document.getElementById('sc-date');
+    if(el && !el.value){
+      var d = new Date();
+      el.value = d.toISOString().slice(0,10);
+    }
+  })();
+
+})();
 </script>
 
 
