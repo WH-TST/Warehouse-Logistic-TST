@@ -6007,6 +6007,15 @@ thead.sticky {
           </button>
           <p class="text-center text-xs text-slate-400 mt-1">— หรือ —</p>
         </div>
+        <!-- TST PD Date (แสดงเฉพาะ transection_fg) -->
+        <div id="inv-tst-date-wrap" class="hidden bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <i class="fas fa-calendar-alt text-orange-500 flex-shrink-0"></i>
+          <div class="flex-1">
+            <p class="text-xs font-black text-orange-700 mb-1">TST PD Date (วันที่ผลิต)</p>
+            <input type="date" id="inv-tst-pd-date" class="border border-orange-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-orange-500 bg-white">
+          </div>
+          <p class="text-xs text-orange-600 font-bold">กรอกก่อน import</p>
+        </div>
 
         <!-- File Drop Zone -->
         <div ondrop="invImportHandleDrop(event)" ondragover="event.preventDefault()"
@@ -13019,6 +13028,12 @@ let blockingChartInstance = null;
         // Show/hide D365 button (only for onhand_fg and onhand_semi)
         const d365Wrap = document.getElementById('inv-d365-btn-wrap');
         if (d365Wrap) d365Wrap.style.display = (type === 'onhand_fg' || type === 'onhand_semi') ? '' : 'none';
+        // Show/hide TST PD Date (only for transection_fg)
+        const tstWrap = document.getElementById('inv-tst-date-wrap');
+        if (tstWrap) tstWrap.classList.toggle('hidden', type !== 'transection_fg');
+        // Set today as default date
+        const tstInput = document.getElementById('inv-tst-pd-date');
+        if (tstInput && !tstInput.value) tstInput.value = new Date().toISOString().slice(0,10);
         // Reset file state
         invImportBuffer = null;
         const preview = document.getElementById('inv-import-preview');
@@ -13169,6 +13184,138 @@ let blockingChartInstance = null;
         return batch.length;
     }
 
+    // ── Import COUNTING → Supabase (ลบเดิม + insert ใหม่) ────────────────────────
+    async function _invImportCountingToSupabase(rows) {
+        const now = new Date().toISOString();
+        const hdr = rows[0].map(function(h){ return String(h||'').trim().toLowerCase().replace(/ /g,'_').replace(/[^a-z0-9_]/g,''); });
+        // column map: Excel header → Supabase column
+        const colMap = {
+            'date':'count_date', 'item_number':'item_number', 'item_numbe':'item_number',
+            'product_name':'product_name',
+            'site':'site', 'warehouse':'warehouse',
+            'batch_number':'batch_number', 'batch_numbe':'batch_number',
+            'serial_number':'serial_number', 'serial_numbe':'serial_number',
+            'cw_on-hand':'cw_onhand', 'cw_onhand':'cw_onhand', 'cw_on_hand':'cw_onhand',
+            'cw_counted':'cw_counted',
+            'cw_quantity':'cw_quantity',
+            'cw_unit':'cw_unit',
+            'on-hand':'onhand', 'onhand':'onhand', 'on_hand':'onhand',
+            'counted':'counted',
+            'quantity':'quantity',
+            'batch_number2':'batch_number2',
+            'unit':'unit',
+            'batch_disposition_code':'batch_disposition_code',
+            'batch_disposition_status':'batch_disposition_status',
+            'worker':'worker'
+        };
+        const textCols = ['count_date','item_number','product_name','site','warehouse',
+            'batch_number','serial_number','cw_unit','batch_number2','unit',
+            'batch_disposition_code','batch_disposition_status','worker'];
+        const batch = [];
+        rows.slice(1).forEach(function(row){
+            if(!row || !row[1]) return; // skip empty rows (item_number at index ~1)
+            const rec = { imported_at: now };
+            hdr.forEach(function(h, i){
+                const col = colMap[h];
+                if(!col) return;
+                let v = row[i];
+                if(v instanceof Date){ const p = function(n){ return String(n).padStart(2,'0'); }; v = v.getFullYear()+'-'+p(v.getMonth()+1)+'-'+p(v.getDate()); }
+                if(v === null || v === undefined || v === '') v = textCols.includes(col) ? null : 0;
+                rec[col] = v;
+            });
+            if(!rec.item_number) return;
+            batch.push(rec);
+        });
+        if(!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
+        // ลบข้อมูลเดิมทั้งหมด
+        const { error: delErr } = await window._sb.from('counting').delete().gte('imported_at','2000-01-01');
+        if(delErr) throw delErr;
+        // insert ใหม่ เป็น chunk
+        const CHUNK = 500;
+        for(let i = 0; i < batch.length; i += CHUNK){
+            const { error } = await window._sb.from('counting').insert(batch.slice(i, i+CHUNK));
+            if(error) throw error;
+        }
+        return batch.length;
+    }
+
+    // ── Import TRANSACTION FG → Supabase (ต่อท้าย + คำนวณ 6 คอลัมน์) ─────────────
+    async function _invImportTransectionFGToSupabase(rows, tstPdDate) {
+        const now = new Date().toISOString();
+        const hdr = rows[0].map(function(h){ return String(h||'').trim().toLowerCase().replace(/ /g,'_').replace(/[^a-z0-9_]/g,''); });
+        const colMap = {
+            'modified_date_and_time':'modified_datetime','modified_date':'modified_datetime',
+            'physical_date':'physical_date',
+            'production_pool':'production_pool',
+            'warehouse':'warehouse',
+            'item':'item_number', 'item_number':'item_number',
+            'product_name':'product_name',
+            'reference':'reference',
+            'cw_quantity':'cw_quantity',
+            'cw_unit':'cw_unit',
+            'quantity':'quantity',
+            'unit':'unit',
+            'receipt':'receipt',
+            'issue':'issue',
+            'number':'number',
+            'customer_name':'customer_name',
+            'serial_number':'serial_number', 'serial_numbe':'serial_number',
+            'serial_description':'serial_description',
+            'cost_amount':'cost_amount',
+            'site':'site'
+        };
+        const textCols = ['modified_datetime','physical_date','production_pool','warehouse',
+            'item_number','product_name','reference','cw_unit','unit','number',
+            'customer_name','serial_number','serial_description','site'];
+
+        // ดึง product spec (min_w, likely_w, max_w) ครั้งเดียว
+        const { data: products } = await window._sb.from('products').select('sku,min_w,likely_w,max_w');
+        const prodMap = {};
+        (products||[]).forEach(function(p){ prodMap[p.sku] = p; });
+
+        const batch = [];
+        rows.slice(1).forEach(function(row){
+            if(!row || !row[0]) return;
+            const rec = { imported_at: now, tst_pd_date: tstPdDate };
+            hdr.forEach(function(h, i){
+                const col = colMap[h];
+                if(!col) return;
+                let v = row[i];
+                if(v instanceof Date){ const p = function(n){ return String(n).padStart(2,'0'); }; v = v.getFullYear()+'-'+p(v.getMonth()+1)+'-'+p(v.getDate()); }
+                if(v === null || v === undefined || v === '') v = textCols.includes(col) ? null : 0;
+                rec[col] = v;
+            });
+            if(!rec.item_number) return;
+            // คำนวณ produced_w = quantity / cw_quantity
+            var cwQty = Number(rec.cw_quantity) || 0;
+            var qty   = Number(rec.quantity)    || 0;
+            var producedW = (cwQty !== 0) ? Math.round((qty / cwQty) * 10000) / 10000 : null;
+            rec.produced_w = producedW;
+            // ดึง spec จาก products
+            var spec = prodMap[rec.item_number] || {};
+            rec.min_w    = spec.min_w    || null;
+            rec.likely_w = spec.likely_w || null;
+            rec.max_w    = spec.max_w    || null;
+            // W Range?
+            if(producedW !== null && spec.min_w !== undefined && spec.min_w !== null){
+                if(producedW < spec.min_w) rec.w_range = 'Under';
+                else if(spec.max_w !== null && producedW > spec.max_w) rec.w_range = 'Over';
+                else rec.w_range = 'OK';
+            } else {
+                rec.w_range = null;
+            }
+            batch.push(rec);
+        });
+        if(!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
+        // ต่อท้าย (ไม่ลบ) — insert เป็น chunk
+        const CHUNK = 500;
+        for(let i = 0; i < batch.length; i += CHUNK){
+            const { error } = await window._sb.from('transection_fg').insert(batch.slice(i, i+CHUNK));
+            if(error) throw error;
+        }
+        return batch.length;
+    }
+
     window.invConfirmImport = function() {
         if (!invImportBuffer || !invCurrentImportType) return showToast('กรุณาเลือกประเภทและไฟล์ก่อน', true);
         const cfg = INV_IMPORT_CONFIG[invCurrentImportType];
@@ -13194,25 +13341,53 @@ let blockingChartInstance = null;
                     return;
                 }
 
-                // ── ประเภทอื่น → GAS ──
+                // ── counting → Supabase (ลบเดิม + insert ใหม่) ──
+                if (invCurrentImportType === 'counting') {
+                    _invImportCountingToSupabase(rows).then(function(count) {
+                        showToast('✅ นำเข้า ' + count + ' รายการ → counting สำเร็จ');
+                        invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: 'Supabase:counting', message: 'นำเข้า ' + count + ' รายการ (แทนข้อมูลเดิม)' });
+                        invRenderImportLog();
+                        _invSaveImportDate('counting');
+                        invClearImportFile();
+                    }).catch(function(err) { showToast('❌ ' + err.message, true); });
+                    return;
+                }
+
+                // ── transection_fg → Supabase (ต่อท้ายตามวันที่) ──
+                if (invCurrentImportType === 'transection_fg') {
+                    const tstDate = (document.getElementById('inv-tst-pd-date').value || '').trim();
+                    if (!tstDate) { showToast('กรุณาระบุ TST PD Date ก่อน import', true); return; }
+                    _invImportTransectionFGToSupabase(rows, tstDate).then(function(count) {
+                        showToast('✅ นำเข้า ' + count + ' รายการ → transection_fg สำเร็จ');
+                        invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: 'Supabase:transection_fg', message: 'นำเข้า ' + count + ' รายการ (TST PD: ' + tstDate + ')' });
+                        invRenderImportLog();
+                        _invSaveImportDate('transection_fg');
+                        invClearImportFile();
+                    }).catch(function(err) { showToast('❌ ' + err.message, true); });
+                    return;
+                }
+
+                // ── ประเภทอื่น → GAS (fallback) ──
                 const cleanRows = rows.map(row => row.map(cell => {
                     if (cell instanceof Date) { const p = n => String(n).padStart(2,'0'); return cell.getFullYear()+'-'+p(cell.getMonth()+1)+'-'+p(cell.getDate()); }
                     if (cell === null || cell === undefined) return '';
                     if (typeof cell === 'number' && !isFinite(cell)) return 0;
                     return cell;
                 }));
-                google.script.run
-                    .withSuccessHandler(function(res) {
-                        if (res.success) {
-                            showToast('✅ ' + res.message);
-                            invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: cfg.sheet, message: res.message });
-                            invRenderImportLog();
-                            _invSaveImportDate(invCurrentImportType);
-                            invClearImportFile();
-                        } else { showToast('❌ ' + res.message, true); }
-                    })
-                    .withFailureHandler(function(err) { showToast('Error: ' + err.message, true); })
-                    .importInventoryData(cleanRows, invCurrentImportType);
+                try {
+                    google.script.run
+                        .withSuccessHandler(function(res) {
+                            if (res.success) {
+                                showToast('✅ ' + res.message);
+                                invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: cfg.sheet, message: res.message });
+                                invRenderImportLog();
+                                _invSaveImportDate(invCurrentImportType);
+                                invClearImportFile();
+                            } else { showToast('❌ ' + res.message, true); }
+                        })
+                        .withFailureHandler(function(err) { showToast('Error: ' + err.message, true); })
+                        .importInventoryData(cleanRows, invCurrentImportType);
+                } catch(e) { showToast('❌ ไม่สามารถเชื่อมต่อ GAS: ' + e.message, true); }
             },
             { type: 'info', okText: 'นำเข้า' }
         );
@@ -34220,62 +34395,82 @@ window.viewTripResult = async function(planId) {
     }
   };
 
-  // ── load sheet from GAS ─────────────────────────────────────────
-  window.scLoadSheet = function(){
+  // ── load sheet from Supabase (transection_fg + counting) ───────
+  window.scLoadSheet = async function(){
     var dateVal = document.getElementById('sc-date').value;
     if(!dateVal){ showToast('กรุณาเลือกวันที่', true); return; }
     _scDate = dateVal;
+    var whFilter = document.getElementById('sc-wh-filter').value;
     var tbody = document.getElementById('sc-sheet-tbody');
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
 
     try {
-      google.script.run
-        .withSuccessHandler(function(rows){
-          _scItems = (rows || []).map(function(r){
-            return {
-              sku:       r.sku || r.SKU || '',
-              name:      r.name || r.productName || r.product_name || '',
-              wh:        r.wh || r.WH || 'FG-BP',
-              ppb:       Number(r.ppb || r.PPB || 0),
-              systemQty: Number(r.systemQty || r.system_qty || r.onhand || 0),
-              // count inputs — filled later
-              bundle1: 0, bundle2: 0, pcs1: 0, pcs2: 0, holdPcs: 0, note: ''
-            };
-          });
-          var whFilter = document.getElementById('sc-wh-filter').value;
-          if(whFilter) _scItems = _scItems.filter(function(r){ return r.wh === whFilter; });
-          _scRenderSheet();
-          var info = document.getElementById('sc-sheet-info');
-          info.textContent = 'พบ ' + _scItems.length + ' SKU ที่มีการเคลื่อนไหวในวันที่ ' + dateVal + (whFilter ? ' — WH: ' + whFilter : '');
-          info.classList.remove('hidden');
-          document.getElementById('sc-btn-reconcile').classList.remove('hidden');
-        })
-        .withFailureHandler(function(err){
-          var tbody2 = document.getElementById('sc-sheet-tbody');
-          tbody2.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#ef4444;padding:40px">❌ ' + (err.message||err) + '</td></tr>';
-        })
-        .getCycleCountItems(dateVal, 'fg');
-    } catch(e) {
-      // dev/preview fallback: dummy data
-      _scItems = _scDummyItems();
-      var whFilter2 = document.getElementById('sc-wh-filter').value;
-      if(whFilter2) _scItems = _scItems.filter(function(r){ return r.wh === whFilter2; });
+      // 1. ดึง SKU ที่มีการเคลื่อนไหวในวันนั้นจาก transection_fg
+      var fgQuery = window._sb.from('transection_fg')
+        .select('item_number,product_name,warehouse,cw_quantity,quantity,receipt,issue')
+        .eq('physical_date', dateVal);
+      if(whFilter) fgQuery = fgQuery.eq('warehouse', whFilter);
+      var fgRes = await fgQuery;
+      if(fgRes.error) throw fgRes.error;
+      var fgRows = fgRes.data || [];
+
+      // รวม receipt/issue ต่อ SKU+WH
+      var skuMap = {};
+      fgRows.forEach(function(r){
+        var key = r.item_number + '|' + (r.warehouse||'');
+        if(!skuMap[key]) skuMap[key] = { sku: r.item_number, name: r.product_name||'', wh: r.warehouse||'', receipt:0, issue:0 };
+        skuMap[key].receipt += Number(r.receipt)||0;
+        skuMap[key].issue   += Number(r.issue)||0;
+      });
+      var skuList = Object.values(skuMap);
+      if(!skuList.length){
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการเคลื่อนไหวในวันที่ ' + dateVal + '</td></tr>';
+        return;
+      }
+
+      // 2. ดึง system qty จาก counting (sum quantity ต่อ item_number+warehouse)
+      var itemNums = [...new Set(skuList.map(function(s){ return s.sku; }))];
+      var cntQuery = window._sb.from('counting').select('item_number,warehouse,quantity,cw_onhand').in('item_number', itemNums);
+      if(whFilter) cntQuery = cntQuery.eq('warehouse', whFilter);
+      var cntRes = await cntQuery;
+      var cntMap = {};
+      (cntRes.data||[]).forEach(function(r){
+        var key = r.item_number + '|' + (r.warehouse||'');
+        if(!cntMap[key]) cntMap[key] = 0;
+        cntMap[key] += Number(r.quantity)||0;
+      });
+
+      // 3. ดึง PPB จาก products
+      var prodRes = await window._sb.from('products').select('sku,lines_per_bundle').in('sku', itemNums);
+      var ppbMap = {};
+      (prodRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
+
+      // 4. รวมเป็น _scItems
+      _scItems = skuList.map(function(s){
+        var cntKey = s.sku + '|' + s.wh;
+        var cntKeyAll = s.sku + '|';
+        var sysQty = cntMap[cntKey] !== undefined ? cntMap[cntKey] : (cntMap[cntKeyAll]||0);
+        return {
+          sku:       s.sku,
+          name:      s.name,
+          wh:        s.wh,
+          ppb:       ppbMap[s.sku] || 0,
+          systemQty: sysQty,
+          bundle1:0, bundle2:0, pcs1:0, pcs2:0, holdPcs:0, note:''
+        };
+      });
+
       _scRenderSheet();
-      var info2 = document.getElementById('sc-sheet-info');
-      info2.textContent = '[DEV] พบ ' + _scItems.length + ' รายการ (ข้อมูลทดสอบ)';
-      info2.classList.remove('hidden');
+      var info = document.getElementById('sc-sheet-info');
+      info.textContent = 'พบ ' + _scItems.length + ' SKU ที่มีการเคลื่อนไหวในวันที่ ' + dateVal + (whFilter ? ' — WH: ' + whFilter : '');
+      info.classList.remove('hidden');
       document.getElementById('sc-btn-reconcile').classList.remove('hidden');
+
+    } catch(err) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#ef4444;padding:40px">❌ ' + (err.message||err) + '</td></tr>';
+      showToast('❌ โหลดข้อมูลล้มเหลว: ' + (err.message||err), true);
     }
   };
-
-  function _scDummyItems(){
-    return [
-      {sku:'0CGI4001201',name:'CG 4 ชมพู Pink',   wh:'FG-BP',ppb:40,systemQty:760,bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
-      {sku:'0CGI4001600',name:'CG 4 แดง Red',     wh:'FG-BP',ppb:40,systemQty:212,bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
-      {sku:'0CGI4001900',name:'CG 4 ส้ม Orange',  wh:'FG-BP',ppb:40,systemQty:80, bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
-      {sku:'0RTG2001200',name:'PG 2×1 ขาว',       wh:'FG-BB',ppb:35,systemQty:450,bundle1:0,bundle2:0,pcs1:0,pcs2:0,holdPcs:0,note:''},
-    ];
-  }
 
   // ── render Count Sheet table ─────────────────────────────────────
   function _scRenderSheet(){
