@@ -34606,7 +34606,12 @@ window.viewTripResult = async function(planId) {
       var whColor = item.wh === 'FG-BP' ? '#1d4ed8' : '#0f766e';
       var whBg    = item.wh === 'FG-BP' ? '#dbeafe'  : '#ccfbf1';
       return '<tr style="background:' + bg + ';border-bottom:1px solid #f1f5f9" data-idx="' + i + '">'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">' + (i+1) + '</td>'
+        + '<td style="padding:4px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">'
+        +   '<div style="display:flex;flex-direction:column;align-items:center;gap:1px">'
+        +   '<span style="font-size:11px;color:#cbd5e1">'+(i+1)+'</span>'
+        +   '<button onclick="scDeleteItem('+i+')" title="ลบแถวนี้" style="width:18px;height:18px;border-radius:4px;border:none;background:#fee2e2;color:#ef4444;font-size:11px;cursor:pointer;line-height:1;padding:0">×</button>'
+        +   '</div>'
+        + '</td>'
         + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'
         +   '<span style="background:' + whBg + ';color:' + whColor + ';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">' + item.wh + '</span>'
         + '</td>'
@@ -34864,6 +34869,12 @@ window.viewTripResult = async function(planId) {
     var pop = document.getElementById('sc-expr-popup');
     if(pop) pop.style.display = 'none';
   });
+
+  window.scDeleteItem = function(idx){
+    if(!confirm('ลบ "'+(_scItems[idx]||{}).sku+'" ออกจากรายการนับ?')) return;
+    _scItems.splice(idx, 1);
+    _scRenderSheet();
+  };
 
   window.scClearNote = function(){
     document.getElementById('sc-note-textarea').value = '';
