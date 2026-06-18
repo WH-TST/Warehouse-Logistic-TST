@@ -7435,10 +7435,13 @@ thead.sticky {
         <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4">
           <h3 class="font-black text-slate-800 text-base mb-4"><i class="fas fa-plus text-violet-500 mr-2"></i>เพิ่มรายการนับ SEMI</h3>
           <label class="text-xs font-bold text-slate-500 mb-1 block">กรอกรหัส FG</label>
-          <input id="sc-semi-add-input" type="text" placeholder="เช่น FLG1002170" autocomplete="off"
-            class="border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm w-full outline-none focus:border-violet-400 mb-3"
-            oninput="scSemiAddSearch(this.value)" onkeydown="if(event.key==='Enter')scSemiAddConfirm()">
-          <div id="sc-semi-add-result" class="min-h-[60px] text-sm text-slate-500"></div>
+          <div style="position:relative">
+            <input id="sc-semi-add-input" type="text" placeholder="เช่น FLG1002170" autocomplete="off"
+              class="border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm w-full outline-none focus:border-violet-400"
+              oninput="scSemiAddSearch(this.value)" onkeydown="scSemiAddKeydown(event)">
+            <div id="sc-semi-add-dropdown" class="hidden absolute left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg z-50 mt-1" style="max-height:200px;overflow-y:auto"></div>
+          </div>
+          <div id="sc-semi-add-result" class="min-h-[60px] text-sm text-slate-500 mt-3"></div>
           <div class="flex gap-2 mt-4">
             <button id="sc-semi-add-btn" onclick="scSemiAddConfirm()" class="hidden flex-1 bg-violet-600 hover:bg-violet-500 text-white font-black py-2.5 rounded-xl text-sm transition">
               <i class="fas fa-plus mr-1"></i> เพิ่มในใบนับ
@@ -35798,31 +35801,87 @@ window.viewTripResult = async function(planId) {
     _semiAddMatch = null;
   };
 
-  window.scSemiAddSearch = async function(val){
-    var fg = (val||'').trim().toUpperCase();
-    var resultEl = document.getElementById('sc-semi-add-result');
-    var btnEl    = document.getElementById('sc-semi-add-btn');
-    _semiAddMatch = null;
-    btnEl.classList.add('hidden');
-    if(fg.length < 3){ resultEl.innerHTML = '<span class="text-slate-400">กรอกรหัส FG อย่างน้อย 3 ตัวอักษร</span>'; return; }
-    resultEl.innerHTML = '<span class="text-slate-400">กำลังค้นหา...</span>';
-    var { data } = await window._sb.from('semi_fg_mapping').select('*')
-      .or('fg_code_1.ilike.%'+fg+'%,fg_code_2.ilike.%'+fg+'%');
-    if(!data||!data.length){
-      resultEl.innerHTML = '<span class="text-red-500 font-bold">ไม่พบ FG "'+fg+'" ใน mapping</span>';
+  var _semiAddDropdownItems = [];
+  var _semiAddDropdownIdx = -1;
+
+  window.scSemiAddKeydown = function(e){
+    var dd = document.getElementById('sc-semi-add-dropdown');
+    var items = dd.querySelectorAll('[data-dd-idx]');
+    if(e.key === 'ArrowDown'){ e.preventDefault(); _semiAddDropdownIdx = Math.min(_semiAddDropdownIdx+1, items.length-1); _semiDDHighlight(items); return; }
+    if(e.key === 'ArrowUp'){   e.preventDefault(); _semiAddDropdownIdx = Math.max(_semiAddDropdownIdx-1, 0); _semiDDHighlight(items); return; }
+    if(e.key === 'Enter'){
+      if(_semiAddDropdownIdx >= 0 && items[_semiAddDropdownIdx]){ items[_semiAddDropdownIdx].click(); }
+      else scSemiAddConfirm();
       return;
     }
-    var row = data[0];
+    if(e.key === 'Escape'){ dd.classList.add('hidden'); }
+  };
+
+  function _semiDDHighlight(items){
+    items.forEach(function(el, i){
+      el.style.background = i === _semiAddDropdownIdx ? '#ede9fe' : '';
+    });
+    if(items[_semiAddDropdownIdx]) items[_semiAddDropdownIdx].scrollIntoView({block:'nearest'});
+  }
+
+  window.scSemiAddSearch = async function(val){
+    var fg = (val||'').trim();
+    var resultEl = document.getElementById('sc-semi-add-result');
+    var btnEl    = document.getElementById('sc-semi-add-btn');
+    var dd       = document.getElementById('sc-semi-add-dropdown');
+    _semiAddMatch = null; _semiAddDropdownIdx = -1;
+    btnEl.classList.add('hidden');
+    resultEl.innerHTML = '';
+    dd.classList.add('hidden'); dd.innerHTML = '';
+    if(fg.length < 2) return;
+
+    var { data } = await window._sb.from('semi_fg_mapping').select('*')
+      .or('fg_code_1.ilike.%'+fg+'%,fg_code_2.ilike.%'+fg+'%').limit(20);
+    if(!data||!data.length){
+      resultEl.innerHTML = '<span style="color:#ef4444;font-weight:600">ไม่พบ FG "'+fg+'" ใน mapping</span>';
+      return;
+    }
+
+    // สร้าง dropdown options
+    var ddHtml = '';
+    data.forEach(function(row, i){
+      var matchFG = (row.fg_code_1||'').toLowerCase().includes(fg.toLowerCase())
+        ? row.fg_code_1 : row.fg_code_2;
+      var matchName = matchFG === row.fg_code_1 ? row.fg_name_1 : row.fg_name_2;
+      ddHtml += '<div data-dd-idx="'+i+'" onclick="scSemiDDSelect('+i+')" style="padding:8px 12px;cursor:pointer;border-bottom:0.5px solid #f1f5f9;font-size:12px">'
+        + '<span style="font-weight:600;color:#5b21b6">'+matchFG+'</span>'
+        + ' <span style="color:#64748b">'+matchName+'</span>'
+        + ' <span style="font-size:10px;color:#94a3b8;margin-left:4px">→ SEMI: '+row.semi_item+'</span>'
+        + '</div>';
+    });
+    dd.innerHTML = ddHtml;
+    dd.classList.remove('hidden');
+    _semiAddDropdownItems = data;
+
+    // ถ้ามีผลเดียว แสดง detail เลย
+    if(data.length === 1) scSemiDDSelect(0);
+  };
+
+  window.scSemiDDSelect = function(i){
+    var row = _semiAddDropdownItems[i];
+    if(!row) return;
+    var dd = document.getElementById('sc-semi-add-dropdown');
+    dd.classList.add('hidden');
+    // ใส่ค่าใน input
+    var matchFG = (_semiAddDropdownItems[i].fg_code_1||'').toLowerCase().includes((document.getElementById('sc-semi-add-input').value||'').toLowerCase())
+      ? row.fg_code_1 : row.fg_code_2;
+    document.getElementById('sc-semi-add-input').value = matchFG;
     _semiAddMatch = row;
-    // ตรวจว่าอยู่ในรายการแล้วหรือยัง
     var exists = _semiItems.some(function(it){ return it.semi_item === row.semi_item; });
-    var html = '<div class="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-1">'
-      + '<p><span class="text-slate-500">SEMI:</span> <strong class="text-slate-800">'+row.semi_item+'</strong> — '+row.semi_name+'</p>'
-      + '<p><span class="text-green-700">FG 1:</span> <strong>'+row.fg_code_1+'</strong> '+row.fg_name_1+'</p>'
-      + (row.fg_code_2 ? '<p><span class="text-blue-700">FG 2:</span> <strong>'+row.fg_code_2+'</strong> '+row.fg_name_2+'</p>' : '')
+    var resultEl = document.getElementById('sc-semi-add-result');
+    var btnEl    = document.getElementById('sc-semi-add-btn');
+    var html = '<div style="background:#f8fafc;border-radius:10px;padding:10px 12px;border:1px solid #e2e8f0;font-size:12px">'
+      + '<p style="margin-bottom:4px"><span style="color:#64748b">SEMI:</span> <strong style="color:#1e293b">'+row.semi_item+'</strong> — <span style="color:#475569">'+row.semi_name+'</span></p>'
+      + '<p style="margin-bottom:2px"><span style="color:#3b6d11">FG 1:</span> <strong>'+row.fg_code_1+'</strong> <span style="color:#64748b">'+row.fg_name_1+'</span></p>'
+      + (row.fg_code_2 ? '<p><span style="color:#185fa5">FG 2:</span> <strong>'+row.fg_code_2+'</strong> <span style="color:#64748b">'+row.fg_name_2+'</span></p>' : '')
       + '</div>';
     if(exists){
-      html += '<p class="text-amber-600 font-bold text-xs mt-2">⚠️ SEMI นี้อยู่ในรายการแล้ว</p>';
+      html += '<p style="color:#d97706;font-weight:600;font-size:12px;margin-top:6px">⚠️ SEMI นี้อยู่ในรายการแล้ว</p>';
       btnEl.classList.add('hidden');
     } else {
       btnEl.classList.remove('hidden');
