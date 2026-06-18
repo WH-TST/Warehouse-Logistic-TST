@@ -32811,7 +32811,53 @@ window.umDeleteUser = async function(un){
   if(sidebar)sidebar.classList.add('wms-app-hidden');
   if(main)main.classList.add('wms-app-hidden');
 
-  function _afterUsersLoaded(){
+  // ── SSO Token Validator ──────────────────────────────────────────
+  // format: ?sso=username|timestamp|signature
+  // signature = HMAC-SHA256(username|timestamp, SSO_SECRET) แบบ hex
+  var SSO_SECRET = 'TST-WMS-2026';
+  var SSO_TTL_MS = 5 * 60 * 1000; // 5 นาที
+
+  async function _verifySsoToken(token){
+    try {
+      var parts = token.split('|');
+      if(parts.length !== 3) return null;
+      var username = parts[0], ts = parseInt(parts[1]), sig = parts[2];
+      if(!username || isNaN(ts)) return null;
+      // ตรวจอายุ token
+      if(Date.now() - ts > SSO_TTL_MS) return null;
+      // คำนวณ HMAC-SHA256
+      var enc = new TextEncoder();
+      var key = await crypto.subtle.importKey('raw', enc.encode(SSO_SECRET),
+        {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+      var msgBuf = enc.encode(username + '|' + ts);
+      var sigBuf = await crypto.subtle.sign('HMAC', key, msgBuf);
+      var expected = Array.from(new Uint8Array(sigBuf))
+        .map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+      if(expected !== sig) return null;
+      return username;
+    } catch(e){ return null; }
+  }
+
+  async function _afterUsersLoaded(){
+    // 1. ตรวจ SSO token ใน URL ก่อน
+    var params = new URLSearchParams(location.search);
+    var ssoRaw = params.get('sso');
+    if(ssoRaw){
+      var ssoUser = await _verifySsoToken(ssoRaw);
+      if(ssoUser){
+        // ลบ token ออกจาก URL (ไม่ให้ติดใน browser history)
+        var cleanUrl = location.pathname + (location.hash || '');
+        history.replaceState(null,'',cleanUrl);
+        // หา user ใน wms_users
+        var res = await window._sb.from('wms_users').select('*').eq('username',ssoUser).eq('active',true).maybeSingle();
+        if(res.data){
+          var r = res.data;
+          var user = {username:r.username,pwHash:r.password,name:r.name||'',role:r.role||'',isAdmin:r.is_admin||false,perms:r.perms||[],active:true};
+          _cu=user;_saveSess(user);window._currentUser=user.name||user.username;_applySession();return;
+        }
+      }
+    }
+    // 2. ตรวจ session เดิม
     var s=_loadSess();
     if(s){var users=_loadUsers(),user=null;for(var i=0;i<users.length;i++){if(users[i].username===s.username){user=users[i];break;}}
       if(user){_cu=user;window._currentUser=user.name||user.username;_applySession();return;}}
