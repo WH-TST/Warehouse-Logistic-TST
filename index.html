@@ -34491,7 +34491,8 @@ window.viewTripResult = async function(planId) {
   'use strict';
 
   // ── state ───────────────────────────────────────────────────────
-  var _scItems = [];   // loaded from GAS: [{sku,name,wh,ppb,systemQty,...}]
+  var _scItems = [];   // Count Sheet items (transection_fg + manual)
+  var _recItems = [];  // Reconcile items (counting + saved counts) — แยกจาก _scItems
   var _scDate  = '';
 
   // ── tab switch ──────────────────────────────────────────────────
@@ -34925,14 +34926,13 @@ window.viewTripResult = async function(planId) {
         }
       });
 
-      // memory session มีลำดับความสำคัญสูงกว่า (กรอกในหน้านี้ยังไม่บันทึก)
+      // memory (Count Sheet session ปัจจุบัน) มีลำดับความสำคัญสูงกว่าข้อมูลที่บันทึกไว้
       var memMap = {};
       _scItems.forEach(function(it){ memMap[it.sku+'|'+it.wh] = it; });
 
-      _scItems = Object.values(map).map(function(s){
-        var mem  = memMap[s.sku+'|'+s.wh] || {};
+      _recItems = Object.values(map).map(function(s){
+        var mem   = memMap[s.sku+'|'+s.wh] || {};
         var saved = savedMap[s.sku+'|'+s.wh] || {};
-        // ถ้ามีข้อมูลใน memory (กรอกค้างไว้) ให้ใช้ก่อน ไม่งั้นใช้ค่าที่บันทึกล่าสุด
         var hasMem = mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs;
         var src = hasMem ? mem : saved;
         return {
@@ -34960,19 +34960,19 @@ window.viewTripResult = async function(planId) {
     var tbody  = document.getElementById('sc-reconcile-tbody');
     var sumDiv = document.getElementById('sc-reconcile-summary');
 
-    if(!_scItems.length){
+    if(!_recItems.length){
       title.textContent = 'ยังไม่มีข้อมูล';
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px">'
         + '<button onclick="scLoadReconcile()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm"><i class="fas fa-sync mr-2"></i>โหลดจาก Counting</button>'
         + '</td></tr>';
       return;
     }
-    title.textContent = 'Reconcile — ' + (_scDate||'') + ' (' + _scItems.length + ' รายการ)';
+    title.textContent = 'Reconcile — ' + (_scDate||'') + ' (' + _recItems.length + ' รายการ)';
 
     var total=0, okCount=0, diffCount=0, emptyCount=0;
     var rowBg = ['#ffffff','#f8fafc'];
 
-    tbody.innerHTML = _scItems.map(function(item, i){
+    tbody.innerHTML = _recItems.map(function(item, i){
       total++;
       var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
       var diff     = counted - item.systemQty;
@@ -35137,7 +35137,7 @@ window.viewTripResult = async function(planId) {
 
   // ── save reconcile to Supabase ───────────────────────────────────
   window.scSaveReconcile = async function(){
-    if(!_scItems.length){ showToast('ไม่มีข้อมูลให้บันทึก', true); return; }
+    if(!_recItems.length){ showToast('ไม่มีข้อมูลให้บันทึก', true); return; }
     var checker = (document.getElementById('sc-checker').value||'').trim();
     var user    = window._currentUser || 'unknown';
 
@@ -35154,7 +35154,7 @@ window.viewTripResult = async function(planId) {
     var sessionId = Array.isArray(sData) ? sData[0].id : sData.id;
 
     // upsert items
-    var itemsPayload = _scItems.map(function(item){
+    var itemsPayload = _recItems.map(function(item){
       var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
       return { session_id: sessionId, sku: item.sku, product_name: item.name, wh: item.wh,
         ppb: item.ppb||0, bundle_1: item.bundle1||0, bundle_2: item.bundle2||0,
@@ -35169,7 +35169,7 @@ window.viewTripResult = async function(planId) {
         body: JSON.stringify(itemsPayload) });
     if(!iRes.ok){ var e=await iRes.json(); showToast('❌ บันทึก items ล้มเหลว', true); console.error(e); return; }
     showToast('✅ บันทึกสำเร็จ — session #'+sessionId);
-    _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _scItems.length + ' รายการ)');
+    _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _recItems.length + ' รายการ)');
   };
 
   function _scLogAudit(action){
@@ -35178,9 +35178,9 @@ window.viewTripResult = async function(planId) {
 
   // ── export reconcile to CSV ──────────────────────────────────────
   window.scExportReconcile = function(){
-    if(!_scItems.length){ showToast('ไม่มีข้อมูล', true); return; }
+    if(!_recItems.length){ showToast('ไม่มีข้อมูล', true); return; }
     var csv = 'No.,WH,Item number,Product name,bundle_1,bundle_2,Pcs.(1),Pcs.(2),Hold pcs.,นับได้ (เส้น),ระบบ (Counting),Diff,NOTE\n';
-    _scItems.forEach(function(item,i){
+    _recItems.forEach(function(item,i){
       var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
       var diff    = counted - item.systemQty;
       csv += [(i+1), item.wh, item.sku, '"'+item.name+'"',
