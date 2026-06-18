@@ -34646,7 +34646,15 @@ window.viewTripResult = async function(planId) {
       if(target) target.focus();
       return;
     }
-    if(['0','1','2','3','4','5','6','7','8','9','Backspace','Delete','ArrowLeft','ArrowRight'].includes(e.key)) return;
+    if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+      e.preventDefault();
+      var allCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[contenteditable="true"]'));
+      var ci2 = allCells.indexOf(td);
+      var target2 = allCells[ci2 + (e.key==='ArrowRight'?1:-1)];
+      if(target2) target2.focus();
+      return;
+    }
+    if(['0','1','2','3','4','5','6','7','8','9','Backspace','Delete'].includes(e.key)) return;
     e.preventDefault();
   };
 
