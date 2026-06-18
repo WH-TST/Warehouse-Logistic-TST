@@ -34892,8 +34892,8 @@ window.viewTripResult = async function(planId) {
       });
       var skus = Object.values(map).map(function(s){ return s.sku; });
 
-      // ดึง PPB
-      var ppbRes = await window._sb.from('products').select('sku,lines_per_bundle').in('sku', skus);
+      // ดึง PPB (ดึงทั้งหมด ไม่ filter ด้วย SKU เพราะ URL จะยาวเกิน)
+      var ppbRes = await window._sb.from('products').select('sku,lines_per_bundle');
       var ppbMap = {};
       (ppbRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
 
