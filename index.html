@@ -7035,6 +7035,9 @@ thead.sticky {
     <div class="flex flex-wrap items-center gap-3">
       <input type="text" id="map-search" placeholder="🔍 ค้นหา SEMI / FG..." oninput="mapRender()" class="flex-1 min-w-[220px] border-2 border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-indigo-400 bg-slate-50">
       <span id="map-count" class="text-xs font-bold text-slate-400"></span>
+      <button onclick="mapOpenAdd()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition shadow-sm">
+        <i class="fas fa-plus"></i> เพิ่ม Mapping
+      </button>
       <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 font-bold text-sm hover:bg-sky-100 transition cursor-pointer">
         <i class="fas fa-file-import"></i> Import Excel
         <input type="file" id="map-import-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="mapImport(this)">
@@ -7051,6 +7054,7 @@ thead.sticky {
             <th class="px-4 py-3 text-left">FG Name 1</th>
             <th class="px-4 py-3 text-left">FG Code 2</th>
             <th class="px-4 py-3 text-left">FG Name 2</th>
+            <th class="px-4 py-3 text-center w-24">จัดการ</th>
           </tr>
         </thead>
         <tbody id="map-tbody">
@@ -7060,6 +7064,59 @@ thead.sticky {
     </div>
   </div>
 </div><!-- end view-products-content -->
+
+<!-- MODAL: เพิ่ม/แก้ไข SEMI→FG Mapping -->
+<div id="map-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-center justify-center backdrop-blur-sm px-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h3 id="map-modal-title" class="text-lg font-black text-slate-800">เพิ่ม Mapping</h3>
+      <button onclick="mapCloseModal()" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition flex items-center justify-center"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="px-6 py-5 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">SEMI Item *</label>
+          <input id="map-f-semi-item" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-indigo-400" placeholder="เช่น 0001234">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อ SEMI</label>
+          <input id="map-f-semi-name" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" placeholder="ชื่อวัตถุดิบ">
+        </div>
+      </div>
+      <div class="border-t border-slate-100 pt-3">
+        <p class="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">FG ที่ 1 *</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-bold text-slate-500 block mb-1">FG Code 1 *</label>
+            <input id="map-f-fg-code1" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-indigo-400" placeholder="เช่น 0RTG3001000">
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-500 block mb-1">FG Name 1</label>
+            <input id="map-f-fg-name1" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" placeholder="ชื่อ FG">
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-slate-100 pt-3">
+        <p class="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">FG ที่ 2 (ถ้ามี)</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-bold text-slate-500 block mb-1">FG Code 2</label>
+            <input id="map-f-fg-code2" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-indigo-400" placeholder="เช่น 0RTG3002000">
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-500 block mb-1">FG Name 2</label>
+            <input id="map-f-fg-name2" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" placeholder="ชื่อ FG">
+          </div>
+        </div>
+      </div>
+      <div id="map-modal-err" class="hidden text-rose-600 text-sm font-bold"></div>
+    </div>
+    <div class="px-6 pb-5 flex gap-3 justify-end">
+      <button onclick="mapCloseModal()" class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition">ยกเลิก</button>
+      <button onclick="mapSave()" class="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm transition shadow-sm"><i class="fas fa-save mr-1"></i>บันทึก</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: เพิ่ม/แก้ไขสินค้า -->
 <div id="prod-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-center justify-center backdrop-blur-sm px-4">
@@ -36755,6 +36812,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
     if (!tbody) return;
     if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-slate-400">ไม่พบข้อมูล</td></tr>'; return; }
     tbody.innerHTML = list.map(function(m) {
+      var sid = (m.semi_item||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
         + '<td class="px-4 py-2.5 font-mono font-bold text-slate-700 text-xs">' + esc(m.semi_item) + '</td>'
         + '<td class="px-4 py-2.5 text-xs text-slate-600">' + esc(m.semi_name) + '</td>'
@@ -36762,10 +36820,79 @@ window.loRefreshOrderList = window.loRefreshHistory;
         + '<td class="px-4 py-2.5 text-xs text-slate-600">' + esc(m.fg_name_1) + '</td>'
         + '<td class="px-4 py-2.5 font-mono text-xs text-purple-700 font-bold">' + esc(m.fg_code_2||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-xs text-slate-600">' + esc(m.fg_code_2 ? (m.fg_name_2||'') : '–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center">'
+        + '<button onclick="mapOpenEdit(\'' + sid + '\')" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold transition mr-1"><i class="fas fa-pen"></i></button>'
+        + '<button onclick="mapDelete(\'' + sid + '\')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 text-xs font-bold transition"><i class="fas fa-trash"></i></button>'
+        + '</td>'
         + '</tr>';
     }).join('');
   }
   window.mapRender = mapRender;
+
+  var _mapEditKey = null; // null = add mode, string = edit mode (semi_item)
+
+  window.mapOpenAdd = function() {
+    _mapEditKey = null;
+    document.getElementById('map-modal-title').textContent = 'เพิ่ม Mapping';
+    ['map-f-semi-item','map-f-semi-name','map-f-fg-code1','map-f-fg-name1','map-f-fg-code2','map-f-fg-name2'].forEach(function(id){ document.getElementById(id).value=''; });
+    document.getElementById('map-f-semi-item').disabled = false;
+    document.getElementById('map-modal-err').classList.add('hidden');
+    document.getElementById('map-modal').classList.remove('hidden');
+    document.getElementById('map-f-semi-item').focus();
+  };
+
+  window.mapOpenEdit = function(semiItem) {
+    var m = _mapList.find(function(x){ return x.semi_item === semiItem; });
+    if (!m) return;
+    _mapEditKey = semiItem;
+    document.getElementById('map-modal-title').textContent = 'แก้ไข Mapping';
+    document.getElementById('map-f-semi-item').value = m.semi_item || '';
+    document.getElementById('map-f-semi-item').disabled = true;
+    document.getElementById('map-f-semi-name').value = m.semi_name || '';
+    document.getElementById('map-f-fg-code1').value = m.fg_code_1 || '';
+    document.getElementById('map-f-fg-name1').value = m.fg_name_1 || '';
+    document.getElementById('map-f-fg-code2').value = m.fg_code_2 || '';
+    document.getElementById('map-f-fg-name2').value = m.fg_name_2 || '';
+    document.getElementById('map-modal-err').classList.add('hidden');
+    document.getElementById('map-modal').classList.remove('hidden');
+    document.getElementById('map-f-semi-name').focus();
+  };
+
+  window.mapCloseModal = function() {
+    document.getElementById('map-modal').classList.add('hidden');
+    document.getElementById('map-f-semi-item').disabled = false;
+  };
+
+  window.mapSave = async function() {
+    var semi_item = document.getElementById('map-f-semi-item').value.trim();
+    var semi_name = document.getElementById('map-f-semi-name').value.trim();
+    var fg_code_1 = document.getElementById('map-f-fg-code1').value.trim();
+    var fg_name_1 = document.getElementById('map-f-fg-name1').value.trim();
+    var fg_code_2 = document.getElementById('map-f-fg-code2').value.trim();
+    var fg_name_2 = document.getElementById('map-f-fg-name2').value.trim();
+    var errEl = document.getElementById('map-modal-err');
+    if (!semi_item) { errEl.textContent='กรุณากรอก SEMI Item'; errEl.classList.remove('hidden'); return; }
+    if (!fg_code_1) { errEl.textContent='กรุณากรอก FG Code 1'; errEl.classList.remove('hidden'); return; }
+    errEl.classList.add('hidden');
+    var row = { semi_item: semi_item, semi_name: semi_name, fg_code_1: fg_code_1, fg_name_1: fg_name_1,
+                fg_code_2: fg_code_2, fg_name_2: fg_name_2, updated_at: new Date().toISOString() };
+    var res = await window._sb.from('semi_fg_mapping').upsert([row], { onConflict: 'semi_item' });
+    if (res.error) { errEl.textContent = '❌ ' + res.error.message; errEl.classList.remove('hidden'); return; }
+    mapCloseModal();
+    _mapLoaded = false;
+    await mapLoad();
+    _mapLoaded = true;
+  };
+
+  window.mapDelete = async function(semiItem) {
+    if (!confirm('ลบ Mapping "' + semiItem + '" ใช่ไหม?')) return;
+    var res = await window._sb.from('semi_fg_mapping').delete().eq('semi_item', semiItem);
+    if (res.error) { alert('❌ ' + res.error.message); return; }
+    _mapList = _mapList.filter(function(m){ return m.semi_item !== semiItem; });
+    mapRender();
+    var countEl = document.getElementById('map-count');
+    if (countEl) countEl.textContent = _mapList.length + ' รายการ';
+  };
 
   window.mapImport = async function(input) {
     var file = input.files[0]; if (!file) return;
