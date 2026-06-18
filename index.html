@@ -34832,19 +34832,19 @@ window.viewTripResult = async function(planId) {
     var whFilter = (document.getElementById('sc-wh-filter')||{}).value||'';
     tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
     try {
-      var q = window._sb.from('counting').select('item_number,product_name,warehouse,onhand');
+      var q = window._sb.from('counting').select('item_number,product_name,warehouse,cw_onhand');
       if(whFilter) q = q.eq('warehouse', whFilter);
       var res = await q;
       if(res.error) throw res.error;
       var rows = res.data || [];
       if(!rows.length){ tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบข้อมูลใน Counting</td></tr>'; return; }
 
-      // รวม onhand ต่อ item_number+warehouse (หลาย batch)
+      // รวม cw_onhand (จำนวนเส้น) ต่อ item_number+warehouse (หลาย batch)
       var map = {};
       rows.forEach(function(r){
         var key = r.item_number+'|'+(r.warehouse||'');
         if(!map[key]) map[key] = { sku:r.item_number, name:r.product_name||'', wh:r.warehouse||'', systemQty:0 };
-        map[key].systemQty += Number(r.onhand)||0;
+        map[key].systemQty += Number(r.cw_onhand)||0;
       });
       var skus = Object.values(map).map(function(s){ return s.sku; });
 
