@@ -2045,7 +2045,7 @@ thead.sticky {
                 <span class="nav-icon"><i class="fas fa-users-cog"></i></span> ตั้งค่าบัญชีผู้ใช้
             </button>
             <div style="height:1px;background:rgba(255,255,255,0.08);margin:6px 0;"></div>
-            <button onclick="openAuditLogModal()" class="nav-btn" data-tip="Audit Log" title="ประวัติการแก้ไขข้อมูล">
+            <button onclick="openAuditLogModal()" id="nav-audit-log" class="nav-btn" data-tip="Audit Log" title="ประวัติการแก้ไขข้อมูล">
                 <span class="nav-icon"><i class="fas fa-history"></i></span> Audit Log
             </button>
 
@@ -35507,7 +35507,7 @@ window.confirmSaveInvKPI = function() {
 
 <script>
 // AUTH & USER MANAGEMENT SYSTEM
-var WMS_VIEWS=[{id:'wm-manage',label:'จัดการคลังสินค้า'},{id:'products',label:'จัดการสินค้า'},{id:'printtag',label:'Print Tag FG'},{id:'analytics',label:'Analytics'},{id:'whactivity',label:'WH Activity Log'},{id:'kpi-stock',label:'KPI Inventory'},{id:'logistic-plan',label:'วางแผนส่งมอบ'},{id:'truck-dispatch',label:'จัดรถส่งสินค้า'},{id:'kpi-wh',label:'KPI WH & Logistic'},{id:'user-accounts',label:'ตั้งค่าบัญชีผู้ใช้'}];
+var WMS_VIEWS=[{id:'wm-manage',label:'จัดการคลังสินค้า'},{id:'products',label:'จัดการสินค้า'},{id:'printtag',label:'Print Tag FG'},{id:'analytics',label:'Analytics'},{id:'whactivity',label:'WH Activity Log'},{id:'kpi-stock',label:'KPI Inventory'},{id:'logistic-plan',label:'วางแผนส่งมอบ'},{id:'truck-dispatch',label:'จัดรถส่งสินค้า'},{id:'kpi-wh',label:'KPI WH & Logistic'},{id:'user-accounts',label:'ตั้งค่าบัญชีผู้ใช้'},{id:'audit-log',label:'Audit Log'}];
 function _hashPw(s){var h=0x811c9dc5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h.toString(16);}
 // ── Users cache (โหลดจาก GAS ตอนเริ่ม, sync ทุกเครื่อง) ──────────────────────
 var _usersCache = null;
@@ -35592,7 +35592,7 @@ window.doLogin = async function(){
     for(var i=0;i<cached.length;i++){if(cached[i].username===uname&&cached[i].pwHash===hash){user=cached[i];break;}}
   }
   if(!user){err.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';err.classList.remove('hidden');document.getElementById('login-password').value='';return;}
-  _cu=user;_saveSess(user);_applySession();
+  _cu=user;_saveSess(user);window._currentUser=user.name||user.username;_applySession();
 };
 
 window.doLogout=function(){
@@ -35722,7 +35722,7 @@ window.umDeleteUser = async function(un){
   function _afterUsersLoaded(){
     var s=_loadSess();
     if(s){var users=_loadUsers(),user=null;for(var i=0;i<users.length;i++){if(users[i].username===s.username){user=users[i];break;}}
-      if(user){_cu=user;_applySession();return;}}
+      if(user){_cu=user;window._currentUser=user.name||user.username;_applySession();return;}}
     var ls=document.getElementById('login-screen');
     if(ls)ls.classList.remove('hidden');
     var lu=document.getElementById('login-username');
