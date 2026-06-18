@@ -7262,22 +7262,28 @@ thead.sticky {
         </div>
       </div>
       <div class="overflow-x-auto" style="border:1px solid #e2e8f0;border-radius:10px">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:1100px">
+        <table id="sc-rec-table" style="border-collapse:collapse;font-size:13px;table-layout:fixed;width:100%">
+          <colgroup>
+            <col style="width:38px"><col style="width:72px"><col style="width:130px">
+            <col style="width:200px"><col style="width:76px"><col style="width:76px">
+            <col style="width:68px"><col style="width:68px"><col style="width:76px">
+            <col style="width:84px"><col style="width:94px"><col style="width:64px"><col style="width:140px">
+          </colgroup>
           <thead>
-            <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
-              <th style="padding:9px 8px;text-align:center;width:38px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">#</th>
-              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">WH</th>
-              <th style="padding:9px 10px;text-align:left;width:130px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Item number</th>
-              <th style="padding:9px 10px;text-align:left;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Product name</th>
-              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_1</th>
-              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_2</th>
-              <th style="padding:9px 8px;text-align:center;width:68px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(1)</th>
-              <th style="padding:9px 8px;text-align:center;width:68px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(2)</th>
-              <th style="padding:9px 8px;text-align:center;width:74px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Hold pcs.</th>
-              <th style="padding:9px 8px;text-align:center;width:80px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">นับได้ (เส้น)</th>
-              <th style="padding:9px 8px;text-align:center;width:90px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">ระบบ (Counting)</th>
-              <th style="padding:9px 8px;text-align:center;width:64px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Diff</th>
-              <th style="padding:9px 10px;text-align:left;width:140px;color:#64748b;font-size:11px;font-weight:700">NOTE</th>
+            <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;user-select:none">
+              <th class="sc-th" onmousedown="scRecResizeStart(event,0)">#</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,1)">WH</th>
+              <th class="sc-th" style="text-align:left" onmousedown="scRecResizeStart(event,2)">Item number</th>
+              <th class="sc-th" style="text-align:left" onmousedown="scRecResizeStart(event,3)">Product name</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,4)">bundle_1</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,5)">bundle_2</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,6)">Pcs.(1)</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,7)">Pcs.(2)</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,8)">Hold pcs.</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,9)">นับได้ (เส้น)</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,10)">ระบบ (Counting)</th>
+              <th class="sc-th" onmousedown="scRecResizeStart(event,11)">Diff</th>
+              <th class="sc-th" style="text-align:left" onmousedown="scRecResizeStart(event,12)">NOTE</th>
             </tr>
           </thead>
           <tbody id="sc-reconcile-tbody">
@@ -34726,6 +34732,35 @@ window.viewTripResult = async function(planId) {
     _scResizeState = null;
     document.removeEventListener('mousemove', _scResizeMove);
     document.removeEventListener('mouseup',   _scResizeEnd);
+  }
+
+  // ── Reconcile table column resize (shares same move/end handlers) ──
+  var _scRecResizeState = null;
+  window.scRecResizeStart = function(e, colIdx){
+    e.preventDefault(); e.stopPropagation();
+    var table = document.getElementById('sc-rec-table');
+    if(!table) return;
+    var cols = table.querySelectorAll('col');
+    var widths = Array.from(cols).map(function(c){ return c.offsetWidth || parseInt(c.style.width) || 80; });
+    widths.forEach(function(w, i){ cols[i].style.width = w + 'px'; });
+    var total = widths.reduce(function(s,w){ return s+w; }, 0);
+    table.style.width = total + 'px';
+    _scRecResizeState = { colIdx: colIdx, startX: e.clientX, startW: widths[colIdx], cols: cols, table: table };
+    document.addEventListener('mousemove', _scRecResizeMove);
+    document.addEventListener('mouseup',   _scRecResizeEnd);
+  };
+  function _scRecResizeMove(e){
+    if(!_scRecResizeState) return;
+    var dx = e.clientX - _scRecResizeState.startX;
+    var newW = Math.max(40, _scRecResizeState.startW + dx);
+    _scRecResizeState.cols[_scRecResizeState.colIdx].style.width = newW + 'px';
+    var total = Array.from(_scRecResizeState.cols).reduce(function(s,c){ return s+(parseInt(c.style.width)||0); }, 0);
+    _scRecResizeState.table.style.width = total + 'px';
+  }
+  function _scRecResizeEnd(){
+    _scRecResizeState = null;
+    document.removeEventListener('mousemove', _scRecResizeMove);
+    document.removeEventListener('mouseup',   _scRecResizeEnd);
   }
 
   var _scNoteIdx = -1;
