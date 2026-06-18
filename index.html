@@ -7261,6 +7261,28 @@ thead.sticky {
       </div>
     </div>
   </div>
+<!-- Modal: NOTE หมายเหตุ -->
+<div id="sc-note-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.45)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+    <div class="bg-slate-700 px-5 py-4 flex items-center justify-between">
+      <div class="text-white font-black flex items-center gap-2"><i class="fas fa-pencil-alt"></i> หมายเหตุ</div>
+      <button onclick="scCloseNote(false)" class="text-white opacity-70 hover:opacity-100"><i class="fas fa-times text-lg"></i></button>
+    </div>
+    <div class="p-5">
+      <div id="sc-note-item-label" class="text-xs text-slate-400 font-bold mb-2"></div>
+      <textarea id="sc-note-textarea" rows="4" placeholder="กรอกหมายเหตุ..."
+        class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-slate-500 resize-none"></textarea>
+    </div>
+    <div class="px-5 pb-5 flex gap-2">
+      <button onclick="scCloseNote(true)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-black py-2.5 rounded-xl text-sm transition">
+        <i class="fas fa-save mr-1"></i> บันทึก
+      </button>
+      <button onclick="scClearNote()" class="px-4 bg-red-50 hover:bg-red-100 text-red-500 font-bold rounded-xl text-sm transition">ล้าง</button>
+      <button onclick="scCloseNote(false)" class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: เพิ่มรายการนับ -->
 <div id="sc-add-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.45)">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
@@ -34528,19 +34550,22 @@ window.viewTripResult = async function(planId) {
         + _scInputCell(i,'bundle1') + _scInputCell(i,'bundle2')
         + _scInputCell(i,'pcs1')    + _scInputCell(i,'pcs2')
         + _scInputCell(i,'holdPcs')
-        + '<td style="padding:6px 8px;border-right:none">'
-        +   '<input type="text" placeholder="หมายเหตุ" oninput="scSetNote('+i+',this.value)" value="'+_esc(item.note)+'"'
-        +   ' style="width:120px;height:34px;padding:4px 8px;font-size:12px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;color:#334155;outline:none">'
+        + '<td style="padding:6px 10px;border-right:none;text-align:center">'
+        +   '<button onclick="scOpenNote('+i+')" title="'+(item.note?_esc(item.note):'')+'"'
+        +   ' style="height:38px;padding:0 12px;font-size:12px;border-radius:8px;border:1.5px solid '+(item.note?'#7c3aed':'#e2e8f0')+';background:'+(item.note?'#ede9fe':'#f8fafc')+';color:'+(item.note?'#5b21b6':'#94a3b8')+';cursor:pointer;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis">'
+        +   (item.note ? '📝 '+_esc(item.note).slice(0,12)+(item.note.length>12?'…':'') : '+ เพิ่ม')
+        +   '</button>'
         + '</td>'
         + '</tr>';
     }).join('');
   }
 
   function _scInputCell(idx, field){
-    return '<td style="padding:6px 8px;text-align:center;border-right:1px solid #f1f5f9">'
-      + '<input type="number" min="0" value="0" oninput="scSetVal('+idx+',\''+field+'\',this.value)"'
-      + ' style="width:68px;height:36px;text-align:center;font-size:14px;font-weight:600;border:1.5px solid #e2e8f0;border-radius:6px;background:#fff;color:#1e293b;outline:none"'
-      + ' onfocus="this.select()">'
+    var cur = _scItems[idx] ? (_scItems[idx][field]||0) : 0;
+    return '<td style="padding:5px 6px;text-align:center;border-right:1px solid #f1f5f9">'
+      + '<input type="number" min="0" value="'+cur+'" oninput="scSetVal('+idx+',\''+field+'\',this.value)"'
+      + ' style="width:88px;height:40px;text-align:center;font-size:16px;font-weight:700;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#1e293b;outline:none;transition:border-color 0.15s"'
+      + ' onfocus="this.select();this.style.borderColor=\'#6d28d9\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
       + '</td>';
   }
 
@@ -34551,6 +34576,40 @@ window.viewTripResult = async function(planId) {
   };
   window.scSetNote = function(idx, val){
     if(_scItems[idx]) _scItems[idx].note = val;
+  };
+
+  var _scNoteIdx = -1;
+  window.scOpenNote = function(idx){
+    _scNoteIdx = idx;
+    var item = _scItems[idx];
+    if(!item) return;
+    document.getElementById('sc-note-item-label').textContent = item.sku + ' — ' + item.name;
+    document.getElementById('sc-note-textarea').value = item.note || '';
+    document.getElementById('sc-note-modal').classList.remove('hidden');
+    setTimeout(function(){ document.getElementById('sc-note-textarea').focus(); }, 80);
+  };
+  window.scCloseNote = function(save){
+    if(save && _scNoteIdx >= 0){
+      var val = document.getElementById('sc-note-textarea').value;
+      if(_scItems[_scNoteIdx]) _scItems[_scNoteIdx].note = val;
+      // re-render เฉพาะปุ่ม NOTE ของแถวนั้น ไม่ต้อง render ทั้งตาราง
+      var rows = document.querySelectorAll('#sc-sheet-tbody tr[data-idx="'+_scNoteIdx+'"]');
+      if(rows.length){
+        var btn = rows[0].querySelector('button[onclick^="scOpenNote"]');
+        if(btn){
+          btn.title = val;
+          btn.style.borderColor = val ? '#7c3aed' : '#e2e8f0';
+          btn.style.background  = val ? '#ede9fe' : '#f8fafc';
+          btn.style.color       = val ? '#5b21b6' : '#94a3b8';
+          btn.textContent       = val ? '📝 '+val.slice(0,12)+(val.length>12?'…':'') : '+ เพิ่ม';
+        }
+      }
+    }
+    document.getElementById('sc-note-modal').classList.add('hidden');
+    _scNoteIdx = -1;
+  };
+  window.scClearNote = function(){
+    document.getElementById('sc-note-textarea').value = '';
   };
 
   // ── render Reconcile table ───────────────────────────────────────
