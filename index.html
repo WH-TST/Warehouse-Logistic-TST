@@ -13176,7 +13176,7 @@ let blockingChartInstance = null;
         if (d365Wrap) d365Wrap.style.display = (type === 'onhand_fg' || type === 'onhand_semi') ? '' : 'none';
         // Show/hide TST PD Date (only for transection_fg)
         const tstWrap = document.getElementById('inv-tst-date-wrap');
-        if (tstWrap) tstWrap.classList.toggle('hidden', type !== 'transection_fg');
+        if (tstWrap) tstWrap.classList.toggle('hidden', type !== 'transection_fg' && type !== 'transection_semi');
         // Set today as default date
         const tstInput = document.getElementById('inv-tst-pd-date');
         if (tstInput && !tstInput.value) tstInput.value = new Date().toISOString().slice(0,10);
@@ -13462,6 +13462,52 @@ let blockingChartInstance = null;
         return batch.length;
     }
 
+    async function _invImportTransectionSEMIToSupabase(rows, tstPdDate) {
+        const now = new Date().toISOString();
+        const hdr = rows[0].map(function(h){ return String(h||'').trim().toLowerCase().replace(/ /g,'_').replace(/[^a-z0-9_]/g,''); });
+        const colMap = {
+            'physical_date':'physical_date',
+            'modified_date_and_time':'modified_datetime','modified_date':'modified_datetime',
+            'production_pool':'production_pool',
+            'warehouse':'warehouse',
+            'serial_number':'serial_number',
+            'batch_number':'batch_number',
+            'item_number':'item_number','item':'item_number',
+            'product_name':'product_name',
+            'issue':'issue',
+            'quantity':'quantity',
+            'unit':'unit',
+            'number':'number',
+            'reference':'reference',
+            'site':'site',
+            'receipt':'receipt'
+        };
+        const textCols = ['physical_date','modified_datetime','production_pool','warehouse',
+            'serial_number','batch_number','item_number','product_name','issue','unit','number','reference','site','receipt'];
+        const batch = [];
+        rows.slice(1).forEach(function(row){
+            if(!row || !row[0]) return;
+            const rec = { imported_at: now, tst_pd_date: tstPdDate };
+            hdr.forEach(function(h, i){
+                const col = colMap[h];
+                if(!col) return;
+                let v = row[i];
+                if(v instanceof Date){ const p = function(n){ return String(n).padStart(2,'0'); }; v = v.getFullYear()+'-'+p(v.getMonth()+1)+'-'+p(v.getDate()); }
+                if(v === null || v === undefined || v === '') v = textCols.includes(col) ? null : 0;
+                rec[col] = v;
+            });
+            if(!rec.item_number) return;
+            batch.push(rec);
+        });
+        if(!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
+        const CHUNK = 500;
+        for(let i = 0; i < batch.length; i += CHUNK){
+            const { error } = await window._sb.from('transection_semi').insert(batch.slice(i, i+CHUNK));
+            if(error) throw error;
+        }
+        return batch.length;
+    }
+
     window.invConfirmImport = function() {
         if (!invImportBuffer || !invCurrentImportType) return showToast('กรุณาเลือกประเภทและไฟล์ก่อน', true);
         const cfg = INV_IMPORT_CONFIG[invCurrentImportType];
@@ -13508,6 +13554,20 @@ let blockingChartInstance = null;
                         invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: 'Supabase:transection_fg', message: 'นำเข้า ' + count + ' รายการ (TST PD: ' + tstDate + ')' });
                         invRenderImportLog();
                         _invSaveImportDate('transection_fg');
+                        invClearImportFile();
+                    }).catch(function(err) { showToast('❌ ' + err.message, true); });
+                    return;
+                }
+
+                // ── transection_semi → Supabase (ต่อท้ายตามวันที่) ──
+                if (invCurrentImportType === 'transection_semi') {
+                    const tstDate = (document.getElementById('inv-tst-pd-date').value || '').trim();
+                    if (!tstDate) { showToast('กรุณาระบุวันที่ก่อน import', true); return; }
+                    _invImportTransectionSEMIToSupabase(rows, tstDate).then(function(count) {
+                        showToast('✅ นำเข้า ' + count + ' รายการ → transection_semi สำเร็จ');
+                        invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: 'Supabase:transection_semi', message: 'นำเข้า ' + count + ' รายการ (TST PD: ' + tstDate + ')' });
+                        invRenderImportLog();
+                        _invSaveImportDate('transection_semi');
                         invClearImportFile();
                     }).catch(function(err) { showToast('❌ ' + err.message, true); });
                     return;
