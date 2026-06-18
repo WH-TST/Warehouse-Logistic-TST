@@ -1923,7 +1923,17 @@ thead.sticky {
       <button onclick="document.getElementById('um-edit-modal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
     </div>
     <div class="p-5 space-y-3">
-      <input id="um-edit-username" type="hidden">
+      <input id="um-edit-username-orig" type="hidden">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">ชื่อผู้ใช้ *</label>
+          <input id="um-edit-username" type="text" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="text-slate-400 text-xs font-bold mb-1 block">รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)</label>
+          <input id="um-edit-password" type="text" placeholder="ใหม่..." class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-slate-400 text-xs font-bold mb-1 block">ชื่อ-นามสกุล</label>
@@ -1933,10 +1943,6 @@ thead.sticky {
           <label class="text-slate-400 text-xs font-bold mb-1 block">ตำแหน่ง</label>
           <input id="um-edit-role" type="text" class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
         </div>
-      </div>
-      <div>
-        <label class="text-slate-400 text-xs font-bold mb-1 block">รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)</label>
-        <input id="um-edit-password" type="text" placeholder="ใหม่..." class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
       </div>
       <div>
         <p class="text-slate-400 text-xs font-bold mb-2">สิทธิ์เข้าถึงหน้า:</p>
@@ -35670,6 +35676,7 @@ window.umAddUser = async function(){
 
 window.umOpenEdit=function(un){
   var users=_loadUsers(),u=null;for(var i=0;i<users.length;i++){if(users[i].username===un){u=users[i];break;}}if(!u)return;
+  document.getElementById('um-edit-username-orig').value=u.username;
   document.getElementById('um-edit-username').value=u.username;
   document.getElementById('um-edit-name').value=u.name||'';
   document.getElementById('um-edit-role').value=u.role||'';
@@ -35680,17 +35687,24 @@ window.umOpenEdit=function(un){
 };
 
 window.umSaveEdit = async function(){
-  var un=document.getElementById('um-edit-username').value;
+  var origUn=document.getElementById('um-edit-username-orig').value;
+  var newUn=(document.getElementById('um-edit-username').value||'').trim();
+  if(!newUn){showToast('กรุณากรอกชื่อผู้ใช้',true);return;}
   var users=_loadUsers(),idx=-1;
-  for(var i=0;i<users.length;i++){if(users[i].username===un){idx=i;break;}}if(idx<0)return;
+  for(var i=0;i<users.length;i++){if(users[i].username===origUn){idx=i;break;}}if(idx<0)return;
   var np=(document.getElementById('um-edit-password').value||'').trim();
   if(np) users[idx].pwHash=_hashPw(np);
   users[idx].name=(document.getElementById('um-edit-name').value||'').trim();
   users[idx].role=(document.getElementById('um-edit-role').value||'').trim();
   if(!users[idx].isAdmin) users[idx].perms=_getChecked('um-edit-perms');
+  if(newUn !== origUn){
+    var delRes = await _sbDeleteUser(origUn);
+    if(delRes.error){showToast('❌ '+delRes.error.message,true);return;}
+    users[idx].username=newUn;
+  }
   var res = await _sbUpsertUser(users[idx]);
   if(res.error){showToast('❌ '+res.error.message,true);return;}
-  if(_cu&&_cu.username===un){_cu=users[idx];_saveSess(_cu);}
+  if(_cu&&_cu.username===origUn){_cu=users[idx];_saveSess(_cu);window._currentUser=_cu.name||_cu.username;}
   document.getElementById('um-edit-modal').classList.add('hidden');
   await umRefreshList();
   showToast('✅ บันทึกสำเร็จ');
