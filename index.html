@@ -1875,7 +1875,7 @@ thead.sticky {
 <!-- ══════════════════════════════════════════════════════════════
      USER MANAGEMENT MODAL (Admin only)
 ══════════════════════════════════════════════════════════════ -->
-<div id="user-mgmt-modal" class="fixed inset-0 bg-black/70 hidden z-[200] flex items-center justify-center px-4 backdrop-blur-sm">
+<div id="user-mgmt-modal" class="fixed inset-0 bg-black/70 hidden z-[200] flex items-center justify-center px-4 backdrop-blur-sm" style="display:none!important">
   <div class="bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-700 flex flex-col max-h-[90vh]">
     <div class="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center justify-between rounded-t-2xl border-b border-slate-600 flex-shrink-0">
       <h3 class="text-white font-black text-lg flex items-center gap-2"><i class="fas fa-users-cog text-blue-400"></i> จัดการผู้ใช้งาน</h3>
@@ -7122,6 +7122,10 @@ thead.sticky {
       class="px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">
       <i class="fas fa-hard-hat mr-2"></i>พนักงาน WH
     </button>
+    <button id="ua-tab-wms" onclick="uaSwitchTab('wms')"
+      class="px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">
+      <i class="fas fa-shield-alt mr-2"></i>ผู้ใช้งาน WMS
+    </button>
   </div>
 
   <!-- Panel: จัดการคนขับ -->
@@ -7129,6 +7133,37 @@ thead.sticky {
 
   <!-- Panel: พนักงาน WH -->
   <div id="ua-panel-whstaff" class="hidden"></div>
+
+  <!-- Panel: ผู้ใช้งาน WMS -->
+  <div id="ua-panel-wms" class="hidden space-y-4">
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
+      <p class="font-black text-slate-700 flex items-center gap-2"><i class="fas fa-user-plus text-blue-500"></i> เพิ่มผู้ใช้ใหม่</p>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อผู้ใช้ *</label>
+          <input id="um-new-username" type="text" placeholder="Username" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">รหัสผ่าน *</label>
+          <input id="um-new-password" type="text" placeholder="Password" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อ-นามสกุล</label>
+          <input id="um-new-name" type="text" placeholder="ชื่อที่แสดง" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ตำแหน่ง</label>
+          <input id="um-new-role" type="text" placeholder="เช่น พนักงานคลัง" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+        </div>
+      </div>
+      <p class="text-xs font-black text-slate-500 uppercase tracking-wider">สิทธิ์เข้าถึงหน้า:</p>
+      <div id="um-new-perms" class="grid grid-cols-3 gap-1.5 text-xs"></div>
+      <button onclick="umAddUser()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl font-black text-sm transition shadow-sm">
+        <i class="fas fa-plus mr-1"></i> เพิ่มผู้ใช้
+      </button>
+    </div>
+    <div id="um-user-list" class="space-y-2"></div>
+  </div>
 </div><!-- end view-user-accounts-content -->
 
 <!-- MODAL: เพิ่ม/แก้ไข SEMI→FG Mapping -->
@@ -35609,7 +35644,7 @@ function _applySession(){
   if(typeof switchView==='function')switchView(fv);
 }
 
-window.openUserMgmt=function(){if(!_cu||!_cu.isAdmin)return;_renderPermCb('um-new-perms',[]);umRefreshList();document.getElementById('user-mgmt-modal').classList.remove('hidden');};
+window.openUserMgmt=function(){if(!_cu||!_cu.isAdmin)return;switchView('user-accounts');uaSwitchTab('wms');};
 
 function _renderPermCb(id,checked){
   var el=document.getElementById(id);if(!el)return;var h='';
@@ -37120,20 +37155,24 @@ window.loRefreshOrderList = window.loRefreshHistory;
     uaSwitchTab('driver');
   };
 
+  var TAB_COLORS = {
+    driver:  'border-purple-500 text-purple-600 bg-purple-50',
+    whstaff: 'border-emerald-500 text-emerald-600 bg-emerald-50',
+    wms:     'border-blue-500 text-blue-600 bg-blue-50'
+  };
+
   window.uaSwitchTab = function(tab) {
-    ['driver','whstaff'].forEach(function(t) {
+    ['driver','whstaff','wms'].forEach(function(t) {
       var panel = document.getElementById('ua-panel-' + t);
       var btn   = document.getElementById('ua-tab-' + t);
       if (panel) panel.classList.toggle('hidden', t !== tab);
       if (btn) {
         btn.className = t === tab
-          ? 'px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 ' + (t === 'driver' ? 'border-purple-500 text-purple-600 bg-purple-50' : 'border-emerald-500 text-emerald-600 bg-emerald-50') + ' transition'
+          ? 'px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 ' + TAB_COLORS[t] + ' transition'
           : 'px-6 py-2.5 rounded-t-xl text-sm font-black border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition';
       }
     });
-
     if (tab === 'driver' && !_uaLoaded.driver) {
-      // ย้าย logi-panel-driver-users มาใส่ ua-panel-driver
       var src = document.getElementById('logi-panel-driver-users');
       var dst = document.getElementById('ua-panel-driver');
       if (src && dst && !dst.children.length) { dst.appendChild(src); src.classList.remove('hidden'); }
@@ -37141,12 +37180,15 @@ window.loRefreshOrderList = window.loRefreshHistory;
       _uaLoaded.driver = true;
     }
     if (tab === 'whstaff' && !_uaLoaded.whstaff) {
-      // ย้าย logi-panel-wh-staff มาใส่ ua-panel-whstaff
       var src2 = document.getElementById('logi-panel-wh-staff');
       var dst2 = document.getElementById('ua-panel-whstaff');
       if (src2 && dst2 && !dst2.children.length) { dst2.appendChild(src2); src2.classList.remove('hidden'); }
       if (typeof window.whStaffInit === 'function') window.whStaffInit();
       _uaLoaded.whstaff = true;
+    }
+    if (tab === 'wms') {
+      if (typeof window._renderPermCb === 'function') window._renderPermCb('um-new-perms', []);
+      if (typeof window.umRefreshList === 'function') window.umRefreshList();
     }
   };
 })();
