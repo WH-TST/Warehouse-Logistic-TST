@@ -7038,6 +7038,9 @@ thead.sticky {
       <button onclick="mapOpenAdd()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition shadow-sm">
         <i class="fas fa-plus"></i> เพิ่ม Mapping
       </button>
+      <button onclick="mapExport()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm hover:bg-emerald-100 transition">
+        <i class="fas fa-file-excel"></i> Export Excel
+      </button>
       <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 font-bold text-sm hover:bg-sky-100 transition cursor-pointer">
         <i class="fas fa-file-import"></i> Import Excel
         <input type="file" id="map-import-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="mapImport(this)">
@@ -36828,6 +36831,20 @@ window.loRefreshOrderList = window.loRefreshHistory;
     }).join('');
   }
   window.mapRender = mapRender;
+
+  window.mapExport = function() {
+    if (!_mapList.length) { alert('ไม่มีข้อมูลสำหรับ export'); return; }
+    var rows = [['SEMI Item','ชื่อ SEMI','FG Code 1','FG Name 1','FG Code 2','FG Name 2']];
+    _mapList.forEach(function(m) {
+      rows.push([m.semi_item||'', m.semi_name||'', m.fg_code_1||'', m.fg_name_1||'', m.fg_code_2||'', m.fg_name_2||'']);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:16},{wch:30},{wch:16},{wch:30},{wch:16},{wch:30}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'SEMI-FG Mapping');
+    var d = new Date(); var stamp = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    XLSX.writeFile(wb, 'semi_fg_mapping_' + stamp + '.xlsx');
+  };
 
   var _mapEditKey = null; // null = add mode, string = edit mode (semi_item)
 
