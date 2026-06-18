@@ -34587,21 +34587,36 @@ window.viewTripResult = async function(planId) {
   }
 
   function _scEditCell(idx, field){
-    var cur = _scItems[idx] ? (_scItems[idx][field]||0) : 0;
-    var display = cur ? String(cur) : '';
+    var item = _scItems[idx];
+    var num  = item ? (item[field]||0) : 0;
+    var expr = item ? (item[field+'_expr']||'') : '';
+    // แสดง expression ถ้ามี มิฉะนั้นแสดงตัวเลข (ว่างถ้า 0)
+    var display = expr || (num ? String(num) : '');
+    var hasExpr = expr && expr !== String(num);
+    // indicator จุดม่วงถ้าเป็น expression
+    var dot = hasExpr ? '<span style="position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:#7c3aed;pointer-events:none"></span>' : '';
     return '<td contenteditable="true" data-idx="'+idx+'" data-field="'+field+'"'
       + ' onblur="scCellBlur(this)" onkeydown="scCellKey(event,this)"'
-      + ' onfocus="scCellFocus(this)" oninput="scCellInput(this)"'
-      + ' style="padding:0;text-align:center;border-right:1px solid #e2e8f0;height:40px;vertical-align:middle;font-size:15px;font-weight:600;color:#1e293b;cursor:text;outline:none">'
-      + display
+      + ' onfocus="scCellFocus(this)"'
+      + ' style="padding:0;text-align:center;border-right:1px solid #e2e8f0;height:40px;vertical-align:middle;font-size:15px;font-weight:600;color:#1e293b;cursor:text;outline:none;position:relative">'
+      + display + dot
       + '</td>';
+  }
+
+  // ── safe expression evaluator (รองรับ +, -, *, / และ ตัวเลข) ─────
+  function _scEval(expr){
+    var clean = String(expr||'').trim().replace(/[^0-9+\-*\/().]/g,'');
+    if(!clean) return 0;
+    // ป้องกัน eval อันตราย — ตรวจว่ามีแค่ตัวเลขและ operator
+    if(!/^[\d+\-*\/().\s]+$/.test(clean)) return 0;
+    try {
+      var result = Function('"use strict";return('+clean+')')();
+      return (isFinite(result) && result >= 0) ? Math.round(result * 100) / 100 : 0;
+    } catch(e){ return 0; }
   }
 
   function _esc(s){ return String(s||'').replace(/"/g,'&quot;'); }
 
-  window.scSetVal = function(idx, field, val){
-    if(_scItems[idx]) _scItems[idx][field] = Number(val)||0;
-  };
   window.scSetNote = function(idx, val){
     if(_scItems[idx]) _scItems[idx].note = val;
   };
@@ -34611,38 +34626,43 @@ window.viewTripResult = async function(planId) {
     td.style.background = '#f5f3ff';
     td.style.outline = '2px solid #7c3aed';
     td.style.outlineOffset = '-2px';
-    // select all text on focus
+    // แสดง expression เต็มขณะ focus
+    var idx = parseInt(td.dataset.idx), field = td.dataset.field;
+    var item = _scItems[idx];
+    if(item && item[field+'_expr']) td.innerText = item[field+'_expr'];
+    // select all
     var range = document.createRange();
     range.selectNodeContents(td);
     var sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
   };
-  window.scCellInput = function(td){
-    // allow only digits
-    var v = td.innerText.replace(/[^0-9]/g,'');
-    var idx = parseInt(td.dataset.idx);
-    var field = td.dataset.field;
-    if(_scItems[idx]) _scItems[idx][field] = Number(v)||0;
-  };
+
   window.scCellBlur = function(td){
     td.style.background = '';
     td.style.outline = '';
-    var v = td.innerText.replace(/[^0-9]/g,'');
-    var idx = parseInt(td.dataset.idx);
+    var raw   = td.innerText.trim();
+    var idx   = parseInt(td.dataset.idx);
     var field = td.dataset.field;
-    var num = Number(v)||0;
-    if(_scItems[idx]) _scItems[idx][field] = num;
-    td.innerText = num ? String(num) : '';
+    var num   = _scEval(raw);
+    var isExpr = raw && raw !== String(num) && /[+\-*\/()]/.test(raw);
+    if(_scItems[idx]){
+      _scItems[idx][field]          = num;
+      _scItems[idx][field+'_expr']  = isExpr ? raw : '';
+    }
+    // แสดงผล: ถ้ามี expression ให้แสดง expr, ถ้าไม่มีให้แสดงตัวเลข
+    var display = isExpr ? raw : (num ? String(num) : '');
+    td.innerHTML = display + (isExpr
+      ? '<span style="position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:#7c3aed;pointer-events:none"></span>'
+      : '');
   };
+
   window.scCellKey = function(e, td){
-    // allow: digits, backspace, delete, arrows, tab, enter
     if(e.key === 'Enter' || e.key === 'Tab'){
       e.preventDefault();
       td.blur();
-      // move to next editable cell
       var allCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[contenteditable="true"]'));
-      var cur = allCells.indexOf(td);
+      var cur  = allCells.indexOf(td);
       var next = allCells[cur + (e.shiftKey ? -1 : 1)];
       if(next) next.focus();
       return;
@@ -34657,13 +34677,14 @@ window.viewTripResult = async function(planId) {
     }
     if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
       e.preventDefault();
-      var allCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[contenteditable="true"]'));
-      var ci2 = allCells.indexOf(td);
-      var target2 = allCells[ci2 + (e.key==='ArrowRight'?1:-1)];
-      if(target2) target2.focus();
+      var allCells2 = Array.from(document.querySelectorAll('#sc-sheet-tbody td[contenteditable="true"]'));
+      var ci2 = allCells2.indexOf(td);
+      var next2 = allCells2[ci2 + (e.key==='ArrowRight'?1:-1)];
+      if(next2) next2.focus();
       return;
     }
-    if(['0','1','2','3','4','5','6','7','8','9','Backspace','Delete'].includes(e.key)) return;
+    // อนุญาต: ตัวเลข, operator, วงเล็บ, backspace, delete
+    if(/[0-9+\-*\/().]/.test(e.key) || ['Backspace','Delete'].includes(e.key)) return;
     e.preventDefault();
   };
 
@@ -34777,6 +34798,29 @@ window.viewTripResult = async function(planId) {
       var whColor = item.wh==='FG-BP'?'#1d4ed8':'#0f766e';
       var whBg    = item.wh==='FG-BP'?'#dbeafe':'#ccfbf1';
       var bg = rowBg[i % 2];
+
+      // helper: แสดงค่าช่องที่มี expression ด้วย underline + tooltip
+      function _fieldCell(field){
+        if(isEmpty) return '—';
+        var num  = item[field]||0;
+        var expr = item[field+'_expr']||'';
+        var isExpr = expr && expr !== String(num);
+        if(isExpr) return '<span style="cursor:help;color:#7c3aed;font-weight:700;border-bottom:1px dashed #7c3aed" title="'+_esc(expr+' = '+num)+'">'+num+'</span>';
+        return num||0;
+      }
+      // tooltip breakdown สำหรับ "นับได้ (เส้น)"
+      var ppb = item.ppb||1;
+      var tooltip = isEmpty ? '' : [
+        'bundle_1: '+(item.bundle1_expr&&item.bundle1_expr!==String(item.bundle1)?item.bundle1_expr+' = ':'')+item.bundle1+' มัด × '+ppb+' = '+(item.bundle1*ppb),
+        'bundle_2: '+(item.bundle2_expr&&item.bundle2_expr!==String(item.bundle2)?item.bundle2_expr+' = ':'')+item.bundle2+' มัด × '+ppb+' = '+(item.bundle2*ppb),
+        'Pcs.(1): '+(item.pcs1_expr&&item.pcs1_expr!==String(item.pcs1)?item.pcs1_expr+' = ':'')+item.pcs1,
+        'Pcs.(2): '+(item.pcs2_expr&&item.pcs2_expr!==String(item.pcs2)?item.pcs2_expr+' = ':'')+item.pcs2,
+        '──────────────',
+        'รวม = '+counted+' เส้น'
+      ].join('\n');
+      var countedCell = isEmpty ? '—'
+        : '<span style="cursor:help;border-bottom:1px dashed #94a3b8" title="'+_esc(tooltip)+'">'+counted+'</span>';
+
       return '<tr style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
         + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">' + (i+1) + '</td>'
         + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'
@@ -34784,12 +34828,12 @@ window.viewTripResult = async function(planId) {
         + '</td>'
         + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:#334155">'+item.sku+'</td>'
         + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:13px">'+item.name+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.bundle1)+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.bundle2)+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.pcs1)+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.pcs2)+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+(isEmpty?'—':item.holdPcs)+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:700;color:#1e293b">'+(isEmpty?'—':counted)+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('bundle1')+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('bundle2')+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('pcs1')+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('pcs2')+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('holdPcs')+'</td>'
+        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:700;color:#1e293b">'+countedCell+'</td>'
         + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#475569">'+item.systemQty+'</td>'
         + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'+diffHtml+'</td>'
         + '<td style="padding:8px 10px;font-size:12px;color:#64748b">'+_esc(item.note)+'</td>'
