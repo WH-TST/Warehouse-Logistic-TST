@@ -1822,10 +1822,11 @@ thead.sticky {
 
 .kpi-unit { font-size: 1.25rem; opacity: 0.7; margin-left: 0.25rem; }
 
-/* Stock Count — Excel-style number cells (no spinner) */
-#sc-sheet-tbody input[type=number]::-webkit-inner-spin-button,
-#sc-sheet-tbody input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
-#sc-sheet-tbody input[type=number] { -moz-appearance:textfield; appearance:textfield; }
+/* Stock Count — Excel-style contenteditable cells */
+#sc-sheet-tbody td[contenteditable] { caret-color:#7c3aed; user-select:text; }
+#sc-sheet-tbody td[contenteditable]:hover { background:#fafaff; }
+#sc-sheet-tbody tr:hover td[contenteditable] { background:#f5f3ff22; }
+#sc-sheet-table th { white-space:nowrap; }
 </style>
 
 <style>
@@ -7181,21 +7182,33 @@ thead.sticky {
         </button>
       </div>
       <div id="sc-sheet-info" class="hidden mb-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700 font-medium"></div>
-      <!-- Excel-style table: border-collapse, fixed col widths, larger inputs -->
-      <div class="overflow-x-auto" style="border:1px solid #e2e8f0;border-radius:10px">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px">
+      <!-- Excel-style table: contenteditable cells, resizable columns -->
+      <div class="overflow-x-auto" style="border:1px solid #cbd5e1;border-radius:10px">
+        <table id="sc-sheet-table" style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+          <colgroup>
+            <col style="width:38px">
+            <col style="width:68px">
+            <col style="width:128px">
+            <col style="width:200px">
+            <col class="sc-col-resize" style="width:88px">
+            <col class="sc-col-resize" style="width:88px">
+            <col class="sc-col-resize" style="width:88px">
+            <col class="sc-col-resize" style="width:88px">
+            <col class="sc-col-resize" style="width:88px">
+            <col style="width:80px">
+          </colgroup>
           <thead>
-            <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
-              <th style="padding:9px 8px;text-align:center;width:38px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">#</th>
-              <th style="padding:9px 8px;text-align:center;width:72px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">WH</th>
-              <th style="padding:9px 10px;text-align:left;width:130px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Item number</th>
-              <th style="padding:9px 10px;text-align:left;width:220px;max-width:220px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Product name</th>
-              <th style="padding:9px 8px;text-align:center;width:96px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_1</th>
-              <th style="padding:9px 8px;text-align:center;width:96px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">bundle_2</th>
-              <th style="padding:9px 8px;text-align:center;width:96px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(1)</th>
-              <th style="padding:9px 8px;text-align:center;width:96px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Pcs.(2)</th>
-              <th style="padding:9px 8px;text-align:center;width:96px;border-right:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:700">Hold pcs.</th>
-              <th style="padding:9px 10px;text-align:left;width:90px;color:#64748b;font-size:11px;font-weight:700">NOTE</th>
+            <tr style="background:#f1f5f9;border-bottom:2px solid #cbd5e1;user-select:none">
+              <th style="padding:8px 6px;text-align:center;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative">#</th>
+              <th style="padding:8px 6px;text-align:center;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative">WH</th>
+              <th style="padding:8px 8px;text-align:left;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative">Item number</th>
+              <th style="padding:8px 8px;text-align:left;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative">Product name</th>
+              <th style="padding:8px 6px;text-align:center;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative;cursor:col-resize" onmousedown="scColResizeStart(event,4)">bundle_1<span style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent"></span></th>
+              <th style="padding:8px 6px;text-align:center;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative" onmousedown="scColResizeStart(event,5)">bundle_2<span style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent"></span></th>
+              <th style="padding:8px 6px;text-align:center;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative" onmousedown="scColResizeStart(event,6)">Pcs.(1)<span style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent"></span></th>
+              <th style="padding:8px 6px;text-align:center;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative" onmousedown="scColResizeStart(event,7)">Pcs.(2)<span style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent"></span></th>
+              <th style="padding:8px 6px;text-align:center;border-right:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:700;position:relative" onmousedown="scColResizeStart(event,8)">Hold pcs.<span style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent"></span></th>
+              <th style="padding:8px 6px;text-align:center;color:#64748b;font-size:11px;font-weight:700">NOTE</th>
             </tr>
           </thead>
           <tbody id="sc-sheet-tbody">
@@ -34552,25 +34565,26 @@ window.viewTripResult = async function(planId) {
         + '</td>'
         + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:#334155">' + item.sku + '</td>'
         + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:13px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + item.name + '</td>'
-        + _scInputCell(i,'bundle1') + _scInputCell(i,'bundle2')
-        + _scInputCell(i,'pcs1')    + _scInputCell(i,'pcs2')
-        + _scInputCell(i,'holdPcs')
-        + '<td style="padding:6px 10px;border-right:none;text-align:center">'
+        + _scEditCell(i,'bundle1') + _scEditCell(i,'bundle2')
+        + _scEditCell(i,'pcs1')    + _scEditCell(i,'pcs2')
+        + _scEditCell(i,'holdPcs')
+        + '<td style="padding:4px 6px;text-align:center;border-right:none">'
         +   '<button onclick="scOpenNote('+i+')" title="'+(item.note?_esc(item.note):'')+'"'
-        +   ' style="height:38px;padding:0 12px;font-size:12px;border-radius:8px;border:1.5px solid '+(item.note?'#7c3aed':'#e2e8f0')+';background:'+(item.note?'#ede9fe':'#f8fafc')+';color:'+(item.note?'#5b21b6':'#94a3b8')+';cursor:pointer;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis">'
-        +   (item.note ? '📝 '+_esc(item.note).slice(0,12)+(item.note.length>12?'…':'') : '+ เพิ่ม')
+        +   ' style="height:32px;padding:0 10px;font-size:12px;border-radius:6px;border:1px solid '+(item.note?'#7c3aed':'#e2e8f0')+';background:'+(item.note?'#ede9fe':'#f8fafc')+';color:'+(item.note?'#5b21b6':'#94a3b8')+';cursor:pointer;white-space:nowrap;max-width:74px;overflow:hidden;text-overflow:ellipsis">'
+        +   (item.note ? '📝 '+_esc(item.note).slice(0,8)+(item.note.length>8?'…':'') : '+ เพิ่ม')
         +   '</button>'
         + '</td>'
         + '</tr>';
     }).join('');
   }
 
-  function _scInputCell(idx, field){
+  function _scEditCell(idx, field){
     var cur = _scItems[idx] ? (_scItems[idx][field]||0) : 0;
-    return '<td style="padding:5px 6px;text-align:center;border-right:1px solid #f1f5f9">'
-      + '<input type="number" min="0" value="'+cur+'" oninput="scSetVal('+idx+',\''+field+'\',this.value)"'
-      + ' style="width:88px;height:40px;text-align:center;font-size:16px;font-weight:700;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#1e293b;outline:none;transition:border-color 0.15s"'
-      + ' onfocus="this.select();this.style.borderColor=\'#6d28d9\'" onblur="this.style.borderColor=\'#e2e8f0\'">'
+    return '<td contenteditable="true" data-idx="'+idx+'" data-field="'+field+'"'
+      + ' onblur="scCellBlur(this)" onkeydown="scCellKey(event,this)"'
+      + ' onfocus="scCellFocus(this)" oninput="scCellInput(this)"'
+      + ' style="padding:0;text-align:center;border-right:1px solid #e2e8f0;height:40px;vertical-align:middle;font-size:15px;font-weight:600;color:#1e293b;cursor:text;outline:none;min-width:60px">'
+      + (cur||'0')
       + '</td>';
   }
 
@@ -34582,6 +34596,82 @@ window.viewTripResult = async function(planId) {
   window.scSetNote = function(idx, val){
     if(_scItems[idx]) _scItems[idx].note = val;
   };
+
+  // ── contenteditable cell handlers ────────────────────────────────
+  window.scCellFocus = function(td){
+    td.style.background = '#f5f3ff';
+    td.style.outline = '2px solid #7c3aed';
+    td.style.outlineOffset = '-2px';
+    // select all text on focus
+    var range = document.createRange();
+    range.selectNodeContents(td);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+  window.scCellInput = function(td){
+    // allow only digits
+    var v = td.innerText.replace(/[^0-9]/g,'');
+    var idx = parseInt(td.dataset.idx);
+    var field = td.dataset.field;
+    if(_scItems[idx]) _scItems[idx][field] = Number(v)||0;
+  };
+  window.scCellBlur = function(td){
+    td.style.background = '';
+    td.style.outline = '';
+    var v = td.innerText.replace(/[^0-9]/g,'');
+    var idx = parseInt(td.dataset.idx);
+    var field = td.dataset.field;
+    var num = Number(v)||0;
+    if(_scItems[idx]) _scItems[idx][field] = num;
+    td.innerText = num;
+  };
+  window.scCellKey = function(e, td){
+    // allow: digits, backspace, delete, arrows, tab, enter
+    if(e.key === 'Enter' || e.key === 'Tab'){
+      e.preventDefault();
+      td.blur();
+      // move to next editable cell
+      var allCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[contenteditable="true"]'));
+      var cur = allCells.indexOf(td);
+      var next = allCells[cur + (e.shiftKey ? -1 : 1)];
+      if(next) next.focus();
+      return;
+    }
+    if(e.key === 'ArrowUp' || e.key === 'ArrowDown'){
+      e.preventDefault();
+      var colCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[data-field="'+td.dataset.field+'"]'));
+      var ci = colCells.indexOf(td);
+      var target = colCells[ci + (e.key==='ArrowDown'?1:-1)];
+      if(target) target.focus();
+      return;
+    }
+    if(['0','1','2','3','4','5','6','7','8','9','Backspace','Delete','ArrowLeft','ArrowRight'].includes(e.key)) return;
+    e.preventDefault();
+  };
+
+  // ── column resize ────────────────────────────────────────────────
+  var _scResizeState = null;
+  window.scColResizeStart = function(e, colIdx){
+    e.preventDefault();
+    var table = document.getElementById('sc-sheet-table');
+    if(!table) return;
+    var cols = table.querySelectorAll('col');
+    _scResizeState = { colIdx: colIdx, startX: e.clientX, startW: cols[colIdx].offsetWidth || parseInt(cols[colIdx].style.width)||88, cols: cols };
+    document.addEventListener('mousemove', _scResizeMove);
+    document.addEventListener('mouseup',   _scResizeEnd);
+  };
+  function _scResizeMove(e){
+    if(!_scResizeState) return;
+    var dx = e.clientX - _scResizeState.startX;
+    var newW = Math.max(60, _scResizeState.startW + dx);
+    _scResizeState.cols[_scResizeState.colIdx].style.width = newW + 'px';
+  }
+  function _scResizeEnd(){
+    _scResizeState = null;
+    document.removeEventListener('mousemove', _scResizeMove);
+    document.removeEventListener('mouseup',   _scResizeEnd);
+  }
 
   var _scNoteIdx = -1;
   window.scOpenNote = function(idx){
