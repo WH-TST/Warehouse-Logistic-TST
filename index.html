@@ -34919,7 +34919,7 @@ window.viewTripResult = async function(planId) {
         console.log('[Rec] querying stock_count_items...');
         var savedRes = await window._sb
           .from('stock_count_items')
-          .select('sku,warehouse,bundle_1,bundle_2,pcs_1,pcs_2,hold_pcs,note,session_id')
+          .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,session_id')
           .limit(10000);
         console.log('[Rec] items:', savedRes.error||'ok', (savedRes.data||[]).length);
         if(!savedRes.error) savedResData = savedRes.data||[];
@@ -34927,7 +34927,7 @@ window.viewTripResult = async function(planId) {
       // หา record ล่าสุดต่อ sku+wh — เรียงตาม count_date ก่อน ถ้าวันเดียวกันใช้ session_id สูงสุด
       var savedMap = {};
       savedResData.forEach(function(r){
-        var key    = r.sku+'|'+(r.warehouse||r.wh||'');
+        var key    = r.sku;  // ไม่มี warehouse column ใน stock_count_items
         var sessId = r.session_id||0;
         var date   = sessDateMap[sessId]||'';
         var prev   = savedMap[key];
@@ -34936,11 +34936,11 @@ window.viewTripResult = async function(planId) {
           || (date === prev._date && sessId > prev._sessId);
         if(isNewer){
           savedMap[key] = {
-            bundle1:  Number(r.bundle_1)||0,
-            bundle2:  Number(r.bundle_2)||0,
-            pcs1:     Number(r.pcs_1)||0,
-            pcs2:     Number(r.pcs_2)||0,
-            holdPcs:  Number(r.hold_pcs)||0,
+            bundle1:  Number(r.bundle1)||0,
+            bundle2:  Number(r.bundle2)||0,
+            pcs1:     Number(r.scrap1)||0,
+            pcs2:     Number(r.scrap2)||0,
+            holdPcs:  0,
             note:     r.note||'',
             _date:    date,
             _sessId:  sessId
@@ -34954,7 +34954,7 @@ window.viewTripResult = async function(planId) {
 
       _recItems = Object.values(map).map(function(s){
         var mem   = memMap[s.sku+'|'+s.wh] || {};
-        var saved = savedMap[s.sku+'|'+s.wh] || {};
+        var saved = savedMap[s.sku] || {};
         var hasMem = mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs;
         var src = hasMem ? mem : saved;
         return {
@@ -35178,10 +35178,10 @@ window.viewTripResult = async function(planId) {
     // upsert items
     var itemsPayload = _scItems.map(function(item){
       var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
-      return { session_id: sessionId, sku: item.sku, product_name: item.name, warehouse: item.wh,
-        ppb: item.ppb||0, bundle_1: item.bundle1||0, bundle_2: item.bundle2||0,
-        pcs_1: item.pcs1||0, pcs_2: item.pcs2||0, hold_pcs: item.holdPcs||0,
-        counted_qty: counted, system_qty: item.systemQty, diff_qty: counted - item.systemQty,
+      return { session_id: sessionId, sku: item.sku, sku_name: item.name,
+        ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
+        scrap1: item.pcs1||0, scrap2: item.pcs2||0,
+        system_pcs: item.systemQty||0,
         note: item.note||null };
     });
     var iRes = await fetch(
