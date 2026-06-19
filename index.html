@@ -30335,6 +30335,13 @@ window.viewTripResult = async function(planId) {
                && (!diff || rdiff === diff);
       tr.style.display = show ? '' : 'none';
     });
+    // ซ่อน WH section header ถ้าไม่มี item ที่แสดงอยู่ในกลุ่มนั้น
+    document.querySelectorAll('#sc-reconcile-tbody tr[data-wh-header]').forEach(function(hdr){
+      var whVal = hdr.dataset.whHeader;
+      var hasVisible = Array.from(document.querySelectorAll('#sc-reconcile-tbody tr[data-wh="'+whVal+'"]'))
+        .some(function(r){ return r.style.display !== 'none'; });
+      hdr.style.display = hasVisible ? '' : 'none';
+    });
   };
 
   // ── Reconcile table column resize (shares same move/end handlers) ──
@@ -30514,7 +30521,7 @@ window.viewTripResult = async function(planId) {
     var whFilter = (document.getElementById('sc-wh-filter')||{}).value||'';
     tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
     try {
-      var q = window._sb.from('counting').select('item_number,product_name,warehouse,cw_onhand');
+      var q = window._sb.from('counting').select('item_number,product_name,warehouse,cw_onhand').order('id',{ascending:true});
       if(whFilter) q = q.eq('warehouse', whFilter);
       var res = await q;
       if(res.error) throw res.error;
@@ -30523,12 +30530,16 @@ window.viewTripResult = async function(planId) {
 
       // รวม cw_onhand (จำนวนเส้น) ต่อ item_number+warehouse (หลาย batch)
       var map = {};
+      var orderedKeys = [];
       rows.forEach(function(r){
         var key = r.item_number+'|'+(r.warehouse||'');
-        if(!map[key]) map[key] = { sku:r.item_number, name:r.product_name||'', wh:r.warehouse||'', systemQty:0 };
+        if(!map[key]){
+          map[key] = { sku:r.item_number, name:r.product_name||'', wh:r.warehouse||'', systemQty:0 };
+          orderedKeys.push(key);
+        }
         map[key].systemQty += Number(r.cw_onhand)||0;
       });
-      var skus = Object.values(map).map(function(s){ return s.sku; });
+      var skus = orderedKeys.map(function(k){ return map[k].sku; });
 
       // ดึง PPB (ดึงทั้งหมด ไม่ filter ด้วย SKU เพราะ URL จะยาวเกิน)
       var ppbRes = await window._sb.from('products').select('sku,lines_per_bundle');
@@ -30579,7 +30590,7 @@ window.viewTripResult = async function(planId) {
       var memMap = {};
       _scItems.forEach(function(it){ memMap[it.sku+'|'+it.wh] = it; });
 
-      _recItems = Object.values(map).map(function(s){
+      _recItems = orderedKeys.map(function(k){ return map[k]; }).map(function(s){
         var mem   = memMap[s.sku+'|'+s.wh] || {};
         var saved = savedMap[s.sku] || {};
         var hasMem = mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs;
@@ -30622,81 +30633,105 @@ window.viewTripResult = async function(planId) {
     var total=0, okCount=0, diffCount=0, emptyCount=0;
     var rowBg = ['#ffffff','#f8fafc'];
 
-    tbody.innerHTML = _recItems.map(function(item, i){
-      total++;
-      var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
-      var diff     = counted - item.systemQty;
-      var isEmpty  = (item.bundle1===0 && item.bundle2===0 && item.pcs1===0 && item.pcs2===0 && item.holdPcs===0);
-      var rowStyle = '';
-      var diffHtml = '';
-      if(isEmpty){
-        emptyCount++;
-        rowStyle  = 'opacity:0.5';
-        diffHtml  = '<span style="color:#94a3b8">?</span>';
-      } else if(diff===0){
-        okCount++;
-        rowStyle  = 'background:#f0fdf4';
-        diffHtml  = '<span style="color:#15803d;font-weight:700">0</span>';
-      } else {
-        diffCount++;
-        rowStyle  = 'background:#fff1f2';
-        diffHtml  = '<span style="color:#dc2626;font-weight:700">' + (diff>0?'+':'') + diff + '</span>';
-      }
-      var whColor = item.wh==='FG-BP'?'#1d4ed8':'#0f766e';
-      var whBg    = item.wh==='FG-BP'?'#dbeafe':'#ccfbf1';
-      var bg = rowBg[i % 2];
+    // จัดกลุ่มตาม WH รักษาลำดับ import (physical order)
+    var whGroups = {};
+    var whOrder  = [];
+    _recItems.forEach(function(item){
+      if(!whGroups[item.wh]){ whGroups[item.wh] = []; whOrder.push(item.wh); }
+      whGroups[item.wh].push(item);
+    });
+    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309' };
+    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7' };
 
-      // helper: แสดงค่าช่องที่มี expression — คลิกเพื่อดู popup
-      function _fieldCell(field){
-        if(isEmpty) return '—';
-        var num  = item[field]||0;
-        var expr = item[field+'_expr']||'';
-        var isExpr = expr && expr !== String(num);
-        if(isExpr){
-          var tip = _esc(expr+' = '+num);
-          return '<span style="cursor:pointer;color:#7c3aed;font-weight:700;border-bottom:2px dashed #7c3aed" onclick="scShowExprPopup(event,\''+tip+'\')">'+num+'</span>';
+    var seqNum = 0;
+    var html = whOrder.map(function(wh){
+      var items = whGroups[wh];
+      var whColor = _whColorMap[wh]||'#475569';
+      var whBg2   = _whBgMap[wh]||'#f1f5f9';
+      var grpOk=0, grpDiff=0, grpEmpty=0;
+      items.forEach(function(it){
+        var c=(it.bundle1+it.bundle2)*(it.ppb||1)+it.pcs1+it.pcs2;
+        var e=(it.bundle1===0&&it.bundle2===0&&it.pcs1===0&&it.pcs2===0&&it.holdPcs===0);
+        if(e) grpEmpty++; else if(c===it.systemQty) grpOk++; else grpDiff++;
+      });
+      var headerRow = '<tr data-wh-header="'+wh+'" style="background:'+whBg2+';border-top:2px solid '+whColor+';border-bottom:1px solid #e2e8f0">'
+        + '<td colspan="14" style="padding:8px 14px;font-weight:900;font-size:12px;color:'+whColor+';letter-spacing:0.04em">'
+        + '<span style="background:'+whColor+';color:#fff;padding:2px 10px;border-radius:6px;font-size:11px;margin-right:10px">'+wh+'</span>'
+        + items.length+' รายการ'
+        + ' &nbsp;·&nbsp; <span style="color:#15803d">✓ '+grpOk+'</span>'
+        + (grpDiff?' &nbsp;·&nbsp; <span style="color:#dc2626">✗ '+grpDiff+'</span>':'')
+        + (grpEmpty?' &nbsp;·&nbsp; <span style="color:#94a3b8">? '+grpEmpty+'</span>':'')
+        + '</td></tr>';
+
+      var rowsHtml = items.map(function(item){
+        seqNum++;
+        total++;
+        var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
+        var diff     = counted - item.systemQty;
+        var isEmpty  = (item.bundle1===0 && item.bundle2===0 && item.pcs1===0 && item.pcs2===0 && item.holdPcs===0);
+        var rowStyle = '';
+        var diffHtml = '';
+        if(isEmpty){
+          emptyCount++;
+          rowStyle  = 'opacity:0.5';
+          diffHtml  = '<span style="color:#94a3b8">?</span>';
+        } else if(diff===0){
+          okCount++;
+          rowStyle  = 'background:#f0fdf4';
+          diffHtml  = '<span style="color:#15803d;font-weight:700">0</span>';
+        } else {
+          diffCount++;
+          rowStyle  = 'background:#fff1f2';
+          diffHtml  = '<span style="color:#dc2626;font-weight:700">' + (diff>0?'+':'') + diff + '</span>';
         }
-        return num||0;
-      }
-      // popup breakdown สำหรับ "นับได้ (เส้น)"
-      var ppb = item.ppb||1;
-      function _exprPart(field, label){
-        var num  = item[field]||0;
-        var expr = item[field+'_expr']||'';
-        var isExpr = expr && expr !== String(num);
-        return isExpr ? label+': <b>'+_esc(expr)+'</b> = '+num : label+': '+num;
-      }
-      var tooltipHtml = isEmpty ? '' : _esc(
-        'bundle_1: '+(item.bundle1_expr&&item.bundle1_expr!==String(item.bundle1)?item.bundle1_expr+' = ':'')+item.bundle1+' มัด × '+ppb+' = '+(item.bundle1*ppb)+'&#10;'
-        +'bundle_2: '+(item.bundle2_expr&&item.bundle2_expr!==String(item.bundle2)?item.bundle2_expr+' = ':'')+item.bundle2+' มัด × '+ppb+' = '+(item.bundle2*ppb)+'&#10;'
-        +'Pcs.(1): '+(item.pcs1_expr&&item.pcs1_expr!==String(item.pcs1)?item.pcs1_expr+' = ':'')+item.pcs1+'&#10;'
-        +'Pcs.(2): '+(item.pcs2_expr&&item.pcs2_expr!==String(item.pcs2)?item.pcs2_expr+' = ':'')+item.pcs2+'&#10;'
-        +'─────────────&#10;'
-        +'รวม = '+counted+' เส้น'
-      );
-      var countedCell = isEmpty ? '—'
-        : '<span style="cursor:pointer;border-bottom:2px dashed #94a3b8;font-weight:700" onclick="scShowExprPopup(event,\''+tooltipHtml+'\')">'+counted+'</span>';
+        var bg = rowBg[seqNum % 2];
 
-      var diffTag = isEmpty ? 'empty' : (diff===0 ? 'ok' : 'diff');
-      return '<tr data-rec-row="1" data-wh="'+item.wh+'" data-sku="'+_esc(item.sku)+'" data-name="'+_esc(item.name)+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">' + (i+1) + '</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'
-        +   '<span style="background:'+whBg+';color:'+whColor+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">'+item.wh+'</span>'
-        + '</td>'
-        + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:#334155">'+item.sku+'</td>'
-        + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:13px">'+item.name+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('bundle1')+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('bundle2')+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('pcs1')+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('pcs2')+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('holdPcs')+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:700;color:#1e293b">'+countedCell+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#475569">'+item.systemQty+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'+diffHtml+'</td>'
-        + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-size:11px;color:#64748b">'+(item.count_date||'<span style="color:#cbd5e1">—</span>')+'</td>'
-        + '<td style="padding:8px 10px;font-size:12px;color:#64748b">'+_esc(item.note)+'</td>'
-        + '</tr>';
+        function _fieldCell(field){
+          if(isEmpty) return '\u2014';
+          var num  = item[field]||0;
+          var expr = item[field+'_expr']||'';
+          var isExpr = expr && expr !== String(num);
+          if(isExpr){
+            var tip = _esc(expr+' = '+num);
+            return '<span style="cursor:pointer;color:#7c3aed;font-weight:700;border-bottom:2px dashed #7c3aed" onclick="scShowExprPopup(event,\''+tip+'\')">'+num+'</span>';
+          }
+          return num||0;
+        }
+        var ppb = item.ppb||1;
+        var tooltipHtml = isEmpty ? '' : _esc(
+          'bundle_1: '+(item.bundle1_expr&&item.bundle1_expr!==String(item.bundle1)?item.bundle1_expr+' = ':'')+item.bundle1+' มัด × '+ppb+' = '+(item.bundle1*ppb)+'&#10;'
+          +'bundle_2: '+(item.bundle2_expr&&item.bundle2_expr!==String(item.bundle2)?item.bundle2_expr+' = ':'')+item.bundle2+' มัด × '+ppb+' = '+(item.bundle2*ppb)+'&#10;'
+          +'Pcs.(1): '+(item.pcs1_expr&&item.pcs1_expr!==String(item.pcs1)?item.pcs1_expr+' = ':'')+item.pcs1+'&#10;'
+          +'Pcs.(2): '+(item.pcs2_expr&&item.pcs2_expr!==String(item.pcs2)?item.pcs2_expr+' = ':'')+item.pcs2+'&#10;'
+          +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500&#10;'
+          +'รวม = '+counted+' เส้น'
+        );
+        var countedCell = isEmpty ? '\u2014'
+          : '<span style="cursor:pointer;border-bottom:2px dashed #94a3b8;font-weight:700" onclick="scShowExprPopup(event,\''+tooltipHtml+'\')">'+counted+'</span>';
+
+        var diffTag = isEmpty ? 'empty' : (diff===0 ? 'ok' : 'diff');
+        return '<tr data-rec-row="1" data-wh="'+item.wh+'" data-sku="'+_esc(item.sku)+'" data-name="'+_esc(item.name)+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">' + seqNum + '</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'
+          +   '<span style="background:'+whBg2+';color:'+whColor+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">'+item.wh+'</span>'
+          + '</td>'
+          + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;font-family:monospace;font-size:12px;color:#334155">'+item.sku+'</td>'
+          + '<td style="padding:8px 10px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:13px">'+item.name+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('bundle1')+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('bundle2')+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('pcs1')+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('pcs2')+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:600">'+_fieldCell('holdPcs')+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-weight:700;color:#1e293b">'+countedCell+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#475569">'+item.systemQty+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'+diffHtml+'</td>'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-size:11px;color:#64748b">'+(item.count_date||'<span style="color:#cbd5e1">\u2014</span>')+'</td>'
+          + '<td style="padding:8px 10px;font-size:12px;color:#64748b">'+_esc(item.note)+'</td>'
+          + '</tr>';
+      }).join('');
+      return headerRow + rowsHtml;
     }).join('');
+    tbody.innerHTML = html;
 
     // summary cards
     sumDiv.classList.remove('hidden');
