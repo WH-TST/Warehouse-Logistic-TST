@@ -215,7 +215,8 @@ function doGet(e) {
           'getTagSystemStartDate','setTagSystemStartDate',
           'getDeliveryTypeData',
           'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
-          'syncProductionPlan'
+          'syncProductionPlan',
+          'syncProductionBlock'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -8444,6 +8445,104 @@ function syncProductionPlan() {
         'Authorization': 'Bearer ' + SB_KEY,
         'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates'
+      },
+      payload: JSON.stringify(payload)
+    });
+    synced.push(monthKey);
+  });
+
+  return { success: true, message: 'Synced: ' + synced.join(', '), months: synced.length };
+}
+
+// ── Sync Production Block จาก Google Sheet → Supabase production_block_cache ──
+function syncProductionBlock() {
+  // อ่าน config จาก Supabase
+  var cfgRes = UrlFetchApp.fetch(
+    SB_URL + '/rest/v1/app_config?key=in.(production_block_spreadsheet_id,production_block_sheet_name)&select=key,value',
+    { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
+  );
+  var cfgRows = JSON.parse(cfgRes.getContentText());
+  var cfgMap = {};
+  cfgRows.forEach(function(r){ cfgMap[r.key] = r.value; });
+
+  var spreadsheetId = cfgMap['production_block_spreadsheet_id'] || '';
+  var sheetName     = cfgMap['production_block_sheet_name'] || '';
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี production_block_spreadsheet_id' };
+  if (!sheetName)     return { success: false, message: 'ไม่มี production_block_sheet_name' };
+
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(sheetName);
+  if (!sheet) return { success: false, message: 'ไม่พบ Sheet: ' + sheetName };
+
+  var data  = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: false, message: 'Sheet ว่างเปล่า' };
+
+  // Row 0 = header: col 0=machine, col 1=SKU, col 5=label, col 6+ = dates (Excel serial or Date)
+  var headerRow = data[0];
+  var MACHINES  = { 'C5':1,'P1':1,'P2':1,'P3':1,'P4':1 };
+  var SKIP_LABELS = { 'PD Time (HR)':1,'PM, Setup Roll (HR)':1,'Other Downtime (HR)':1,'Plan/Day':1 };
+
+  // Map column index → YYYY-MM-DD
+  var dateCols = {};
+  for (var c = 6; c < headerRow.length; c++) {
+    var hv = headerRow[c];
+    if (!hv) continue;
+    var dateStr = '';
+    if (hv instanceof Date) {
+      dateStr = Utilities.formatDate(hv, 'GMT+7', 'yyyy-MM-dd');
+    } else {
+      var serial = parseFloat(hv);
+      if (!isNaN(serial) && serial > 40000) {
+        // Excel serial → Date (days since 1899-12-30)
+        var d = new Date((serial - 25569) * 86400000);
+        dateStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+      }
+    }
+    if (dateStr) dateCols[c] = dateStr;
+  }
+
+  // Parse rows: group by month_key → machine → sku → daily lines
+  var months = {};
+  for (var r = 1; r < data.length; r++) {
+    var row     = data[r];
+    var machine = String(row[0] || '').trim().toUpperCase();
+    var sku     = String(row[1] || '').trim();
+    var label   = String(row[5] || '').trim();
+
+    if (!MACHINES[machine] || !sku || SKIP_LABELS[label]) continue;
+
+    Object.keys(dateCols).forEach(function(c) {
+      var cellVal = row[parseInt(c)];
+      var lines   = parseFloat(cellVal);
+      if (isNaN(lines) || lines <= 0) return; // skip empty, PM, CM, zero
+
+      var dateStr  = dateCols[c];
+      var monthKey = dateStr.slice(0, 7);
+
+      if (!months[monthKey]) months[monthKey] = {};
+      if (!months[monthKey][machine]) months[monthKey][machine] = {};
+      if (!months[monthKey][machine][sku]) months[monthKey][machine][sku] = {};
+      months[monthKey][machine][sku][dateStr] = (months[monthKey][machine][sku][dateStr] || 0) + lines;
+    });
+  }
+
+  // Upsert each month_key to production_block_cache
+  var synced = [];
+  Object.keys(months).forEach(function(monthKey) {
+    var machines = Object.keys(months[monthKey]).map(function(machineId) {
+      var skus = months[monthKey][machineId];
+      return {
+        machineId: machineId,
+        products: Object.keys(skus).map(function(sku) {
+          return { sku: sku, daily: skus[sku] };
+        })
+      };
+    });
+    var payload = [{ month_key: monthKey, data: { machines: machines }, updated_at: new Date().toISOString() }];
+    UrlFetchApp.fetch(SB_URL + '/rest/v1/production_block_cache', {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+        'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates'
       },
       payload: JSON.stringify(payload)
     });
