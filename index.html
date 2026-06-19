@@ -8471,7 +8471,6 @@ const _safeStorage = {
         var cards = safeGet('wmc-cards');
         if (!cards) return;
 
-        // Build date list: today + 3 days forward
         function addDays(s, n) {
           var d = new Date(s+'T00:00:00'); d.setDate(d.getDate()+n);
           return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -8484,8 +8483,7 @@ const _safeStorage = {
 
         var dates = [dateStr, addDays(dateStr,1), addDays(dateStr,2), addDays(dateStr,3)];
 
-        // Extract production by zone+date from planData
-        // planData.machines[].machineId, .products[].sku, .products[].daily[date] = lines
+        // Get plan items for a zone on a date: [{sku, lines}]
         function getDailyPlan(zone, date) {
           if (!planData || !planData.machines) return [];
           var result = [];
@@ -8499,88 +8497,123 @@ const _safeStorage = {
           return result;
         }
 
+        // Calculate ฐานที่ต้องใช้ for a list of plan items
+        // Returns [{sku, bundles, layers, slotsNeeded}]
+        function calcSlotNeeds(planItems) {
+          return planItems.map(function(r) {
+            var p = prodMap[r.sku] || {};
+            var lpb = p.lines_per_bundle || 1;
+            var bh = p.bundle_height || 0;
+            var bundles = Math.ceil(r.lines / lpb);
+            var layers = bh > 0 ? Math.floor(420 / (bh + 5.08)) : 0;
+            var slotsNeeded = (layers > 0) ? Math.ceil(bundles / layers) : 0;
+            return { sku: r.sku, lines: r.lines, bundles: bundles, bh: bh, layers: layers, slotsNeeded: slotsNeeded };
+          });
+        }
+
         var html = '';
         WMC_ZONES.forEach(function(zone) {
           var emptySlots = logMap[zone] !== undefined ? logMap[zone] : 0;
 
-          // Get all SKUs produced in this zone across the 4 dates to find bundle_height
-          var allSkus = {};
-          dates.forEach(function(d) {
-            getDailyPlan(zone, d).forEach(function(r) { allSkus[r.sku] = true; });
-          });
+          // Today's detail breakdown
+          var todayPlan = getDailyPlan(zone, dateStr);
+          var todayItems = calcSlotNeeds(todayPlan);
+          var todayTotalSlots = todayItems.reduce(function(s,r){ return s+r.slotsNeeded; }, 0);
 
-          // Pick representative bundle_height (first SKU with valid height)
-          var bh = 0, repSku = '';
-          Object.keys(allSkus).forEach(function(sku) {
-            if (!bh && prodMap[sku] && prodMap[sku].bundle_height > 0) {
-              bh = prodMap[sku].bundle_height;
-              repSku = sku;
-            }
-          });
-
-          // Calculate layers: floor(420 / (bundle_height + 5.08)) where 5.08 = 2 inches
-          var layers = bh > 0 ? Math.floor(420 / (bh + 5.08)) : 0;
-          var totalCapBundles = emptySlots * layers;
-
-          // Build day-by-day forecast
-          var dayRows = '';
-          var cumBundles = 0;
-          var fullDay = '';
-          dates.forEach(function(d, i) {
-            var plan = getDailyPlan(zone, d);
-            var dayBundles = 0;
-            plan.forEach(function(r) {
-              var lpb = (prodMap[r.sku] && prodMap[r.sku].lines_per_bundle) ? prodMap[r.sku].lines_per_bundle : 1;
-              dayBundles += Math.ceil(r.lines / lpb);
-            });
-            cumBundles += dayBundles;
-            var remaining = totalCapBundles - cumBundles;
-            var isFull = remaining <= 0 && !fullDay;
-            if (isFull) fullDay = d;
-            var label = i===0 ? 'วันนี้' : i===1 ? 'พรุ่งนี้' : '+'+i+' วัน';
-            var rowColor = isFull ? '#fef2f2' : remaining < totalCapBundles*0.2 ? '#fffbeb' : '#f0fdf4';
-            var textColor = isFull ? '#dc2626' : remaining < totalCapBundles*0.2 ? '#b45309' : '#15803d';
-            dayRows += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-radius:8px;margin-bottom:4px;background:'+rowColor+';">'
-              +'<span style="font-size:11px;font-weight:700;color:#475569;">'+label+' ('+fmtThai(d)+')</span>'
-              +'<span style="font-size:11px;font-weight:800;color:'+textColor+';">'+(dayBundles>0?'+'+dayBundles+' มัด':'-')+'</span>'
-              +'<span style="font-size:11px;font-weight:800;color:'+textColor+';">เหลือ '+(remaining>=0?remaining:0)+' มัด</span>'
+          // Build SKU breakdown rows for today
+          var skuRows = '';
+          todayItems.forEach(function(r) {
+            skuRows += '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #f1f5f9;">'
+              +'<span style="font-size:11px;font-weight:700;color:#334155;flex:1;">'+r.sku+'</span>'
+              +'<span style="font-size:10px;color:#64748b;margin-right:8px;">'+r.bundles+' มัด ('+r.bh+'cm → '+r.layers+' ชั้น)</span>'
+              +'<span style="font-size:12px;font-weight:900;color:#1d4ed8;">'+r.slotsNeeded+' ฐาน</span>'
               +'</div>';
           });
 
-          var pctUsed = totalCapBundles > 0 ? Math.min(100, Math.round(cumBundles/totalCapBundles*100)) : 0;
-          var barColor = pctUsed>=100 ? '#ef4444' : pctUsed>=70 ? '#f59e0b' : '#10b981';
-          var headerColor = pctUsed>=100 ? '#fee2e2' : pctUsed>=70 ? '#fef3c7' : '#f0fdf4';
-          var forecastMsg = fullDay
-            ? '<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:#fee2e2;color:#dc2626;font-size:11px;font-weight:800;">⚠️ พื้นที่เต็มวันที่ '+fmtThai(fullDay)+'</div>'
-            : totalCapBundles > 0
-              ? '<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:#f0fdf4;color:#15803d;font-size:11px;font-weight:800;">✓ พื้นที่พอใน 4 วันข้างหน้า</div>'
-              : '<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:700;">ไม่มีแผนผลิต</div>';
+          // Forecast: cumulative slots used over 4 days
+          var dayRows = '';
+          var cumSlots = 0;
+          var fullDay = '';
+          dates.forEach(function(d, i) {
+            var plan = getDailyPlan(zone, d);
+            var items = calcSlotNeeds(plan);
+            var daySlots = items.reduce(function(s,r){ return s+r.slotsNeeded; }, 0);
+            cumSlots += daySlots;
+            var remaining = emptySlots - cumSlots;
+            var isFull = remaining < 0 && !fullDay;
+            if (isFull) fullDay = d;
+            var label = i===0 ? 'วันนี้' : i===1 ? 'พรุ่งนี้' : i===2 ? 'มะรืน' : '+3 วัน';
+            var rowBg = remaining < 0 ? '#fef2f2' : remaining === 0 ? '#fffbeb' : remaining < emptySlots*0.3 ? '#fffbeb' : '#f8fafc';
+            var slotsColor = remaining < 0 ? '#dc2626' : remaining < emptySlots*0.3 ? '#b45309' : '#15803d';
+            dayRows += '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;margin-bottom:4px;background:'+rowBg+';">'
+              +'<span style="font-size:11px;font-weight:700;color:#64748b;width:72px;">'+label+'</span>'
+              +'<span style="font-size:10px;color:#94a3b8;">('+fmtThai(d)+')</span>'
+              +'<span style="flex:1;"></span>'
+              +'<span style="font-size:11px;color:#475569;">ใช้ +'+daySlots+' ฐาน</span>'
+              +'<span style="font-size:12px;font-weight:900;color:'+slotsColor+';min-width:56px;text-align:right;">'
+              +(remaining>=0?'เหลือ '+remaining:'ขาด '+Math.abs(remaining))+' ฐาน'
+              +'</span>'
+              +'</div>';
+          });
 
-          html += '<div class="bg-white rounded-2xl shadow-sm overflow-hidden" style="border:1.5px solid '+barColor+'22;">'
+          // Status color
+          var remainAfter4 = emptySlots - cumSlots;
+          var headerBg, borderColor, statusMsg;
+          if (fullDay || emptySlots - todayTotalSlots < 0) {
+            headerBg='#fef2f2'; borderColor='#ef4444';
+            statusMsg='<div style="padding:7px 10px;border-radius:8px;background:#fee2e2;color:#dc2626;font-size:11px;font-weight:800;">⚠️ พื้นที่ไม่พอ'+(fullDay?' — เต็มวันที่ '+fmtThai(fullDay):'วันนี้')+'</div>';
+          } else if (remainAfter4 < emptySlots*0.3) {
+            headerBg='#fffbeb'; borderColor='#f59e0b';
+            statusMsg='<div style="padding:7px 10px;border-radius:8px;background:#fef3c7;color:#b45309;font-size:11px;font-weight:800;">⚡ พื้นที่เหลือน้อย ใน 4 วัน</div>';
+          } else if (todayTotalSlots === 0) {
+            headerBg='#f8fafc'; borderColor='#e2e8f0';
+            statusMsg='<div style="padding:7px 10px;border-radius:8px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:700;">— ไม่มีแผนผลิต</div>';
+          } else {
+            headerBg='#f0fdf4'; borderColor='#10b981';
+            statusMsg='<div style="padding:7px 10px;border-radius:8px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:800;">✓ พื้นที่พอใน 4 วัน</div>';
+          }
+
+          // Progress bar: slots used today / empty slots
+          var pct = emptySlots > 0 ? Math.min(100, Math.round(todayTotalSlots/emptySlots*100)) : 0;
+          var barColor = pct>=100?'#ef4444':pct>=70?'#f59e0b':'#10b981';
+
+          html += '<div class="bg-white rounded-2xl shadow-sm overflow-hidden" style="border:1.5px solid '+borderColor+'40;">'
             // header
-            +'<div style="background:'+headerColor+';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">'
-            +'<span style="font-size:20px;font-weight:900;color:#0f172a;">'+zone+'</span>'
-            +(bh>0?'<span style="font-size:10px;color:#64748b;">สูง '+bh+' cm → '+layers+' ชั้น</span>':''
-            +'<span style="font-size:10px;color:#94a3b8;">ไม่มีข้อมูลความสูงมัด</span>')
+            +'<div style="background:'+headerBg+';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">'
+            +'<span style="font-size:22px;font-weight:900;color:#0f172a;letter-spacing:-.5px;">'+zone+'</span>'
+            +'<div style="text-align:right;">'
+            +'<div style="font-size:11px;font-weight:700;color:#475569;">ฐานว่างทั้งหมด</div>'
+            +'<div style="font-size:18px;font-weight:900;color:#0f172a;" id="wmc-disp-'+zone+'">'+emptySlots+' ฐาน</div>'
             +'</div>'
-            // input
+            +'</div>'
+            // input + today summary
             +'<div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">'
-            +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px;">ฐานว่าง (ฐาน)</div>'
-            +'<div style="display:flex;align-items:center;gap:8px;">'
-            +'<input id="wmc-inp-'+zone+'" type="number" min="0" value="'+emptySlots+'" oninput="wmCapUpdateCard(\''+zone+'\')" '
-            +'style="width:80px;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-size:18px;font-weight:900;color:#0f172a;text-align:center;outline:none;">'
-            +'<div style="flex:1;">'
-            +(totalCapBundles>0?'<div style="font-size:12px;color:#475569;">= <strong>'+totalCapBundles+'</strong> มัด ('+emptySlots+' ฐาน × '+layers+' ชั้น)</div>':
-              bh===0?'<div style="font-size:11px;color:#94a3b8;">กรอกความสูงมัดในหน้า Products ก่อน</div>':
-              '<div style="font-size:12px;color:#94a3b8;">กรอกจำนวนฐานว่าง</div>')
-            +'</div></div>'
-            // progress bar
-            +(totalCapBundles>0?'<div style="margin-top:8px;height:4px;background:#f1f5f9;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+pctUsed+'%;background:'+barColor+';border-radius:4px;transition:width .4s;"></div></div>':'')
+            +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
+            +'<div>'
+            +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px;">กรอกฐานว่าง</div>'
+            +'<input id="wmc-inp-'+zone+'" type="number" min="0" value="'+emptySlots+'" '
+            +'style="width:72px;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 10px;font-size:20px;font-weight:900;color:#0f172a;text-align:center;outline:none;box-sizing:border-box;">'
             +'</div>'
-            // forecast rows
+            +'<div style="flex:1;padding:8px 10px;background:#f8fafc;border-radius:10px;">'
+            +'<div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:4px;">ต้องใช้วันนี้</div>'
+            +'<div style="font-size:20px;font-weight:900;color:'+(todayTotalSlots>emptySlots?'#dc2626':'#0f172a')+';">'+todayTotalSlots+' ฐาน</div>'
+            +(emptySlots>0?'<div style="font-size:10px;color:'+(todayTotalSlots>emptySlots?'#dc2626':'#64748b')+';">'
+              +(todayTotalSlots>emptySlots?'ขาด '+(todayTotalSlots-emptySlots)+' ฐาน':'เหลือ '+(emptySlots-todayTotalSlots)+' ฐาน')
+              +'</div>':'')
+            +'</div>'
+            +'</div>'
+            // progress bar
+            +(emptySlots>0?'<div style="height:5px;background:#f1f5f9;border-radius:4px;overflow:hidden;margin-bottom:10px;">'
+              +'<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:4px;"></div></div>':'')
+            // SKU breakdown today
+            +(skuRows?'<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px;">รายละเอียด SKU วันนี้</div>'+skuRows
+              :'<div style="font-size:11px;color:#94a3b8;padding:6px 0;">ไม่มีแผนผลิตวันนี้</div>')
+            +'</div>'
+            // 4-day forecast
             +'<div style="padding:12px 16px;">'
-            +(dayRows||'<div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px;">ไม่มีแผนผลิต</div>')
-            +forecastMsg
+            +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:8px;">Forecast 4 วัน (สะสม)</div>'
+            +dayRows
+            +statusMsg
             +'</div>'
             +'</div>';
         });
@@ -8588,10 +8621,7 @@ const _safeStorage = {
         cards.innerHTML = html || '<div class="col-span-full py-8 text-center text-slate-400">ไม่มีข้อมูล</div>';
       };
 
-      window.wmCapUpdateCard = function(zone) {
-        // Re-calculate single card on input change (lightweight: just update display text)
-        // Full re-render on save; for now just show updated capacity count
-      };
+      window.wmCapUpdateCard = function() { /* input changes saved on บันทึก button */ };
 
       // ── Zone Grid ─────────────────────────────────────────────────
       window.wmmRefreshZones = function() {
