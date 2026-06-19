@@ -298,9 +298,6 @@ function doGet(e) {
 /**
  * ✅ NEW: Include HTML files
  */
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
 
 /**
  * ⚡ Cache Helper — ใช้ CacheService เพื่อลดการอ่าน Sheet ซ้ำ
@@ -1416,67 +1413,6 @@ function getDeliveryTypeData(startDate, endDate) {
 }
 
 // ── Debug: เช็คชื่อลูกค้าระหว่าง Logistic_Plan กับ Transection ต่อวัน ──
-function getDeliveryNameDebug(dateStr) {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const targetDate = dateStr; // 'yyyy-MM-dd'
-
-    // ดึงชื่อร้านค้าจาก Logistic_Plan (status=success)
-    const logiNames = [];
-    const logiSheet = ss.getSheetByName('Logistic_Plan');
-    if (logiSheet && logiSheet.getLastRow() >= 2) {
-      const logiData = logiSheet.getDataRange().getValues();
-      for (let i = 1; i < logiData.length; i++) {
-        const d = parseDateValue(logiData[i][1]);
-        if (!d) continue;
-        const dStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
-        if (dStr !== targetDate) continue;
-        const status = String(logiData[i][11] || '').trim().toLowerCase();
-        const shopName = String(logiData[i][6] || '').trim();
-        logiNames.push({ shopName: shopName, status: status });
-      }
-    }
-
-    // ดึงชื่อลูกค้าจาก Transection (Sales order เท่านั้น)
-    const transNames = [];
-    const transSheet = ss.getSheetByName('Transection');
-    if (transSheet && transSheet.getLastRow() >= 2) {
-      const transData = transSheet.getDataRange().getValues();
-      for (let i = 1; i < transData.length; i++) {
-        const d = parseDateValue(transData[i][8]); // col I = Physical date
-        if (!d) continue;
-        const dStr = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
-        if (dStr !== targetDate) continue;
-        const type = String(transData[i][3] || '').trim();
-        if (type !== 'Sales order') continue;
-        const custName = String(transData[i][7] || '').trim();
-        const weight = Math.abs(parseFloat(transData[i][6]) || 0);
-        if (!transNames.find(x => x.custName === custName)) {
-          transNames.push({ custName: custName, totalWeight: weight });
-        } else {
-          transNames.find(x => x.custName === custName).totalWeight += weight;
-        }
-      }
-    }
-
-    // เทียบว่า match กันไหม
-    const successLogiNames = logiNames.filter(x => x.status === 'success').map(x => x.shopName.toLowerCase());
-    const matchResult = transNames.map(t => ({
-      custName: t.custName,
-      totalWeight: t.totalWeight,
-      matched: successLogiNames.indexOf(t.custName.toLowerCase()) >= 0
-    }));
-
-    return {
-      success: true,
-      date: targetDate,
-      logiPlanNames: logiNames,
-      transactionCustomers: matchResult
-    };
-  } catch (e) {
-    return { success: false, message: e.toString() };
-  }
-}
 /**
  * ✅ ฟังก์ชันใหม่: ดึงสินค้า 20 อันดับแรกที่มีน้ำหนักสุทธิคงเหลือมากที่สุด
  * เพื่อนำไปแสดงในตารางสินค้าเร่งระบาย
@@ -2280,30 +2216,6 @@ function getSpaceAnalysisData() {
  * 🆕 ฟังก์ชันสำหรับตั้งเวลาบันทึก Inventory blocking อัตโนมัติทุกวัน 11:00 น.
  * เรียกใช้ครั้งเดียวเพื่อติดตั้ง Trigger
  */
-function setupDailyInventoryBlockingLog() {
-  try {
-    // ลบ Trigger เก่าที่มีชื่อเดียวกัน (ถ้ามี)
-    const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'recordInventoryBlockingDaily') {
-        ScriptApp.deleteTrigger(trigger);
-      }
-    });
-
-    // สร้าง Trigger ใหม่: ทำงานทุกวันเวลา 11:00-12:00 น.
-    ScriptApp.newTrigger('recordInventoryBlockingDaily')
-      .timeBased()
-      .atHour(11)
-      .everyDays(1)
-      .create();
-
-    Logger.log('✅ ติดตั้ง Trigger สำเร็จ: บันทึก Inventory blocking อัตโนมัติทุกวัน 11:00 น.');
-    return { success: true, message: 'ติดตั้ง Trigger สำเร็จ' };
-  } catch (e) {
-    Logger.log('❌ setupDailyInventoryBlockingLog error: ' + e.message);
-    return { success: false, message: e.toString() };
-  }
-}
 /**
  * 🆕 ฟังก์ชันบันทึกข้อมูล Inventory blocking อัตโนมัติ (เวอร์ชันคำนวณน้ำหนักตามมาตรฐานสินค้า)
  */
@@ -2410,9 +2322,6 @@ function recordInventoryBlockingDaily() {
 /**
  * 🆕 ฟังก์ชันบันทึกด้วยตนเอง (Manual Trigger) - เรียกจากหน้าเว็บได้
  */
-function manualRecordInventoryBlocking() {
-  return recordInventoryBlockingDaily();
-}
 
 /**
  * 🆕 ดึงข้อมูล Log ย้อนหลัง สำหรับแสดงผลในหน้าเว็บ
@@ -2454,27 +2363,6 @@ function getInventoryBlockingLog(limit = 30) {
 /**
  * 🆕 ลบ Trigger (ใช้เมื่อต้องการยกเลิกการบันทึกอัตโนมัติ)
  */
-function removeDailyInventoryBlockingTrigger() {
-  try {
-    const triggers = ScriptApp.getProjectTriggers();
-    let removed = 0;
-
-    triggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'recordInventoryBlockingDaily') {
-        ScriptApp.deleteTrigger(trigger);
-        removed++;
-      }
-    });
-
-    return {
-      success: true,
-      message: `ลบ Trigger สำเร็จ (${removed} รายการ)`
-    };
-  } catch (e) {
-    Logger.log('❌ removeDailyInventoryBlockingTrigger error: ' + e.message);
-    return { success: false, message: e.toString() };
-  }
-}
 /**
  * ✅ แก้ไขฟังก์ชันดึงข้อมูลแนวโน้ม Inventory Blocking (เน้นความถูกต้องของจำนวนเส้น)
  */
@@ -6310,65 +6198,6 @@ function saveDriverActivityRows(rows) {
 // แล้ว insert เข้า Supabase ตาราง driver_activity_log ทีละ 500 แถว
 // รันจาก Apps Script editor ครั้งเดียว ไม่ต้อง deploy
 // ════════════════════════════════════════════════════════════════════════
-function migrateDriverActivityLogToSupabase() {
-  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(DRIVER_ACTIVITY_SHEET);
-  if (!sheet) { Logger.log('ไม่พบชีต ' + DRIVER_ACTIVITY_SHEET); return; }
-
-  var rows  = sheet.getDataRange().getValues();
-  var batch = [];
-  var total = 0;
-
-  for (var i = 1; i < rows.length; i++) {
-    var r = rows[i];
-    if (!r[0] && !r[1]) continue;
-
-    var dateStr = '';
-    if (r[0] instanceof Date) {
-      dateStr = Utilities.formatDate(r[0], 'Asia/Bangkok', 'yyyy-MM-dd');
-    } else {
-      var raw = String(r[0] || '').trim();
-      // แปลง dd/MM/yyyy → yyyy-MM-dd
-      var parts = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      if (parts) {
-        dateStr = parts[3] + '-' + ('0'+parts[2]).slice(-2) + '-' + ('0'+parts[1]).slice(-2);
-      } else {
-        dateStr = raw;
-      }
-    }
-
-    batch.push({
-      delivery_date:    dateStr || null,
-      driver_name:      String(r[1] || '').trim() || null,
-      truck_plate:      String(r[2] || '').trim() || null,
-      mileage_start:    r[3] !== '' ? (parseFloat(r[3]) || null) : null,
-      mileage_end:      r[4] !== '' ? (parseFloat(r[4]) || null) : null,
-      time_depart:      String(r[5] || '').trim() || null,
-      time_arrive:      String(r[6] || '').trim() || null,
-      shop_code:        String(r[7] || '').trim() || null,
-      shop_name:        String(r[8] || '').trim() || null,
-      distance_km:      r[9]  !== '' ? (parseFloat(r[9])  || null) : null,
-      travel_minutes:   r[10] !== '' ? (parseFloat(r[10]) || null) : null,
-      km_per_hr:        r[11] !== '' ? (parseFloat(r[11]) || null) : null,
-      planned_distance: r[12] !== '' ? (parseFloat(r[12]) || null) : null,
-      sale:             String(r[13] || '').trim() || null,
-      recorded_at:      String(r[14] || '').trim() || null,
-    });
-
-    if (batch.length >= 500) {
-      _sbInsertDriverBatch(batch);
-      total += batch.length;
-      batch = [];
-      Utilities.sleep(500);
-    }
-  }
-  if (batch.length) {
-    _sbInsertDriverBatch(batch);
-    total += batch.length;
-  }
-
-  Logger.log('✅ migrate เสร็จ: ' + total + ' แถว');
-}
 
 function _sbInsertDriverBatch(batch) {
   var res = UrlFetchApp.fetch(SB_URL + '/rest/v1/driver_activity_log', {
@@ -6878,89 +6707,6 @@ function saveWHActivityRows(rows) {
 // MIGRATE: ดึงข้อมูลเก่าจาก WH_Activity_Log Sheet → Supabase
 // วิธีใช้: เปิด GAS Editor → Run → migrateWHActivityLogToSupabase
 // ════════════════════════════════════════════════════════════════════════
-function migrateWHActivityLogToSupabase() {
-  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(WH_ACTIVITY_SHEET);
-  if (!sheet || sheet.getLastRow() < 2) {
-    Logger.log('ไม่พบข้อมูลใน Sheet ' + WH_ACTIVITY_SHEET);
-    return;
-  }
-
-  var lastRow = sheet.getLastRow();
-  var data    = sheet.getRange(2, 1, lastRow - 1, 21).getValues(); // A-U (21 cols)
-  Logger.log('พบข้อมูล ' + data.length + ' แถว');
-
-  var now   = new Date().toISOString();
-  var rows  = [];
-
-  data.forEach(function(r) {
-    if (!r[0] && !r[1]) return; // ข้ามแถวว่าง
-    // แปลงวันที่: รองรับทั้ง Date object และ string dd/MM/yyyy
-    var dateVal = '';
-    if (r[1] instanceof Date && !isNaN(r[1])) {
-      dateVal = Utilities.formatDate(r[1], 'Asia/Bangkok', 'yyyy-MM-dd');
-    } else if (r[1]) {
-      var parts = String(r[1]).trim().split('/');
-      if (parts.length === 3) dateVal = parts[2] + '-' + parts[1].padStart(2,'0') + '-' + parts[0].padStart(2,'0');
-      else dateVal = String(r[1]).trim();
-    }
-    if (!dateVal) return;
-
-    rows.push({
-      type:            String(r[0]  || ''),
-      date:            dateVal,
-      emp_id:          String(r[2]  || ''),
-      emp_name:        String(r[3]  || ''),
-      team:            String(r[4]  || ''),
-      time_start:      String(r[5]  || ''),
-      time_end:        String(r[6]  || ''),
-      mins:            parseFloat(r[7])  || 0,
-      qty:             parseFloat(r[8])  || 0,
-      weight:          parseFloat(r[9])  || 0,
-      min_per_item:    parseFloat(r[10]) || 0,
-      weight_per_unit: parseFloat(r[11]) || 0,
-      sku_a:           String(r[12] || ''),
-      name_a:          String(r[13] || ''),
-      damage_qty:      parseFloat(r[14]) || 0,
-      cause_p:         String(r[15] || ''),
-      remark_q:        String(r[16] || ''),
-      saved_at:        String(r[17] || ''),
-      sku_b:           String(r[18] || ''),
-      name_b:          String(r[19] || ''),
-      truck_plate:     String(r[20] || ''),
-      created_at:      now
-    });
-  });
-
-  Logger.log('แถวที่ valid: ' + rows.length);
-
-  // insert เป็น batch ทีละ 500 แถว
-  var BATCH = 500;
-  var totalSaved = 0;
-  for (var i = 0; i < rows.length; i += BATCH) {
-    var batch = rows.slice(i, i + BATCH);
-    var res = UrlFetchApp.fetch(SB_URL + '/rest/v1/wh_activity_log', {
-      method:  'POST',
-      headers: {
-        'apikey':        SB_KEY,
-        'Authorization': 'Bearer ' + SB_KEY,
-        'Content-Type':  'application/json',
-        'Prefer':        'return=minimal'
-      },
-      payload:          JSON.stringify(batch),
-      muteHttpExceptions: true
-    });
-    var code = res.getResponseCode();
-    if (code === 201) {
-      totalSaved += batch.length;
-      Logger.log('✅ batch ' + (i/BATCH + 1) + ': insert ' + batch.length + ' แถว (รวม ' + totalSaved + ')');
-    } else {
-      Logger.log('❌ batch ' + (i/BATCH + 1) + ' error ' + code + ': ' + res.getContentText().substring(0, 200));
-    }
-    Utilities.sleep(300); // ป้องกัน rate limit
-  }
-  Logger.log('🎉 เสร็จสิ้น: บันทึกสำเร็จ ' + totalSaved + '/' + rows.length + ' แถว');
-}
 
 function getWHActivityLog(params) {
   try {
@@ -9705,310 +9451,8 @@ function runSupabaseSync() {
 // ย้าย trucks / drivers / shops / transports / wh_staff จากชีตไป Supabase
 // รันครั้งเดียวจาก GAS Editor
 // ══════════════════════════════════════════════════════════════════════
-function migrateLogiMasterToSupabase() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var now = new Date().toISOString();
 
-  // 1. Trucks
-  var trucks = [];
-  var truckSheet = ss.getSheetByName(LOGI_SH_TRUCK);
-  if (truckSheet && truckSheet.getLastRow() >= 2) {
-    var td = truckSheet.getDataRange().getValues();
-    for (var i = 1; i < td.length; i++) {
-      var plate = String(td[i][0] || '').trim();
-      if (!plate) continue;
-      var capMother = parseFloat(td[i][3]) || 0;
-      var capChild  = parseFloat(td[i][4]) || 0;
-      trucks.push({
-        plate:       plate,
-        type:        String(td[i][1] || '').trim(),
-        net_weight:  parseFloat(td[i][2]) || 0,
-        cap_mother:  capMother,
-        cap_child:   capChild,
-        child_plate: String(td[i][5] || '').trim(),
-        is_trailer:  capMother > 0 && capChild > 0,
-        updated_at:  now
-      });
-    }
-  }
-  if (trucks.length) _sbFetch('POST', 'logi_trucks?on_conflict=plate', trucks);
-  Logger.log('[MigrateLogiMaster] trucks: ' + trucks.length);
 
-  // 2. Drivers
-  var drivers = [];
-  var driverSheet = ss.getSheetByName(LOGI_SH_DRIVER);
-  if (driverSheet && driverSheet.getLastRow() >= 2) {
-    var dd = driverSheet.getDataRange().getValues();
-    for (var i = 1; i < dd.length; i++) {
-      var empId   = String(dd[i][0] || '').trim();
-      var empName = String(dd[i][1] || '').trim();
-      if (!empName) continue;
-      if (!empId) empId = empName; // fallback key
-      drivers.push({
-        id:               empId,
-        name:             empName,
-        can_trailer:      String(dd[i][2] || '').trim().toUpperCase() === 'TRUE',
-        trailer_priority: parseInt(dd[i][3]) || 1,
-        updated_at:       now
-      });
-    }
-  }
-  if (drivers.length) _sbFetch('POST', 'logi_drivers?on_conflict=id', drivers);
-  Logger.log('[MigrateLogiMaster] drivers: ' + drivers.length);
-
-  // 3. Transports
-  var transports = [];
-  var transSheet = ss.getSheetByName(LOGI_SH_TRANSPORT);
-  if (transSheet && transSheet.getLastRow() >= 2) {
-    var tt = transSheet.getDataRange().getValues();
-    for (var i = 1; i < tt.length; i++) {
-      var tid   = String(tt[i][0] || '').trim();
-      var tname = String(tt[i][1] || '').trim();
-      if (!tname) continue;
-      if (!tid) tid = tname;
-      transports.push({ id: tid, name: tname, capacity: parseFloat(tt[i][2]) || 0, updated_at: now });
-    }
-  }
-  if (transports.length) _sbFetch('POST', 'logi_transports?on_conflict=id', transports);
-  Logger.log('[MigrateLogiMaster] transports: ' + transports.length);
-
-  // 4. Shops
-  var shops = [];
-  var custSheet = ss.getSheetByName(LOGI_SH_CUSTOMER);
-  if (custSheet && custSheet.getLastRow() >= 2) {
-    var cd = custSheet.getDataRange().getValues();
-    for (var i = 1; i < cd.length; i++) {
-      var cid   = String(cd[i][0] || '').trim();
-      var cname = String(cd[i][1] || '').trim();
-      if (!cid || !cname) continue;
-      shops.push({
-        id:         cid,
-        name:       cname,
-        address:    String(cd[i][2] || '').trim(),
-        phone:      String(cd[i][3] || '').trim(),
-        sale:       String(cd[i][4] || '').trim(),
-        distance:   parseFloat(cd[i][5]) || 0,
-        no_trailer: String(cd[i][6] || '').trim().toUpperCase() === 'TRUE',
-        updated_at: now
-      });
-    }
-  }
-  // dedup by id (เอาแถวสุดท้ายที่เจอถ้า id ซ้ำ)
-  var shopMap = {};
-  shops.forEach(function(s) { shopMap[s.id] = s; });
-  var shopsDedup = Object.values(shopMap);
-  if (shopsDedup.length) {
-    for (var i = 0; i < shopsDedup.length; i += 200) {
-      _sbFetch('POST', 'logi_shops?on_conflict=id', shopsDedup.slice(i, i + 200));
-    }
-  }
-  Logger.log('[MigrateLogiMaster] shops: ' + shopsDedup.length + ' (raw: ' + shops.length + ')');
-
-  // 5. WH Staff
-  var staff = [];
-  var staffSheet = ss.getSheetByName(LOGI_SH_WH_STAFF);
-  if (staffSheet && staffSheet.getLastRow() >= 2) {
-    var sd = staffSheet.getDataRange().getValues();
-    for (var i = 1; i < sd.length; i++) {
-      var sid   = String(sd[i][0] || '').trim();
-      var sname = String(sd[i][1] || '').trim();
-      if (!sname) continue;
-      if (!sid) sid = sname;
-      staff.push({ id: sid, name: sname, team: String(sd[i][2] || '').trim(), updated_at: now });
-    }
-  }
-  if (staff.length) _sbFetch('POST', 'logi_wh_staff?on_conflict=id', staff);
-  Logger.log('[MigrateLogiMaster] wh_staff: ' + staff.length);
-
-  Logger.log('[MigrateLogiMaster] Done.');
-}
-
-function migrateLogisticPlansToSupabase() {
-  var ss        = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var planSheet = ss.getSheetByName('Logistic_Plan');
-  var itemSheet = ss.getSheetByName('Logistic_Plan_Item');
-
-  if (!planSheet || planSheet.getLastRow() < 2) {
-    Logger.log('[Migrate] Logistic_Plan ว่างหรือไม่มีข้อมูล');
-    return;
-  }
-
-  // ── 1. อ่าน Logistic_Plan ──────────────────────────────────────────
-  // Col: A=PlanID B=วันที่ C=ประเภทรถ D=Driver/Transport E=TripNo
-  //      F=ประเภทงาน G=ร้านค้า H=ระยะทาง I=ค่าStop J=ค่าจ้าง
-  //      K=เซลล์ L=สถานะ M=คลังสินค้า N=สาเหตุ O=ทะเบียนรถ P=ระยะทางขากลับ
-  //      Q=ลำดับร้าน R=รหัสร้านค้า S=หมายเหตุ T=trailerMode
-  var planData  = planSheet.getDataRange().getValues();
-  var planMap   = {};
-  var planOrder = [];
-
-  for (var i = 1; i < planData.length; i++) {
-    var row    = planData[i];
-    var pid    = String(row[0] || '').trim();
-    if (!pid) continue;
-
-    var rowDate = row[1] instanceof Date
-      ? Utilities.formatDate(row[1], 'GMT+7', 'yyyy-MM-dd')
-      : String(row[1] || '').substring(0, 10);
-
-    var basePlanId = pid.replace(/-[MC]$/, '');
-    var isMother   = pid.endsWith('-M');
-    var isChild    = pid.endsWith('-C');
-
-    if (!planMap[pid]) {
-      planOrder.push(pid);
-      planMap[pid] = {
-        plan_id:          pid,
-        pair_id:          basePlanId,
-        is_mother:        isMother,
-        is_child:         isChild,
-        plan_date:        rowDate,
-        truck_type:       String(row[2]  || 'company'),
-        driver_transport: String(row[3]  || ''),
-        driver_id:        '',
-        trip_no:          String(row[4]  || ''),
-        job_type:         String(row[5]  || ''),
-        wage:             parseFloat(row[9])  || 0,
-        status:           String(row[11] || 'planned'),
-        warehouse:        String(row[12] || ''),
-        fail_reason:      String(row[13] || ''),
-        truck_plate:      String(row[14] || ''),
-        child_plate:      '',
-        return_distance:  parseFloat(row[15]) || 0,
-        trailer_mode:     String(row[19] || ''),
-        total_weight:     0,
-        created_by:       'migration',
-        updated_at:       new Date().toISOString(),
-        _shopMap:         {},   // shopSeq → shop object (temp)
-        shops:            [],
-      };
-    }
-
-    // ── รวม shop rows (format ใหม่: col Q มีค่า) ──
-    var hasShopRow = (row[16] !== '' && row[16] !== null && row[16] !== undefined);
-    if (hasShopRow) {
-      var shopSeq = parseInt(row[16]) || 0;
-      var shopId  = String(row[17] || '');
-      var key     = shopSeq + '_' + shopId;
-      if (!planMap[pid]._shopMap[key]) {
-        var shopObj = {
-          shopSeq:       shopSeq,
-          shopId:        shopId,
-          shopName:      String(row[6]  || ''),
-          distance:      parseFloat(row[7])  || 0,
-          freeDistance:  parseFloat(row[8])  || 0,
-          sale:          String(row[10] || ''),
-          loadWarehouse: String(row[12] || ''),
-          remark:        String(row[18] || ''),
-          truckLabel:    isChild ? 'child' : 'mother',
-          items:         [],
-        };
-        planMap[pid]._shopMap[key] = shopObj;
-        planMap[pid].shops.push(shopObj);
-      }
-    } else if (!hasShopRow && planMap[pid].shops.length === 0) {
-      // format เก่า: 1 แถว ต่อ plan ไม่มี per-shop
-      var shopObj = {
-        shopSeq:       0,
-        shopId:        '',
-        shopName:      String(row[6]  || ''),
-        distance:      parseFloat(row[7])  || 0,
-        freeDistance:  parseFloat(row[8])  || 0,
-        sale:          String(row[10] || ''),
-        loadWarehouse: String(row[12] || ''),
-        remark:        '',
-        truckLabel:    'mother',
-        items:         [],
-      };
-      planMap[pid]._shopMap['0_'] = shopObj;
-      planMap[pid].shops.push(shopObj);
-    }
-  }
-
-  // ── 2. อ่าน Logistic_Plan_Item แล้วแนบเข้า shop ──────────────────
-  // Col: A=PlanID B=SKU C=Name D=Qty E=WeightPerUnit F=TotalWeight
-  //      G=JobType H=ShopName I=Warehouse J=Date K=Status L=TruckPlate
-  //      M=LoadWarehouse N=ระยะทาง O=หมายเหตุ P=shopSeq Q=ระยะทางฟรี R=shopId
-  if (itemSheet && itemSheet.getLastRow() >= 2) {
-    var itemData = itemSheet.getDataRange().getValues();
-    for (var j = 1; j < itemData.length; j++) {
-      var ir  = itemData[j];
-      var pid = String(ir[0] || '').trim();
-      if (!pid || !planMap[pid]) continue;
-
-      var shopSeq  = (ir[15] !== undefined && ir[15] !== '') ? parseInt(ir[15]) : -1;
-      var shopId   = String(ir[17] || '');
-      var shopName = String(ir[7]  || '');
-      if (!shopName) continue;
-
-      // หา shop ที่ตรงกัน
-      var plan = planMap[pid];
-      var shop = null;
-      if (shopSeq >= 0) {
-        for (var k = 0; k < plan.shops.length; k++) {
-          if (plan.shops[k].shopSeq === shopSeq) { shop = plan.shops[k]; break; }
-        }
-      }
-      if (!shop) {
-        for (var k = 0; k < plan.shops.length; k++) {
-          if (plan.shops[k].shopName === shopName) { shop = plan.shops[k]; break; }
-        }
-      }
-      if (!shop) {
-        // สร้าง shop ใหม่ถ้าไม่เจอ (fallback)
-        shop = { shopSeq: shopSeq, shopId: shopId, shopName: shopName,
-                 distance: 0, freeDistance: 0, sale: '', loadWarehouse: String(ir[12]||''),
-                 remark: '', truckLabel: 'mother', items: [] };
-        plan.shops.push(shop);
-      }
-
-      var weight = parseFloat(ir[5]) || 0;
-      shop.items.push({
-        sku:           String(ir[1] || ''),
-        productName:   String(ir[2] || ''),
-        qty:           parseFloat(ir[3]) || 0,
-        weightPerUnit: parseFloat(ir[4]) || 0,
-        weight:        weight,
-        truckLabel:    'mother',
-      });
-      plan.total_weight += weight;
-    }
-  }
-
-  // ── 3. ลบ _shopMap temp แล้ว upsert เป็น batch ──────────────────
-  var batch = planOrder.map(function(pid) {
-    var p = planMap[pid];
-    delete p._shopMap;
-    return p;
-  });
-
-  if (!batch.length) { Logger.log('[Migrate] ไม่มีข้อมูล'); return; }
-
-  var successCount = 0;
-  var errorCount   = 0;
-  var CHUNK = 50;
-  for (var i = 0; i < batch.length; i += CHUNK) {
-    var chunk  = batch.slice(i, i + CHUNK);
-    var result = _sbFetch('POST', 'logistic_plans?on_conflict=plan_id', chunk);
-    if (result && result.error) {
-      Logger.log('[Migrate] error chunk ' + i + ': ' + JSON.stringify(result.error));
-      errorCount += chunk.length;
-    } else {
-      successCount += chunk.length;
-    }
-  }
-
-  Logger.log('[Migrate] logistic_plans: success=' + successCount + ' error=' + errorCount + ' total=' + batch.length);
-}
-
-function setupSupabaseSyncTrigger() {
-  // Remove existing if any
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'runSupabaseSync') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('runSupabaseSync').timeBased().everyMinutes(15).create();
-  Logger.log('[SB Sync] Trigger installed: runSupabaseSync every 15 min');
-}
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _updateZoneStockForMove(ss, fromZone, toZone, sku, skuName, totalPCS, pcsPerBundle, bw, bh) {
@@ -10458,12 +9902,6 @@ function _getLineGroupId() {
 }
 
 // รันครั้งเดียวจาก GAS Editor เพื่อตั้งค่า token
-function initLineConfig() {
-  var props = PropertiesService.getScriptProperties();
-  props.setProperty('LINE_CHANNEL_TOKEN',
-    'RuPRi5CkeaWWSuYksfyAEoS6tYowTc2SPirJrtaShoxyI7TPDyBIZ2ehUmTRzTziXhylb0wEEUojCwbeTV7VYMMlMnE2sIIJApEVKwYz5DPXHel0aHyeXgJ9Ao4gMJHxXi47SVfL5N5YQIe1H/coGAdB04t89/1O/w1cDnyilFU=');
-  Logger.log('✅ LINE token saved. Group ID จะถูก auto-save เมื่อมีข้อความในกลุ่ม');
-}
 
 function sendLineMessage(message) {
   try {
@@ -12038,65 +11476,6 @@ function analyzeZoneCapacity(params) {
 // ============================================================
 // Migrate GPS_Activity_Log → Supabase gps_activity_log
 // ============================================================
-function migrateGpsActivityToSupabase() {
-  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(GPS_ACTIVITY_SHEET);
-  if (!sheet || sheet.getLastRow() < 2) {
-    Logger.log('[GPS Migrate] ไม่พบข้อมูล');
-    return;
-  }
-
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues();
-  var batch = [];
-
-  data.forEach(function(row) {
-    var rawDate = row[4];
-    var dateStr = '';
-    if (rawDate instanceof Date) {
-      dateStr = Utilities.formatDate(rawDate, 'Asia/Bangkok', 'yyyy-MM-dd');
-    } else {
-      var s = String(rawDate || '').trim();
-      // รองรับ dd/MM/yyyy และ dd-MM-yyyy
-      var m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-      if (m) dateStr = m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
-      else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) dateStr = s;
-    }
-    if (!dateStr) return; // ข้ามแถวที่ไม่มีวันที่
-
-    batch.push({
-      device_id:       String(row[0]  || '').trim(),
-      truck:           String(row[1]  || '').trim(),
-      vehicle_name:    String(row[2]  || '').trim(),
-      driver:          String(row[3]  || '').trim(),
-      activity_date:   dateStr,
-      time_start:      _fmtTime(row[5]),
-      time_end:        _fmtTime(row[6]),
-      engine_run_time: String(row[7]  || '').trim(),
-      idle_str:        String(row[8]  || '').trim(),
-      travel_time:     String(row[9]  || '').trim(),
-      distance:        parseFloat(row[10]) || 0,
-      avg_speed:       parseFloat(row[11]) || 0,
-      max_speed:       parseFloat(row[12]) || 0,
-      fuel_used:       parseFloat(row[13]) || 0,
-      idle_min:        parseFloat(row[14]) || 0,
-      engine_min:      parseFloat(row[15]) || 0,
-      fuel_eff:        parseFloat(row[16]) || 0,
-    });
-  });
-
-  Logger.log('[GPS Migrate] รวม ' + batch.length + ' แถว');
-
-  var success = 0, error = 0;
-  var CHUNK = 100;
-  for (var i = 0; i < batch.length; i += CHUNK) {
-    var chunk = batch.slice(i, i + CHUNK);
-    var ok = _sbFetch('POST', 'gps_activity_log', chunk);
-    if (ok) success += chunk.length;
-    else    error   += chunk.length;
-  }
-
-  Logger.log('[GPS Migrate] success=' + success + ' error=' + error + ' total=' + batch.length);
-}
 
 // ── Sync Production Plan จาก Google Sheet → Supabase production_plan_cache ──
 function syncProductionPlan() {
