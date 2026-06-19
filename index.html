@@ -8474,13 +8474,16 @@ const _safeStorage = {
           ]);
 
           // อ่าน Production Block จาก GAS โดยตรง
+          console.log('[wmCap] gasUrl:', gasUrl, 'monthKeys:', monthKeys);
           var allMachines = {};
           if (gasUrl) {
             var gasResults = await Promise.all(monthKeys.map(function(mk) {
-              return fetch(gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk])))
+              var url = gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk]));
+              return fetch(url, { redirect: 'follow' })
                 .then(function(r){ return r.json(); })
-                .catch(function(){ return null; });
+                .catch(function(err){ console.error('[wmCap] GAS fetch error:', err); return null; });
             }));
+            console.log('[wmCap] gasResults:', JSON.stringify(gasResults));
             gasResults.forEach(function(res) {
               if (!res || !res.success) return;
               (res.machines || []).forEach(function(m) {
