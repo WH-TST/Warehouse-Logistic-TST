@@ -2154,7 +2154,7 @@ thead.sticky {
       <div id="wmc-status" style="display:none;" class="px-4 py-2.5 rounded-xl text-sm font-bold text-center"></div>
 
       <!-- Zone Capacity Cards -->
-      <div id="wmc-cards" class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr));">
+      <div id="wmc-cards" class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(420px,1fr));">
         <div class="col-span-full py-10 text-center" style="color:#64748b;">
           <i class="fas fa-spinner fa-spin text-2xl mb-2 block" style="color:#3b82f6;"></i>
           <div class="text-sm font-bold">กำลังโหลด...</div>
@@ -8641,7 +8641,7 @@ const _safeStorage = {
               +'</div>';
           });
 
-          // Forecast: cumulative slots used over 4 days
+          // Forecast: cumulative slots used over 4 days (with SKU breakdown)
           var dayRows = '';
           var cumSlots = 0;
           var fullDay = '';
@@ -8654,16 +8654,35 @@ const _safeStorage = {
             var isFull = remaining < 0 && !fullDay;
             if (isFull) fullDay = d;
             var label = i===0 ? 'วันนี้' : i===1 ? 'พรุ่งนี้' : i===2 ? 'มะรืน' : '+3 วัน';
-            var rowBg = remaining < 0 ? '#fef2f2' : remaining === 0 ? '#fffbeb' : remaining < emptySlots*0.3 ? '#fffbeb' : '#f8fafc';
-            var slotsColor = remaining < 0 ? '#dc2626' : remaining < emptySlots*0.3 ? '#b45309' : '#15803d';
-            dayRows += '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;margin-bottom:4px;background:'+rowBg+';">'
-              +'<span style="font-size:11px;font-weight:700;color:#64748b;width:72px;">'+label+'</span>'
+            var rowBg = remaining < 0 ? '#fef2f2' : remaining < emptySlots*0.3 && emptySlots>0 ? '#fffbeb' : '#f8fafc';
+            var slotsColor = remaining < 0 ? '#dc2626' : remaining < emptySlots*0.3 && emptySlots>0 ? '#b45309' : '#15803d';
+
+            // SKU detail rows per day
+            var skuDetail = '';
+            items.forEach(function(r) {
+              var name = prodMap[r.sku] && prodMap[r.sku].name ? prodMap[r.sku].name : r.sku;
+              skuDetail += '<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 8px 2px 16px;">'
+                +'<span style="font-size:10px;color:#475569;flex:1;">'+name+'</span>'
+                +'<span style="font-size:10px;color:#64748b;margin-right:8px;">'+r.bundles+' มัด</span>'
+                +'<span style="font-size:10px;font-weight:800;color:#1d4ed8;">'+r.slotsNeeded+' ฐาน</span>'
+                +'</div>';
+            });
+
+            dayRows += '<div style="border-radius:8px;margin-bottom:6px;background:'+rowBg+';overflow:hidden;">'
+              // day header
+              +'<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;">'
+              +'<span style="font-size:12px;font-weight:800;color:#334155;width:60px;">'+label+'</span>'
               +'<span style="font-size:10px;color:#94a3b8;">('+fmtThai(d)+')</span>'
               +'<span style="flex:1;"></span>'
-              +'<span style="font-size:11px;color:#475569;">ใช้ +'+daySlots+' ฐาน</span>'
-              +'<span style="font-size:12px;font-weight:900;color:'+slotsColor+';min-width:56px;text-align:right;">'
+              +(daySlots>0?'<span style="font-size:10px;color:#475569;margin-right:6px;">รวม '+daySlots+' ฐาน</span>':'')
+              +'<span style="font-size:12px;font-weight:900;color:'+slotsColor+';">'
               +(remaining>=0?'เหลือ '+remaining:'ขาด '+Math.abs(remaining))+' ฐาน'
               +'</span>'
+              +'</div>'
+              // SKU detail
+              +(skuDetail
+                ? '<div style="padding-bottom:6px;border-top:1px dashed #e2e8f0;">'+skuDetail+'</div>'
+                : '<div style="padding:0 10px 6px;font-size:10px;color:#94a3b8;">— ไม่มีแผนผลิต</div>')
               +'</div>';
           });
 
