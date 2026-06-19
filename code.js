@@ -8554,18 +8554,9 @@ function syncProductionBlock() {
 }
 
 // ── อ่าน Production Block จาก Google Sheet โดยตรง (ไม่ต้อง Sync) ──────────────
-function getProductionBlock(monthKey) {
-  var cfgRes = UrlFetchApp.fetch(
-    SB_URL + '/rest/v1/app_config?key=in.(production_block_spreadsheet_id,production_block_sheet_name)&select=key,value',
-    { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
-  );
-  var cfgMap = {};
-  JSON.parse(cfgRes.getContentText()).forEach(function(r){ cfgMap[r.key] = r.value; });
-
-  var spreadsheetId = cfgMap['production_block_spreadsheet_id'] || '';
-  var sheetName     = cfgMap['production_block_sheet_name'] || '';
-  if (!spreadsheetId) return { success: false, message: 'ไม่มี production_block_spreadsheet_id' };
-  if (!sheetName)     return { success: false, message: 'ไม่มี production_block_sheet_name' };
+function getProductionBlock(monthKey, spreadsheetId, sheetName) {
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี spreadsheetId' };
+  if (!sheetName)     return { success: false, message: 'ไม่มี sheetName' };
 
   var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(sheetName);
   if (!sheet) return { success: false, message: 'ไม่พบ Sheet: ' + sheetName };

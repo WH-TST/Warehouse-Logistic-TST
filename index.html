@@ -8463,10 +8463,14 @@ const _safeStorage = {
           var monthKey2 = d3.getFullYear()+'-'+String(d3.getMonth()+1).padStart(2,'0');
           var monthKeys = monthKey2 !== monthKey ? [monthKey, monthKey2] : [monthKey];
 
-          // อ่าน GAS URL จาก app_config
-          var cfgRes = await window._sb.from('app_config').select('key,value').in('key', ['gas_sync_url']);
-          var gasUrl = '';
-          if (cfgRes.data) cfgRes.data.forEach(function(r){ if (r.key==='gas_sync_url') gasUrl = r.value; });
+          // อ่าน config จาก app_config
+          var cfgRes = await window._sb.from('app_config').select('key,value').in('key', ['gas_sync_url','production_block_spreadsheet_id','production_block_sheet_name']);
+          var gasUrl = '', pbSpreadsheetId = '', pbSheetName = '';
+          if (cfgRes.data) cfgRes.data.forEach(function(r){
+            if (r.key==='gas_sync_url') gasUrl = r.value;
+            if (r.key==='production_block_spreadsheet_id') pbSpreadsheetId = r.value;
+            if (r.key==='production_block_sheet_name') pbSheetName = r.value;
+          });
 
           var [logRes, prodRes] = await Promise.all([
             window._sb.from('zone_capacity_log').select('zone,empty_slots').eq('log_date', dateStr),
@@ -8478,7 +8482,7 @@ const _safeStorage = {
           var allMachines = {};
           if (gasUrl) {
             var gasResults = await Promise.all(monthKeys.map(function(mk) {
-              var url = gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk]));
+              var url = gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk, pbSpreadsheetId, pbSheetName]));
               return fetch(url, { redirect: 'follow' })
                 .then(function(r){ return r.json(); })
                 .catch(function(err){ console.error('[wmCap] GAS fetch error:', err); return null; });
