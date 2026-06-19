@@ -30740,8 +30740,17 @@ window.viewTripResult = async function(planId) {
           : '<span style="cursor:pointer;border-bottom:2px dashed #94a3b8;font-weight:700" onclick="scShowExprPopup(event,\''+tooltipHtml+'\')">'+counted+'</span>';
 
         var diffTag = isEmpty ? 'empty' : (diff===0 ? 'ok' : 'diff');
-        return '<tr data-rec-row="1" data-wh="'+item.wh+'" data-sku="'+_esc(item.sku)+'" data-name="'+_esc(item.name)+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
-          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">' + seqNum + '</td>'
+        var rowId = 'rec-row-'+item.sku.replace(/[^a-zA-Z0-9]/g,'_')+'_'+item.wh.replace(/[^a-zA-Z0-9]/g,'_');
+        var histId = 'rec-hist-'+rowId;
+        var mainRow = '<tr data-rec-row="1" data-wh="'+item.wh+'" data-sku="'+_esc(item.sku)+'" data-name="'+_esc(item.name)+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
+          + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">'
+          +   '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
+          +   '<span>'+seqNum+'</span>'
+          +   '<button onclick="scRecToggleHistory(\''+histId+'\',\''+item.sku.replace(/'/g,"\\'")+'\')" '
+          +     'id="btn-'+histId+'" title="\u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e01\u0e32\u0e23\u0e19\u0e31\u0e1a" '
+          +     'style="width:20px;height:20px;border-radius:4px;border:none;background:#e0f2fe;color:#0284c7;font-size:10px;cursor:pointer;line-height:1;padding:0;font-weight:700">\u25b6</button>'
+          +   '</div>'
+          + '</td>'
           + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9">'
           +   '<span style="background:'+whBg2+';color:'+whColor+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">'+item.wh+'</span>'
           + '</td>'
@@ -30758,6 +30767,13 @@ window.viewTripResult = async function(planId) {
           + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;font-size:11px;color:#64748b">'+(item.count_date||'<span style="color:#cbd5e1">\u2014</span>')+'</td>'
           + '<td style="padding:8px 10px;font-size:12px;color:#64748b">'+_esc(item.note)+'</td>'
           + '</tr>';
+        var histRow = '<tr id="'+histId+'" style="display:none" data-wh="'+item.wh+'" data-hist="1">'
+          + '<td colspan="14" style="padding:0;background:#f0f9ff;border-bottom:2px solid #bae6fd">'
+          +   '<div style="padding:10px 16px 10px 40px" id="'+histId+'-inner">'
+          +     '<span style="color:#94a3b8;font-size:12px"><i class="fas fa-spinner fa-spin"></i> \u0e01\u0e33\u0e25\u0e31\u0e07\u0e42\u0e2b\u0e25\u0e14...</span>'
+          +   '</div>'
+          + '</td></tr>';
+        return mainRow + histRow;
       }).join('');
       return headerRow + rowsHtml;
     }).join('');
@@ -30895,6 +30911,76 @@ window.viewTripResult = async function(planId) {
     if(iErr){ showToast('❌ บันทึก items ล้มเหลว: ' + iErr.message, true); return; }
     showToast('✅ บันทึกสำเร็จ — session #'+sessionId);
     _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _scItems.length + ' รายการ)');
+  };
+
+  // ── ประวัติการนับ expand row ────────────────────────────────────
+  var _scHistCache = {}; // sku → loaded flag
+  window.scRecToggleHistory = async function(histId, sku){
+    var row  = document.getElementById(histId);
+    var btn  = document.getElementById('btn-'+histId);
+    if(!row) return;
+    var isOpen = row.style.display !== 'none';
+    if(isOpen){
+      row.style.display = 'none';
+      if(btn) btn.textContent = '▶';
+      return;
+    }
+    row.style.display = '';
+    if(btn) btn.textContent = '▼';
+    if(_scHistCache[histId]) return; // โหลดแล้ว ไม่ต้องโหลดซ้ำ
+
+    var inner = document.getElementById(histId+'-inner');
+    // ดึง sessions + items สำหรับ SKU นี้
+    var { data: items, error } = await window._sb
+      .from('stock_count_items')
+      .select('session_id,bundle1,bundle2,scrap1,scrap2,ppb,system_pcs,note,stock_count_sessions(count_date,movement_date,wh,checker_name)')
+      .eq('sku', sku)
+      .order('session_id', {ascending: false})
+      .limit(60);
+    if(error || !items || !items.length){
+      inner.innerHTML = '<span style="color:#94a3b8;font-size:12px">ไม่พบประวัติการนับ</span>';
+      _scHistCache[histId] = true;
+      return;
+    }
+    var rows = items.map(function(it){
+      var sess = it.stock_count_sessions || {};
+      var counted = (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
+      var diff    = counted - (it.system_pcs||0);
+      var diffHtml = diff===0
+        ? '<span style="color:#15803d;font-weight:700">0</span>'
+        : '<span style="color:#dc2626;font-weight:700">'+(diff>0?'+':'')+diff+'</span>';
+      var dateStr = sess.count_date||'—';
+      var movStr  = sess.movement_date||'—';
+      var checker = sess.checker_name||'—';
+      return '<tr style="border-bottom:1px solid #e0f2fe">'
+        + '<td style="padding:4px 8px;font-size:11px;color:#0369a1;font-weight:600;white-space:nowrap">'+dateStr+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;color:#64748b;white-space:nowrap">'+movStr+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;color:#475569">'+checker+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+it.bundle1+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+it.bundle2+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+it.scrap1+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+it.scrap2+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:700">'+counted+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center;color:#0f766e">'+it.system_pcs+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+diffHtml+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;color:#64748b;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(it.note||'')+'</td>'
+        + '</tr>';
+    }).join('');
+    inner.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:11px">'
+      + '<thead><tr style="background:#bae6fd">'
+      + '<th style="padding:4px 8px;text-align:left;font-size:10px;white-space:nowrap">วันที่นับ</th>'
+      + '<th style="padding:4px 8px;text-align:left;font-size:10px;white-space:nowrap">วันเคลื่อนไหว</th>'
+      + '<th style="padding:4px 8px;text-align:left;font-size:10px">ผู้นับ</th>'
+      + '<th style="padding:4px 8px;text-align:center;font-size:10px">มัด1</th>'
+      + '<th style="padding:4px 8px;text-align:center;font-size:10px">มัด2</th>'
+      + '<th style="padding:4px 8px;text-align:center;font-size:10px">เศษ1</th>'
+      + '<th style="padding:4px 8px;text-align:center;font-size:10px">เศษ2</th>'
+      + '<th style="padding:4px 8px;text-align:center;font-size:10px">นับได้</th>'
+      + '<th style="padding:4px 8px;text-align:center;font-size:10px">ระบบ</th>'
+      + '<th style="padding:4px 8px;text-align:center;font-size:10px">Diff</th>'
+      + '<th style="padding:4px 8px;text-align:left;font-size:10px">NOTE</th>'
+      + '</tr></thead><tbody>'+rows+'</tbody></table>';
+    _scHistCache[histId] = true;
   };
 
   function _scLogAudit(action){
