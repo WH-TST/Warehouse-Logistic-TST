@@ -30750,18 +30750,32 @@ window.viewTripResult = async function(planId) {
     var BLANK_ROWS = 30;
     var rows;
     if(_scItems.length){
-      rows = _scItems.map(function(item,i){
-        return '<tr style="height:28px;border-bottom:1px solid #ccc">'
-          + '<td style="padding:4px 6px;text-align:center;border-right:1px solid #ccc">'+(i+1)+'</td>'
-          + '<td style="padding:4px 6px;border-right:1px solid #ccc">'+item.wh+'</td>'
-          + '<td style="padding:4px 6px;border-right:1px solid #ccc;font-family:monospace;font-size:11px">'+item.sku+'</td>'
-          + '<td style="padding:4px 8px;border-right:1px solid #ccc">'+item.name+'</td>'
-          + '<td style="border-right:1px solid #ccc"></td>'
-          + '<td style="border-right:1px solid #ccc"></td>'
-          + '<td style="border-right:1px solid #ccc"></td>'
-          + '<td style="border-right:1px solid #ccc"></td>'
-          + '<td></td>'
+      // จัดกลุ่มตาม WH รักษาลำดับ import
+      var _prtGroups = {}, _prtOrder = [];
+      _scItems.forEach(function(item){
+        if(!_prtGroups[item.wh]){ _prtGroups[item.wh]=[]; _prtOrder.push(item.wh); }
+        _prtGroups[item.wh].push(item);
+      });
+      var _prtSeq = 0;
+      rows = _prtOrder.map(function(pwh){
+        var grpRows = _prtGroups[pwh].map(function(item){
+          _prtSeq++;
+          return '<tr style="height:28px;border-bottom:1px solid #ccc">'
+            + '<td style="padding:4px 6px;text-align:center;border-right:1px solid #ccc">'+_prtSeq+'</td>'
+            + '<td style="padding:4px 6px;border-right:1px solid #ccc">'+item.wh+'</td>'
+            + '<td style="padding:4px 6px;border-right:1px solid #ccc;font-family:monospace;font-size:11px">'+item.sku+'</td>'
+            + '<td style="padding:4px 8px;border-right:1px solid #ccc">'+item.name+'</td>'
+            + '<td style="border-right:1px solid #ccc"></td>'
+            + '<td style="border-right:1px solid #ccc"></td>'
+            + '<td style="border-right:1px solid #ccc"></td>'
+            + '<td style="border-right:1px solid #ccc"></td>'
+            + '<td></td>'
+            + '</tr>';
+        }).join('');
+        var grpHeader = '<tr style="background:#e8edf5;border-bottom:1px solid #999">'
+          + '<td colspan="9" style="padding:4px 10px;font-weight:bold;font-size:11px;letter-spacing:0.05em">▸ '+pwh+' ('+_prtGroups[pwh].length+' รายการ)</td>'
           + '</tr>';
+        return grpHeader + grpRows;
       }).join('');
     } else {
       // ใบเปล่า — แถวว่างสำหรับเขียน
