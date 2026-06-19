@@ -8492,12 +8492,26 @@ const _safeStorage = {
 
           var allMachines = {};
           if (gasUrl) {
-            // 1. Production Block (forecast รายเดือน)
+            // 1. Production Block (forecast +1 ถึง +3 วัน เท่านั้น ไม่รวมวันนี้)
             var pbResults = await Promise.all(monthKeys.map(function(mk) {
               var url = gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk, pbSpreadsheetId, pbSheetName]));
               return fetch(url, { redirect: 'follow' }).then(function(r){ return r.json(); }).catch(function(){ return null; });
             }));
-            pbResults.forEach(function(res){ if (res && res.success) mergeMachines(allMachines, res.machines); });
+            pbResults.forEach(function(res) {
+              if (!res || !res.success) return;
+              // กรองวันนี้ออก — วันนี้ใช้จาก Dashboard เท่านั้น
+              var filtered = (res.machines || []).map(function(m) {
+                return {
+                  machineId: m.machineId,
+                  products: (m.products || []).map(function(p) {
+                    var daily = {};
+                    Object.keys(p.daily || {}).forEach(function(d){ if (d !== dateStr) daily[d] = p.daily[d]; });
+                    return { sku: p.sku, daily: daily };
+                  }).filter(function(p){ return Object.keys(p.daily).length > 0; })
+                };
+              });
+              mergeMachines(allMachines, filtered);
+            });
 
             // 2. Dashboard (แผนจริงวันนี้) — override/เพิ่มข้อมูลวันนี้
             if (ppSpreadsheetId) {
