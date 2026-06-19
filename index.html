@@ -238,16 +238,111 @@
       };
 
       // ── Zone Stock ───────────────────────────────────────────────
+      // ── Zone Stock — คำนวณจาก onhand_fg + production_plan_cache + move_log ──
       window._sbGetZoneStock = async function(forceRefresh) {
         try {
           if (!forceRefresh) { var c = _cacheGet('zone_stock'); if (c) return c; }
-          var { data, error } = await window._sb.from('zone_stock').select('*');
-          if (error) throw error;
-          var result = {};
-          (data||[]).forEach(function(r) {
-            if (!result[r.zone]) result[r.zone] = {};
-            result[r.zone][r.sku] = { pcs: r.pcs, ppb: r.ppb, name: r.sku_name, bw: r.bundle_width, bh: r.bundle_height };
+
+          var MACHINE_ZONES = ['P1','P2','P3','P4','C5'];
+          var RESERVE_ZONES = ['RE4','RE1','C4','RE-C5'];
+
+          // 1. ดึง onhand_fg — ยอดรวมจริงต่อ SKU
+          var { data: onhandRows, error: e1 } = await window._sb
+            .from('onhand_fg')
+            .select('item_number,product_name,cw_physical_inventory');
+          if (e1) throw e1;
+
+          // รวมยอดต่อ SKU (อาจมีหลาย warehouse)
+          var skuTotal = {}, skuName = {};
+          (onhandRows||[]).forEach(function(r) {
+            var sku = String(r.item_number||'').trim();
+            if (!sku) return;
+            skuTotal[sku] = (skuTotal[sku]||0) + (Number(r.cw_physical_inventory)||0);
+            if (!skuName[sku] && r.product_name) skuName[sku] = r.product_name;
           });
+
+          // 2. ดึง production_plan_cache เดือนนี้ + เดือนก่อน → SKU → Machine mapping
+          var now = new Date();
+          var curY = now.getFullYear(), curM = now.getMonth()+1;
+          var prevM = curM === 1 ? 12 : curM-1;
+          var prevY = curM === 1 ? curY-1 : curY;
+          var mkCur  = curY  + '-' + (curM  < 10 ? '0'+curM  : ''+curM);
+          var mkPrev = prevY + '-' + (prevM < 10 ? '0'+prevM : ''+prevM);
+
+          var { data: planRows } = await window._sb
+            .from('production_plan_cache')
+            .select('data')
+            .in('month_key', [mkCur, mkPrev]);
+
+          // สร้าง skuMachineMap: sku → machineId (ใช้แผนเดือนนี้ก่อน ถ้าไม่มีใช้เดือนก่อน)
+          var skuMachineMap = {};
+          (planRows||[]).forEach(function(row) {
+            var d = row.data;
+            if (typeof d === 'string') { try { d = JSON.parse(d); } catch(e){} }
+            if (!d || !d.machines) return;
+            d.machines.forEach(function(mach) {
+              var machId = String(mach.machineId||'').toUpperCase().trim();
+              if (!MACHINE_ZONES.includes(machId)) return;
+              (mach.products||[]).forEach(function(p) {
+                var sku = String(p.sku||'').trim();
+                if (!sku) return;
+                // เดือนนี้ override เดือนก่อน
+                if (!skuMachineMap[sku]) skuMachineMap[sku] = machId;
+              });
+            });
+          });
+
+          // 3. ดึง move_log ทั้งหมด — ปรับยอดระหว่าง Zone
+          var { data: moveRows } = await window._sb
+            .from('move_log')
+            .select('from_zone,to_zone,sku,pcs');
+
+          // 4. คำนวณ Zone Stock ต่อ SKU
+          // เริ่มต้น: ของทั้งหมดอยู่ที่ Machine Zone (ตาม production plan)
+          // Zone ที่ไม่รู้จักให้ไปที่ P1 เป็น default
+          var zoneStock = {}; // { zone: { sku: pcs } }
+          var ALL_ZONES = MACHINE_ZONES.concat(RESERVE_ZONES);
+          ALL_ZONES.forEach(function(z) { zoneStock[z] = {}; });
+
+          Object.keys(skuTotal).forEach(function(sku) {
+            var total = skuTotal[sku];
+            if (total <= 0) return;
+            var machine = skuMachineMap[sku] || 'P1';
+            zoneStock[machine][sku] = (zoneStock[machine][sku]||0) + total;
+          });
+
+          // apply move_log: ย้ายระหว่าง Zone
+          (moveRows||[]).forEach(function(m) {
+            var fromZ = String(m.from_zone||'').trim();
+            var toZ   = String(m.to_zone||'').trim();
+            var sku   = String(m.sku||'').trim();
+            var pcs   = Number(m.pcs)||0;
+            if (!fromZ || !toZ || !sku || pcs <= 0) return;
+            if (!zoneStock[fromZ]) zoneStock[fromZ] = {};
+            if (!zoneStock[toZ])   zoneStock[toZ]   = {};
+            zoneStock[fromZ][sku] = Math.max(0, (zoneStock[fromZ][sku]||0) - pcs);
+            zoneStock[toZ][sku]   = (zoneStock[toZ][sku]||0) + pcs;
+          });
+
+          // 5. แปลงเป็น format เดิม { zone: { sku: { pcs, ppb, name, bw, bh } } }
+          var products = await window._sbGetProducts();
+          var result = {};
+          Object.keys(zoneStock).forEach(function(zone) {
+            result[zone] = {};
+            Object.keys(zoneStock[zone]).forEach(function(sku) {
+              var pcs = zoneStock[zone][sku];
+              if (pcs <= 0) return;
+              var pm = products[sku] || {};
+              result[zone][sku] = {
+                pcs:  pcs,
+                ppb:  pm.ppb || 1,
+                name: skuName[sku] || pm.name || sku,
+                bw:   pm.bw  || 0,
+                bh:   pm.bh  || 0
+              };
+            });
+          });
+
           var ret = { success: true, data: result };
           _cacheSet('zone_stock', ret);
           return ret;
