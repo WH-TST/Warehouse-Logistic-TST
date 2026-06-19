@@ -6620,7 +6620,26 @@ thead.sticky {
     <!-- Semi Reconcile Panel -->
     <div id="sc-semi-panel-rec" class="hidden space-y-4">
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-wrap items-center gap-3">
-        <span id="sc-semi-rec-title" class="text-slate-500 text-sm font-bold"></span>
+        <p id="sc-semi-rec-title" class="text-slate-700 font-bold text-sm">กำลังโหลด...</p>
+      </div>
+      <!-- Summary -->
+      <div id="sc-semi-rec-summary" class="hidden grid grid-cols-4 gap-3 mb-2">
+        <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 text-center">
+          <div class="text-2xl font-black text-slate-700" id="sc-semi-rec-total">0</div>
+          <div class="text-xs text-slate-500 mt-1">รายการทั้งหมด</div>
+        </div>
+        <div class="bg-green-50 rounded-xl p-4 border border-green-200 text-center">
+          <div class="text-2xl font-black text-green-600" id="sc-semi-rec-ok">0</div>
+          <div class="text-xs text-green-600 mt-1">OK</div>
+        </div>
+        <div class="bg-red-50 rounded-xl p-4 border border-red-200 text-center">
+          <div class="text-2xl font-black text-red-600" id="sc-semi-rec-diff">0</div>
+          <div class="text-xs text-red-500 mt-1">มีผลต่าง</div>
+        </div>
+        <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 text-center">
+          <div class="text-2xl font-black text-slate-400" id="sc-semi-rec-empty">0</div>
+          <div class="text-xs text-slate-400 mt-1">ยังไม่นับ</div>
+        </div>
       </div>
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100" style="overflow:hidden">
         <div style="overflow-x:auto;max-height:65vh;overflow-y:auto">
@@ -6630,15 +6649,18 @@ thead.sticky {
                 <th style="width:36px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">#</th>
                 <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">รหัส SEMI</th>
                 <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">ชื่อ SEMI</th>
-                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">วันที่นับ</th>
-                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">รวมนับจริง (ม้วน)</th>
-                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#534ab7;text-align:center">ยอดระบบ (ม้วน)</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b;text-align:center">วันที่นับ</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#3b6d11;text-align:center">นับจริง FG1</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#185fa5;text-align:center">นับจริง FG2</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center;font-weight:700">รวมนับ</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#534ab7;text-align:center">ยอดระบบ</th>
                 <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">Diff</th>
                 <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">สถานะ</th>
+                <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b">หมายเหตุ</th>
               </tr>
             </thead>
             <tbody id="sc-semi-rec-tbody">
-              <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">กด "โหลด Reconcile"</td></tr>
+              <tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">กำลังโหลด...</td></tr>
             </tbody>
           </table>
         </div>
@@ -30957,35 +30979,115 @@ window.viewTripResult = async function(planId) {
 
   // ── load reconcile ──
   window.scSemiLoadRec = async function(){
-    var tbody = document.getElementById('sc-semi-rec-tbody');
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px">กำลังโหลด...</td></tr>';
+    var tbody   = document.getElementById('sc-semi-rec-tbody');
+    var titleEl = document.getElementById('sc-semi-rec-title');
+    var sumDiv  = document.getElementById('sc-semi-rec-summary');
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
+    if(sumDiv) sumDiv.classList.add('hidden');
     try {
-      var { data } = await window._sb.from('stock_count_semi').select('*').order('count_date',{ascending:false});
-      if(!data||!data.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px">ยังไม่มีข้อมูลบันทึก</td></tr>'; return; }
-      var titleEl = document.getElementById('sc-semi-rec-title');
-      if(titleEl) titleEl.textContent = 'Reconcile — '+data.length+' รายการ';
-      var html = '';
-      data.forEach(function(r, i){
-        var diff = r.diff||0;
-        var diffColor = diff===0?'#16a34a':diff>0?'#d97706':'#dc2626';
-        var badge = diff===0
-          ? '<span style="background:#dcfce7;color:#166534;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">OK</span>'
-          : diff>0
+      // 1. ดึงข้อมูล stock_count_semi ทั้งหมด — หา latest ต่อ semi_item
+      var { data: saved, error: e1 } = await window._sb.from('stock_count_semi').select('*').order('count_date',{ascending:false});
+      if(e1) throw e1;
+
+      // หา record ล่าสุดต่อ semi_item
+      var latestMap = {};
+      (saved||[]).forEach(function(r){
+        if(!latestMap[r.semi_item] || r.count_date > latestMap[r.semi_item].count_date)
+          latestMap[r.semi_item] = r;
+      });
+
+      // memory (Count Sheet ปัจจุบัน) มีลำดับความสำคัญสูงกว่า
+      var memMap = {};
+      _semiItems.forEach(function(it){ memMap[it.semi_item] = it; });
+
+      // 2. ดึง system qty จาก onhand_semi (นับ rows ต่อ item_number)
+      var { data: onhand } = await window._sb.from('onhand_semi').select('item_number');
+      var sysMap = {};
+      (onhand||[]).forEach(function(r){ sysMap[r.item_number] = (sysMap[r.item_number]||0) + 1; });
+
+      // 3. รวม mapping SEMI ทั้งหมดจาก semi_fg_mapping
+      var { data: mapping } = await window._sb.from('semi_fg_mapping').select('semi_item,semi_name').order('semi_item');
+
+      // สร้าง items — ใช้ mapping เป็น base, merge saved + memory
+      var items = (mapping||[]).map(function(m){
+        var mem   = memMap[m.semi_item];
+        var sv    = latestMap[m.semi_item];
+        var src   = mem || sv || null;
+        var systemQty = sysMap[m.semi_item] || 0;
+        return {
+          semi_item:  m.semi_item,
+          semi_name:  m.semi_name||'',
+          count_date: src ? (mem ? (document.getElementById('sc-semi-date').value||'') : sv.count_date) : '',
+          count1:     src ? (mem ? (mem.count1||0) : (sv.count1||0)) : 0,
+          count2:     src ? (mem ? (mem.count2||0) : (sv.count2||0)) : 0,
+          total:      src ? (mem ? ((mem.count1||0)+(mem.count2||0)) : (sv.total_count||0)) : 0,
+          systemQty:  systemQty,
+          note:       src ? (mem ? (mem.note||'') : (sv.note||'')) : '',
+          isEmpty:    !src
+        };
+      });
+
+      if(!items.length){
+        titleEl.textContent = 'ยังไม่มีข้อมูล';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:40px">ยังไม่มีข้อมูลบันทึก</td></tr>';
+        return;
+      }
+
+      // 4. render
+      var total=0, okCount=0, diffCount=0, emptyCount=0;
+      var rowBg = ['#ffffff','#f8fafc'];
+      var html = items.map(function(it, i){
+        total++;
+        var diff = it.total - it.systemQty;
+        var isEmpty = it.isEmpty || (it.count1===0 && it.count2===0);
+        var rowStyle='', badge='', diffHtml='';
+        if(isEmpty){
+          emptyCount++;
+          rowStyle = 'opacity:0.45';
+          badge    = '<span style="background:#f1f5f9;color:#94a3b8;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">?</span>';
+          diffHtml = '<span style="color:#94a3b8">—</span>';
+        } else if(diff===0){
+          okCount++;
+          rowStyle = 'background:#f0fdf4';
+          badge    = '<span style="background:#dcfce7;color:#166534;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">OK</span>';
+          diffHtml = '<span style="color:#15803d;font-weight:700">0</span>';
+        } else {
+          diffCount++;
+          rowStyle = 'background:#fff1f2';
+          badge    = diff>0
             ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Over</span>'
             : '<span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Under</span>';
-        html += '<tr>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px">'+(i+1)+'</td>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">'+r.semi_item+'</td>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b;font-size:11px">'+r.semi_name+'</td>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;font-size:11px">'+r.count_date+'</td>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;font-weight:600">'+(r.total_count||0)+'</td>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:#534ab7;font-weight:600">'+(r.system_qty||0)+'</td>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:'+diffColor+';font-weight:600">'+(diff>0?'+':'')+diff+'</td>'
-          + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center">'+badge+'</td>'
+          diffHtml = '<span style="color:#dc2626;font-weight:700">'+(diff>0?'+':'')+diff+'</span>';
+        }
+        var bg = rowBg[i%2];
+        return '<tr style="border-bottom:1px solid #f1f5f9;'+(rowStyle||'background:'+bg)+'">'
+          + '<td style="padding:8px 6px;border-right:1px solid #f1f5f9;text-align:center;color:#94a3b8;font-size:12px">'+(i+1)+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;font-weight:700;font-size:12px;font-family:monospace;color:#334155">'+it.semi_item+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:12px">'+it.semi_name+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center;font-size:11px;color:#64748b">'+it.count_date+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center;font-weight:600;background:#f0fdf4;color:#166534">'+(isEmpty?'—':it.count1)+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center;font-weight:600;background:#eff6ff;color:#1d4ed8">'+(isEmpty?'—':it.count2)+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center;font-weight:700">'+(isEmpty?'—':it.total)+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center;color:#534ab7;font-weight:600">'+it.systemQty+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center">'+diffHtml+'</td>'
+          + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center">'+badge+'</td>'
+          + '<td style="padding:8px;font-size:11px;color:#64748b">'+it.note+'</td>'
           + '</tr>';
-      });
+      }).join('');
       tbody.innerHTML = html;
-    } catch(e){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:30px">Error: '+e.message+'</td></tr>'; }
+
+      // summary
+      titleEl.textContent = 'Reconcile — '+total+' รายการ';
+      if(sumDiv){
+        sumDiv.classList.remove('hidden');
+        document.getElementById('sc-semi-rec-total').textContent = total;
+        document.getElementById('sc-semi-rec-ok').textContent    = okCount;
+        document.getElementById('sc-semi-rec-diff').textContent  = diffCount;
+        document.getElementById('sc-semi-rec-empty').textContent = emptyCount;
+      }
+    } catch(e){
+      tbody.innerHTML='<tr><td colspan="11" style="text-align:center;color:#ef4444;padding:30px">❌ '+e.message+'</td></tr>';
+    }
   };
 
   var _semiAddMatch = null; // mapping row ที่ค้นเจอ
