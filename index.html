@@ -13170,6 +13170,9 @@ let blockingChartInstance = null;
             batch.push(rec);
         });
         if(!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
+        // ลบข้อมูลเก่าทั้งหมดก่อน
+        const { error: delErr } = await window._sb.from('transection_semi').delete().neq('id', 0);
+        if(delErr) throw delErr;
         const CHUNK = 500;
         for(let i = 0; i < batch.length; i += CHUNK){
             const { error } = await window._sb.from('transection_semi').insert(batch.slice(i, i+CHUNK));
