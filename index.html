@@ -30576,45 +30576,30 @@ window.viewTripResult = async function(planId) {
       var ppbMap = {};
       (ppbRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
 
-      // ดึงจำนวนนับล่าสุดต่อ SKU+WH จาก stock_count_items
-      var sessDateMap = {}, savedResData = [];
+      // ดึงจำนวนนับล่าสุดต่อ SKU — join session เพื่อได้ count_date, เรียง session_id DESC
+      // Supabase คืนสูงสุด 1000 rows → order DESC = 1000 session ล่าสุด ครอบคลุม SKU ทุกตัว
+      var savedMap = {};
       try {
-        console.log('[Rec] querying stock_count_sessions...');
-        var sessRes = await window._sb.from('stock_count_sessions').select('id,count_date');
-        console.log('[Rec] sessions:', sessRes.error||'ok', (sessRes.data||[]).length);
-        if(!sessRes.error) (sessRes.data||[]).forEach(function(s){ sessDateMap[s.id] = s.count_date||''; });
-
-        console.log('[Rec] querying stock_count_items...');
         var savedRes = await window._sb
           .from('stock_count_items')
-          .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,session_id')
-          .limit(10000);
-        console.log('[Rec] items:', savedRes.error||'ok', (savedRes.data||[]).length);
-        if(!savedRes.error) savedResData = savedRes.data||[];
-      } catch(e){ console.warn('[Rec] stock_count query failed:', e); }
-      // หา record ล่าสุดต่อ sku — วันที่ล่าสุด (count_date) ก่อน ถ้าวันเดียวกันใช้ session_id สูงสุด
-      var savedMap = {};
-      savedResData.forEach(function(r){
-        var key    = r.sku;
-        var sessId = r.session_id||0;
-        var date   = sessDateMap[sessId]||'';
-        var prev   = savedMap[key];
-        var isNewer = !prev
-          || date > prev._date
-          || (date === prev._date && sessId > prev._sessId);
-        if(isNewer){
-          savedMap[key] = {
+          .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,session_id,stock_count_sessions(count_date)')
+          .order('session_id', {ascending: false});
+        // dedup: เก็บเฉพาะ occurrence แรกต่อ sku (= session ล่าสุด)
+        (savedRes.data||[]).forEach(function(r){
+          if(savedMap[r.sku]) return;
+          var sess = r.stock_count_sessions || {};
+          savedMap[r.sku] = {
             bundle1: Number(r.bundle1)||0,
             bundle2: Number(r.bundle2)||0,
             pcs1:    Number(r.scrap1)||0,
             pcs2:    Number(r.scrap2)||0,
             holdPcs: 0,
             note:    r.note||'',
-            _date:   date,
-            _sessId: sessId
+            _date:   sess.count_date||'',
+            _sessId: r.session_id||0
           };
-        }
-      });
+        });
+      } catch(e){ console.warn('[Rec] stock_count query failed:', e); }
 
       // memory (Count Sheet session ปัจจุบัน) มีลำดับความสำคัญสูงกว่าข้อมูลที่บันทึกไว้
       var memMap = {};
