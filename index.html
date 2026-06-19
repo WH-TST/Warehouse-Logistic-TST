@@ -30872,7 +30872,9 @@ window.viewTripResult = async function(planId) {
     var user    = window._currentUser || 'unknown';
 
     // insert session (สร้างใหม่ทุกครั้ง)
-    var sessionPayload = { count_date: _scDate, wh: document.getElementById('sc-wh-filter').value||null,
+    var todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD วันที่นับจริง
+    var sessionPayload = { count_date: todayStr, movement_date: _scDate,
+      wh: document.getElementById('sc-wh-filter').value||null,
       checker_name: checker||null, created_by: user, status: 'completed' };
     var { data: sData, error: sErr } = await window._sb.from('stock_count_sessions')
       .insert(sessionPayload)
