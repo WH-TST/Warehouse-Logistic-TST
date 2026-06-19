@@ -8514,10 +8514,14 @@ const _safeStorage = {
             });
 
             // 2. Dashboard (แผนจริงวันนี้) — override/เพิ่มข้อมูลวันนี้
+            var machineHours = {};
             if (ppSpreadsheetId) {
               var ppRes = await fetch(gasUrl + '?action=getProductionPlanByDate&args=' + encodeURIComponent(JSON.stringify([dateStr, ppSpreadsheetId])), { redirect: 'follow' })
                 .then(function(r){ return r.json(); }).catch(function(){ return null; });
-              if (ppRes && ppRes.success) mergeMachines(allMachines, ppRes.machines);
+              if (ppRes && ppRes.success) {
+                mergeMachines(allMachines, ppRes.machines);
+                Object.assign(machineHours, ppRes.hours || {});
+              }
             }
           }
 
@@ -8531,8 +8535,8 @@ const _safeStorage = {
 
           var planData = { machines: Object.values(allMachines) };
 
-          window._wmCapState = { dateStr, planData, prodMap };
-          wmCapRender(dateStr, logMap, planData, prodMap);
+          window._wmCapState = { dateStr, planData, prodMap, machineHours };
+          wmCapRender(dateStr, logMap, planData, prodMap, machineHours);
         } catch(e) {
           if (cards) cards.innerHTML = '<div class="col-span-full py-8 text-center text-red-500 font-bold">โหลดไม่สำเร็จ: ' + e.message + '</div>';
         }
@@ -8569,7 +8573,12 @@ const _safeStorage = {
         wmCapLoad();
       };
 
-      window.wmCapRender = function(dateStr, logMap, planData, prodMap) {
+      window.wmCapRender = function(dateStr, logMap, planData, prodMap, machineHours) {
+        machineHours = machineHours || {};
+        function hoursToEndTime(h) {
+          var map = { 7.5: '17:00', 10: '20:00', 13: '23:00' };
+          return map[h] || map[parseFloat(h)] || null;
+        }
         var cards = safeGet('wmc-cards');
         if (!cards) return;
 
@@ -8679,10 +8688,20 @@ const _safeStorage = {
           var pct = emptySlots > 0 ? Math.min(100, Math.round(todayTotalSlots/emptySlots*100)) : 0;
           var barColor = pct>=100?'#ef4444':pct>=70?'#f59e0b':'#10b981';
 
+          var zoneHours = machineHours[zone] || 0;
+          var endTime = zoneHours > 0 ? hoursToEndTime(zoneHours) : null;
+          var hoursTag = zoneHours > 0
+            ? '<span style="display:inline-block;margin-top:4px;padding:2px 8px;background:#dbeafe;color:#1d4ed8;border-radius:20px;font-size:10px;font-weight:800;">'
+              +'⏱ '+zoneHours+' ชม.'+(endTime?' → ถึง '+endTime+' น.':'')+'</span>'
+            : '';
+
           html += '<div class="bg-white rounded-2xl shadow-sm overflow-hidden" style="border:1.5px solid '+borderColor+'40;">'
             // header
             +'<div style="background:'+headerBg+';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">'
+            +'<div>'
             +'<span style="font-size:22px;font-weight:900;color:#0f172a;letter-spacing:-.5px;">'+zone+'</span>'
+            +(hoursTag ? '<div>'+hoursTag+'</div>' : '')
+            +'</div>'
             +'<div style="text-align:right;">'
             +'<div style="font-size:11px;font-weight:700;color:#475569;">ฐานว่างทั้งหมด</div>'
             +'<div style="font-size:18px;font-weight:900;color:#0f172a;" id="wmc-disp-'+zone+'">'+emptySlots+' ฐาน</div>'
@@ -8732,7 +8751,7 @@ const _safeStorage = {
           var inp = document.getElementById('wmc-inp-'+z);
           logMap[z] = inp ? (parseInt(inp.value) || 0) : 0;
         });
-        wmCapRender(s.dateStr, logMap, s.planData, s.prodMap);
+        wmCapRender(s.dateStr, logMap, s.planData, s.prodMap, s.machineHours);
         // คืน focus หลัง re-render
         if (activeId) {
           var el = document.getElementById(activeId);
