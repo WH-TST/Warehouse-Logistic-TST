@@ -8467,6 +8467,7 @@ const _safeStorage = {
           // Parse production plan
           var planData = (planRes.data && planRes.data.data) || null;
 
+          window._wmCapState = { dateStr, planData, prodMap };
           wmCapRender(dateStr, logMap, planData, prodMap);
         } catch(e) {
           if (cards) cards.innerHTML = '<div class="col-span-full py-8 text-center text-red-500 font-bold">โหลดไม่สำเร็จ: ' + e.message + '</div>';
@@ -8658,7 +8659,17 @@ const _safeStorage = {
         cards.innerHTML = html || '<div class="col-span-full py-8 text-center text-slate-400">ไม่มีข้อมูล</div>';
       };
 
-      window.wmCapUpdateCard = function() { /* input changes saved on บันทึก button */ };
+      window.wmCapUpdateCard = function() {
+        var s = window._wmCapState;
+        if (!s) return;
+        // อ่าน logMap ใหม่จาก input ปัจจุบัน
+        var logMap = {};
+        WMC_ZONES.forEach(function(z) {
+          var inp = document.getElementById('wmc-inp-'+z);
+          logMap[z] = inp ? (parseInt(inp.value) || 0) : 0;
+        });
+        wmCapRender(s.dateStr, logMap, s.planData, s.prodMap);
+      };
 
       // ── WM Config (SpreadsheetId / GAS URL) ───────────────────────
       window.wmCfgOpen = async function() {
