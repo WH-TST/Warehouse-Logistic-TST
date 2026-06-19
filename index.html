@@ -6591,6 +6591,7 @@ thead.sticky {
                 <th style="width:70px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">รวมนับ</th>
                 <th style="width:80px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#534ab7;text-align:center">ยอดระบบ (ม้วน)</th>
                 <th style="width:80px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">Diff</th>
+                <th style="width:140px;padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center">หมายเหตุ</th>
               </tr>
               <tr style="background:#f8fafc;position:sticky;top:33px;z-index:2">
                 <th style="border:1px solid #e2e8f0"></th>
@@ -6605,10 +6606,11 @@ thead.sticky {
                 <th style="border:1px solid #e2e8f0"></th>
                 <th style="border:1px solid #e2e8f0"></th>
                 <th style="border:1px solid #e2e8f0"></th>
+                <th style="border:1px solid #e2e8f0"></th>
               </tr>
             </thead>
             <tbody id="sc-semi-tbody">
-              <tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">เลือกวันที่แล้วกด "โหลดรายการ"</td></tr>
+              <tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">เลือกวันที่แล้วกด "โหลดรายการ"</td></tr>
             </tbody>
           </table>
         </div>
@@ -30776,7 +30778,7 @@ window.viewTripResult = async function(planId) {
     var date = (document.getElementById('sc-semi-date').value||'').trim();
     if(!date){ if(typeof showToast==='function') showToast('กรุณาเลือกวันที่ก่อน', true); return; }
     var tbody = document.getElementById('sc-semi-tbody');
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">กำลังโหลด...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:30px">กำลังโหลด...</td></tr>';
 
     try {
       // 1. ดึง SEMI ที่มีการเคลื่อนไหวในวันที่เลือกจาก transection_semi
@@ -30786,9 +30788,9 @@ window.viewTripResult = async function(planId) {
 
       // 2. load mapping เฉพาะ SEMI ที่มีการเคลื่อนไหว
       var { data: mapping } = await window._sb.from('semi_fg_mapping').select('*').order('semi_item');
-      if(!mapping||!mapping.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">ไม่พบข้อมูล mapping</td></tr>'; return; }
+      if(!mapping||!mapping.length){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:30px">ไม่พบข้อมูล mapping</td></tr>'; return; }
       mapping = mapping.filter(function(m){ return activeSemiSet[m.semi_item]; });
-      if(!mapping.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">ไม่พบรายการเคลื่อนไหวในวันที่ '+date+'</td></tr>'; return; }
+      if(!mapping.length){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:30px">ไม่พบรายการเคลื่อนไหวในวันที่ '+date+'</td></tr>'; return; }
 
       // 3. count rows in onhand_semi per item_number = system qty (ม้วน)
       var { data: onhand } = await window._sb.from('onhand_semi').select('item_number');
@@ -30805,16 +30807,17 @@ window.viewTripResult = async function(planId) {
           fg_code_1: m.fg_code_1||'', fg_name_1: m.fg_name_1||'',
           fg_code_2: m.fg_code_2||'', fg_name_2: m.fg_name_2||'',
           count1: prev.count1||0, count2: prev.count2||0,
-          systemQty: sysMap[m.semi_item]||0
+          systemQty: sysMap[m.semi_item]||0,
+          note: prev.note||''
         };
       });
       _scSemiRender();
-    } catch(e){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#ef4444;padding:30px">Error: '+e.message+'</td></tr>'; }
+    } catch(e){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:#ef4444;padding:30px">Error: '+e.message+'</td></tr>'; }
   };
 
   function _scSemiRender(){
     var tbody = document.getElementById('sc-semi-tbody');
-    if(!_semiItems.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">ไม่มีข้อมูล</td></tr>'; return; }
+    if(!_semiItems.length){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:30px">ไม่มีข้อมูล</td></tr>'; return; }
     var html = '';
     _semiItems.forEach(function(it, i){
       var total = (it.count1||0) + (it.count2||0);
@@ -30841,6 +30844,7 @@ window.viewTripResult = async function(planId) {
         + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;font-weight:600">'+(total||'—')+'</td>'
         + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:#534ab7;font-weight:600">'+it.systemQty+'</td>'
         + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:'+diffColor+';font-weight:600">'+(diff>0?'+':'')+diff+' '+badge+'</td>'
+        + '<td data-semi-idx="'+i+'" data-semi-fg="note" contenteditable="true" onkeydown="_semiCellKey(event)" onblur="_semiCellBlur(this)" onclick="_semiCellClick(this)" style="padding:6px;border:1px solid #e2e8f0;background:#fafaf9;cursor:text;min-width:100px;color:#64748b;font-size:11px">'+(it.note||'')+'</td>'
         + '</tr>';
     });
     tbody.innerHTML = html;
@@ -30860,16 +30864,22 @@ window.viewTripResult = async function(planId) {
 
   window._semiCellBlur = function(td){
     td.style.outline = '';
-    td.style.background = '#fefce8';
     var idx = parseInt(td.dataset.semiIdx);
-    var fg  = parseInt(td.dataset.semiFg);
+    var fg  = td.dataset.semiFg;
+    if(!_semiItems[idx]) return;
+    if(fg === 'note'){
+      td.style.background = '#fafaf9';
+      _semiItems[idx].note = td.innerText.trim();
+      return;
+    }
+    td.style.background = '#fefce8';
+    var fgNum = parseInt(fg);
     var raw = td.innerText.trim();
     var num = typeof _scEval === 'function' ? _scEval(raw) : (parseInt(raw)||0);
     num = Math.round(num);
     var isExpr = raw && raw !== String(num) && /[+\-*\/()]/.test(raw);
-    if(!_semiItems[idx]) return;
-    if(fg === 1){ _semiItems[idx].count1 = num; _semiItems[idx].count1_expr = isExpr ? raw : ''; }
-    else        { _semiItems[idx].count2 = num; _semiItems[idx].count2_expr = isExpr ? raw : ''; }
+    if(fgNum === 1){ _semiItems[idx].count1 = num; _semiItems[idx].count1_expr = isExpr ? raw : ''; }
+    else           { _semiItems[idx].count2 = num; _semiItems[idx].count2_expr = isExpr ? raw : ''; }
     var display = isExpr ? raw : (num ? String(num) : '');
     td.innerHTML = display + (isExpr ? '<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:#7c3aed;pointer-events:none"></span>' : '');
     // อัปเดต total + diff
@@ -30901,7 +30911,8 @@ window.viewTripResult = async function(planId) {
           fg_code_1: it.fg_code_1, fg_name_1: it.fg_name_1, count1: it.count1||0,
           fg_code_2: it.fg_code_2||null, fg_name_2: it.fg_name_2||null, count2: it.count2||0,
           total_count: (it.count1||0)+(it.count2||0), system_qty: it.systemQty,
-          diff: ((it.count1||0)+(it.count2||0)) - it.systemQty
+          diff: ((it.count1||0)+(it.count2||0)) - it.systemQty,
+          note: it.note||null
         };
       });
       // upsert by count_date + semi_item
@@ -30916,10 +30927,10 @@ window.viewTripResult = async function(planId) {
   window.scSemiExport = function(){
     if(!_semiItems.length){ if(typeof showToast==='function') showToast('กรุณาโหลดรายการก่อน', true); return; }
     var date = document.getElementById('sc-semi-date').value||'';
-    var rows = [['รหัส SEMI','ชื่อ SEMI','รหัส FG 1','ชื่อ FG 1','นับจริง 1','รหัส FG 2','ชื่อ FG 2','นับจริง 2','รวมนับ','ยอดระบบ','Diff']];
+    var rows = [['รหัส SEMI','ชื่อ SEMI','รหัส FG 1','ชื่อ FG 1','นับจริง 1','รหัส FG 2','ชื่อ FG 2','นับจริง 2','รวมนับ','ยอดระบบ','Diff','หมายเหตุ']];
     _semiItems.forEach(function(it){
       var total = (it.count1||0)+(it.count2||0);
-      rows.push([it.semi_item,it.semi_name,it.fg_code_1,it.fg_name_1,it.count1||0,it.fg_code_2||'',it.fg_name_2||'',it.count2||0,total,it.systemQty,total-it.systemQty]);
+      rows.push([it.semi_item,it.semi_name,it.fg_code_1,it.fg_name_1,it.count1||0,it.fg_code_2||'',it.fg_name_2||'',it.count2||0,total,it.systemQty,total-it.systemQty,it.note||'']);
     });
     if(typeof XLSX !== 'undefined'){
       var wb = XLSX.utils.book_new();
