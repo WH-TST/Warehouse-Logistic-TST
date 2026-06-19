@@ -252,7 +252,8 @@ function doGet(e) {
           'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
           'loSubmitLift','loCompleteOrder','loGetOrderStatus','loGetOrderHistory',
           'loSyncLifts',
-          'wmsGetUsers','wmsSaveUsers'
+          'wmsGetUsers','wmsSaveUsers',
+          'syncProductionPlan'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -6873,6 +6874,94 @@ function saveWHActivityRows(rows) {
   } catch(err) { return { success: false, message: err.message }; }
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// MIGRATE: ดึงข้อมูลเก่าจาก WH_Activity_Log Sheet → Supabase
+// วิธีใช้: เปิด GAS Editor → Run → migrateWHActivityLogToSupabase
+// ════════════════════════════════════════════════════════════════════════
+function migrateWHActivityLogToSupabase() {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(WH_ACTIVITY_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) {
+    Logger.log('ไม่พบข้อมูลใน Sheet ' + WH_ACTIVITY_SHEET);
+    return;
+  }
+
+  var lastRow = sheet.getLastRow();
+  var data    = sheet.getRange(2, 1, lastRow - 1, 21).getValues(); // A-U (21 cols)
+  Logger.log('พบข้อมูล ' + data.length + ' แถว');
+
+  var now   = new Date().toISOString();
+  var rows  = [];
+
+  data.forEach(function(r) {
+    if (!r[0] && !r[1]) return; // ข้ามแถวว่าง
+    // แปลงวันที่: รองรับทั้ง Date object และ string dd/MM/yyyy
+    var dateVal = '';
+    if (r[1] instanceof Date && !isNaN(r[1])) {
+      dateVal = Utilities.formatDate(r[1], 'Asia/Bangkok', 'yyyy-MM-dd');
+    } else if (r[1]) {
+      var parts = String(r[1]).trim().split('/');
+      if (parts.length === 3) dateVal = parts[2] + '-' + parts[1].padStart(2,'0') + '-' + parts[0].padStart(2,'0');
+      else dateVal = String(r[1]).trim();
+    }
+    if (!dateVal) return;
+
+    rows.push({
+      type:            String(r[0]  || ''),
+      date:            dateVal,
+      emp_id:          String(r[2]  || ''),
+      emp_name:        String(r[3]  || ''),
+      team:            String(r[4]  || ''),
+      time_start:      String(r[5]  || ''),
+      time_end:        String(r[6]  || ''),
+      mins:            parseFloat(r[7])  || 0,
+      qty:             parseFloat(r[8])  || 0,
+      weight:          parseFloat(r[9])  || 0,
+      min_per_item:    parseFloat(r[10]) || 0,
+      weight_per_unit: parseFloat(r[11]) || 0,
+      sku_a:           String(r[12] || ''),
+      name_a:          String(r[13] || ''),
+      damage_qty:      parseFloat(r[14]) || 0,
+      cause_p:         String(r[15] || ''),
+      remark_q:        String(r[16] || ''),
+      saved_at:        String(r[17] || ''),
+      sku_b:           String(r[18] || ''),
+      name_b:          String(r[19] || ''),
+      truck_plate:     String(r[20] || ''),
+      created_at:      now
+    });
+  });
+
+  Logger.log('แถวที่ valid: ' + rows.length);
+
+  // insert เป็น batch ทีละ 500 แถว
+  var BATCH = 500;
+  var totalSaved = 0;
+  for (var i = 0; i < rows.length; i += BATCH) {
+    var batch = rows.slice(i, i + BATCH);
+    var res = UrlFetchApp.fetch(SB_URL + '/rest/v1/wh_activity_log', {
+      method:  'POST',
+      headers: {
+        'apikey':        SB_KEY,
+        'Authorization': 'Bearer ' + SB_KEY,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal'
+      },
+      payload:          JSON.stringify(batch),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 201) {
+      totalSaved += batch.length;
+      Logger.log('✅ batch ' + (i/BATCH + 1) + ': insert ' + batch.length + ' แถว (รวม ' + totalSaved + ')');
+    } else {
+      Logger.log('❌ batch ' + (i/BATCH + 1) + ' error ' + code + ': ' + res.getContentText().substring(0, 200));
+    }
+    Utilities.sleep(300); // ป้องกัน rate limit
+  }
+  Logger.log('🎉 เสร็จสิ้น: บันทึกสำเร็จ ' + totalSaved + '/' + rows.length + ' แถว');
+}
+
 function getWHActivityLog(params) {
   try {
     var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -12007,4 +12096,75 @@ function migrateGpsActivityToSupabase() {
   }
 
   Logger.log('[GPS Migrate] success=' + success + ' error=' + error + ' total=' + batch.length);
+}
+
+// ── Sync Production Plan จาก Google Sheet → Supabase production_plan_cache ──
+function syncProductionPlan() {
+  // อ่าน SpreadsheetId จาก app_config
+  var cfgRes = UrlFetchApp.fetch(
+    SB_URL + '/rest/v1/app_config?key=eq.production_plan_spreadsheet_id&select=value',
+    { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
+  );
+  var cfgRows = JSON.parse(cfgRes.getContentText());
+  var spreadsheetId = cfgRows.length > 0 ? cfgRows[0].value : '';
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี SpreadsheetId ใน app_config' };
+
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName('Dashboard');
+  if (!sheet) return { success: false, message: 'ไม่พบ Sheet ชื่อ Dashboard' };
+
+  var rows = sheet.getDataRange().getValues();
+
+  // Group: monthKey → machineId → { dailyHours: {date: h}, products: {sku: {date: lines}} }
+  var months = {};
+
+  for (var i = 1; i < rows.length; i++) {
+    var r        = rows[i];
+    var rawDate  = String(r[2]).trim();   // Col C: วันที่ (20260525)
+    var machine  = String(r[3]).trim().toUpperCase(); // Col D: เครื่อง
+    var sku      = String(r[6]).trim();   // Col G: รหัสสินค้า
+    var hoursDay = parseFloat(r[9])  || 0; // Col J: ชม./วัน
+    var lines    = parseFloat(r[20]) || 0; // Col U: เส้น/งาน
+
+    if (rawDate.length < 8 || !machine || !sku || lines <= 0) continue;
+
+    var dateStr  = rawDate.slice(0,4) + '-' + rawDate.slice(4,6) + '-' + rawDate.slice(6,8);
+    var monthKey = dateStr.slice(0, 7);
+
+    if (!months[monthKey]) months[monthKey] = {};
+    if (!months[monthKey][machine]) months[monthKey][machine] = { dailyHours: {}, products: {} };
+
+    var mz = months[monthKey][machine];
+    if (hoursDay > 0) mz.dailyHours[dateStr] = hoursDay;
+    if (!mz.products[sku]) mz.products[sku] = {};
+    mz.products[sku][dateStr] = (mz.products[sku][dateStr] || 0) + lines;
+  }
+
+  var synced = [];
+  Object.keys(months).forEach(function(monthKey) {
+    var machines = Object.keys(months[monthKey]).map(function(machineId) {
+      var mz = months[monthKey][machineId];
+      return {
+        machineId: machineId,
+        dailyHours: mz.dailyHours,
+        products: Object.keys(mz.products).map(function(sku) {
+          return { sku: sku, daily: mz.products[sku] };
+        })
+      };
+    });
+
+    var payload = [{ month_key: monthKey, data: { machines: machines } }];
+    UrlFetchApp.fetch(SB_URL + '/rest/v1/production_plan_cache', {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + SB_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      payload: JSON.stringify(payload)
+    });
+    synced.push(monthKey);
+  });
+
+  return { success: true, message: 'Synced: ' + synced.join(', '), months: synced.length };
 }
