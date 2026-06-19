@@ -6694,6 +6694,27 @@ thead.sticky {
                 <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#374151;text-align:center;cursor:col-resize;user-select:none" onmousedown="scSemiRecResizeStart(event,13)">สถานะ</th>
                 <th style="padding:8px 6px;border:1px solid #e2e8f0;font-size:11px;color:#64748b;cursor:col-resize;user-select:none" onmousedown="scSemiRecResizeStart(event,14)">หมายเหตุ</th>
               </tr>
+              <tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0;position:sticky;top:33px;z-index:2">
+                <td></td>
+                <td style="padding:3px 4px"><input id="scsr-code" oninput="scSemiRecFilter()" placeholder="ค้นหา..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none"></td>
+                <td style="padding:3px 4px"><input id="scsr-name" oninput="scSemiRecFilter()" placeholder="ค้นหา..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none"></td>
+                <td></td>
+                <td style="padding:3px 4px"><input id="scsr-fg1" oninput="scSemiRecFilter()" placeholder="รหัส..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none;background:#f0fdf4"></td>
+                <td style="padding:3px 4px"><input id="scsr-fg1n" oninput="scSemiRecFilter()" placeholder="ชื่อ..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none;background:#f0fdf4"></td>
+                <td></td>
+                <td style="padding:3px 4px"><input id="scsr-fg2" oninput="scSemiRecFilter()" placeholder="รหัส..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none;background:#eff6ff"></td>
+                <td style="padding:3px 4px"><input id="scsr-fg2n" oninput="scSemiRecFilter()" placeholder="ชื่อ..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none;background:#eff6ff"></td>
+                <td></td><td></td><td></td><td></td>
+                <td style="padding:3px 4px">
+                  <select id="scsr-diff" onchange="scSemiRecFilter()" style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 4px;background:#fff;outline:none">
+                    <option value="">ทั้งหมด</option>
+                    <option value="ok">OK</option>
+                    <option value="diff">ต่างกัน</option>
+                    <option value="empty">ยังไม่นับ</option>
+                  </select>
+                </td>
+                <td></td>
+              </tr>
             </thead>
             <tbody id="sc-semi-rec-tbody">
               <tr><td colspan="15" style="text-align:center;color:#94a3b8;padding:40px;font-size:13px">กำลังโหลด...</td></tr>
@@ -30371,6 +30392,27 @@ window.viewTripResult = async function(planId) {
     document.removeEventListener('mouseup',   _scSemiRecResizeEnd);
   }
 
+  // ── SEMI Reconcile filter ────────────────────────────────────────
+  window.scSemiRecFilter = function(){
+    var code  = ((document.getElementById('scsr-code')||{}).value||'').toLowerCase().trim();
+    var name  = ((document.getElementById('scsr-name')||{}).value||'').toLowerCase().trim();
+    var fg1   = ((document.getElementById('scsr-fg1')||{}).value||'').toLowerCase().trim();
+    var fg1n  = ((document.getElementById('scsr-fg1n')||{}).value||'').toLowerCase().trim();
+    var fg2   = ((document.getElementById('scsr-fg2')||{}).value||'').toLowerCase().trim();
+    var fg2n  = ((document.getElementById('scsr-fg2n')||{}).value||'').toLowerCase().trim();
+    var diff  = ((document.getElementById('scsr-diff')||{}).value||'');
+    document.querySelectorAll('#sc-semi-rec-tbody tr[data-srf]').forEach(function(tr){
+      var show = (!code || (tr.dataset.code||'').includes(code))
+              && (!name || (tr.dataset.name||'').includes(name))
+              && (!fg1  || (tr.dataset.fg1||'').includes(fg1))
+              && (!fg1n || (tr.dataset.fg1n||'').includes(fg1n))
+              && (!fg2  || (tr.dataset.fg2||'').includes(fg2))
+              && (!fg2n || (tr.dataset.fg2n||'').includes(fg2n))
+              && (!diff || tr.dataset.diff === diff);
+      tr.style.display = show ? '' : 'none';
+    });
+  };
+
   var _scNoteIdx = -1;
   window.scOpenNote = function(idx){
     _scNoteIdx = idx;
@@ -31186,7 +31228,8 @@ window.viewTripResult = async function(planId) {
           : (sysTip
             ? '<span style="cursor:pointer;color:#534ab7;border-bottom:2px dashed #534ab7;font-weight:700" onclick="scShowExprPopup(event,\''+sysTip+'\')">'+it.systemQty+'</span>'
             : '<span style="color:#534ab7;font-weight:700">'+it.systemQty+'</span>');
-        return '<tr style="border-bottom:1px solid #f1f5f9;'+(rowStyle||'background:'+bg)+'">'
+        var diffTag = isEmpty ? 'empty' : (diff===0 ? 'ok' : 'diff');
+        return '<tr data-srf="1" data-code="'+it.semi_item.toLowerCase()+'" data-name="'+(it.semi_name||'').toLowerCase()+'" data-fg1="'+(it.fg_code_1||'').toLowerCase()+'" data-fg1n="'+(it.fg_name_1||'').toLowerCase()+'" data-fg2="'+(it.fg_code_2||'').toLowerCase()+'" data-fg2n="'+(it.fg_name_2||'').toLowerCase()+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;'+(rowStyle||'background:'+bg)+'">'
           + '<td style="padding:8px 6px;border-right:1px solid #f1f5f9;text-align:center;color:#94a3b8;font-size:12px">'+(i+1)+'</td>'
           + '<td style="padding:8px;border-right:1px solid #f1f5f9;font-weight:700;font-size:12px;font-family:monospace;color:#334155">'+it.semi_item+'</td>'
           + '<td style="padding:8px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:12px">'+it.semi_name+'</td>'
