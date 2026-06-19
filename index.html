@@ -8592,7 +8592,13 @@ const _safeStorage = {
           return days[d.getDay()]+' '+d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0');
         }
 
-        var dates = [dateStr, addDays(dateStr,1), addDays(dateStr,2), addDays(dateStr,3)];
+        // สร้าง 4 วันทำงาน (ข้ามอาทิตย์)
+        var dates = [dateStr];
+        var d = dateStr;
+        while (dates.length < 4) {
+          d = addDays(d, 1);
+          if (new Date(d+'T00:00:00').getDay() !== 0) dates.push(d);
+        }
 
         // Get plan items for a zone on a date: [{sku, lines}]
         function getDailyPlan(zone, date) {
