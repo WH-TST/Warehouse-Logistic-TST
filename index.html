@@ -30063,17 +30063,16 @@ window.viewTripResult = async function(planId) {
         return;
       }
 
-      // 2. ดึง system qty จาก counting (onhand = ยอดระบบ, รวมทุก row ต่อ item_number)
+      // 2. ดึง system qty จาก counting (cw_onhand = ยอดระบบ เหมือน Reconcile)
       var itemNums = [...new Set(skuList.map(function(s){ return s.sku; }))];
       var cntRes = await window._sb.from('counting')
-        .select('item_number,warehouse,onhand,cw_onhand')
+        .select('item_number,warehouse,cw_onhand')
         .in('item_number', itemNums);
-      // counting รวมทุก warehouse ต่อ SKU (zone_stock ครบ)
       var cntMapAll = {};  // key = item_number (รวมทุก WH)
       var cntMapWH  = {};  // key = item_number|warehouse
       (cntRes.data||[]).forEach(function(r){
         var sku = r.item_number;
-        var v   = Number(r.onhand)||0;
+        var v   = Number(r.cw_onhand)||0;
         cntMapAll[sku] = (cntMapAll[sku]||0) + v;
         var key = sku + '|' + (r.warehouse||'');
         cntMapWH[key]  = (cntMapWH[key]||0) + v;
