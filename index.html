@@ -30779,16 +30779,23 @@ window.viewTripResult = async function(planId) {
     tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">กำลังโหลด...</td></tr>';
 
     try {
-      // 1. load mapping
+      // 1. ดึง SEMI ที่มีการเคลื่อนไหวในวันที่เลือกจาก transection_semi
+      var { data: txRows } = await window._sb.from('transection_semi').select('item_number').eq('tst_pd_date', date);
+      var activeSemiSet = {};
+      (txRows||[]).forEach(function(r){ if(r.item_number) activeSemiSet[r.item_number] = true; });
+
+      // 2. load mapping เฉพาะ SEMI ที่มีการเคลื่อนไหว
       var { data: mapping } = await window._sb.from('semi_fg_mapping').select('*').order('semi_item');
       if(!mapping||!mapping.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">ไม่พบข้อมูล mapping</td></tr>'; return; }
+      mapping = mapping.filter(function(m){ return activeSemiSet[m.semi_item]; });
+      if(!mapping.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:30px">ไม่พบรายการเคลื่อนไหวในวันที่ '+date+'</td></tr>'; return; }
 
-      // 2. count rows in onhand_semi per item_number = system qty (ม้วน)
+      // 3. count rows in onhand_semi per item_number = system qty (ม้วน)
       var { data: onhand } = await window._sb.from('onhand_semi').select('item_number');
       var sysMap = {};
       (onhand||[]).forEach(function(r){ sysMap[r.item_number] = (sysMap[r.item_number]||0) + 1; });
 
-      // 3. build _semiItems (preserve existing count if reloading same date)
+      // 4. build _semiItems (preserve existing count if reloading same date)
       var prevMap = {};
       _semiItems.forEach(function(it){ prevMap[it.semi_item] = it; });
       _semiItems = mapping.map(function(m){
