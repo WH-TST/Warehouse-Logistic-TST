@@ -2126,15 +2126,18 @@ thead.sticky {
     <!-- ============================================ -->
     <div id="view-wm-manage-content" class="space-y-4">
 
-      <!-- Control Bar -->
+      <!-- Zone Capacity Header -->
       <div class="flex flex-wrap gap-3 items-center justify-between rounded-2xl px-5 py-4" style="background:linear-gradient(135deg,#0d1b2a,#172840);">
         <div class="flex items-center gap-3 flex-wrap">
           <div>
-            <div class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#64748b;">วันที่วิเคราะห์</div>
-            <input type="date" id="wmm-date" class="rounded-xl px-3 py-2 text-sm font-bold focus:outline-none" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;">
+            <div class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#64748b;">วันที่บันทึก</div>
+            <input type="date" id="wmc-date" class="rounded-xl px-3 py-2 text-sm font-bold focus:outline-none" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;">
           </div>
-          <button onclick="wmmRunAnalysis()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow" style="background:#2563eb;color:#fff;">
-            <i class="fas fa-sync-alt text-xs"></i> รีเฟรช
+          <button onclick="wmCapLoad()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow" style="background:#2563eb;color:#fff;">
+            <i class="fas fa-sync-alt text-xs"></i> โหลด
+          </button>
+          <button onclick="wmCapSave()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;">
+            <i class="fas fa-save text-xs"></i> บันทึก
           </button>
         </div>
         <button onclick="wmmOpenCreateModal({})" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;">
@@ -2142,37 +2145,16 @@ thead.sticky {
         </button>
       </div>
 
-      <!-- Notification Banner -->
-      <div id="wmm-notification" class="items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold" style="display:none;background:#fef3c7;color:#92400e;border:1px solid #fde68a;">
-        <i class="fas fa-bell"></i>
-        <span id="wmm-notification-text"></span>
-        <button onclick="wmmDismissNotification()" style="margin-left:auto;font-size:11px;text-decoration:underline;background:none;border:none;cursor:pointer;color:#92400e;">ปิด</button>
-      </div>
+      <!-- Save status -->
+      <div id="wmc-status" style="display:none;" class="px-4 py-2.5 rounded-xl text-sm font-bold text-center"></div>
 
-      <!-- Zone Detail Popup Modal -->
-      <div id="wmm-zone-popup" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);padding:16px;" onclick="if(event.target===this)wmmCloseZoneDetail()">
-        <div style="background:#fff;border-radius:20px;width:100%;max-width:540px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 48px rgba(0,0,0,0.2);overflow:hidden;">
-          <!-- header -->
-          <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;">
-            <span id="wmm-zone-popup-title" style="font-size:18px;font-weight:900;color:#0f172a;flex:1;"></span>
-            <button onclick="wmmCloseZoneDetail()" style="padding:6px 14px;border-radius:8px;background:#f1f5f9;border:none;font-size:13px;font-weight:700;color:#475569;cursor:pointer;">✕ ปิด</button>
-          </div>
-          <!-- body -->
-          <div id="wmm-zone-popup-body" style="padding:18px 20px;overflow-y:auto;flex:1;"></div>
+      <!-- Zone Capacity Cards -->
+      <div id="wmc-cards" class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr));">
+        <div class="col-span-full py-10 text-center" style="color:#64748b;">
+          <i class="fas fa-spinner fa-spin text-2xl mb-2 block" style="color:#3b82f6;"></i>
+          <div class="text-sm font-bold">กำลังโหลด...</div>
         </div>
       </div>
-
-      <!-- Zone Analysis (unified — auto-load on tab open) -->
-      <div id="wmm-zone-analysis">
-        <div style="text-align:center;padding:48px 20px;color:#475569;">
-          <i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:12px;color:#3b82f6;"></i>
-          <div style="font-size:13px;font-weight:700;">กำลังโหลดข้อมูลทุกเครื่อง...</div>
-        </div>
-      </div>
-
-      <!-- hidden: kept for backward-compat with wmmRefreshZones -->
-      <div id="wmm-zone-grid" style="display:none;"></div>
-      <div id="wmm-analysis-panel" style="display:none;"><div id="wmm-analysis-list"></div><span id="wmm-analysis-count"></span></div>
 
       <!-- Work Orders -->
       <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -8409,14 +8391,206 @@ const _safeStorage = {
 
       // ── Init ──────────────────────────────────────────────────────
       window.wmmInit = function() {
-        const d = safeGet('wmm-date');
+        const d = safeGet('wmc-date');
         if (d && !d.value) {
           const t = new Date();
           d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
         }
-        wmmRunAnalysis();   // auto-load ทันที — ดึงครบทั้ง 7 ขั้นพร้อมกัน
+        wmCapLoad();
         wmmLoadOrders();
         if (!_wmmPoll) wmmStartPolling();
+      };
+
+      // ── Zone Capacity (ฐานว่าง) ────────────────────────────────────
+      var WMC_ZONES = ['P1','P2','P3','P4','C5'];
+
+      window.wmCapLoad = async function() {
+        const dateEl = safeGet('wmc-date');
+        const dateStr = dateEl ? dateEl.value : new Date().toISOString().slice(0,10);
+        const cards = safeGet('wmc-cards');
+        if (cards) cards.innerHTML = '<div class="col-span-full py-10 text-center" style="color:#64748b;"><i class="fas fa-spinner fa-spin text-2xl mb-2 block" style="color:#3b82f6;"></i><div class="text-sm font-bold">กำลังโหลด...</div></div>';
+
+        try {
+          // Load in parallel: zone_capacity_log for date, production_plan_cache for month, products
+          var monthKey = dateStr.slice(0,7);
+          var [logRes, planRes, prodRes] = await Promise.all([
+            window._sb.from('zone_capacity_log').select('zone,empty_slots').eq('log_date', dateStr),
+            window._sb.from('production_plan_cache').select('data').eq('month_key', monthKey).single(),
+            window._sb.from('products').select('sku,lines_per_bundle,bundle_height')
+          ]);
+
+          // Map logged empty_slots by zone
+          var logMap = {};
+          if (logRes.data) logRes.data.forEach(function(r){ logMap[r.zone] = r.empty_slots; });
+
+          // Map products by sku
+          var prodMap = {};
+          if (prodRes.data) prodRes.data.forEach(function(p){ prodMap[p.sku] = p; });
+
+          // Parse production plan
+          var planData = (planRes.data && planRes.data.data) || null;
+
+          wmCapRender(dateStr, logMap, planData, prodMap);
+        } catch(e) {
+          if (cards) cards.innerHTML = '<div class="col-span-full py-8 text-center text-red-500 font-bold">โหลดไม่สำเร็จ: ' + e.message + '</div>';
+        }
+      };
+
+      window.wmCapSave = async function() {
+        const dateEl = safeGet('wmc-date');
+        const dateStr = dateEl ? dateEl.value : '';
+        if (!dateStr) { showToast('กรุณาเลือกวันที่ก่อน'); return; }
+
+        var statusEl = safeGet('wmc-status');
+        if (statusEl) { statusEl.style.display='block'; statusEl.style.background='#eff6ff'; statusEl.style.color='#1d4ed8'; statusEl.textContent='กำลังบันทึก...'; }
+
+        var rows = WMC_ZONES.map(function(z) {
+          var inp = document.getElementById('wmc-inp-'+z);
+          return { log_date: dateStr, zone: z, empty_slots: inp ? (parseInt(inp.value)||0) : 0, recorded_by: 'warehouse' };
+        });
+
+        var errors = 0;
+        await Promise.all(rows.map(async function(row) {
+          var { error } = await window._sb.from('zone_capacity_log').upsert(row, { onConflict: 'log_date,zone' });
+          if (error) errors++;
+        }));
+
+        if (statusEl) {
+          if (errors === 0) {
+            statusEl.style.background='#f0fdf4'; statusEl.style.color='#15803d'; statusEl.textContent='✓ บันทึกสำเร็จ';
+          } else {
+            statusEl.style.background='#fef2f2'; statusEl.style.color='#dc2626'; statusEl.textContent='บันทึกบางรายการไม่สำเร็จ (' + errors + ' โซน)';
+          }
+          setTimeout(function(){ if(statusEl) statusEl.style.display='none'; }, 3000);
+        }
+        // Re-render with updated values
+        wmCapLoad();
+      };
+
+      window.wmCapRender = function(dateStr, logMap, planData, prodMap) {
+        var cards = safeGet('wmc-cards');
+        if (!cards) return;
+
+        // Build date list: today + 3 days forward
+        function addDays(s, n) {
+          var d = new Date(s+'T00:00:00'); d.setDate(d.getDate()+n);
+          return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        }
+        function fmtThai(s) {
+          var d = new Date(s+'T00:00:00');
+          var days = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+          return days[d.getDay()]+' '+d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0');
+        }
+
+        var dates = [dateStr, addDays(dateStr,1), addDays(dateStr,2), addDays(dateStr,3)];
+
+        // Extract production by zone+date from planData
+        // planData.machines[].machineId, .products[].sku, .products[].daily[date] = lines
+        function getDailyPlan(zone, date) {
+          if (!planData || !planData.machines) return [];
+          var result = [];
+          planData.machines.forEach(function(m) {
+            if (!m.machineId || m.machineId.toUpperCase() !== zone) return;
+            (m.products||[]).forEach(function(p) {
+              var lines = (p.daily && p.daily[date]) ? Number(p.daily[date]) : 0;
+              if (lines > 0) result.push({ sku: p.sku, lines: lines });
+            });
+          });
+          return result;
+        }
+
+        var html = '';
+        WMC_ZONES.forEach(function(zone) {
+          var emptySlots = logMap[zone] !== undefined ? logMap[zone] : 0;
+
+          // Get all SKUs produced in this zone across the 4 dates to find bundle_height
+          var allSkus = {};
+          dates.forEach(function(d) {
+            getDailyPlan(zone, d).forEach(function(r) { allSkus[r.sku] = true; });
+          });
+
+          // Pick representative bundle_height (first SKU with valid height)
+          var bh = 0, repSku = '';
+          Object.keys(allSkus).forEach(function(sku) {
+            if (!bh && prodMap[sku] && prodMap[sku].bundle_height > 0) {
+              bh = prodMap[sku].bundle_height;
+              repSku = sku;
+            }
+          });
+
+          // Calculate layers: floor(420 / (bundle_height + 5.08)) where 5.08 = 2 inches
+          var layers = bh > 0 ? Math.floor(420 / (bh + 5.08)) : 0;
+          var totalCapBundles = emptySlots * layers;
+
+          // Build day-by-day forecast
+          var dayRows = '';
+          var cumBundles = 0;
+          var fullDay = '';
+          dates.forEach(function(d, i) {
+            var plan = getDailyPlan(zone, d);
+            var dayBundles = 0;
+            plan.forEach(function(r) {
+              var lpb = (prodMap[r.sku] && prodMap[r.sku].lines_per_bundle) ? prodMap[r.sku].lines_per_bundle : 1;
+              dayBundles += Math.ceil(r.lines / lpb);
+            });
+            cumBundles += dayBundles;
+            var remaining = totalCapBundles - cumBundles;
+            var isFull = remaining <= 0 && !fullDay;
+            if (isFull) fullDay = d;
+            var label = i===0 ? 'วันนี้' : i===1 ? 'พรุ่งนี้' : '+'+i+' วัน';
+            var rowColor = isFull ? '#fef2f2' : remaining < totalCapBundles*0.2 ? '#fffbeb' : '#f0fdf4';
+            var textColor = isFull ? '#dc2626' : remaining < totalCapBundles*0.2 ? '#b45309' : '#15803d';
+            dayRows += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-radius:8px;margin-bottom:4px;background:'+rowColor+';">'
+              +'<span style="font-size:11px;font-weight:700;color:#475569;">'+label+' ('+fmtThai(d)+')</span>'
+              +'<span style="font-size:11px;font-weight:800;color:'+textColor+';">'+(dayBundles>0?'+'+dayBundles+' มัด':'-')+'</span>'
+              +'<span style="font-size:11px;font-weight:800;color:'+textColor+';">เหลือ '+(remaining>=0?remaining:0)+' มัด</span>'
+              +'</div>';
+          });
+
+          var pctUsed = totalCapBundles > 0 ? Math.min(100, Math.round(cumBundles/totalCapBundles*100)) : 0;
+          var barColor = pctUsed>=100 ? '#ef4444' : pctUsed>=70 ? '#f59e0b' : '#10b981';
+          var headerColor = pctUsed>=100 ? '#fee2e2' : pctUsed>=70 ? '#fef3c7' : '#f0fdf4';
+          var forecastMsg = fullDay
+            ? '<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:#fee2e2;color:#dc2626;font-size:11px;font-weight:800;">⚠️ พื้นที่เต็มวันที่ '+fmtThai(fullDay)+'</div>'
+            : totalCapBundles > 0
+              ? '<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:#f0fdf4;color:#15803d;font-size:11px;font-weight:800;">✓ พื้นที่พอใน 4 วันข้างหน้า</div>'
+              : '<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:700;">ไม่มีแผนผลิต</div>';
+
+          html += '<div class="bg-white rounded-2xl shadow-sm overflow-hidden" style="border:1.5px solid '+barColor+'22;">'
+            // header
+            +'<div style="background:'+headerColor+';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">'
+            +'<span style="font-size:20px;font-weight:900;color:#0f172a;">'+zone+'</span>'
+            +(bh>0?'<span style="font-size:10px;color:#64748b;">สูง '+bh+' cm → '+layers+' ชั้น</span>':''
+            +'<span style="font-size:10px;color:#94a3b8;">ไม่มีข้อมูลความสูงมัด</span>')
+            +'</div>'
+            // input
+            +'<div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">'
+            +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px;">ฐานว่าง (ฐาน)</div>'
+            +'<div style="display:flex;align-items:center;gap:8px;">'
+            +'<input id="wmc-inp-'+zone+'" type="number" min="0" value="'+emptySlots+'" oninput="wmCapUpdateCard(\''+zone+'\')" '
+            +'style="width:80px;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-size:18px;font-weight:900;color:#0f172a;text-align:center;outline:none;">'
+            +'<div style="flex:1;">'
+            +(totalCapBundles>0?'<div style="font-size:12px;color:#475569;">= <strong>'+totalCapBundles+'</strong> มัด ('+emptySlots+' ฐาน × '+layers+' ชั้น)</div>':
+              bh===0?'<div style="font-size:11px;color:#94a3b8;">กรอกความสูงมัดในหน้า Products ก่อน</div>':
+              '<div style="font-size:12px;color:#94a3b8;">กรอกจำนวนฐานว่าง</div>')
+            +'</div></div>'
+            // progress bar
+            +(totalCapBundles>0?'<div style="margin-top:8px;height:4px;background:#f1f5f9;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+pctUsed+'%;background:'+barColor+';border-radius:4px;transition:width .4s;"></div></div>':'')
+            +'</div>'
+            // forecast rows
+            +'<div style="padding:12px 16px;">'
+            +(dayRows||'<div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px;">ไม่มีแผนผลิต</div>')
+            +forecastMsg
+            +'</div>'
+            +'</div>';
+        });
+
+        cards.innerHTML = html || '<div class="col-span-full py-8 text-center text-slate-400">ไม่มีข้อมูล</div>';
+      };
+
+      window.wmCapUpdateCard = function(zone) {
+        // Re-calculate single card on input change (lightweight: just update display text)
+        // Full re-render on save; for now just show updated capacity count
       };
 
       // ── Zone Grid ─────────────────────────────────────────────────
