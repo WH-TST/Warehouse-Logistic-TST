@@ -8645,7 +8645,10 @@ const _safeStorage = {
           var dayRows = '';
           var cumSlots = 0;
           var fullDay = '';
+          // วันนี้ (i=0) สะสมก่อนแต่ไม่แสดง — แสดงอยู่ใน section บนแล้ว
+          cumSlots += todayTotalSlots;
           dates.forEach(function(d, i) {
+            if (i === 0) return; // ข้ามวันนี้
             var plan = getDailyPlan(zone, d);
             var items = calcSlotNeeds(plan);
             var daySlots = items.reduce(function(s,r){ return s+r.slotsNeeded; }, 0);
@@ -8653,7 +8656,7 @@ const _safeStorage = {
             var remaining = emptySlots - cumSlots;
             var isFull = remaining < 0 && !fullDay;
             if (isFull) fullDay = d;
-            var label = i===0 ? 'วันนี้' : i===1 ? 'พรุ่งนี้' : i===2 ? 'มะรืน' : '+3 วัน';
+            var label = i===1 ? 'พรุ่งนี้' : i===2 ? 'มะรืน' : '+3 วัน';
             var rowBg = remaining < 0 ? '#fef2f2' : remaining < emptySlots*0.3 && emptySlots>0 ? '#fffbeb' : '#f8fafc';
             var slotsColor = remaining < 0 ? '#dc2626' : remaining < emptySlots*0.3 && emptySlots>0 ? '#b45309' : '#15803d';
 
