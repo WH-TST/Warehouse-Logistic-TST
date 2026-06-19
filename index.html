@@ -30133,7 +30133,16 @@ window.viewTripResult = async function(planId) {
   };
 
   window.scCellKey = function(e, td){
-    if(e.key === 'Enter' || e.key === 'Tab'){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      td.blur();
+      var colCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[data-field="'+td.dataset.field+'"]'));
+      var ci = colCells.indexOf(td);
+      var target = colCells[ci + (e.shiftKey ? -1 : 1)];
+      if(target) target.focus();
+      return;
+    }
+    if(e.key === 'Tab'){
       e.preventDefault();
       td.blur();
       var allCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[contenteditable="true"]'));
@@ -30144,10 +30153,10 @@ window.viewTripResult = async function(planId) {
     }
     if(e.key === 'ArrowUp' || e.key === 'ArrowDown'){
       e.preventDefault();
-      var colCells = Array.from(document.querySelectorAll('#sc-sheet-tbody td[data-field="'+td.dataset.field+'"]'));
-      var ci = colCells.indexOf(td);
-      var target = colCells[ci + (e.key==='ArrowDown'?1:-1)];
-      if(target) target.focus();
+      var colCells2 = Array.from(document.querySelectorAll('#sc-sheet-tbody td[data-field="'+td.dataset.field+'"]'));
+      var ci2 = colCells2.indexOf(td);
+      var target2 = colCells2[ci2 + (e.key==='ArrowDown'?1:-1)];
+      if(target2) target2.focus();
       return;
     }
     if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
