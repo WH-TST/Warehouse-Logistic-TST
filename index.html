@@ -8448,13 +8448,19 @@ const _safeStorage = {
         if (cards) cards.innerHTML = '<div class="col-span-full py-10 text-center" style="color:#64748b;"><i class="fas fa-spinner fa-spin text-2xl mb-2 block" style="color:#3b82f6;"></i><div class="text-sm font-bold">กำลังโหลด...</div></div>';
 
         try {
-          // Load in parallel: zone_capacity_log for date, production_plan_cache for month, products
-          var monthKey = dateStr.slice(0,7);
-          var [logRes, planRes, prodRes] = await Promise.all([
+          // หา month keys ที่ต้องโหลด (อาจข้ามเดือน เช่น forecast +3 วัน)
+          var d3 = new Date(dateStr+'T00:00:00'); d3.setDate(d3.getDate()+3);
+          var monthKey  = dateStr.slice(0,7);
+          var monthKey2 = d3.getFullYear()+'-'+String(d3.getMonth()+1).padStart(2,'0');
+          var monthKeys = monthKey2 !== monthKey ? [monthKey, monthKey2] : [monthKey];
+
+          var [logRes, prodRes] = await Promise.all([
             window._sb.from('zone_capacity_log').select('zone,empty_slots').eq('log_date', dateStr),
-            window._sb.from('production_plan_cache').select('data').eq('month_key', monthKey).single(),
             window._sb.from('products').select('sku,name,lines_per_bundle,bundle_height')
           ]);
+          var planRows = await Promise.all(monthKeys.map(function(mk) {
+            return window._sb.from('production_plan_cache').select('data').eq('month_key', mk).single();
+          }));
 
           // Map logged empty_slots by zone
           var logMap = {};
@@ -8464,8 +8470,21 @@ const _safeStorage = {
           var prodMap = {};
           if (prodRes.data) prodRes.data.forEach(function(p){ prodMap[p.sku] = p; });
 
-          // Parse production plan
-          var planData = (planRes.data && planRes.data.data) || null;
+          // Merge machines from all months into single planData
+          var allMachines = {};
+          planRows.forEach(function(res) {
+            var machines = (res.data && res.data.data && res.data.data.machines) || [];
+            machines.forEach(function(m) {
+              if (!allMachines[m.machineId]) allMachines[m.machineId] = { machineId: m.machineId, dailyHours: {}, products: [] };
+              Object.assign(allMachines[m.machineId].dailyHours, m.dailyHours || {});
+              (m.products||[]).forEach(function(p) {
+                var existing = allMachines[m.machineId].products.find(function(x){ return x.sku===p.sku; });
+                if (existing) Object.assign(existing.daily, p.daily);
+                else allMachines[m.machineId].products.push({ sku: p.sku, daily: Object.assign({}, p.daily) });
+              });
+            });
+          });
+          var planData = { machines: Object.values(allMachines) };
 
           window._wmCapState = { dateStr, planData, prodMap };
           wmCapRender(dateStr, logMap, planData, prodMap);
