@@ -28779,20 +28779,24 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
     try {
       var now = new Date().toISOString();
-      var updates = _updParsedRows.map(function(row) {
-        var obj = { sku: row.sku, updated_at: now };
-        selectedFields.forEach(function(f) {
-          if (row[f] !== undefined) obj[f] = row[f];
-        });
-        return obj;
-      });
 
-      // upsert ทีละ 500
-      var CHUNK = 500, ok = 0, fail = 0;
-      for (var i = 0; i < updates.length; i += CHUNK) {
-        var { error } = await window._sb.from('products').upsert(updates.slice(i, i + CHUNK), { onConflict: 'sku' });
-        if (error) fail += Math.min(CHUNK, updates.length - i);
-        else ok += Math.min(CHUNK, updates.length - i);
+      // deduplicate by SKU (ถ้ามีซ้ำ ใช้แถวสุดท้าย)
+      var skuMap = {};
+      _updParsedRows.forEach(function(row) { skuMap[row.sku] = row; });
+      var uniqueRows = Object.values(skuMap);
+
+      // update ทีละ SKU ผ่าน .update().eq() เพื่อไม่ overwrite field อื่น
+      var BATCH = 50, ok = 0, fail = 0;
+      for (var i = 0; i < uniqueRows.length; i += BATCH) {
+        var chunk = uniqueRows.slice(i, i + BATCH);
+        await Promise.all(chunk.map(async function(row) {
+          var patch = { updated_at: now };
+          selectedFields.forEach(function(f) {
+            if (row[f] !== undefined) patch[f] = row[f];
+          });
+          var { error } = await window._sb.from('products').update(patch).eq('sku', row.sku);
+          if (error) fail++; else ok++;
+        }));
       }
 
       st.className = 'rounded-xl p-3 text-sm font-bold ' + (fail ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-green-50 border border-green-200 text-green-700');
