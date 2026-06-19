@@ -30069,16 +30069,16 @@ window.viewTripResult = async function(planId) {
         .select('item_number,warehouse,cw_onhand')
         .in('item_number', itemNums)
         .order('id', {ascending:true});
-      var cntMapAll = {};   // key = item_number (รวมทุก WH)
-      var cntMapWH  = {};   // key = item_number|warehouse → cw_onhand
-      var orderedKeys = []; // เก็บลำดับ item_number|warehouse ตาม counting.id
+      var cntMapAll = {};  // key = item_number (รวมทุก WH)
+      var cntMapWH  = {};  // key = item_number|warehouse → cw_onhand
+      var skuOrder  = []; // ลำดับ item_number ตาม counting.id (ไม่ซ้ำ, ไม่สนใจ warehouse)
       (cntRes.data||[]).forEach(function(r){
         var sku = r.item_number;
         var v   = Number(r.cw_onhand)||0;
         cntMapAll[sku] = (cntMapAll[sku]||0) + v;
         var key = sku + '|' + (r.warehouse||'');
-        if(!cntMapWH[key]) orderedKeys.push(key);
         cntMapWH[key] = (cntMapWH[key]||0) + v;
+        if(skuOrder.indexOf(sku) === -1) skuOrder.push(sku); // first-seen order by id
       });
 
       // 3. ดึง PPB จาก products
@@ -30086,18 +30086,18 @@ window.viewTripResult = async function(planId) {
       var ppbMap = {};
       (prodRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
 
-      // 4. รวมเป็น _scItems เรียงตาม counting physical order
-      // skuMap จาก transection_fg ใช้ชื่อ/ข้อมูล; ลำดับมาจาก orderedKeys
-      var activeSKUKeys = new Set(skuList.map(function(s){ return s.sku+'|'+s.wh; }));
-      var orderedFiltered = orderedKeys.filter(function(k){ return activeSKUKeys.has(k); });
-      // SKU ที่มีใน transection_fg แต่ไม่มีใน counting ให้ต่อท้าย
-      skuList.forEach(function(s){
-        var k = s.sku+'|'+s.wh;
-        if(orderedFiltered.indexOf(k) === -1) orderedFiltered.push(k);
+      // 4. เรียง skuList ตาม skuOrder (counting physical order) — match ด้วย item_number เท่านั้น
+      //    เพื่อหลีกเลี่ยงปัญหา warehouse ใน counting ≠ warehouse ใน transection_fg
+      var skuPos = {};
+      skuOrder.forEach(function(sku, idx){ skuPos[sku] = idx; });
+      skuList.sort(function(a, b){
+        var pa = skuPos[a.sku] !== undefined ? skuPos[a.sku] : 99999;
+        var pb = skuPos[b.sku] !== undefined ? skuPos[b.sku] : 99999;
+        return pa - pb;
       });
-      _scItems = orderedFiltered.map(function(k){
-        var s = skuMap[k] || { sku: k.split('|')[0], name:'', wh: k.split('|')[1]||'' };
-        var sysQty = cntMapWH[k] !== undefined ? cntMapWH[k] : (cntMapAll[s.sku]||0);
+      _scItems = skuList.map(function(s){
+        var cntKey = s.sku + '|' + s.wh;
+        var sysQty = cntMapWH[cntKey] !== undefined ? cntMapWH[cntKey] : (cntMapAll[s.sku]||0);
         return {
           sku:       s.sku,
           name:      s.name,
