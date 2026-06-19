@@ -30871,16 +30871,16 @@ window.viewTripResult = async function(planId) {
     var checker = (document.getElementById('sc-checker').value||'').trim();
     var user    = window._currentUser || 'unknown';
 
-    // upsert session
+    // insert session (สร้างใหม่ทุกครั้ง)
     var sessionPayload = { count_date: _scDate, wh: document.getElementById('sc-wh-filter').value||null,
       checker_name: checker||null, created_by: user, status: 'completed' };
     var { data: sData, error: sErr } = await window._sb.from('stock_count_sessions')
-      .upsert(sessionPayload, { onConflict: 'count_date,wh' })
+      .insert(sessionPayload)
       .select('id').single();
     if(sErr){ showToast('❌ บันทึก session ล้มเหลว: ' + sErr.message, true); return; }
     var sessionId = sData.id;
 
-    // upsert items
+    // insert items
     var itemsPayload = _scItems.map(function(item){
       return { session_id: sessionId, sku: item.sku, sku_name: item.name,
         ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
@@ -30888,8 +30888,7 @@ window.viewTripResult = async function(planId) {
         system_pcs: item.systemQty||0,
         note: item.note||null };
     });
-    var { error: iErr } = await window._sb.from('stock_count_items')
-      .upsert(itemsPayload, { onConflict: 'session_id,sku' });
+    var { error: iErr } = await window._sb.from('stock_count_items').insert(itemsPayload);
     if(iErr){ showToast('❌ บันทึก items ล้มเหลว: ' + iErr.message, true); return; }
     showToast('✅ บันทึกสำเร็จ — session #'+sessionId);
     _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _scItems.length + ' รายการ)');
