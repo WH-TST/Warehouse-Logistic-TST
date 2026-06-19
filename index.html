@@ -13098,7 +13098,12 @@ let blockingChartInstance = null;
                 if(!col) return;
                 let v = row[i];
                 if(v instanceof Date){ const p = function(n){ return String(n).padStart(2,'0'); }; v = v.getFullYear()+'-'+p(v.getMonth()+1)+'-'+p(v.getDate()); }
-                if(v === null || v === undefined || v === '') v = textCols.includes(col) ? null : 0;
+                if(v === null || v === undefined || v === '') {
+                    v = textCols.includes(col) ? null : 0;
+                } else if(!textCols.includes(col)) {
+                    var n = parseFloat(v);
+                    v = isNaN(n) ? 0 : n;
+                }
                 rec[col] = v;
             });
             if(!rec.item_number) return;
