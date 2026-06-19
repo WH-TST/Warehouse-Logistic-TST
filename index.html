@@ -30851,9 +30851,18 @@ window.viewTripResult = async function(planId) {
   }
 
   window._semiCellKey = function(e){
-    if(e.key === 'Enter'){ e.preventDefault(); e.target.blur(); return; }
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      var td = e.target;
+      td.blur();
+      var idx = parseInt(td.dataset.semiIdx);
+      var fg  = td.dataset.semiFg;
+      var nextTd = document.querySelector('[data-semi-idx="'+(idx+1)+'"][data-semi-fg="'+fg+'"]');
+      if(nextTd){ nextTd.focus(); var r=document.createRange(),s=window.getSelection(); r.selectNodeContents(nextTd); r.collapse(false); s.removeAllRanges(); s.addRange(r); }
+      return;
+    }
     if(e.key === 'Tab'){ e.preventDefault(); e.target.blur(); return; }
-    if(e.target.dataset.semiFg === 'note') return; // allow all keys for note
+    if(e.target.dataset.semiFg === 'note') return;
     if(/[0-9+\-*\/().]/.test(e.key) || ['Backspace','Delete','ArrowLeft','ArrowRight'].includes(e.key)) return;
     e.preventDefault();
   };
