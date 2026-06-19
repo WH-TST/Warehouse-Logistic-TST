@@ -217,7 +217,8 @@ function doGet(e) {
           'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
           'syncProductionPlan',
           'syncProductionBlock',
-          'getProductionBlock'
+          'getProductionBlock',
+          'getProductionPlanByDate'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -8614,4 +8615,47 @@ function getProductionBlock(monthKey, spreadsheetId, sheetName) {
   });
 
   return { success: true, machines: machines, monthKey: monthKey };
+}
+
+// ── อ่านแผนผลิตจาก Dashboard sheet โดยตรง ตามวันที่ ────────────────────────────
+function getProductionPlanByDate(dateStr, spreadsheetId) {
+  // dateStr = 'YYYY-MM-DD', spreadsheetId = Dashboard spreadsheet
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี spreadsheetId' };
+
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName('Dashboard');
+  if (!sheet) return { success: false, message: 'ไม่พบ Sheet Dashboard' };
+
+  // dateStr → YYYYMMDD number เพื่อเทียบกับ col C
+  var targetDate = parseInt(dateStr.replace(/-/g, ''), 10);
+
+  var data = sheet.getDataRange().getValues();
+  var MACHINES = { 'C5':1,'P1':1,'P2':1,'P3':1,'P4':1 };
+  var machinesMap = {};
+
+  for (var r = 1; r < data.length; r++) {
+    var row     = data[r];
+    var colC    = parseInt(row[2] || 0, 10);   // col C = date YYYYMMDD
+    var machine = String(row[3] || '').trim().toUpperCase(); // col D = machine
+    var sku     = String(row[6] || '').trim();  // col G = SKU
+    var lines   = parseFloat(row[20] || 0);    // col U = เส้น/งาน
+
+    if (colC !== targetDate) continue;
+    if (!MACHINES[machine] || !sku || isNaN(lines) || lines <= 0) continue;
+
+    if (!machinesMap[machine]) machinesMap[machine] = {};
+    if (!machinesMap[machine][sku]) machinesMap[machine][sku] = 0;
+    machinesMap[machine][sku] += lines;
+  }
+
+  var machines = Object.keys(machinesMap).map(function(machineId) {
+    return {
+      machineId: machineId,
+      products: Object.keys(machinesMap[machineId]).map(function(sku) {
+        var daily = {}; daily[dateStr] = machinesMap[machineId][sku];
+        return { sku: sku, daily: daily };
+      })
+    };
+  });
+
+  return { success: true, machines: machines, dateStr: dateStr };
 }

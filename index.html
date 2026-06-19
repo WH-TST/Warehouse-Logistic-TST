@@ -8464,12 +8464,13 @@ const _safeStorage = {
           var monthKeys = monthKey2 !== monthKey ? [monthKey, monthKey2] : [monthKey];
 
           // อ่าน config จาก app_config
-          var cfgRes = await window._sb.from('app_config').select('key,value').in('key', ['gas_sync_url','production_block_spreadsheet_id','production_block_sheet_name']);
-          var gasUrl = '', pbSpreadsheetId = '', pbSheetName = '';
+          var cfgRes = await window._sb.from('app_config').select('key,value').in('key', ['gas_sync_url','production_block_spreadsheet_id','production_block_sheet_name','production_plan_spreadsheet_id']);
+          var gasUrl = '', pbSpreadsheetId = '', pbSheetName = '', ppSpreadsheetId = '';
           if (cfgRes.data) cfgRes.data.forEach(function(r){
             if (r.key==='gas_sync_url') gasUrl = r.value;
             if (r.key==='production_block_spreadsheet_id') pbSpreadsheetId = r.value;
             if (r.key==='production_block_sheet_name') pbSheetName = r.value;
+            if (r.key==='production_plan_spreadsheet_id') ppSpreadsheetId = r.value;
           });
 
           var [logRes, prodRes] = await Promise.all([
@@ -8477,28 +8478,33 @@ const _safeStorage = {
             window._sb.from('products').select('sku,name,lines_per_bundle,bundle_height')
           ]);
 
-          // อ่าน Production Block จาก GAS โดยตรง
-          console.log('[wmCap] gasUrl:', gasUrl, 'monthKeys:', monthKeys);
-          var allMachines = {};
-          if (gasUrl) {
-            var gasResults = await Promise.all(monthKeys.map(function(mk) {
-              var url = gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk, pbSpreadsheetId, pbSheetName]));
-              return fetch(url, { redirect: 'follow' })
-                .then(function(r){ return r.json(); })
-                .catch(function(err){ console.error('[wmCap] GAS fetch error:', err); return null; });
-            }));
-            console.log('[wmCap] gasResults:', JSON.stringify(gasResults));
-            gasResults.forEach(function(res) {
-              if (!res || !res.success) return;
-              (res.machines || []).forEach(function(m) {
-                if (!allMachines[m.machineId]) allMachines[m.machineId] = { machineId: m.machineId, products: [] };
-                (m.products||[]).forEach(function(p) {
-                  var existing = allMachines[m.machineId].products.find(function(x){ return x.sku===p.sku; });
-                  if (existing) Object.assign(existing.daily, p.daily);
-                  else allMachines[m.machineId].products.push({ sku: p.sku, daily: Object.assign({}, p.daily) });
-                });
+          // helper: merge machines array เข้า allMachines map
+          function mergeMachines(allMachines, machinesList) {
+            (machinesList || []).forEach(function(m) {
+              if (!allMachines[m.machineId]) allMachines[m.machineId] = { machineId: m.machineId, products: [] };
+              (m.products||[]).forEach(function(p) {
+                var existing = allMachines[m.machineId].products.find(function(x){ return x.sku===p.sku; });
+                if (existing) Object.assign(existing.daily, p.daily);
+                else allMachines[m.machineId].products.push({ sku: p.sku, daily: Object.assign({}, p.daily) });
               });
             });
+          }
+
+          var allMachines = {};
+          if (gasUrl) {
+            // 1. Production Block (forecast รายเดือน)
+            var pbResults = await Promise.all(monthKeys.map(function(mk) {
+              var url = gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk, pbSpreadsheetId, pbSheetName]));
+              return fetch(url, { redirect: 'follow' }).then(function(r){ return r.json(); }).catch(function(){ return null; });
+            }));
+            pbResults.forEach(function(res){ if (res && res.success) mergeMachines(allMachines, res.machines); });
+
+            // 2. Dashboard (แผนจริงวันนี้) — override/เพิ่มข้อมูลวันนี้
+            if (ppSpreadsheetId) {
+              var ppRes = await fetch(gasUrl + '?action=getProductionPlanByDate&args=' + encodeURIComponent(JSON.stringify([dateStr, ppSpreadsheetId])), { redirect: 'follow' })
+                .then(function(r){ return r.json(); }).catch(function(){ return null; });
+              if (ppRes && ppRes.success) mergeMachines(allMachines, ppRes.machines);
+            }
           }
 
           // Map logged empty_slots by zone
