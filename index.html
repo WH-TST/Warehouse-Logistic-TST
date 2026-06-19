@@ -2140,9 +2140,14 @@ thead.sticky {
             <i class="fas fa-save text-xs"></i> บันทึก
           </button>
         </div>
-        <button onclick="wmmOpenCreateModal({})" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;">
-          <i class="fas fa-plus text-xs"></i> สร้างใบงาน
-        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="wmCfgOpen()" class="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;" title="ตั้งค่า SpreadsheetId">
+            <i class="fas fa-cog text-xs"></i>
+          </button>
+          <button onclick="wmmOpenCreateModal({})" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold shadow" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;">
+            <i class="fas fa-plus text-xs"></i> สร้างใบงาน
+          </button>
+        </div>
       </div>
 
       <!-- Save status -->
@@ -2183,6 +2188,38 @@ thead.sticky {
         </div>
       </div>
 
+    </div>
+
+    <!-- ── WM Config Modal (SpreadsheetId / GAS URL) ── -->
+    <div id="wmc-cfg-modal" style="display:none;position:fixed;inset:0;z-index:400;align-items:center;justify-content:center;">
+      <div onclick="wmCfgClose()" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);"></div>
+      <div style="position:relative;background:#fff;border-radius:20px;width:100%;max-width:460px;margin:0 16px;z-index:10;box-shadow:0 25px 50px rgba(0,0,0,0.3);">
+        <div style="padding:20px 24px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:15px;font-weight:900;color:#0f172a;"><i class="fas fa-cog mr-2 text-slate-400"></i>ตั้งค่าแผนผลิต</div>
+          <button onclick="wmCfgClose()" style="width:28px;height:28px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;color:#64748b;display:flex;align-items:center;justify-content:center;"><i class="fas fa-times" style="font-size:11px;"></i></button>
+        </div>
+        <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px;">Google Spreadsheet ID (แผนผลิต)</div>
+            <input id="cfg-spreadsheet-id" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:600;color:#0f172a;outline:none;background:#f8fafc;box-sizing:border-box;font-family:monospace;">
+            <div style="font-size:10px;color:#94a3b8;margin-top:4px;">เปลี่ยนทุกต้นเดือน · ชื่อ Sheet ที่อ่าน: <strong>Dashboard</strong></div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px;">GAS Web App URL (สำหรับ Sync)</div>
+            <input id="cfg-gas-url" type="text" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:600;color:#0f172a;outline:none;background:#f8fafc;box-sizing:border-box;font-family:monospace;">
+            <div style="font-size:10px;color:#94a3b8;margin-top:4px;">Deploy GAS เป็น Web App แล้วนำ URL มาวางที่นี่</div>
+          </div>
+          <div id="cfg-status" style="display:none;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:700;text-align:center;"></div>
+          <div style="display:flex;gap:10px;">
+            <button onclick="wmCfgSave()" style="flex:1;padding:11px;border-radius:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;font-size:13px;font-weight:800;cursor:pointer;">
+              <i class="fas fa-save mr-1"></i> บันทึก
+            </button>
+            <button onclick="wmCfgSync()" id="cfg-sync-btn" style="flex:1;padding:11px;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-size:13px;font-weight:800;cursor:pointer;">
+              <i class="fas fa-sync-alt mr-1"></i> Sync แผนผลิต
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Create Work Order Modal ── -->
@@ -8622,6 +8659,71 @@ const _safeStorage = {
       };
 
       window.wmCapUpdateCard = function() { /* input changes saved on บันทึก button */ };
+
+      // ── WM Config (SpreadsheetId / GAS URL) ───────────────────────
+      window.wmCfgOpen = async function() {
+        var m = safeGet('wmc-cfg-modal');
+        if (m) m.style.display = 'flex';
+        // Load saved values from Supabase
+        var { data } = await window._sb.from('app_config').select('key,value')
+          .in('key', ['production_plan_spreadsheet_id','gas_sync_url']);
+        if (data) {
+          data.forEach(function(row) {
+            if (row.key === 'production_plan_spreadsheet_id') {
+              var el = safeGet('cfg-spreadsheet-id');
+              if (el) el.value = row.value || '';
+            }
+            if (row.key === 'gas_sync_url') {
+              var el = safeGet('cfg-gas-url');
+              if (el) el.value = row.value || '';
+            }
+          });
+        }
+      };
+
+      window.wmCfgClose = function() {
+        var m = safeGet('wmc-cfg-modal');
+        if (m) m.style.display = 'none';
+      };
+
+      window.wmCfgSave = async function() {
+        var sid = (safeGet('cfg-spreadsheet-id') || {}).value || '';
+        var gasUrl = (safeGet('cfg-gas-url') || {}).value || '';
+        var statusEl = safeGet('cfg-status');
+        if (statusEl) { statusEl.style.display='block'; statusEl.style.background='#eff6ff'; statusEl.style.color='#1d4ed8'; statusEl.textContent='กำลังบันทึก...'; }
+        var now = new Date().toISOString();
+        var rows = [
+          { key: 'production_plan_spreadsheet_id', value: sid, updated_at: now },
+          { key: 'gas_sync_url', value: gasUrl, updated_at: now }
+        ];
+        var { error } = await window._sb.from('app_config').upsert(rows, { onConflict: 'key' });
+        if (statusEl) {
+          if (!error) {
+            statusEl.style.background='#f0fdf4'; statusEl.style.color='#15803d'; statusEl.textContent='✓ บันทึกสำเร็จ';
+          } else {
+            statusEl.style.background='#fef2f2'; statusEl.style.color='#dc2626'; statusEl.textContent='บันทึกไม่สำเร็จ: ' + error.message;
+          }
+        }
+      };
+
+      window.wmCfgSync = async function() {
+        var gasUrl = (safeGet('cfg-gas-url') || {}).value || '';
+        var statusEl = safeGet('cfg-status');
+        if (!gasUrl) {
+          if (statusEl) { statusEl.style.display='block'; statusEl.style.background='#fef2f2'; statusEl.style.color='#dc2626'; statusEl.textContent='กรุณาใส่ GAS Web App URL ก่อน'; }
+          return;
+        }
+        var btn = safeGet('cfg-sync-btn');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> กำลัง Sync...'; }
+        if (statusEl) { statusEl.style.display='block'; statusEl.style.background='#eff6ff'; statusEl.style.color='#1d4ed8'; statusEl.textContent='กำลังเรียก GAS...'; }
+        try {
+          var res = await fetch(gasUrl + '?action=syncProductionPlan', { method: 'GET', mode: 'no-cors' });
+          if (statusEl) { statusEl.style.background='#f0fdf4'; statusEl.style.color='#15803d'; statusEl.textContent='✓ ส่งคำสั่ง Sync แล้ว — รอ GAS ประมวลผล (~30 วิ)'; }
+        } catch(e) {
+          if (statusEl) { statusEl.style.background='#fef2f2'; statusEl.style.color='#dc2626'; statusEl.textContent='เรียก GAS ไม่สำเร็จ: ' + e.message; }
+        }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i> Sync แผนผลิต'; }
+      };
 
       // ── Zone Grid ─────────────────────────────────────────────────
       window.wmmRefreshZones = function() {
