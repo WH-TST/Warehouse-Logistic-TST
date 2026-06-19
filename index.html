@@ -30874,30 +30874,23 @@ window.viewTripResult = async function(planId) {
     // upsert session
     var sessionPayload = { count_date: _scDate, wh: document.getElementById('sc-wh-filter').value||null,
       checker_name: checker||null, created_by: user, status: 'completed' };
-    var sRes = await fetch(
-      'https://lkuunmyrxugsoqwrvdby.supabase.co/rest/v1/stock_count_sessions',
-      { method:'POST', headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
-        'Content-Type':'application/json','Prefer':'return=representation,resolution=merge-duplicates'},
-        body: JSON.stringify(sessionPayload) });
-    var sData = await sRes.json();
-    if(!sRes.ok){ showToast('❌ บันทึก session ล้มเหลว', true); console.error(sData); return; }
-    var sessionId = Array.isArray(sData) ? sData[0].id : sData.id;
+    var { data: sData, error: sErr } = await window._sb.from('stock_count_sessions')
+      .upsert(sessionPayload, { onConflict: 'count_date,wh' })
+      .select('id').single();
+    if(sErr){ showToast('❌ บันทึก session ล้มเหลว: ' + sErr.message, true); return; }
+    var sessionId = sData.id;
 
     // upsert items
     var itemsPayload = _scItems.map(function(item){
-      var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
       return { session_id: sessionId, sku: item.sku, sku_name: item.name,
         ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
         scrap1: item.pcs1||0, scrap2: item.pcs2||0,
         system_pcs: item.systemQty||0,
         note: item.note||null };
     });
-    var iRes = await fetch(
-      'https://lkuunmyrxugsoqwrvdby.supabase.co/rest/v1/stock_count_items',
-      { method:'POST', headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
-        'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
-        body: JSON.stringify(itemsPayload) });
-    if(!iRes.ok){ var e=await iRes.json(); showToast('❌ บันทึก items ล้มเหลว', true); console.error(e); return; }
+    var { error: iErr } = await window._sb.from('stock_count_items')
+      .upsert(itemsPayload, { onConflict: 'session_id,sku' });
+    if(iErr){ showToast('❌ บันทึก items ล้มเหลว: ' + iErr.message, true); return; }
     showToast('✅ บันทึกสำเร็จ — session #'+sessionId);
     _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _scItems.length + ' รายการ)');
   };
