@@ -8558,7 +8558,10 @@ function getProductionBlock(monthKey, spreadsheetId, sheetName) {
   if (!spreadsheetId) return { success: false, message: 'ไม่มี spreadsheetId' };
   if (!sheetName)     return { success: false, message: 'ไม่มี sheetName' };
 
-  var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(sheetName);
+  sheetName = sheetName.trim();
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  // หา sheet โดย trim ชื่อทั้งสองฝั่ง เผื่อมี space นำหน้า/ท้าย
+  var sheet = ss.getSheets().filter(function(s){ return s.getName().trim() === sheetName; })[0] || null;
   if (!sheet) return { success: false, message: 'ไม่พบ Sheet: ' + sheetName };
 
   var data = sheet.getDataRange().getValues();
