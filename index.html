@@ -8468,14 +8468,36 @@ const _safeStorage = {
           var monthKey2 = d3.getFullYear()+'-'+String(d3.getMonth()+1).padStart(2,'0');
           var monthKeys = monthKey2 !== monthKey ? [monthKey, monthKey2] : [monthKey];
 
+          // อ่าน GAS URL จาก app_config
+          var cfgRes = await window._sb.from('app_config').select('key,value').in('key', ['gas_sync_url']);
+          var gasUrl = '';
+          if (cfgRes.data) cfgRes.data.forEach(function(r){ if (r.key==='gas_sync_url') gasUrl = r.value; });
+
           var [logRes, prodRes] = await Promise.all([
             window._sb.from('zone_capacity_log').select('zone,empty_slots').eq('log_date', dateStr),
             window._sb.from('products').select('sku,name,lines_per_bundle,bundle_height')
           ]);
-          var planRows = await Promise.all(monthKeys.map(function(mk) {
-            return window._sb.from('production_block_cache').select('data').eq('month_key', mk).maybeSingle();
-          }));
-          console.log('[wmCap] monthKeys:', monthKeys, 'planRows:', JSON.stringify(planRows.map(function(r){ return { data: r.data, error: r.error }; })));
+
+          // อ่าน Production Block จาก GAS โดยตรง
+          var allMachines = {};
+          if (gasUrl) {
+            var gasResults = await Promise.all(monthKeys.map(function(mk) {
+              return fetch(gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk])))
+                .then(function(r){ return r.json(); })
+                .catch(function(){ return null; });
+            }));
+            gasResults.forEach(function(res) {
+              if (!res || !res.success) return;
+              (res.machines || []).forEach(function(m) {
+                if (!allMachines[m.machineId]) allMachines[m.machineId] = { machineId: m.machineId, products: [] };
+                (m.products||[]).forEach(function(p) {
+                  var existing = allMachines[m.machineId].products.find(function(x){ return x.sku===p.sku; });
+                  if (existing) Object.assign(existing.daily, p.daily);
+                  else allMachines[m.machineId].products.push({ sku: p.sku, daily: Object.assign({}, p.daily) });
+                });
+              });
+            });
+          }
 
           // Map logged empty_slots by zone
           var logMap = {};
@@ -8485,20 +8507,6 @@ const _safeStorage = {
           var prodMap = {};
           if (prodRes.data) prodRes.data.forEach(function(p){ prodMap[p.sku] = p; });
 
-          // Merge machines from all months into single planData
-          var allMachines = {};
-          planRows.forEach(function(res) {
-            var machines = (res.data && res.data.data && res.data.data.machines) || [];
-            machines.forEach(function(m) {
-              if (!allMachines[m.machineId]) allMachines[m.machineId] = { machineId: m.machineId, dailyHours: {}, products: [] };
-              Object.assign(allMachines[m.machineId].dailyHours, m.dailyHours || {});
-              (m.products||[]).forEach(function(p) {
-                var existing = allMachines[m.machineId].products.find(function(x){ return x.sku===p.sku; });
-                if (existing) Object.assign(existing.daily, p.daily);
-                else allMachines[m.machineId].products.push({ sku: p.sku, daily: Object.assign({}, p.daily) });
-              });
-            });
-          });
           var planData = { machines: Object.values(allMachines) };
 
           window._wmCapState = { dateStr, planData, prodMap };

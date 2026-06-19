@@ -216,7 +216,8 @@ function doGet(e) {
           'getDeliveryTypeData',
           'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
           'syncProductionPlan',
-          'syncProductionBlock'
+          'syncProductionBlock',
+          'getProductionBlock'
         ];
 
         if (fnNames.indexOf(action) === -1) {
@@ -8550,4 +8551,73 @@ function syncProductionBlock() {
   });
 
   return { success: true, message: 'Synced: ' + synced.join(', '), months: synced.length };
+}
+
+// ── อ่าน Production Block จาก Google Sheet โดยตรง (ไม่ต้อง Sync) ──────────────
+function getProductionBlock(monthKey) {
+  var cfgRes = UrlFetchApp.fetch(
+    SB_URL + '/rest/v1/app_config?key=in.(production_block_spreadsheet_id,production_block_sheet_name)&select=key,value',
+    { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
+  );
+  var cfgMap = {};
+  JSON.parse(cfgRes.getContentText()).forEach(function(r){ cfgMap[r.key] = r.value; });
+
+  var spreadsheetId = cfgMap['production_block_spreadsheet_id'] || '';
+  var sheetName     = cfgMap['production_block_sheet_name'] || '';
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี production_block_spreadsheet_id' };
+  if (!sheetName)     return { success: false, message: 'ไม่มี production_block_sheet_name' };
+
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(sheetName);
+  if (!sheet) return { success: false, message: 'ไม่พบ Sheet: ' + sheetName };
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: false, message: 'Sheet ว่างเปล่า' };
+
+  var headerRow   = data[0];
+  var MACHINES    = { 'C5':1,'P1':1,'P2':1,'P3':1,'P4':1 };
+  var SKIP_LABELS = { 'PD Time (HR)':1,'PM, Setup Roll (HR)':1,'Other Downtime (HR)':1,'Plan/Day':1 };
+
+  var dateCols = {};
+  for (var c = 6; c < headerRow.length; c++) {
+    var hv = headerRow[c];
+    if (!hv) continue;
+    var dateStr = '';
+    if (hv instanceof Date) {
+      dateStr = Utilities.formatDate(hv, 'GMT+7', 'yyyy-MM-dd');
+    } else {
+      var serial = parseFloat(hv);
+      if (!isNaN(serial) && serial > 40000)
+        dateStr = Utilities.formatDate(new Date((serial - 25569) * 86400000), 'GMT+7', 'yyyy-MM-dd');
+    }
+    if (dateStr && dateStr.slice(0,7) === monthKey) dateCols[c] = dateStr;
+  }
+
+  var machinesMap = {};
+  for (var r = 1; r < data.length; r++) {
+    var row     = data[r];
+    var machine = String(row[0] || '').trim().toUpperCase();
+    var sku     = String(row[1] || '').trim();
+    var label   = String(row[5] || '').trim();
+    if (!MACHINES[machine] || !sku || SKIP_LABELS[label]) continue;
+
+    Object.keys(dateCols).forEach(function(c) {
+      var lines = parseFloat(row[parseInt(c)]);
+      if (isNaN(lines) || lines <= 0) return;
+      var ds = dateCols[c];
+      if (!machinesMap[machine]) machinesMap[machine] = {};
+      if (!machinesMap[machine][sku]) machinesMap[machine][sku] = {};
+      machinesMap[machine][sku][ds] = (machinesMap[machine][sku][ds] || 0) + lines;
+    });
+  }
+
+  var machines = Object.keys(machinesMap).map(function(machineId) {
+    return {
+      machineId: machineId,
+      products: Object.keys(machinesMap[machineId]).map(function(sku) {
+        return { sku: sku, daily: machinesMap[machineId][sku] };
+      })
+    };
+  });
+
+  return { success: true, machines: machines, monthKey: monthKey };
 }
