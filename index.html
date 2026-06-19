@@ -8453,7 +8453,7 @@ const _safeStorage = {
           var [logRes, planRes, prodRes] = await Promise.all([
             window._sb.from('zone_capacity_log').select('zone,empty_slots').eq('log_date', dateStr),
             window._sb.from('production_plan_cache').select('data').eq('month_key', monthKey).single(),
-            window._sb.from('products').select('sku,lines_per_bundle,bundle_height')
+            window._sb.from('products').select('sku,name,lines_per_bundle,bundle_height')
           ]);
 
           // Map logged empty_slots by zone
@@ -8561,7 +8561,7 @@ const _safeStorage = {
           var skuRows = '';
           todayItems.forEach(function(r) {
             skuRows += '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #f1f5f9;">'
-              +'<span style="font-size:11px;font-weight:700;color:#334155;flex:1;">'+r.sku+'</span>'
+              +'<span style="font-size:11px;font-weight:700;color:#334155;flex:1;">'+(prodMap[r.sku] && prodMap[r.sku].name ? prodMap[r.sku].name : r.sku)+'</span>'
               +'<span style="font-size:10px;color:#64748b;margin-right:8px;">'+r.bundles+' มัด ('+r.bh+'cm → '+r.layers+' ชั้น)</span>'
               +'<span style="font-size:12px;font-weight:900;color:#1d4ed8;">'+r.slotsNeeded+' ฐาน</span>'
               +'</div>';
