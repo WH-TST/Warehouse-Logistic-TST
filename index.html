@@ -6094,6 +6094,8 @@ thead.sticky {
             <th class="px-4 py-3 text-left">ชื่อสินค้า</th>
             <th class="px-4 py-3 text-center">เส้น/มัด</th>
             <th class="px-4 py-3 text-center">มัด/รอบยก</th>
+            <th class="px-4 py-3 text-center">กว้าง (cm)</th>
+            <th class="px-4 py-3 text-center">สูง (cm)</th>
             <th class="px-4 py-3 text-center">W Min</th>
             <th class="px-4 py-3 text-center">W Max</th>
             <th class="px-4 py-3 text-center">W(std)</th>
@@ -6101,7 +6103,7 @@ thead.sticky {
           </tr>
         </thead>
         <tbody id="prod-tbody">
-          <tr><td colspan="8" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>
+          <tr><td colspan="10" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>
         </tbody>
       </table>
     </div>
@@ -6805,6 +6807,16 @@ thead.sticky {
         <div>
           <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">มัด/รอบยก</label>
           <input id="prod-f-lpr" type="number" min="1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="3">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">กว้างมัด (cm)</label>
+          <input id="prod-f-bw" type="number" step="0.1" min="0" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="46">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">สูงมัด (cm)</label>
+          <input id="prod-f-bh" type="number" step="0.1" min="0" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="49">
         </div>
       </div>
       <div class="grid grid-cols-3 gap-3">
@@ -28542,11 +28554,11 @@ window.loRefreshOrderList = window.loRefreshHistory;
   async function prodLoad() {
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
     var { data, error } = await window._sb.from('products')
-      .select('sku,name,lines_per_bundle,lifts_per_round,min_w,max_w,likely_w')
+      .select('sku,name,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w')
       .order('sku');
-    if (error) { tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
+    if (error) { tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
     _prodList = data || [];
     prodRender();
   }
@@ -28559,23 +28571,25 @@ window.loRefreshOrderList = window.loRefreshHistory;
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-slate-400">ไม่พบสินค้า</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center py-12 text-slate-400">ไม่พบสินค้า</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(function(p) {
-      var wRange = (p.min_w||p.max_w) ? ((p.min_w||'–') + ' – ' + (p.max_w||'–')) : '–';
+      var skuSafe = (p.sku||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
         + '<td class="px-4 py-2.5 font-mono font-bold text-slate-700 text-xs">' + esc(p.sku) + '</td>'
         + '<td class="px-4 py-2.5 text-slate-700 text-xs">' + esc(p.name) + '</td>'
         + '<td class="px-4 py-2.5 text-center font-bold text-slate-700">' + (p.lines_per_bundle||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center text-slate-600">' + (p.lifts_per_round||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center font-bold text-violet-700">' + (p.bundle_width||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center font-bold text-violet-700">' + (p.bundle_height||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.min_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.max_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center font-bold text-emerald-700 text-xs">' + (p.likely_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center">'
           + '<div class="flex justify-center gap-1">'
-          + '<button onclick="prodOpenEdit(\'' + (p.sku||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" class="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>'
-          + '<button onclick="prodDelete(\'' + (p.sku||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" class="w-7 h-7 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>'
+          + '<button onclick="prodOpenEdit(\'' + skuSafe + '\')" class="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>'
+          + '<button onclick="prodDelete(\'' + skuSafe + '\')" class="w-7 h-7 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>'
           + '</div></td>'
         + '</tr>';
     }).join('');
@@ -28584,7 +28598,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
   window.prodOpenAdd = function() {
     _prodEditSku = null;
     document.getElementById('prod-modal-title').textContent = '➕ เพิ่มสินค้าใหม่';
-    ['sku','name','lpb','lpr','wmin','wmax','wstd'].forEach(function(k) {
+    ['sku','name','lpb','lpr','bw','bh','wmin','wmax','wstd'].forEach(function(k) {
       var el = document.getElementById('prod-f-' + k);
       if (el) el.value = '';
     });
@@ -28602,6 +28616,8 @@ window.loRefreshOrderList = window.loRefreshHistory;
     document.getElementById('prod-f-name').value = p.name || '';
     document.getElementById('prod-f-lpb').value = p.lines_per_bundle || '';
     document.getElementById('prod-f-lpr').value = p.lifts_per_round || '';
+    document.getElementById('prod-f-bw').value = p.bundle_width || '';
+    document.getElementById('prod-f-bh').value = p.bundle_height || '';
     document.getElementById('prod-f-wmin').value = p.min_w || '';
     document.getElementById('prod-f-wmax').value = p.max_w || '';
     document.getElementById('prod-f-wstd').value = p.likely_w || '';
@@ -28620,6 +28636,8 @@ window.loRefreshOrderList = window.loRefreshHistory;
       sku: sku, name: name,
       lines_per_bundle: parseInt(document.getElementById('prod-f-lpb').value) || 0,
       lifts_per_round:  parseInt(document.getElementById('prod-f-lpr').value) || 0,
+      bundle_width:  parseFloat(document.getElementById('prod-f-bw').value) || 0,
+      bundle_height: parseFloat(document.getElementById('prod-f-bh').value) || 0,
       min_w:    parseFloat(document.getElementById('prod-f-wmin').value) || 0,
       max_w:    parseFloat(document.getElementById('prod-f-wmax').value) || 0,
       likely_w: parseFloat(document.getElementById('prod-f-wstd').value) || 0,
