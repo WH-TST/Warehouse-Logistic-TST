@@ -30063,19 +30063,22 @@ window.viewTripResult = async function(planId) {
         return;
       }
 
-      // 2. ดึง system qty จาก counting (cw_onhand = ยอดระบบ เหมือน Reconcile)
+      // 2. ดึง system qty จาก counting เรียงตาม id (physical order เหมือน Reconcile)
       var itemNums = [...new Set(skuList.map(function(s){ return s.sku; }))];
       var cntRes = await window._sb.from('counting')
         .select('item_number,warehouse,cw_onhand')
-        .in('item_number', itemNums);
-      var cntMapAll = {};  // key = item_number (รวมทุก WH)
-      var cntMapWH  = {};  // key = item_number|warehouse
+        .in('item_number', itemNums)
+        .order('id', {ascending:true});
+      var cntMapAll = {};   // key = item_number (รวมทุก WH)
+      var cntMapWH  = {};   // key = item_number|warehouse → cw_onhand
+      var orderedKeys = []; // เก็บลำดับ item_number|warehouse ตาม counting.id
       (cntRes.data||[]).forEach(function(r){
         var sku = r.item_number;
         var v   = Number(r.cw_onhand)||0;
         cntMapAll[sku] = (cntMapAll[sku]||0) + v;
         var key = sku + '|' + (r.warehouse||'');
-        cntMapWH[key]  = (cntMapWH[key]||0) + v;
+        if(!cntMapWH[key]) orderedKeys.push(key);
+        cntMapWH[key] = (cntMapWH[key]||0) + v;
       });
 
       // 3. ดึง PPB จาก products
@@ -30083,11 +30086,18 @@ window.viewTripResult = async function(planId) {
       var ppbMap = {};
       (prodRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
 
-      // 4. รวมเป็น _scItems
-      _scItems = skuList.map(function(s){
-        var cntKey = s.sku + '|' + s.wh;
-        // ใช้ยอด WH ตรงก่อน ถ้าไม่มีให้ใช้ยอดรวมทุก WH ต่อ SKU
-        var sysQty = cntMapWH[cntKey] !== undefined ? cntMapWH[cntKey] : (cntMapAll[s.sku]||0);
+      // 4. รวมเป็น _scItems เรียงตาม counting physical order
+      // skuMap จาก transection_fg ใช้ชื่อ/ข้อมูล; ลำดับมาจาก orderedKeys
+      var activeSKUKeys = new Set(skuList.map(function(s){ return s.sku+'|'+s.wh; }));
+      var orderedFiltered = orderedKeys.filter(function(k){ return activeSKUKeys.has(k); });
+      // SKU ที่มีใน transection_fg แต่ไม่มีใน counting ให้ต่อท้าย
+      skuList.forEach(function(s){
+        var k = s.sku+'|'+s.wh;
+        if(orderedFiltered.indexOf(k) === -1) orderedFiltered.push(k);
+      });
+      _scItems = orderedFiltered.map(function(k){
+        var s = skuMap[k] || { sku: k.split('|')[0], name:'', wh: k.split('|')[1]||'' };
+        var sysQty = cntMapWH[k] !== undefined ? cntMapWH[k] : (cntMapAll[s.sku]||0);
         return {
           sku:       s.sku,
           name:      s.name,
@@ -30117,23 +30127,38 @@ window.viewTripResult = async function(planId) {
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการ</td></tr>';
       return;
     }
+    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309' };
+    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7' };
+    var whGroups = {}, whOrder = [];
+    _scItems.forEach(function(item, i){
+      if(!whGroups[item.wh]){ whGroups[item.wh] = []; whOrder.push(item.wh); }
+      whGroups[item.wh].push(i);
+    });
+    var seqNum = 0;
     var rowBg = ['#ffffff','#f8fafc'];
-    tbody.innerHTML = _scItems.map(function(item, i){
-      var bg = rowBg[i % 2];
-      var whColor = item.wh === 'FG-BP' ? '#1d4ed8' : '#0f766e';
-      var whBg    = item.wh === 'FG-BP' ? '#dbeafe'  : '#ccfbf1';
-      var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
-      var isEmpty = (item.bundle1===0 && item.bundle2===0 && item.pcs1===0 && item.pcs2===0 && item.holdPcs===0);
-      var diff = counted - item.systemQty;
-      var diffHtml = isEmpty ? '<span style="color:#cbd5e1">—</span>'
-        : diff===0 ? '<span style="color:#15803d;font-weight:700">0</span>'
-        : '<span style="color:#dc2626;font-weight:700">'+(diff>0?'+':'')+diff+'</span>';
-      var countedHtml = isEmpty ? '<span style="color:#cbd5e1">—</span>'
-        : '<span style="font-weight:700;color:#1e293b">'+counted+'</span>';
-      return '<tr style="background:' + bg + ';border-bottom:1px solid #f1f5f9" data-idx="' + i + '">'
+    var html = whOrder.map(function(wh){
+      var whColor = _whColorMap[wh] || '#475569';
+      var whBg    = _whBgMap[wh]    || '#f1f5f9';
+      var grpHeader = '<tr data-wh-header="'+wh+'" style="background:'+whBg+';border-bottom:2px solid '+whColor+'">'
+        + '<td colspan="13" style="padding:6px 12px;font-weight:700;font-size:12px;color:'+whColor+';letter-spacing:.5px">'
+        + '▸ ' + wh + ' <span style="font-weight:400;color:'+whColor+';opacity:.7">('+whGroups[wh].length+' รายการ)</span>'
+        + '</td></tr>';
+      var grpRows = whGroups[wh].map(function(i){
+        seqNum++;
+        var item = _scItems[i];
+        var bg = rowBg[seqNum % 2];
+        var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
+        var isEmpty = (item.bundle1===0 && item.bundle2===0 && item.pcs1===0 && item.pcs2===0 && item.holdPcs===0);
+        var diff = counted - item.systemQty;
+        var diffHtml = isEmpty ? '<span style="color:#cbd5e1">—</span>'
+          : diff===0 ? '<span style="color:#15803d;font-weight:700">0</span>'
+          : '<span style="color:#dc2626;font-weight:700">'+(diff>0?'+':'')+diff+'</span>';
+        var countedHtml = isEmpty ? '<span style="color:#cbd5e1">—</span>'
+          : '<span style="font-weight:700;color:#1e293b">'+counted+'</span>';
+        return '<tr style="background:' + bg + ';border-bottom:1px solid #f1f5f9" data-idx="' + i + '" data-wh="'+wh+'">'
         + '<td style="padding:4px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">'
         +   '<div style="display:flex;flex-direction:column;align-items:center;gap:1px">'
-        +   '<span style="font-size:11px;color:#cbd5e1">'+(i+1)+'</span>'
+        +   '<span style="font-size:11px;color:#cbd5e1">'+seqNum+'</span>'
         +   '<button onclick="scDeleteItem('+i+')" title="ลบแถวนี้" style="width:18px;height:18px;border-radius:4px;border:none;background:#fee2e2;color:#ef4444;font-size:11px;cursor:pointer;line-height:1;padding:0">×</button>'
         +   '</div>'
         + '</td>'
@@ -30155,7 +30180,10 @@ window.viewTripResult = async function(planId) {
         +   '</button>'
         + '</td>'
         + '</tr>';
+      }).join('');
+      return grpHeader + grpRows;
     }).join('');
+    tbody.innerHTML = html;
   }
 
   function _scEditCell(idx, field){
