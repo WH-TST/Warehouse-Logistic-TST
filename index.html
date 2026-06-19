@@ -30592,17 +30592,13 @@ window.viewTripResult = async function(planId) {
         console.log('[Rec] items:', savedRes.error||'ok', (savedRes.data||[]).length);
         if(!savedRes.error) savedResData = savedRes.data||[];
       } catch(e){ console.warn('[Rec] stock_count query failed:', e); }
-      // หา record ล่าสุดต่อ sku+wh — เรียงตาม count_date ก่อน ถ้าวันเดียวกันใช้ session_id สูงสุด
+      // หา record ล่าสุดต่อ sku — ใช้ session_id สูงสุด (สอดคล้องกับ History panel)
       var savedMap = {};
       savedResData.forEach(function(r){
-        var key    = r.sku;  // ไม่มี warehouse column ใน stock_count_items
+        var key    = r.sku;
         var sessId = r.session_id||0;
-        var date   = sessDateMap[sessId]||'';
         var prev   = savedMap[key];
-        var isNewer = !prev
-          || date > prev._date
-          || (date === prev._date && sessId > prev._sessId);
-        if(isNewer){
+        if(!prev || sessId > prev._sessId){
           savedMap[key] = {
             bundle1:  Number(r.bundle1)||0,
             bundle2:  Number(r.bundle2)||0,
@@ -30610,7 +30606,7 @@ window.viewTripResult = async function(planId) {
             pcs2:     Number(r.scrap2)||0,
             holdPcs:  0,
             note:     r.note||'',
-            _date:    date,
+            _date:    sessDateMap[sessId]||'',
             _sessId:  sessId
           };
         }
