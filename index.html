@@ -30873,7 +30873,8 @@ window.viewTripResult = async function(planId) {
 
     // insert session (สร้างใหม่ทุกครั้ง)
     var todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD วันที่นับจริง
-    var sessionPayload = { count_date: todayStr, movement_date: _scDate,
+    var movementDate = _scDate || document.getElementById('sc-date').value || null;
+    var sessionPayload = { count_date: todayStr, movement_date: movementDate || null,
       wh: document.getElementById('sc-wh-filter').value||null,
       checker_name: checker||null, created_by: user, status: 'completed' };
     var { data: sData, error: sErr } = await window._sb.from('stock_count_sessions')
@@ -30968,9 +30969,9 @@ window.viewTripResult = async function(planId) {
   window.scSelectProduct = async function(sku){
     var prod = (_scProductCache||[]).find(function(p){ return p.sku===sku; });
     if(!prod) return;
-    // ดึง system qty จาก counting
-    var cntRes = await window._sb.from('counting').select('quantity').eq('item_number', sku);
-    var sysQty = (cntRes.data||[]).reduce(function(s,r){ return s + (Number(r.quantity)||0); }, 0);
+    // ดึง system qty จาก counting.cw_onhand (เหมือน Count Sheet + Reconcile)
+    var cntRes = await window._sb.from('counting').select('cw_onhand').eq('item_number', sku);
+    var sysQty = (cntRes.data||[]).reduce(function(s,r){ return s + (Number(r.cw_onhand)||0); }, 0);
     _scAddSelected = { sku: sku, name: prod.name||'', ppb: Number(prod.lines_per_bundle)||0, systemQty: sysQty };
     document.getElementById('sc-add-selected-name').textContent = prod.name||'';
     document.getElementById('sc-add-selected-sku').textContent  = sku;
