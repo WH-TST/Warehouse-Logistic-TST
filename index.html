@@ -15639,10 +15639,11 @@ function renderTrailerTable() {
             +   '<div class="text-sm font-black text-slate-700 truncate">' + shopName + '</div>'
             +   noTrailerBadge
             + '</div>'
-            + '<div class="flex gap-1.5 flex-shrink-0">'
+            + (isSingleShop ? '' :
+              '<div class="flex gap-1.5 flex-shrink-0">'
             +   '<button type="button" onclick="setTrailerShopAssign(' + idx + ',false)" class="px-4 py-2 rounded-xl text-sm font-black border-2 transition-all ' + btnMCls + '">รถแม่</button>'
             +   '<button type="button" onclick="setTrailerShopAssign(' + idx + ',true)"' + (noTrailer ? ' disabled' : '') + ' class="px-4 py-2 rounded-xl text-sm font-black border-2 transition-all ' + btnCCls + (noTrailer ? ' opacity-40 cursor-not-allowed' : '') + '">รถลูก</button>'
-            + '</div>'
+            + '</div>')
             + '</div>';
     });
     var html = rows.join('');
@@ -16862,8 +16863,8 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 whDest:          payload.whDest          || '',
                 transferRemark:  payload.transferRemark  || '',
                 totalWeight:     payload.totalWeight     || 0,
-                shops:           payload.shops           || [],
-                shopNames:       (payload.shops || []).map(s => s.shopName).filter(Boolean).join(', '),
+                shops:           isTrailerSplit ? filterShopsForTruck(payload.shops, 'mother') : (payload.shops || []),
+                shopNames:       (isTrailerSplit ? filterShopsForTruck(payload.shops, 'mother') : (payload.shops || [])).map(s => s.shopName).filter(Boolean).join(', '),
             };
 
             if (isUpdate) {
@@ -16877,7 +16878,8 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 logiPlanList.unshift(updatedPlan);
                 // ถ้ารถพ่วง เพิ่ม -C ด้วย
                 if (isTrailerSplit) {
-                    logiPlanList.unshift({ ...updatedPlan, id: basePlanId + '-C', isMother: false, isChild: true, truckPlate: payload.childPlate || '' });
+                    const childShops = filterShopsForTruck(payload.shops, 'child');
+                    logiPlanList.unshift({ ...updatedPlan, id: basePlanId + '-C', isMother: false, isChild: true, truckPlate: payload.childPlate || '', shops: childShops, shopNames: childShops.map(s => s.shopName).filter(Boolean).join(', ') });
                 }
             }
 
