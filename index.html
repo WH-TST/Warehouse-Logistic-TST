@@ -32682,26 +32682,44 @@ window.dmSelectDriver=async function(){
     return html+'</div>';
   }
 
-  /* ── helper: action buttons (admin override, no photo/mileage lock) ── */
+  /* ── helper: action buttons (admin override, with mileage inputs) ── */
   function dmActionBtns(planId, st){
+    var pid=planId.replace(/[^a-zA-Z0-9]/g,'_');
+    var INP='width:100%;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:12px 14px;color:#fff;font-size:15px;font-weight:700;margin-bottom:10px;outline:none;box-sizing:border-box;';
+    var LBL='font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;';
     var BTN='width:100%;border:none;border-radius:14px;padding:16px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;';
     var SBTN='width:100%;background:#1e293b;border:2px solid #334155;border-radius:14px;padding:13px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:6px;';
     var b='<div style="margin-top:12px;">';
-    var pid="'"+planId+"'";
-    if(st==='idle')
-      b+='<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+pid+',\'traveling\')"><i class="fas fa-play"></i> เริ่มเดินทาง</button>';
-    else if(st==='traveling')
-      b+='<button style="'+BTN+'background:#d97706;" onclick="dmAdminSetStatus('+pid+',\'at_shop\')"><i class="fas fa-store"></i> บันทึกถึงร้าน</button>'
-        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+pid+',\'returning\')"><i class="fas fa-industry"></i> กลับบริษัท</button>';
-    else if(st==='at_shop')
-      b+='<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+pid+',\'traveling\')"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป</button>'
-        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+pid+',\'returning\')"><i class="fas fa-industry"></i> กลับบริษัท</button>';
-    else if(st==='returning')
-      b+='<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+pid+',\'completed\')"><i class="fas fa-flag-checkered"></i> จบงาน / ถึงบริษัท</button>';
-    else if(st==='completed')
+    var qPid="'"+planId+"'";
+
+    if(st==='idle'){
+      b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
+        +'<label style="'+LBL+'">ไมล์ออกจากโรงงาน (หน้าปัดรถ)</label>'
+        +'<input id="dm-mile-start-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125000" style="'+INP+'">'
+        +'<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-play"></i> เริ่มเดินทาง</button>'
+        +'</div>';
+    } else if(st==='traveling'){
+      b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
+        +'<label style="'+LBL+'">ไมล์เมื่อถึงร้าน (หน้าปัดรถ)</label>'
+        +'<input id="dm-mile-arr-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125060" style="'+INP+'">'
+        +'<button style="'+BTN+'background:#d97706;" onclick="dmAdminSetStatus('+qPid+',\'at_shop\',\''+pid+'\')"><i class="fas fa-store"></i> บันทึกถึงร้าน</button>'
+        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> กลับบริษัท</button>'
+        +'</div>';
+    } else if(st==='at_shop'){
+      b+='<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป</button>'
+        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> กลับบริษัท</button>';
+    } else if(st==='returning'){
+      b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
+        +'<label style="'+LBL+'">ไมล์เมื่อถึงบริษัท (หน้าปัดรถ)</label>'
+        +'<input id="dm-mile-end-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125120" style="'+INP+'">'
+        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+qPid+',\'completed\',\''+pid+'\')"><i class="fas fa-flag-checkered"></i> ถึงบริษัท / จบงาน</button>'
+        +'</div>';
+    } else if(st==='completed'){
       b+='<div style="text-align:center;padding:12px 0;color:#34d399;font-weight:900;font-size:14px;"><i class="fas fa-check-circle" style="margin-right:6px;"></i>เสร็จสิ้นแล้ว</div>';
+    }
+
     if(st!=='idle')
-      b+='<button style="'+SBTN+'" onclick="dmAdminSetStatus('+pid+',\'idle\')"><i class="fas fa-undo"></i> รีเซ็ตสถานะ</button>';
+      b+='<button style="'+SBTN+'" onclick="dmAdminSetStatus('+qPid+',\'idle\',\''+pid+'\')"><i class="fas fa-undo"></i> รีเซ็ตสถานะ</button>';
     return b+'</div>';
   }
 
@@ -32769,16 +32787,41 @@ window.dmSelectDriver=async function(){
   area.innerHTML=html;
 };
 
-window.dmAdminSetStatus=async function(planId,newStatus){
+window.dmAdminSetStatus=async function(planId,newStatus,pid){
   var labels={idle:'รีเซ็ต (Idle)',traveling:'กำลังเดินทาง',at_shop:'อยู่ที่ร้าน',returning:'กำลังกลับ',completed:'จบงาน'};
+
+  // อ่านไมล์จาก input (ถ้ามี)
+  var safePid=pid||(planId.replace(/[^a-zA-Z0-9]/g,'_'));
+  var mileStart=parseInt((document.getElementById('dm-mile-start-'+safePid)||{}).value||'')||null;
+  var mileArr  =parseInt((document.getElementById('dm-mile-arr-'+safePid)||{}).value||'')||null;
+  var mileEnd  =parseInt((document.getElementById('dm-mile-end-'+safePid)||{}).value||'')||null;
+
+  // validate ไมล์ที่บังคับกรอก
+  if(newStatus==='traveling' && !mileStart && document.getElementById('dm-mile-start-'+safePid)){
+    showToast('❌ กรุณากรอกเลขไมล์ออกจากโรงงาน',true); return;
+  }
+  if(newStatus==='completed' && !mileEnd && document.getElementById('dm-mile-end-'+safePid)){
+    showToast('❌ กรุณากรอกเลขไมล์เมื่อถึงบริษัท',true); return;
+  }
+
   if(!confirm('บังคับอัปเดตสถานะ "'+planId+'" เป็น '+labels[newStatus]+'?')) return;
   try {
     showToast('กำลังอัปเดต…',false);
     var now=new Date().toISOString();
-    var existing=await window._sb.from('trip_logs').select('id').eq('plan_id',planId).maybeSingle();
+    var existing=await window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle();
     var updates={plan_id:planId,status:newStatus,updated_at:now};
-    if(newStatus==='traveling'||newStatus==='idle') updates.started_at=now;
-    if(newStatus==='completed') updates.finished_at=now;
+    if(newStatus==='traveling'){
+      updates.started_at=now;
+      if(mileStart) updates.mileage_start=mileStart;
+    }
+    if(newStatus==='idle'){
+      updates.started_at=now;
+      updates.mileage_start=null; updates.mileage_end=null; updates.finished_at=null;
+    }
+    if(newStatus==='completed'){
+      updates.finished_at=now;
+      if(mileEnd) updates.mileage_end=mileEnd;
+    }
     var res;
     if(existing.data){
       res=await window._sb.from('trip_logs').update(updates).eq('plan_id',planId);
@@ -32786,11 +32829,26 @@ window.dmAdminSetStatus=async function(planId,newStatus){
       res=await window._sb.from('trip_logs').insert(updates);
     }
     if(res.error) throw res.error;
+
+    // บันทึก mileage_arrival ลง shop_visits (กรณี at_shop)
+    if(newStatus==='at_shop' && mileArr){
+      var seq=(existing.data&&existing.data.current_shop_seq)||0;
+      var svExist=await window._sb.from('shop_visits').select('id').eq('plan_id',planId).eq('shop_seq',seq).maybeSingle();
+      if(svExist.data){
+        await window._sb.from('shop_visits').update({arrived_at:now,mileage_arrival:mileArr}).eq('plan_id',planId).eq('shop_seq',seq);
+      } else {
+        await window._sb.from('shop_visits').insert({plan_id:planId,shop_seq:seq,arrived_at:now,mileage_arrival:mileArr});
+      }
+    }
+
     if(newStatus==='completed'){
       await window._sb.from('logistic_plans').update({status:'success'}).eq('plan_id',planId);
     } else if(newStatus==='traveling'){
       await window._sb.from('logistic_plans').update({status:'inprogress'}).eq('plan_id',planId);
+    } else if(newStatus==='idle'){
+      await window._sb.from('logistic_plans').update({status:'planned'}).eq('plan_id',planId);
     }
+
     showToast('อัปเดตสถานะสำเร็จ',false);
     dmSelectDriver();
   } catch(e){
