@@ -12993,8 +12993,12 @@ let blockingChartInstance = null;
           + cols.map(function(c){
               var raw = r[c] !== null && r[c] !== undefined ? r[c] : '—';
               var v = raw;
-              if(typeof raw === 'string' && raw.length > 16 && raw.includes('T') && raw.includes('+'))
-                v = raw.slice(0,10) + ' ' + raw.slice(11,16);
+              if(typeof raw === 'string' && raw.length > 16 && raw.includes('T')){
+                var d = new Date(raw);
+                if(!isNaN(d)){
+                  v = d.toLocaleString('sv-SE', {timeZone:'Asia/Bangkok'}).slice(0,16);
+                }
+              }
               return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="'+String(raw).replace(/"/g,'&quot;')+'">'+v+'</td>';
             }).join('')
           + '</tr>';
