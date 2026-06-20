@@ -31075,47 +31075,6 @@ window.viewTripResult = async function(planId) {
         };
       });
 
-      // รวม FG-BP + QC ของ SKU เดียวกันเป็น 1 แถว
-      (function(){
-        var fgbpSet = {}, qcSet = {};
-        _recItems.forEach(function(it){
-          if(it.wh==='FG-BP') fgbpSet[it.sku]=true;
-          if(it.wh==='QC')    qcSet[it.sku]=true;
-        });
-        var mergeSKUs = {};
-        Object.keys(fgbpSet).forEach(function(s){ if(qcSet[s]) mergeSKUs[s]=true; });
-        if(!Object.keys(mergeSKUs).length) return;
-        var merged = [];
-        var buf = {};
-        _recItems.forEach(function(it){
-          if(!mergeSKUs[it.sku] || (it.wh!=='FG-BP' && it.wh!=='QC')){
-            merged.push(it); return;
-          }
-          if(!buf[it.sku]){
-            buf[it.sku] = { sku:it.sku, name:it.name, wh:'FG-BP+QC', ppb:it.ppb,
-              systemQty:it.systemQty,
-              bundle1:it.bundle1, bundle1_expr:it.bundle1_expr,
-              bundle2:it.bundle2, bundle2_expr:it.bundle2_expr,
-              pcs1:it.pcs1, pcs1_expr:it.pcs1_expr,
-              pcs2:it.pcs2, pcs2_expr:it.pcs2_expr,
-              holdPcs:it.holdPcs, holdPcs_expr:it.holdPcs_expr,
-              note:it.note, count_date:it.count_date };
-            merged.push(buf[it.sku]);
-          } else {
-            var m = buf[it.sku];
-            m.systemQty += it.systemQty;
-            m.bundle1   += it.bundle1;
-            m.bundle2   += it.bundle2;
-            m.pcs1      += it.pcs1;
-            m.pcs2      += it.pcs2;
-            m.holdPcs   += it.holdPcs;
-            if(it.count_date && it.count_date > m.count_date) m.count_date = it.count_date;
-            if(it.note && !m.note) m.note = it.note;
-          }
-        });
-        _recItems = merged;
-      })();
-
       _scRenderReconcile();
     } catch(err) {
       tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#ef4444;padding:32px">❌ '+_esc(err.message||String(err))+'</td></tr>';
@@ -31172,7 +31131,8 @@ window.viewTripResult = async function(planId) {
       var rowsHtml = items.map(function(item){
         seqNum++;
         total++;
-        var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
+        var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2
+                    + (item.wh === 'QC' ? (item.holdPcs||0) : 0);
         var diff     = counted - item.systemQty;
         var isEmpty  = (item.bundle1===0 && item.bundle2===0 && item.pcs1===0 && item.pcs2===0 && item.holdPcs===0);
         var rowStyle = '';
