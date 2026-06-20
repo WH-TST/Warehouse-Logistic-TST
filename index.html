@@ -32682,36 +32682,43 @@ window.dmSelectDriver=async function(){
     return html+'</div>';
   }
 
-  /* ── helper: action buttons (admin override, with mileage inputs) ── */
+  /* ── helper: action buttons (admin override — mileage บังคับทุกจุด) ── */
   function dmActionBtns(planId, st){
     var pid=planId.replace(/[^a-zA-Z0-9]/g,'_');
     var INP='width:100%;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:12px 14px;color:#fff;font-size:15px;font-weight:700;margin-bottom:10px;outline:none;box-sizing:border-box;';
     var LBL='font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;';
     var BTN='width:100%;border:none;border-radius:14px;padding:16px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;';
     var SBTN='width:100%;background:#1e293b;border:2px solid #334155;border-radius:14px;padding:13px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:6px;';
+    var GPS_HINT='<div style="font-size:11px;color:#64748b;text-align:center;margin-bottom:12px;"><i class="fas fa-map-marker-alt" style="color:#34d399;margin-right:4px;"></i>GPS + เวลาไทยจะบันทึกอัตโนมัติ</div>';
     var b='<div style="margin-top:12px;">';
     var qPid="'"+planId+"'";
 
     if(st==='idle'){
       b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
-        +'<label style="'+LBL+'">ไมล์ออกจากโรงงาน (หน้าปัดรถ)</label>'
+        +'<label style="'+LBL+'"><i class="fas fa-tachometer-alt" style="margin-right:4px;"></i>ไมล์ออกจากโรงงาน (หน้าปัดรถ) *</label>'
         +'<input id="dm-mile-start-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125000" style="'+INP+'">'
+        +GPS_HINT
         +'<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-play"></i> เริ่มเดินทาง</button>'
         +'</div>';
     } else if(st==='traveling'){
       b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
-        +'<label style="'+LBL+'">ไมล์เมื่อถึงร้าน (หน้าปัดรถ)</label>'
+        +'<label style="'+LBL+'"><i class="fas fa-tachometer-alt" style="margin-right:4px;"></i>ไมล์เมื่อถึงร้าน (หน้าปัดรถ) *</label>'
         +'<input id="dm-mile-arr-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125060" style="'+INP+'">'
+        +GPS_HINT
         +'<button style="'+BTN+'background:#d97706;" onclick="dmAdminSetStatus('+qPid+',\'at_shop\',\''+pid+'\')"><i class="fas fa-store"></i> บันทึกถึงร้าน</button>'
-        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> กลับบริษัท</button>'
+        +'<button style="'+BTN+'background:#7c3aed;margin-top:4px;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> กลับบริษัทเลย (ข้ามร้าน)</button>'
         +'</div>';
     } else if(st==='at_shop'){
-      b+='<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป</button>'
-        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> กลับบริษัท</button>';
+      b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
+        +GPS_HINT
+        +'<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-arrow-right"></i> ออกจากร้าน / ไปร้านถัดไป</button>'
+        +'<button style="'+BTN+'background:#7c3aed;margin-top:4px;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> ส่งครบ — กลับบริษัท</button>'
+        +'</div>';
     } else if(st==='returning'){
       b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
-        +'<label style="'+LBL+'">ไมล์เมื่อถึงบริษัท (หน้าปัดรถ)</label>'
+        +'<label style="'+LBL+'"><i class="fas fa-tachometer-alt" style="margin-right:4px;"></i>ไมล์เมื่อถึงบริษัท (หน้าปัดรถ) *</label>'
         +'<input id="dm-mile-end-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125120" style="'+INP+'">'
+        +GPS_HINT
         +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+qPid+',\'completed\',\''+pid+'\')"><i class="fas fa-flag-checkered"></i> ถึงบริษัท / จบงาน</button>'
         +'</div>';
     } else if(st==='completed'){
@@ -32787,72 +32794,124 @@ window.dmSelectDriver=async function(){
   area.innerHTML=html;
 };
 
+// timestamp UTC+7 (เก็บเป็น timestamptz พร้อม offset ไทย)
+function dmThaiNow(){
+  var d=new Date();
+  var thai=new Date(d.getTime()+7*3600000);
+  return thai.toISOString().replace('Z','+07:00');
+}
+
 window.dmAdminSetStatus=async function(planId,newStatus,pid){
   var labels={idle:'รีเซ็ต (Idle)',traveling:'กำลังเดินทาง',at_shop:'อยู่ที่ร้าน',returning:'กำลังกลับ',completed:'จบงาน'};
-
-  // อ่านไมล์จาก input (ถ้ามี)
   var safePid=pid||(planId.replace(/[^a-zA-Z0-9]/g,'_'));
+
+  // อ่านไมล์จาก input
   var mileStart=parseInt((document.getElementById('dm-mile-start-'+safePid)||{}).value||'')||null;
   var mileArr  =parseInt((document.getElementById('dm-mile-arr-'+safePid)||{}).value||'')||null;
   var mileEnd  =parseInt((document.getElementById('dm-mile-end-'+safePid)||{}).value||'')||null;
 
-  // validate ไมล์ที่บังคับกรอก
-  if(newStatus==='traveling' && !mileStart && document.getElementById('dm-mile-start-'+safePid)){
+  // validate ไมล์บังคับ
+  if(newStatus==='traveling' && document.getElementById('dm-mile-start-'+safePid) && !mileStart){
     showToast('❌ กรุณากรอกเลขไมล์ออกจากโรงงาน',true); return;
   }
-  if(newStatus==='completed' && !mileEnd && document.getElementById('dm-mile-end-'+safePid)){
+  if(newStatus==='at_shop' && !mileArr){
+    showToast('❌ กรุณากรอกเลขไมล์เมื่อถึงร้าน',true); return;
+  }
+  if(newStatus==='completed' && !mileEnd){
     showToast('❌ กรุณากรอกเลขไมล์เมื่อถึงบริษัท',true); return;
   }
 
   if(!confirm('บังคับอัปเดตสถานะ "'+planId+'" เป็น '+labels[newStatus]+'?')) return;
+
+  // ดึง GPS ก่อนทุก step
+  showToast('กำลังดึง GPS…',false);
+  var gps=null;
+  try{
+    gps=await new Promise(function(res,rej){
+      if(!navigator.geolocation){rej(new Error('ไม่รองรับ GPS'));return;}
+      navigator.geolocation.getCurrentPosition(
+        function(p){res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)});},
+        function(e){rej(new Error('GPS error: '+e.message));},
+        {timeout:15000,enableHighAccuracy:true,maximumAge:0}
+      );
+    });
+  }catch(ge){
+    showToast('❌ ดึง GPS ไม่ได้: '+ge.message,true); return;
+  }
+
   try {
     showToast('กำลังอัปเดต…',false);
-    var now=new Date().toISOString();
+    var now=dmThaiNow();
     var existing=await window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle();
-    var updates={plan_id:planId,status:newStatus,updated_at:now};
-    if(newStatus==='traveling'){
-      updates.started_at=now;
-      if(mileStart) updates.mileage_start=mileStart;
-    }
-    if(newStatus==='idle'){
-      updates.started_at=now;
-      updates.mileage_start=null; updates.mileage_end=null; updates.finished_at=null;
-    }
-    if(newStatus==='completed'){
-      updates.finished_at=now;
-      if(mileEnd) updates.mileage_end=mileEnd;
-    }
-    var res;
-    if(existing.data){
-      res=await window._sb.from('trip_logs').update(updates).eq('plan_id',planId);
-    } else {
-      res=await window._sb.from('trip_logs').insert(updates);
-    }
-    if(res.error) throw res.error;
+    var log=existing.data||null;
+    var updates={status:newStatus,updated_at:now};
 
-    // บันทึก mileage_arrival ลง shop_visits (กรณี at_shop)
-    if(newStatus==='at_shop' && mileArr){
-      var seq=(existing.data&&existing.data.current_shop_seq)||0;
-      var svExist=await window._sb.from('shop_visits').select('id').eq('plan_id',planId).eq('shop_seq',seq).maybeSingle();
-      if(svExist.data){
-        await window._sb.from('shop_visits').update({arrived_at:now,mileage_arrival:mileArr}).eq('plan_id',planId).eq('shop_seq',seq);
+    if(newStatus==='traveling'){
+      // เริ่มงานครั้งแรก (idle→traveling) หรือ ออกจากร้านไปร้านถัดไป (at_shop→traveling)
+      if(!log || log.status==='idle'){
+        updates.started_at=now;
+        updates.mileage_start=mileStart;
+        updates.lat_start=gps.lat; updates.lng_start=gps.lng; updates.acc_start=gps.acc;
       } else {
-        await window._sb.from('shop_visits').insert({plan_id:planId,shop_seq:seq,arrived_at:now,mileage_arrival:mileArr});
+        // ออกจากร้าน (depart) — บันทึก departed_at ลง shop_visits
+        var seq=log.current_shop_seq||0;
+        await window._sb.from('shop_visits').upsert(
+          {plan_id:planId,shop_seq:seq,departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng},
+          {onConflict:'plan_id,shop_seq'}
+        );
+      }
+    }
+
+    if(newStatus==='at_shop'){
+      var seq=log?log.current_shop_seq:0;
+      updates.current_shop_seq=seq;
+      // บันทึก arrived ลง shop_visits
+      await window._sb.from('shop_visits').upsert({
+        plan_id:planId, shop_seq:seq,
+        arrived_at:now, mileage_arrival:mileArr,
+        lat_arrival:gps.lat, lng_arrival:gps.lng, acc_arrival:gps.acc
+      },{onConflict:'plan_id,shop_seq'});
+    }
+
+    if(newStatus==='returning'){
+      // ออกจากร้านสุดท้าย — บันทึก depart ลง shop_visits
+      if(log && log.status==='at_shop'){
+        var seq=log.current_shop_seq||0;
+        await window._sb.from('shop_visits').upsert(
+          {plan_id:planId,shop_seq:seq,departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng},
+          {onConflict:'plan_id,shop_seq'}
+        );
       }
     }
 
     if(newStatus==='completed'){
-      await window._sb.from('logistic_plans').update({status:'success'}).eq('plan_id',planId);
-    } else if(newStatus==='traveling'){
-      await window._sb.from('logistic_plans').update({status:'inprogress'}).eq('plan_id',planId);
-    } else if(newStatus==='idle'){
-      await window._sb.from('logistic_plans').update({status:'planned'}).eq('plan_id',planId);
+      updates.mileage_end=mileEnd;
+      updates.lat_end=gps.lat; updates.lng_end=gps.lng; updates.acc_end=gps.acc;
+      updates.finished_at=now; updates.completed_at=now;
     }
 
-    showToast('อัปเดตสถานะสำเร็จ',false);
+    if(newStatus==='idle'){
+      // รีเซ็ต
+      updates.started_at=null; updates.finished_at=null; updates.completed_at=null;
+      updates.mileage_start=null; updates.mileage_end=null;
+    }
+
+    var res;
+    if(log){
+      res=await window._sb.from('trip_logs').update(updates).eq('plan_id',planId);
+    } else {
+      res=await window._sb.from('trip_logs').insert(Object.assign({plan_id:planId,driver_username:'admin-override'},updates));
+    }
+    if(res.error) throw res.error;
+
+    // sync logistic_plans status
+    var planStatus={traveling:'inprogress',at_shop:'inprogress',returning:'inprogress',completed:'success',idle:'planned'};
+    await window._sb.from('logistic_plans').update({status:planStatus[newStatus]}).eq('plan_id',planId);
+
+    showToast('✅ อัปเดตสถานะสำเร็จ — GPS ±'+gps.acc+'ม.',false);
     dmSelectDriver();
   } catch(e){
-    showToast('อัปเดตไม่สำเร็จ: '+(e.message||String(e)),true);
+    showToast('❌ อัปเดตไม่สำเร็จ: '+(e.message||String(e)),true);
   }
 };
 
