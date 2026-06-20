@@ -31265,10 +31265,12 @@ window.viewTripResult = async function(planId) {
           ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Over</span>'
           : '<span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Under</span>';
       var hasFG2 = it.fg_code_2 && it.fg_code_2 !== '–' && it.fg_code_2 !== '-';
+      var sHistId = 'semi-sh-hist-'+it.semi_item.replace(/[^a-zA-Z0-9]/g,'_');
       html += '<tr style="border-bottom:1px solid #f1f5f9">'
         + '<td style="padding:4px 6px;border:1px solid #e2e8f0;text-align:center;white-space:nowrap">'
-        + '<span style="color:#94a3b8;font-size:11px;margin-right:4px">'+(i+1)+'</span>'
-        + '<button onclick="scSemiDeleteItem('+i+')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:4px;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;padding:0" title="ลบแถวนี้">×</button>'
+        + '<span style="color:#94a3b8;font-size:11px;margin-right:2px">'+(i+1)+'</span>'
+        + '<button onclick="scSemiDeleteItem('+i+')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:4px;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;padding:0;margin-right:2px" title="ลบแถวนี้">×</button>'
+        + '<button onclick="scSemiToggleHistory(\''+sHistId+'\',\''+it.semi_item+'\')" id="btn-'+sHistId+'" style="background:#ede9fe;color:#7c3aed;border:none;border-radius:4px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;padding:0" title="ประวัติการนับ">▶</button>'
         + '</td>'
         + '<td style="padding:6px;border:1px solid #e2e8f0;font-weight:600;font-size:12px">'+it.semi_item+'</td>'
         + '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b;font-size:11px">'+it.semi_name+'</td>'
@@ -31284,6 +31286,11 @@ window.viewTripResult = async function(planId) {
         + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:#534ab7;font-weight:600">'+it.systemQty+'</td>'
         + '<td style="padding:6px;border:1px solid #e2e8f0;text-align:right;color:'+diffColor+';font-weight:600">'+(diff>0?'+':'')+diff+' '+badge+'</td>'
         + '<td data-semi-idx="'+i+'" data-semi-fg="note" contenteditable="true" onkeydown="_semiCellKey(event)" onblur="_semiCellBlur(this)" onclick="_semiCellClick(this)" style="padding:6px;border:1px solid #e2e8f0;background:#fafaf9;cursor:text;min-width:100px;color:#64748b;font-size:11px">'+(it.note||'')+'</td>'
+        + '</tr>'
+        + '<tr id="'+sHistId+'" style="display:none;background:#faf5ff">'
+        +   '<td colspan="13" style="padding:0">'
+        +     '<div id="'+sHistId+'-inner" style="padding:10px 16px;font-size:11px;color:#6b7280"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div>'
+        +   '</td>'
         + '</tr>';
     });
     tbody.innerHTML = html;
@@ -31584,8 +31591,12 @@ window.viewTripResult = async function(planId) {
             ? '<span style="cursor:pointer;color:#534ab7;border-bottom:2px dashed #534ab7;font-weight:700" onclick="scShowExprPopup(event,\''+sysTip+'\')">'+it.systemQty+'</span>'
             : '<span style="color:#534ab7;font-weight:700">'+it.systemQty+'</span>');
         var diffTag = isEmpty ? 'empty' : (diff===0 ? 'ok' : 'diff');
+        var rHistId = 'semi-rec-hist-'+it.semi_item.replace(/[^a-zA-Z0-9]/g,'_');
         return '<tr data-srf="1" data-code="'+it.semi_item.toLowerCase()+'" data-name="'+(it.semi_name||'').toLowerCase()+'" data-fg1="'+(it.fg_code_1||'').toLowerCase()+'" data-fg1n="'+(it.fg_name_1||'').toLowerCase()+'" data-fg2="'+(it.fg_code_2||'').toLowerCase()+'" data-fg2n="'+(it.fg_name_2||'').toLowerCase()+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;'+(rowStyle||'background:'+bg)+'">'
-          + '<td style="padding:8px 6px;border-right:1px solid #f1f5f9;text-align:center;color:#94a3b8;font-size:12px">'+(i+1)+'</td>'
+          + '<td style="padding:6px;border-right:1px solid #f1f5f9;text-align:center;white-space:nowrap">'
+          + '<span style="color:#94a3b8;font-size:11px;margin-right:3px">'+(i+1)+'</span>'
+          + '<button onclick="scSemiToggleHistory(\''+rHistId+'\',\''+it.semi_item+'\')" id="btn-'+rHistId+'" style="background:#ede9fe;color:#7c3aed;border:none;border-radius:4px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;padding:0" title="ประวัติการนับ">▶</button>'
+          + '</td>'
           + '<td style="padding:8px;border-right:1px solid #f1f5f9;font-weight:700;font-size:12px;font-family:monospace;color:#334155">'+it.semi_item+'</td>'
           + '<td style="padding:8px;border-right:1px solid #f1f5f9;color:#1e293b;font-size:12px">'+it.semi_name+'</td>'
           + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center;font-size:11px;color:#64748b">'+it.count_date+'</td>'
@@ -31600,6 +31611,11 @@ window.viewTripResult = async function(planId) {
           + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center">'+diffHtml+'</td>'
           + '<td style="padding:8px;border-right:1px solid #f1f5f9;text-align:center">'+badge+'</td>'
           + '<td style="padding:8px;font-size:11px;color:#64748b">'+it.note+'</td>'
+          + '</tr>'
+          + '<tr id="'+rHistId+'" style="display:none;background:#faf5ff">'
+          +   '<td colspan="15" style="padding:0">'
+          +     '<div id="'+rHistId+'-inner" style="padding:10px 16px;font-size:11px;color:#6b7280"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div>'
+          +   '</td>'
           + '</tr>';
       }).join('');
       tbody.innerHTML = html;
@@ -31616,6 +31632,58 @@ window.viewTripResult = async function(planId) {
     } catch(e){
       tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:#ef4444;padding:30px">❌ '+e.message+'</td></tr>';
     }
+  };
+
+  // ── ประวัติการนับ SEMI toggle ────────────────────────────────────
+  var _semiHistCache = {};
+  window.scSemiToggleHistory = async function(histId, semiItem){
+    var row = document.getElementById(histId);
+    var btn = document.getElementById('btn-'+histId);
+    if(!row) return;
+    var isOpen = row.style.display !== 'none';
+    if(isOpen){ row.style.display='none'; if(btn) btn.textContent='▶'; return; }
+    row.style.display = '';
+    if(btn) btn.textContent = '▼';
+    if(_semiHistCache[histId]) return;
+    var inner = document.getElementById(histId+'-inner');
+    var { data: items, error } = await window._sb
+      .from('stock_count_semi')
+      .select('count_date,count1,count2,total_count,system_qty,diff,note,fg_code_1,fg_code_2')
+      .eq('semi_item', semiItem)
+      .order('count_date', {ascending: false})
+      .limit(60);
+    if(error || !items || !items.length){
+      inner.innerHTML = '<span style="color:#94a3b8">ไม่มีประวัติ</span>';
+      _semiHistCache[histId] = true; return;
+    }
+    var rows = items.map(function(r){
+      var diff = r.diff !== null ? r.diff : (r.total_count - r.system_qty);
+      var dc = diff === 0 ? '#15803d' : diff > 0 ? '#d97706' : '#dc2626';
+      return '<tr style="border-bottom:1px solid #ede9fe">'
+        + '<td style="padding:4px 8px;color:#374151">'+r.count_date+'</td>'
+        + '<td style="padding:4px 8px;color:#374151;font-family:monospace;font-size:10px">'+r.fg_code_1+'</td>'
+        + '<td style="padding:4px 8px;text-align:right">'+r.count1+'</td>'
+        + '<td style="padding:4px 8px;font-family:monospace;font-size:10px;color:#1d4ed8">'+(r.fg_code_2||'—')+'</td>'
+        + '<td style="padding:4px 8px;text-align:right">'+(r.count2||'—')+'</td>'
+        + '<td style="padding:4px 8px;text-align:right;font-weight:700">'+r.total_count+'</td>'
+        + '<td style="padding:4px 8px;text-align:right;color:#534ab7">'+r.system_qty+'</td>'
+        + '<td style="padding:4px 8px;text-align:right;color:'+dc+';font-weight:700">'+(diff>0?'+':'')+diff+'</td>'
+        + '<td style="padding:4px 8px;color:#6b7280;font-size:10px">'+(r.note||'')+'</td>'
+        + '</tr>';
+    }).join('');
+    inner.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      + '<thead><tr style="background:#ede9fe;color:#5b21b6">'
+      + '<th style="padding:4px 8px;text-align:left">วันที่นับ</th>'
+      + '<th style="padding:4px 8px;text-align:left">รหัส FG1</th>'
+      + '<th style="padding:4px 8px;text-align:right">นับ FG1</th>'
+      + '<th style="padding:4px 8px;text-align:left">รหัส FG2</th>'
+      + '<th style="padding:4px 8px;text-align:right">นับ FG2</th>'
+      + '<th style="padding:4px 8px;text-align:right">รวมนับ</th>'
+      + '<th style="padding:4px 8px;text-align:right">ยอดระบบ</th>'
+      + '<th style="padding:4px 8px;text-align:right">Diff</th>'
+      + '<th style="padding:4px 8px;text-align:left">หมายเหตุ</th>'
+      + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    _semiHistCache[histId] = true;
   };
 
   var _semiAddMatch = null; // mapping row ที่ค้นเจอ
