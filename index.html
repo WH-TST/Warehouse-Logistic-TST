@@ -31055,9 +31055,17 @@ window.viewTripResult = async function(planId) {
       _scItems.forEach(function(it){ memMap[it.sku+'|'+it.wh] = it; });
 
       _recItems = orderedKeys.map(function(k){ return map[k]; }).map(function(s){
+        var isQCwh = s.wh === 'QC';
         var mem   = memMap[s.sku+'|'+s.wh] || {};
         var saved = savedMap[s.sku+'|'+s.wh] || {};
-        var hasMem = mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs;
+        // QC row: holdPcs มาจาก Count Sheet ของ FG-BP หรือ FG-BB (แถวเดียวกัน)
+        var holdMem = isQCwh
+          ? (memMap[s.sku+'|FG-BP'] || memMap[s.sku+'|FG-BB'] || {})
+          : mem;
+        var holdPcsVal = holdMem.holdPcs||0;
+        var hasMem = isQCwh
+          ? holdPcsVal > 0
+          : (mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs);
         var src = hasMem ? mem : saved;
         return {
           sku:       s.sku,
@@ -31069,7 +31077,7 @@ window.viewTripResult = async function(planId) {
           bundle2:   src.bundle2||0,  bundle2_expr: mem.bundle2_expr||'',
           pcs1:      src.pcs1||0,     pcs1_expr:    mem.pcs1_expr||'',
           pcs2:      src.pcs2||0,     pcs2_expr:    mem.pcs2_expr||'',
-          holdPcs:   src.holdPcs||0,  holdPcs_expr: mem.holdPcs_expr||'',
+          holdPcs:   holdPcsVal,      holdPcs_expr: holdMem.holdPcs_expr||'',
           note:      src.note||'',
           count_date: hasMem ? (_scDate||'') : (saved._date||'')
         };
