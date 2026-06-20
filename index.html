@@ -30645,13 +30645,14 @@ window.viewTripResult = async function(planId) {
       try {
         var savedRes = await window._sb
           .from('stock_count_items')
-          .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,session_id,stock_count_sessions(count_date)')
+          .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,session_id,stock_count_sessions(count_date,wh)')
           .order('session_id', {ascending: false});
-        // dedup: เก็บเฉพาะ occurrence แรกต่อ sku (= session ล่าสุด)
+        // dedup: เก็บเฉพาะ occurrence แรกต่อ sku|wh (= session ล่าสุด แยกคลัง)
         (savedRes.data||[]).forEach(function(r){
-          if(savedMap[r.sku]) return;
           var sess = r.stock_count_sessions || {};
-          savedMap[r.sku] = {
+          var key  = r.sku + '|' + (sess.wh||'');
+          if(savedMap[key]) return;
+          savedMap[key] = {
             bundle1: Number(r.bundle1)||0,
             bundle2: Number(r.bundle2)||0,
             pcs1:    Number(r.scrap1)||0,
@@ -30670,7 +30671,7 @@ window.viewTripResult = async function(planId) {
 
       _recItems = orderedKeys.map(function(k){ return map[k]; }).map(function(s){
         var mem   = memMap[s.sku+'|'+s.wh] || {};
-        var saved = savedMap[s.sku] || {};
+        var saved = savedMap[s.sku+'|'+s.wh] || {};
         var hasMem = mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs;
         var src = hasMem ? mem : saved;
         return {
