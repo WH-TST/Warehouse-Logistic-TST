@@ -30109,6 +30109,57 @@ window.viewTripResult = async function(planId) {
         };
       });
 
+      // 5. ดึงข้อมูลที่บันทึกแล้ว (ถ้ามี) — pre-fill ค่าที่กรอกไว้
+      try {
+        var sessQ = window._sb.from('stock_count_sessions')
+          .select('id,checker_name')
+          .eq('movement_date', dateVal);
+        if(whFilter) sessQ = sessQ.eq('wh', whFilter);
+        var sessRes = await sessQ.order('id', {ascending: false}).limit(1).single();
+        if(sessRes.data) {
+          var sessId = sessRes.data.id;
+          // ใส่ชื่อผู้นับกลับ
+          var checkerEl = document.getElementById('sc-checker');
+          if(checkerEl && sessRes.data.checker_name) checkerEl.value = sessRes.data.checker_name;
+          // ดึง items ทั้งหมดของ session นั้น
+          var savedItemsRes = await window._sb.from('stock_count_items')
+            .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,ppb')
+            .eq('session_id', sessId);
+          var savedMap = {};
+          (savedItemsRes.data||[]).forEach(function(r){ savedMap[r.sku] = r; });
+          // pre-fill _scItems ที่มีอยู่
+          _scItems.forEach(function(item){
+            var s = savedMap[item.sku];
+            if(!s) return;
+            item.bundle1  = Number(s.bundle1)||0;
+            item.bundle2  = Number(s.bundle2)||0;
+            item.pcs1     = Number(s.scrap1)||0;
+            item.pcs2     = Number(s.scrap2)||0;
+            item.note     = s.note||'';
+            delete savedMap[item.sku]; // ลบออกเพื่อเหลือแต่ manual items
+          });
+          // เพิ่ม manual items ที่ไม่ได้อยู่ใน transection_fg
+          Object.values(savedMap).forEach(function(s){
+            var cntKey = s.sku + '|' + (whFilter||'');
+            var sysQty = cntMapWH[cntKey] !== undefined ? cntMapWH[cntKey] : (cntMapAll[s.sku]||0);
+            _scItems.push({
+              sku:       s.sku,
+              name:      s.sku,
+              wh:        whFilter||'',
+              ppb:       Number(s.ppb)||0,
+              systemQty: sysQty,
+              bundle1:   Number(s.bundle1)||0,
+              bundle2:   Number(s.bundle2)||0,
+              pcs1:      Number(s.scrap1)||0,
+              pcs2:      Number(s.scrap2)||0,
+              holdPcs:   0,
+              note:      s.note||''
+            });
+          });
+          showToast('โหลดข้อมูลที่บันทึกไว้แล้ว (' + (savedItemsRes.data||[]).length + ' รายการ)');
+        }
+      } catch(e){ /* ยังไม่มีข้อมูลบันทึก = ปกติ */ }
+
       _scRenderSheet();
       var info = document.getElementById('sc-sheet-info');
       info.textContent = 'พบ ' + _scItems.length + ' SKU ที่มีการเคลื่อนไหวในวันที่ ' + dateVal + (whFilter ? ' — WH: ' + whFilter : '');
