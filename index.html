@@ -30935,19 +30935,37 @@ window.viewTripResult = async function(planId) {
     var checker = (document.getElementById('sc-checker').value||'').trim();
     var user    = window._currentUser || 'unknown';
 
-    // insert session (สร้างใหม่ทุกครั้ง)
-    var todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD วันที่นับจริง
+    var todayStr     = new Date().toLocaleDateString('sv-SE');
     var movementDate = _scDate || document.getElementById('sc-date').value || null;
-    var sessionPayload = { count_date: todayStr, movement_date: movementDate || null,
-      wh: document.getElementById('sc-wh-filter').value||null,
-      checker_name: checker||null, created_by: user, status: 'completed' };
-    var { data: sData, error: sErr } = await window._sb.from('stock_count_sessions')
-      .insert(sessionPayload)
-      .select('id').single();
-    if(sErr){ showToast('❌ บันทึก session ล้มเหลว: ' + sErr.message, true); return; }
-    var sessionId = sData.id;
+    var whVal        = document.getElementById('sc-wh-filter').value || null;
 
-    // insert items
+    // ตรวจสอบว่ามี session เดิมสำหรับ movement_date+wh นี้หรือไม่
+    var sessionId = null;
+    var existQ = window._sb.from('stock_count_sessions')
+      .select('id').eq('movement_date', movementDate);
+    if(whVal) existQ = existQ.eq('wh', whVal); else existQ = existQ.is('wh', null);
+    var { data: existData } = await existQ.order('id', {ascending:false}).limit(1).maybeSingle();
+
+    if(existData) {
+      // มี session เดิม → ลบ items เก่า แล้ว update session
+      sessionId = existData.id;
+      var { error: delErr } = await window._sb.from('stock_count_items').delete().eq('session_id', sessionId);
+      if(delErr){ showToast('❌ ลบข้อมูลเก่าล้มเหลว: ' + delErr.message, true); return; }
+      var { error: upErr } = await window._sb.from('stock_count_sessions')
+        .update({ count_date: todayStr, checker_name: checker||null, created_by: user, status: 'completed' })
+        .eq('id', sessionId);
+      if(upErr){ showToast('❌ อัปเดต session ล้มเหลว: ' + upErr.message, true); return; }
+    } else {
+      // ไม่มี session เดิม → สร้างใหม่
+      var { data: sData, error: sErr } = await window._sb.from('stock_count_sessions')
+        .insert({ count_date: todayStr, movement_date: movementDate || null,
+          wh: whVal, checker_name: checker||null, created_by: user, status: 'completed' })
+        .select('id').single();
+      if(sErr){ showToast('❌ บันทึก session ล้มเหลว: ' + sErr.message, true); return; }
+      sessionId = sData.id;
+    }
+
+    // insert items ใหม่
     var itemsPayload = _scItems.map(function(item){
       return { session_id: sessionId, sku: item.sku, sku_name: item.name,
         ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
