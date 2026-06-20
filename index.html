@@ -16916,6 +16916,17 @@ function showLogiSuccessToast(planId) {
 }
 
 // ── โหลดข้อมูลจาก GAS ──────────────────────────────────────────────────────
+// กรอง shops ตาม trailer role (mother/child) — ใช้ตอน load จาก DB
+function _filterTrailerShops(rawShops, isMother, isChild) {
+    if (!isMother && !isChild) return rawShops;
+    var hasChildLabel  = rawShops.some(function(s) { return s.truckLabel === 'child';  });
+    var hasMotherLabel = rawShops.some(function(s) { return s.truckLabel === 'mother'; });
+    if (!hasChildLabel && !hasMotherLabel) return rawShops; // ไม่มี label → แสดงทั้งหมด (backward compat)
+    if (isMother) return rawShops.filter(function(s) { return !s.truckLabel || s.truckLabel === 'mother'; });
+    if (isChild)  return rawShops.filter(function(s) { return s.truckLabel === 'child'; });
+    return rawShops;
+}
+
 window.loadLogisticList = async function loadLogisticList() {
     const filterDate = document.getElementById('logi-filter-date')?.value;
     if (!filterDate) return;
@@ -16990,13 +17001,13 @@ window.loadLogisticList = async function loadLogisticList() {
             transferRemark:  row.fail_reason       || '',
             returnDistance:  row.return_distance   || 0,
             totalWeight:     row.total_weight      || 0,
-            shops:           row.shops            || [],
+            shops:           _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false),
             whSource:        (row.job_type === 'transfer_fg' || row.job_type === 'transfer_semi')
                                ? ((row.shops||[])[0]?.loadWarehouse || '') : '',
             whDest:          '',
-            shopNames:       (row.shops||[]).map(s => s.shopName).filter(Boolean).join(', '),
-            distance:        (row.shops||[]).reduce((s, sh) => s + (parseFloat(sh.distance)||0), 0),
-            stopFee:         (row.shops||[]).reduce((s, sh) => s + (parseFloat(sh.freeDistance)||0), 0),
+            shopNames:       _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).map(s => s.shopName).filter(Boolean).join(', '),
+            distance:        _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce((s, sh) => s + (parseFloat(sh.distance)||0), 0),
+            stopFee:         _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce((s, sh) => s + (parseFloat(sh.freeDistance)||0), 0),
         }));
 
         renderLogisticList();
@@ -20066,7 +20077,7 @@ function initPreShipmentTab() {
                     id: row.plan_id, date: row.plan_date, status: row.status,
                     truckPlate: row.truck_plate || '', childPlate: row.child_plate || '',
                     driverTransport: row.driver_transport || '', totalWeight: row.total_weight || 0,
-                    shops: row.shops || [], isMother: row.is_mother || false, isChild: row.is_child || false,
+                    shops: _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false), isMother: row.is_mother || false, isChild: row.is_child || false,
                     pairId: row.pair_id || '', trailerMode: row.trailer_mode || ''
                 };
             });
@@ -21461,10 +21472,10 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
                             transferRemark:  row.fail_reason      || '',
                             returnDistance:  row.return_distance  || 0,
                             totalWeight:     row.total_weight     || 0,
-                            shops:           row.shops            || [],
-                            shopNames:       (row.shops||[]).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
-                            distance:        (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
-                            stopFee:         (row.shops||[]).reduce(function(s,sh){ return s+(parseFloat(sh.freeDistance)||0); }, 0),
+                            shops:           _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false),
+                            shopNames:       _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
+                            distance:        _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
+                            stopFee:         _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce(function(s,sh){ return s+(parseFloat(sh.freeDistance)||0); }, 0),
                         };
                     });
                     renderLogiCalendar();
