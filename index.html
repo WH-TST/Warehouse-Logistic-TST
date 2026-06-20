@@ -5832,6 +5832,12 @@ thead.sticky {
     <div class="flex gap-2 items-center flex-wrap">
       <input id="invd-search" type="text" placeholder="ค้นหา รหัส / ชื่อสินค้า..." oninput="invdRender()"
         class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 w-64">
+      <div id="invd-date-filter" class="flex gap-1 items-center hidden">
+        <span class="text-xs text-slate-500 font-bold">วันที่:</span>
+        <input id="invd-date-from" type="date" onchange="invdLoad()" class="border-2 border-slate-200 rounded-xl px-2 py-1.5 text-sm outline-none focus:border-blue-400">
+        <span class="text-xs text-slate-400">ถึง</span>
+        <input id="invd-date-to" type="date" onchange="invdLoad()" class="border-2 border-slate-200 rounded-xl px-2 py-1.5 text-sm outline-none focus:border-blue-400">
+      </div>
       <span id="invd-count" class="text-xs text-slate-400 font-bold"></span>
       <span class="flex-1"></span>
       <button onclick="invdLoad()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
@@ -12944,7 +12950,7 @@ let blockingChartInstance = null;
       onhand_fg:        ['item_number','product_name','warehouse','cw_physical_inventory','cw_available_physical','cw_physical_reserved','physical_inventory','available_physical','imported_at'],
       onhand_semi:      ['item_number','product_name','warehouse','batch_number','serial_number','imported_at'],
       counting:         ['item_number','product_name','warehouse','cw_onhand','imported_at'],
-      transection_fg:   ['tst_pd_date','item_number','product_name','warehouse','receipt','issue','cw_quantity','quantity'],
+      transection_fg:   ['tst_pd_date','physical_date','modified_datetime','warehouse','item_number','product_name','reference','cw_quantity','cw_unit','quantity','unit','receipt','issue','number','customer_name','serial_number','cost_amount','site'],
       transection_semi: ['tst_pd_date','item_number','product_name','warehouse','receipt','issue'],
     };
 
@@ -12963,11 +12969,24 @@ let blockingChartInstance = null;
     window.invdLoad = async function(){
       var tbody = document.getElementById('invd-tbody');
       var thead = document.getElementById('invd-thead');
+      var dateFilter = document.getElementById('invd-date-filter');
+      var isTransaction = _invdTable.startsWith('transection');
+      // show/hide date filter
+      if(dateFilter) dateFilter.classList.toggle('hidden', !isTransaction);
       tbody.innerHTML = '<tr><td colspan="20" class="text-center text-slate-400 py-10"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
       try {
         var cols = _invdCols[_invdTable];
-        var sortCol = _invdTable.startsWith('transection') ? 'tst_pd_date' : 'item_number';
-        var res = await window._sb.from(_invdTable).select(cols.join(',')).order(sortCol,{ascending:false}).limit(2000);
+        var sortCol = isTransaction ? 'tst_pd_date' : 'item_number';
+        var q = window._sb.from(_invdTable).select(cols.join(',')).order(sortCol,{ascending:false});
+        // date filter สำหรับ transaction tables
+        if(isTransaction){
+          var dateFrom = (document.getElementById('invd-date-from').value||'').trim();
+          var dateTo   = (document.getElementById('invd-date-to').value||'').trim();
+          if(dateFrom) q = q.gte('tst_pd_date', dateFrom);
+          if(dateTo)   q = q.lte('tst_pd_date', dateTo);
+          if(!dateFrom && !dateTo) q = q.limit(1000);  // ถ้าไม่ filter ดึง 1000 ล่าสุด
+        }
+        var res = await q;
         if(res.error) throw res.error;
         _invdData = res.data || [];
         _invdLoaded = true;
