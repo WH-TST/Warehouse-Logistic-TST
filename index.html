@@ -16749,6 +16749,20 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             // 2. Build rows (รองรับรถพ่วง -M / -C)
             const isTrailerSplit = !!(payload.truckType !== 'hire' && payload.childPlate && payload.trailerMode !== 'mother_only');
             const basePlanId = planId.replace(/-[MC]$/, '');
+
+            // กรอง shops/items ตาม truckLabel เพื่อแยก mother/child plan ไม่ให้ซ้ำ
+            const filterShopsForTruck = (shops, role) =>
+                (shops || []).map(s => {
+                    if (s.truckLabel && s.truckLabel !== role) return null;
+                    const filteredItems = (s.items || []).filter(it =>
+                        role === 'mother'
+                            ? (!it.truckLabel || it.truckLabel === 'mother')
+                            : it.truckLabel === 'child'
+                    );
+                    if (!s.truckLabel && filteredItems.length === 0) return null;
+                    return { ...s, items: filteredItems };
+                }).filter(Boolean);
+
             const buildRow = (pid, isMother, isChild, plate) => ({
                 plan_id:          pid,
                 plan_date:        payload.date,
@@ -16764,7 +16778,9 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 wage:             payload.wage           || 0,
                 warehouse:        payload.warehouse      || '',
                 fail_reason:      payload.failReason     || payload.pmDetail || '',
-                shops:            payload.shops          || [],
+                shops:            isTrailerSplit
+                                    ? filterShopsForTruck(payload.shops, isMother ? 'mother' : 'child')
+                                    : (payload.shops      || []),
                 total_weight:     payload.totalWeight    || 0,
                 return_distance:  payload.returnDistance || 0,
                 is_mother:        isMother,
