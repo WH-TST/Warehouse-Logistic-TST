@@ -4948,6 +4948,10 @@ thead.sticky {
       class="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-black text-sm transition-all text-slate-500 hover:text-slate-700">
       <i class="fas fa-calculator"></i> KPI Accuracy
     </button>
+    <button id="inv-subtab-btn-viewdata" onclick="invSwitchSubTab('viewdata')"
+      class="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-black text-sm transition-all text-slate-500 hover:text-slate-700">
+      <i class="fas fa-table"></i> ดูข้อมูล
+    </button>
   </div>
 
   <!-- SUB-TAB: IMPORT -->
@@ -5813,6 +5817,35 @@ thead.sticky {
   </div><!-- end 2-column grid SEMI -->
   </div><!-- end kpi-semi-panel -->
   </div><!-- end inv-sub-kpiaccuracy -->
+
+  <!-- SUB-TAB: VIEW DATA -->
+  <div id="inv-sub-viewdata" class="hidden space-y-4">
+    <!-- inner tab bar -->
+    <div class="flex gap-2 flex-wrap">
+      <button id="invd-tab-btn-onhand_fg"       onclick="invdSwitch('onhand_fg')"       class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all">ON-HAND FG</button>
+      <button id="invd-tab-btn-onhand_semi"     onclick="invdSwitch('onhand_semi')"     class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">ON-HAND SEMI</button>
+      <button id="invd-tab-btn-counting"        onclick="invdSwitch('counting')"        class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">COUNTING</button>
+      <button id="invd-tab-btn-transection_fg"  onclick="invdSwitch('transection_fg')"  class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">TRANSACTION FG</button>
+      <button id="invd-tab-btn-transection_semi" onclick="invdSwitch('transection_semi')" class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">TRANSACTION SEMI</button>
+    </div>
+    <!-- filter bar -->
+    <div class="flex gap-2 items-center flex-wrap">
+      <input id="invd-search" type="text" placeholder="ค้นหา รหัส / ชื่อสินค้า..." oninput="invdRender()"
+        class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 w-64">
+      <span id="invd-count" class="text-xs text-slate-400 font-bold"></span>
+      <span class="flex-1"></span>
+      <button onclick="invdLoad()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+        <i class="fas fa-sync"></i> โหลด / รีเฟรช
+      </button>
+    </div>
+    <!-- table -->
+    <div class="overflow-x-auto rounded-xl border border-slate-200" style="max-height:600px;overflow-y:auto">
+      <table class="w-full border-collapse text-sm" id="invd-table">
+        <thead id="invd-thead" class="sticky top-0 bg-slate-100 z-10"></thead>
+        <tbody id="invd-tbody"><tr><td class="text-center text-slate-400 py-10">กดปุ่มโหลดเพื่อแสดงข้อมูล</td></tr></tbody>
+      </table>
+    </div>
+  </div><!-- end inv-sub-viewdata -->
 
 </div><!-- end view-kpi-stock-content -->
 
@@ -12902,6 +12935,71 @@ let blockingChartInstance = null;
         switchInvSubTab('import');
     };
 
+    // ── View Data tab ────────────────────────────────────────────
+    var _invdTable = 'onhand_fg';
+    var _invdData  = [];
+    var _invdLoaded = false;
+
+    var _invdCols = {
+      onhand_fg:        ['item_number','product_name','warehouse','cw_quantity','quantity','imported_at'],
+      onhand_semi:      ['item_number','product_name','warehouse','serial_number','imported_at'],
+      counting:         ['item_number','product_name','warehouse','cw_onhand','imported_at'],
+      transection_fg:   ['tst_pd_date','item_number','product_name','warehouse','receipt','issue','cw_quantity','quantity'],
+      transection_semi: ['tst_pd_date','item_number','product_name','warehouse','receipt','issue'],
+    };
+
+    window.invdSwitch = function(t){
+      _invdTable = t;
+      document.querySelectorAll('.invd-tab-btn').forEach(function(b){
+        var active = b.id === 'invd-tab-btn-'+t;
+        b.className = 'invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all '
+          + (active ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-200 bg-white text-slate-500');
+      });
+      _invdData = [];
+      document.getElementById('invd-tbody').innerHTML = '<tr><td class="text-center text-slate-400 py-10">กดปุ่มโหลดเพื่อแสดงข้อมูล</td></tr>';
+      document.getElementById('invd-count').textContent = '';
+      document.getElementById('invd-search').value = '';
+      document.getElementById('invd-thead').innerHTML = '';
+    };
+
+    window.invdLoad = async function(){
+      var tbody = document.getElementById('invd-tbody');
+      var thead = document.getElementById('invd-thead');
+      tbody.innerHTML = '<tr><td colspan="20" class="text-center text-slate-400 py-10"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
+      try {
+        var cols = _invdCols[_invdTable];
+        var sortCol = _invdTable.startsWith('transection') ? 'tst_pd_date' : 'item_number';
+        var res = await window._sb.from(_invdTable).select(cols.join(',')).order(sortCol,{ascending:false}).limit(2000);
+        if(res.error) throw res.error;
+        _invdData = res.data || [];
+        _invdLoaded = true;
+        thead.innerHTML = '<tr class="text-left text-xs text-slate-600 uppercase">'
+          + cols.map(function(c){ return '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-slate-100">'+c+'</th>'; }).join('')
+          + '</tr>';
+        invdRender();
+      } catch(e){
+        tbody.innerHTML = '<tr><td colspan="20" class="text-center text-red-500 py-8">❌ '+e.message+'</td></tr>';
+      }
+    };
+
+    window.invdRender = function(){
+      var q = (document.getElementById('invd-search').value||'').toLowerCase();
+      var cols = _invdCols[_invdTable];
+      var filtered = q ? _invdData.filter(function(r){
+        return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(q); });
+      }) : _invdData;
+      document.getElementById('invd-count').textContent = filtered.length.toLocaleString() + ' รายการ';
+      var rowBg = ['#ffffff','#f8fafc'];
+      document.getElementById('invd-tbody').innerHTML = filtered.length ? filtered.map(function(r,i){
+        return '<tr style="background:'+rowBg[i%2]+';border-bottom:1px solid #f1f5f9">'
+          + cols.map(function(c){
+              var v = r[c] !== null && r[c] !== undefined ? r[c] : '—';
+              return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="'+String(v).replace(/"/g,'&quot;')+'">'+v+'</td>';
+            }).join('')
+          + '</tr>';
+      }).join('') : '<tr><td colspan="20" class="text-center text-slate-400 py-8">ไม่พบข้อมูล</td></tr>';
+    };
+
     // ============================================================
     // INVENTORY CONTROL — NEW 3-TAB SYSTEM
     // ============================================================
@@ -12917,7 +13015,8 @@ let blockingChartInstance = null;
     var invCurrentImportType = null;
 
     window.invSwitchSubTab = function(tab) {
-        ['import','kpiaccuracy'].forEach(function(t) {
+        if(tab === 'viewdata' && !_invdLoaded) { invdLoad(); }
+        ['import','kpiaccuracy','viewdata'].forEach(function(t) {
             const panel = document.getElementById('inv-sub-' + t);
             const btn = document.getElementById('inv-subtab-btn-' + t);
             if (!panel || !btn) return;
