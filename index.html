@@ -5844,6 +5844,21 @@ thead.sticky {
         <i class="fas fa-sync"></i> โหลด / รีเฟรช
       </button>
     </div>
+    <!-- summary cards (ON-HAND FG only) -->
+    <div id="invd-cards" class="hidden grid grid-cols-3 gap-3">
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+        <div id="invd-card-sku" class="text-2xl font-black text-blue-700">—</div>
+        <div class="text-xs text-blue-500 font-bold mt-1">SKU ที่มีสต๊อก &gt; 0</div>
+      </div>
+      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+        <div id="invd-card-cw" class="text-2xl font-black text-emerald-700">—</div>
+        <div class="text-xs text-emerald-500 font-bold mt-1">CW Physical รวม (เส้น)</div>
+      </div>
+      <div class="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center">
+        <div id="invd-card-weight" class="text-2xl font-black text-violet-700">—</div>
+        <div class="text-xs text-violet-500 font-bold mt-1">น้ำหนักรวมประมาณ (KG)</div>
+      </div>
+    </div>
     <!-- table -->
     <div class="overflow-x-auto rounded-xl border border-slate-200" style="max-height:600px;overflow-y:auto">
       <table class="w-full border-collapse text-sm" id="invd-table">
@@ -12945,6 +12960,7 @@ let blockingChartInstance = null;
     var _invdTable = 'onhand_fg';
     var _invdData  = [];
     var _invdLoaded = false;
+    var _invdLikelyW = {}; // sku → likely_w
 
     var _invdCols = {
       onhand_fg:        ['item_number','product_name','warehouse','cw_ordered','cw_physical_inventory','cw_on_order','cw_physical_reserved','cw_available_physical','cw_total_available','ordered','physical_inventory','on_order','physical_reserved','available_physical','total_available','imported_at'],
@@ -12975,6 +12991,12 @@ let blockingChartInstance = null;
       if(dateFilter) dateFilter.classList.toggle('hidden', !isTransaction);
       tbody.innerHTML = '<tr><td colspan="20" class="text-center text-slate-400 py-10"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
       try {
+        // fetch likely_w for onhand_fg
+        if(_invdTable === 'onhand_fg'){
+          var pwRes = await window._sb.from('products').select('sku,likely_w');
+          _invdLikelyW = {};
+          (pwRes.data||[]).forEach(function(p){ _invdLikelyW[p.sku] = Number(p.likely_w)||0; });
+        }
         var cols = _invdCols[_invdTable];
         var sortCol = isTransaction ? 'tst_pd_date' : 'item_number';
         var q = window._sb.from(_invdTable).select(cols.join(',')).order(sortCol,{ascending:false});
@@ -12990,9 +13012,12 @@ let blockingChartInstance = null;
         if(res.error) throw res.error;
         _invdData = res.data || [];
         _invdLoaded = true;
+        var extraCol = _invdTable === 'onhand_fg' ? '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-violet-100 text-violet-700">EST. WEIGHT (KG)</th>' : '';
         thead.innerHTML = '<tr class="text-left text-xs text-slate-600 uppercase">'
           + cols.map(function(c){ return '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-slate-100">'+c+'</th>'; }).join('')
-          + '</tr>';
+          + extraCol + '</tr>';
+        var cards = document.getElementById('invd-cards');
+        if(cards) cards.classList.toggle('hidden', _invdTable !== 'onhand_fg');
         invdRender();
       } catch(e){
         tbody.innerHTML = '<tr><td colspan="20" class="text-center text-red-500 py-8">❌ '+e.message+'</td></tr>';
@@ -13002,12 +13027,29 @@ let blockingChartInstance = null;
     window.invdRender = function(){
       var q = (document.getElementById('invd-search').value||'').toLowerCase();
       var cols = _invdCols[_invdTable];
+      var isFG = _invdTable === 'onhand_fg';
       var filtered = q ? _invdData.filter(function(r){
         return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(q); });
       }) : _invdData;
       document.getElementById('invd-count').textContent = filtered.length.toLocaleString() + ' รายการ';
+
+      // คำนวณ cards สำหรับ onhand_fg
+      if(isFG){
+        var skuSet = new Set(), totalCW = 0, totalWeight = 0;
+        filtered.forEach(function(r){
+          var cw = Number(r.cw_physical_inventory)||0;
+          if(cw > 0) skuSet.add(r.item_number);
+          totalCW += cw;
+          totalWeight += cw * (Number(_invdLikelyW[r.item_number])||0);
+        });
+        document.getElementById('invd-card-sku').textContent    = skuSet.size.toLocaleString();
+        document.getElementById('invd-card-cw').textContent     = totalCW.toLocaleString();
+        document.getElementById('invd-card-weight').textContent = totalWeight.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+      }
+
       var rowBg = ['#ffffff','#f8fafc'];
       document.getElementById('invd-tbody').innerHTML = filtered.length ? filtered.map(function(r,i){
+        var estWeight = isFG ? (Number(r.cw_physical_inventory)||0) * (Number(_invdLikelyW[r.item_number])||0) : null;
         return '<tr style="background:'+rowBg[i%2]+';border-bottom:1px solid #f1f5f9">'
           + cols.map(function(c){
               var raw = r[c] !== null && r[c] !== undefined ? r[c] : '—';
@@ -13026,6 +13068,7 @@ let blockingChartInstance = null;
               }
               return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="'+String(raw).replace(/"/g,'&quot;')+'">'+cell+'</td>';
             }).join('')
+          + (isFG ? '<td class="px-3 py-1.5 text-xs whitespace-nowrap text-right font-bold" style="color:#7c3aed;background:#faf5ff">'+(estWeight ? estWeight.toFixed(2) : '—')+'</td>' : '')
           + '</tr>';
       }).join('') : '<tr><td colspan="20" class="text-center text-slate-400 py-8">ไม่พบข้อมูล</td></tr>';
     };
