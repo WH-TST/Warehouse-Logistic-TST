@@ -66,6 +66,13 @@
               window.loadLogisticList();
             }
           });
+          // auto-refresh driver monitor ถ้ากำลังเปิดอยู่
+          _rtRefresh('dm', function() {
+            var dmContent = document.getElementById('view-driver-monitor-content');
+            if (dmContent && !dmContent.classList.contains('hidden') && typeof window.dmSelectDriver === 'function') {
+              window.dmSelectDriver();
+            }
+          });
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_visits' }, function() {
           _rtRefresh('dt', function() {
