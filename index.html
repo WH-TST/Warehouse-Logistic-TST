@@ -5889,6 +5889,21 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
         <div class="text-xs text-violet-500 font-bold mt-1">น้ำหนักรวมประมาณ (KG)</div>
       </div>
     </div>
+    <!-- summary cards (ON-HAND SEMI only) -->
+    <div id="invd-cards-semi" class="hidden grid grid-cols-3 gap-3">
+      <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 text-center">
+        <div id="invd-semi-card-sku" class="text-2xl font-black text-purple-700">—</div>
+        <div class="text-xs text-purple-500 font-bold mt-1">จำนวน SKU</div>
+      </div>
+      <div class="bg-fuchsia-50 border border-fuchsia-200 rounded-xl p-4 text-center">
+        <div id="invd-semi-card-band" class="text-2xl font-black text-fuchsia-700">—</div>
+        <div class="text-xs text-fuchsia-500 font-bold mt-1">จำนวนแถบ (Serial)</div>
+      </div>
+      <div class="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center">
+        <div id="invd-semi-card-weight" class="text-2xl font-black text-violet-700">—</div>
+        <div class="text-xs text-violet-500 font-bold mt-1">น้ำหนักรวมประมาณ (KG)</div>
+      </div>
+    </div>
     <!-- table -->
     <div class="overflow-x-auto rounded-xl border border-slate-200" style="max-height:600px;overflow-y:auto">
       <table class="w-full border-collapse text-sm" id="invd-table">
@@ -13052,8 +13067,8 @@ let blockingChartInstance = null;
       if(dateFilter) dateFilter.classList.toggle('hidden', !isTransaction);
       tbody.innerHTML = '<tr><td colspan="20" class="text-center text-slate-400 py-10"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
       try {
-        // fetch likely_w for onhand_fg
-        if(_invdTable === 'onhand_fg'){
+        // fetch likely_w for onhand_fg and onhand_semi
+        if(_invdTable === 'onhand_fg' || _invdTable === 'onhand_semi'){
           var pwRes = await window._sb.from('products').select('sku,likely_w');
           _invdLikelyW = {};
           (pwRes.data||[]).forEach(function(p){ _invdLikelyW[p.sku] = Number(p.likely_w)||0; });
@@ -13079,6 +13094,8 @@ let blockingChartInstance = null;
           + extraCol + '</tr>';
         var cards = document.getElementById('invd-cards');
         if(cards) cards.classList.toggle('hidden', _invdTable !== 'onhand_fg');
+        var cardsSemi = document.getElementById('invd-cards-semi');
+        if(cardsSemi) cardsSemi.classList.toggle('hidden', _invdTable !== 'onhand_semi');
         invdRender();
       } catch(e){
         tbody.innerHTML = '<tr><td colspan="20" class="text-center text-red-500 py-8">❌ '+e.message+'</td></tr>';
@@ -13106,6 +13123,19 @@ let blockingChartInstance = null;
         document.getElementById('invd-card-sku').textContent    = skuSet.size.toLocaleString();
         document.getElementById('invd-card-cw').textContent     = totalCW.toLocaleString();
         document.getElementById('invd-card-weight').textContent = totalWeight.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+      }
+      // คำนวณ cards สำหรับ onhand_semi
+      if(_invdTable === 'onhand_semi'){
+        var semiSkuSet = new Set(), semiBands = 0, semiWeight = 0;
+        filtered.forEach(function(r){
+          var qty = Number(r.physical_inventory)||0;
+          if(qty > 0) semiSkuSet.add(r.item_number);
+          semiBands++;
+          semiWeight += qty * (Number(_invdLikelyW[r.item_number])||0);
+        });
+        document.getElementById('invd-semi-card-sku').textContent    = semiSkuSet.size.toLocaleString();
+        document.getElementById('invd-semi-card-band').textContent   = semiBands.toLocaleString();
+        document.getElementById('invd-semi-card-weight').textContent = semiWeight.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
       }
 
       var rowBg = ['#ffffff','#f8fafc'];
