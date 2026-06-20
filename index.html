@@ -21491,6 +21491,93 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
         });
 }
 
+// ── Calendar Drag-and-Drop ──────────────────────────────────────────────────
+let _calDragPlanId = null;
+
+window.calDragStart = function(e, planId) {
+    _calDragPlanId = planId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', planId);
+    setTimeout(function() {
+        var el = document.getElementById('cal-badge-' + planId);
+        if (el) el.style.opacity = '0.35';
+    }, 0);
+};
+
+window.calDragEnd = function(e) {
+    if (_calDragPlanId) {
+        var el = document.getElementById('cal-badge-' + _calDragPlanId);
+        if (el) el.style.opacity = '';
+    }
+    _calDragPlanId = null;
+    document.querySelectorAll('.cal-drop-cell').forEach(function(td) {
+        td.classList.remove('ring-2','ring-inset','ring-emerald-400','!bg-emerald-50');
+    });
+};
+
+window.calDragOver = function(e) {
+    if (!_calDragPlanId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('ring-2','ring-inset','ring-emerald-400','!bg-emerald-50');
+};
+
+window.calDragLeave = function(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove('ring-2','ring-inset','ring-emerald-400','!bg-emerald-50');
+    }
+};
+
+window.calDrop = async function(e, newDate, newTruck) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('ring-2','ring-inset','ring-emerald-400','!bg-emerald-50');
+    var planId = _calDragPlanId || e.dataTransfer.getData('text/plain');
+    _calDragPlanId = null;
+    if (!planId) return;
+
+    var allPlans = (logiCalPlanList && logiCalPlanList.length) ? logiCalPlanList : (logiPlanList || []);
+    var plan = allPlans.find(function(p) { return p.id === planId; });
+    if (!plan) return;
+
+    var curTruck = plan.truckType === 'hire' ? (plan.driverTransport || '—') : (plan.truckPlate || '—');
+    if (plan.date === newDate && curTruck === newTruck) return;
+
+    var updates = {};
+    if (plan.date !== newDate) updates.plan_date = newDate;
+    if (curTruck !== newTruck && plan.truckType === 'company') updates.truck_plate = newTruck;
+    if (!Object.keys(updates).length) return;
+
+    // รถพ่วง: ย้ายแม่+ลูกพร้อมกัน
+    var ids = [planId];
+    if (plan.isMother) {
+        var childId = (plan.pairId || planId.replace(/-M$/, '')) + '-C';
+        if (allPlans.find(function(p) { return p.id === childId; })) ids.push(childId);
+    }
+
+    try {
+        showToast('กำลังย้ายแผน…', false);
+        for (var i = 0; i < ids.length; i++) {
+            var res = await window._sb.from('logistic_plans').update(updates).eq('plan_id', ids[i]);
+            if (res.error) throw res.error;
+        }
+        [logiCalPlanList, logiPlanList].forEach(function(list) {
+            if (!list) return;
+            list.forEach(function(p) {
+                if (ids.indexOf(p.id) !== -1) {
+                    if (updates.plan_date)  p.date = updates.plan_date;
+                    if (updates.truck_plate) { p.truckPlate = updates.truck_plate; }
+                }
+            });
+        });
+        showToast('ย้ายแผนเรียบร้อย', false);
+        renderLogiCalendar();
+        if (typeof renderLogisticList === 'function') renderLogisticList();
+    } catch(err) {
+        showToast('ย้ายแผนไม่สำเร็จ: ' + (err.message || String(err)), true);
+        renderLogiCalendar();
+    }
+};
+
 // ── Main render ────────────────────────────────────────────────────────────
 function renderLogiCalendar() {
     const container = document.getElementById('logi-cal-inner');
@@ -21639,7 +21726,14 @@ function renderLogiCalendar() {
                 const distDisplay = isMaint ? '' : (totalDist > 0 ? totalDist.toLocaleString(undefined,{maximumFractionDigits:0})+' กม.' : '');
                 const remarkDisplay = isMaint ? (p.failReason||'') : remarks;
 
-                return `<div class="${st.bg} border-l-4 ${st.border} rounded-r-xl rounded-l-sm p-2 cursor-pointer hover:shadow-lg hover:brightness-95 transition-all text-left w-full relative group"
+                const _canDrag = p.status !== 'success';
+                const _esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
+                return `<div class="${st.bg} border-l-4 ${st.border} rounded-r-xl rounded-l-sm p-2 text-left w-full relative group transition-all
+                    ${_canDrag ? 'cursor-grab active:cursor-grabbing hover:shadow-lg hover:brightness-95' : 'cursor-pointer hover:shadow-lg hover:brightness-95'}"
+                    id="cal-badge-${p.id}"
+                    draggable="${_canDrag}"
+                    ondragstart="${_canDrag ? `calDragStart(event,'${_esc(p.id)}')` : ''}"
+                    ondragend="${_canDrag ? 'calDragEnd(event)' : ''}"
                     onclick="viewLogiPlan('${p.id}')">
 
                     <!-- ปุ่มลบ (แสดงเมื่อ hover) -->
@@ -21689,7 +21783,11 @@ function renderLogiCalendar() {
                 </div>`;
             }).join('');
 
-            return `<td style="width:${CELL_W}px;min-width:${CELL_W}px" class="px-1 py-1 border-r border-slate-100 align-top ${cellBg}">
+            const _escT = truck.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            return `<td style="width:${CELL_W}px;min-width:${CELL_W}px" class="px-1 py-1 border-r border-slate-100 align-top cal-drop-cell transition-all ${cellBg}"
+                ondragover="calDragOver(event)"
+                ondragleave="calDragLeave(event)"
+                ondrop="calDrop(event,'${d}','${_escT}')">
                 <div class="space-y-1 min-h-[40px]">${badges}</div>
             </td>`;
         }).join('');
