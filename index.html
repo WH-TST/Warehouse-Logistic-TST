@@ -6543,7 +6543,8 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
                   <option value="empty">ยังไม่นับ</option>
                 </select>
               </td>
-              <td></td><td></td>
+              <td style="padding:3px 4px"><input id="scf-date" type="date" onchange="scRecFilter()" style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 4px;outline:none"></td>
+              <td></td>
             </tr>
           </thead>
           <tbody id="sc-reconcile-tbody">
@@ -6832,7 +6833,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
                 <td></td>
                 <td style="padding:3px 4px"><input id="scsr-code" oninput="scSemiRecFilter()" placeholder="ค้นหา..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none"></td>
                 <td style="padding:3px 4px"><input id="scsr-name" oninput="scSemiRecFilter()" placeholder="ค้นหา..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none"></td>
-                <td></td>
+                <td style="padding:3px 4px"><input id="scsr-date" type="date" onchange="scSemiRecFilter()" style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 4px;outline:none"></td>
                 <td style="padding:3px 4px"><input id="scsr-fg1" oninput="scSemiRecFilter()" placeholder="รหัส..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none;background:#f0fdf4"></td>
                 <td style="padding:3px 4px"><input id="scsr-fg1n" oninput="scSemiRecFilter()" placeholder="ชื่อ..." style="width:100%;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;outline:none;background:#f0fdf4"></td>
                 <td></td>
@@ -30795,16 +30796,19 @@ window.viewTripResult = async function(planId) {
     var sku  = ((document.getElementById('scf-sku')||{}).value||'').toLowerCase();
     var name = ((document.getElementById('scf-name')||{}).value||'').toLowerCase();
     var diff = (document.getElementById('scf-diff')||{}).value||'';
+    var date = (document.getElementById('scf-date')||{}).value||'';
     var rows = document.querySelectorAll('#sc-reconcile-tbody tr[data-rec-row]');
     rows.forEach(function(tr){
       var rwh   = (tr.dataset.wh||'');
       var rsku  = (tr.dataset.sku||'').toLowerCase();
       var rname = (tr.dataset.name||'').toLowerCase();
       var rdiff = (tr.dataset.diff||'');
+      var rdate = (tr.dataset.date||'');
       var show  = (!wh || rwh === wh)
                && (!sku  || rsku.includes(sku))
                && (!name || rname.includes(name))
-               && (!diff || rdiff === diff);
+               && (!diff || rdiff === diff)
+               && (!date || rdate === date);
       tr.style.display = show ? '' : 'none';
     });
     // ซ่อน WH section header ถ้าไม่มี item ที่แสดงอยู่ในกลุ่มนั้น
@@ -30912,6 +30916,7 @@ window.viewTripResult = async function(planId) {
     var fg2   = ((document.getElementById('scsr-fg2')||{}).value||'').toLowerCase().trim();
     var fg2n  = ((document.getElementById('scsr-fg2n')||{}).value||'').toLowerCase().trim();
     var diff  = ((document.getElementById('scsr-diff')||{}).value||'');
+    var date  = ((document.getElementById('scsr-date')||{}).value||'');
     document.querySelectorAll('#sc-semi-rec-tbody tr[data-srf]').forEach(function(tr){
       var show = (!code || (tr.dataset.code||'').includes(code))
               && (!name || (tr.dataset.name||'').includes(name))
@@ -30919,7 +30924,8 @@ window.viewTripResult = async function(planId) {
               && (!fg1n || (tr.dataset.fg1n||'').includes(fg1n))
               && (!fg2  || (tr.dataset.fg2||'').includes(fg2))
               && (!fg2n || (tr.dataset.fg2n||'').includes(fg2n))
-              && (!diff || tr.dataset.diff === diff);
+              && (!diff || tr.dataset.diff === diff)
+              && (!date || (tr.dataset.date||'') === date);
       tr.style.display = show ? '' : 'none';
     });
   };
@@ -31170,7 +31176,7 @@ window.viewTripResult = async function(planId) {
         var diffTag = isEmpty ? 'empty' : (diff===0 ? 'ok' : 'diff');
         var rowId = 'rec-row-'+item.sku.replace(/[^a-zA-Z0-9]/g,'_')+'_'+item.wh.replace(/[^a-zA-Z0-9]/g,'_');
         var histId = 'rec-hist-'+rowId;
-        var mainRow = '<tr data-rec-row="1" data-wh="'+item.wh+'" data-sku="'+_esc(item.sku)+'" data-name="'+_esc(item.name)+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
+        var mainRow = '<tr data-rec-row="1" data-wh="'+item.wh+'" data-sku="'+_esc(item.sku)+'" data-name="'+_esc(item.name)+'" data-diff="'+diffTag+'" data-date="'+(item.count_date||'')+'" style="border-bottom:1px solid #f1f5f9;' + rowStyle + (rowStyle?'':';background:'+bg) + '">'
           + '<td style="padding:8px;text-align:center;border-right:1px solid #f1f5f9;color:#94a3b8;font-size:12px">'
           +   '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
           +   '<span>'+seqNum+'</span>'
@@ -31977,7 +31983,7 @@ window.viewTripResult = async function(planId) {
             : '<span style="color:#534ab7;font-weight:700">'+it.systemQty+'</span>');
         var diffTag = isEmpty ? 'empty' : (diff===0 ? 'ok' : 'diff');
         var rHistId = 'semi-rec-hist-'+it.semi_item.replace(/[^a-zA-Z0-9]/g,'_');
-        return '<tr data-srf="1" data-code="'+it.semi_item.toLowerCase()+'" data-name="'+(it.semi_name||'').toLowerCase()+'" data-fg1="'+(it.fg_code_1||'').toLowerCase()+'" data-fg1n="'+(it.fg_name_1||'').toLowerCase()+'" data-fg2="'+(it.fg_code_2||'').toLowerCase()+'" data-fg2n="'+(it.fg_name_2||'').toLowerCase()+'" data-diff="'+diffTag+'" style="border-bottom:1px solid #f1f5f9;'+(rowStyle||'background:'+bg)+'">'
+        return '<tr data-srf="1" data-code="'+it.semi_item.toLowerCase()+'" data-name="'+(it.semi_name||'').toLowerCase()+'" data-fg1="'+(it.fg_code_1||'').toLowerCase()+'" data-fg1n="'+(it.fg_name_1||'').toLowerCase()+'" data-fg2="'+(it.fg_code_2||'').toLowerCase()+'" data-fg2n="'+(it.fg_name_2||'').toLowerCase()+'" data-diff="'+diffTag+'" data-date="'+(it.count_date||'')+'" style="border-bottom:1px solid #f1f5f9;'+(rowStyle||'background:'+bg)+'">'
           + '<td style="padding:6px;border-right:1px solid #f1f5f9;text-align:center;white-space:nowrap">'
           + '<span style="color:#94a3b8;font-size:11px;margin-right:3px">'+(i+1)+'</span>'
           + '<button onclick="scSemiToggleHistory(\''+rHistId+'\',\''+it.semi_item+'\')" id="btn-'+rHistId+'" style="background:#ede9fe;color:#7c3aed;border:none;border-radius:4px;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:1;padding:0" title="ประวัติการนับ">▶</button>'
