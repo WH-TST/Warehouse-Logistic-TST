@@ -16783,7 +16783,10 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 shops:            isTrailerSplit
                                     ? filterShopsForTruck(payload.shops, isMother ? 'mother' : 'child')
                                     : (payload.shops      || []),
-                total_weight:     payload.totalWeight    || 0,
+                total_weight:     isTrailerSplit
+                                    ? filterShopsForTruck(payload.shops, isMother ? 'mother' : 'child')
+                                        .reduce((s, sh) => s + (sh.items||[]).reduce((ss, it) => ss + (parseFloat(it.weight)||0), 0), 0)
+                                    : (payload.totalWeight || 0),
                 return_distance:  payload.returnDistance || 0,
                 is_mother:        isMother,
                 is_child:         isChild,
@@ -16862,9 +16865,11 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 whSource:        payload.whSource        || '',
                 whDest:          payload.whDest          || '',
                 transferRemark:  payload.transferRemark  || '',
-                totalWeight:     payload.totalWeight     || 0,
                 shops:           isTrailerSplit ? filterShopsForTruck(payload.shops, 'mother') : (payload.shops || []),
                 shopNames:       (isTrailerSplit ? filterShopsForTruck(payload.shops, 'mother') : (payload.shops || [])).map(s => s.shopName).filter(Boolean).join(', '),
+                totalWeight:     isTrailerSplit
+                                    ? filterShopsForTruck(payload.shops, 'mother').reduce((s, sh) => s + (sh.items||[]).reduce((ss, it) => ss + (parseFloat(it.weight)||0), 0), 0)
+                                    : (payload.totalWeight || 0),
             };
 
             if (isUpdate) {
@@ -16879,7 +16884,8 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 // ถ้ารถพ่วง เพิ่ม -C ด้วย
                 if (isTrailerSplit) {
                     const childShops = filterShopsForTruck(payload.shops, 'child');
-                    logiPlanList.unshift({ ...updatedPlan, id: basePlanId + '-C', isMother: false, isChild: true, truckPlate: payload.childPlate || '', shops: childShops, shopNames: childShops.map(s => s.shopName).filter(Boolean).join(', ') });
+                    const childWt = childShops.reduce((s, sh) => s + (sh.items||[]).reduce((ss, it) => ss + (parseFloat(it.weight)||0), 0), 0);
+                    logiPlanList.unshift({ ...updatedPlan, id: basePlanId + '-C', isMother: false, isChild: true, truckPlate: payload.childPlate || '', shops: childShops, shopNames: childShops.map(s => s.shopName).filter(Boolean).join(', '), totalWeight: childWt });
                 }
             }
 
@@ -17001,13 +17007,14 @@ window.loadLogisticList = async function loadLogisticList() {
             transferRemark:  row.fail_reason       || '',
             returnDistance:  row.return_distance   || 0,
             totalWeight:     row.total_weight      || 0,
-            shops:           _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false),
+            shops:           (function(){ var _s=_filterTrailerShops(row.shops||[],row.is_mother||false,row.is_child||false); return _s; })(),
             whSource:        (row.job_type === 'transfer_fg' || row.job_type === 'transfer_semi')
                                ? ((row.shops||[])[0]?.loadWarehouse || '') : '',
             whDest:          '',
             shopNames:       _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).map(s => s.shopName).filter(Boolean).join(', '),
             distance:        _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce((s, sh) => s + (parseFloat(sh.distance)||0), 0),
             stopFee:         _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce((s, sh) => s + (parseFloat(sh.freeDistance)||0), 0),
+            totalWeight:     (function(){ var _fs=_filterTrailerShops(row.shops||[],row.is_mother||false,row.is_child||false); var _calc=_fs.reduce(function(s,sh){return s+(sh.items||[]).reduce(function(ss,it){return ss+(parseFloat(it.weight)||0);},0);},0); return _calc||row.total_weight||0; })(),
         }));
 
         renderLogisticList();
@@ -21471,11 +21478,11 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
                             failReason:      row.fail_reason      || '',
                             transferRemark:  row.fail_reason      || '',
                             returnDistance:  row.return_distance  || 0,
-                            totalWeight:     row.total_weight     || 0,
                             shops:           _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false),
                             shopNames:       _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
                             distance:        _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
                             stopFee:         _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce(function(s,sh){ return s+(parseFloat(sh.freeDistance)||0); }, 0),
+                            totalWeight:     (function(){ var _fs=_filterTrailerShops(row.shops||[],row.is_mother||false,row.is_child||false); var _calc=_fs.reduce(function(s,sh){return s+(sh.items||[]).reduce(function(ss,it){return ss+(parseFloat(it.weight)||0);},0);},0); return _calc||row.total_weight||0; })(),
                         };
                     });
                     renderLogiCalendar();
