@@ -6333,6 +6333,9 @@ thead.sticky {
         <button onclick="scSwitchTab('reconcile')" id="sc-btn-reconcile" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-balance-scale"></i> ไปหน้าเทียบ →
         </button>
+        <button onclick="scOpenHistoryManager('fg')" class="bg-orange-500 hover:bg-orange-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-database"></i> จัดการประวัติ
+        </button>
       </div>
       <div id="sc-sheet-info" class="hidden mb-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700 font-medium"></div>
       <!-- Excel-style table: contenteditable cells, resizable columns -->
@@ -6491,6 +6494,39 @@ thead.sticky {
   </div>
 </div>
 
+<!-- Modal: จัดการประวัติการนับ -->
+<div id="sc-hist-mgr-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div class="flex items-center gap-2 font-black text-slate-800"><i class="fas fa-database text-orange-500"></i> จัดการประวัติการนับ</div>
+      <button onclick="document.getElementById('sc-hist-mgr-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
+    </div>
+    <div class="px-6 py-5">
+      <div id="sc-hist-mgr-stats" class="mb-5 bg-slate-50 rounded-xl p-4 text-sm text-slate-600"><i class="fas fa-spinner fa-spin"></i> กำลังโหลดสถิติ...</div>
+      <div class="mb-4">
+        <label class="block text-sm font-bold text-slate-700 mb-2">ลบประวัติที่เก่ากว่า</label>
+        <div class="flex gap-2 items-center">
+          <select id="sc-hist-mgr-months" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400">
+            <option value="3">3 เดือน</option>
+            <option value="6" selected>6 เดือน</option>
+            <option value="12">12 เดือน</option>
+            <option value="24">24 เดือน</option>
+          </select>
+          <button onclick="scHistMgrDelete()" class="bg-orange-500 hover:bg-orange-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition">
+            <i class="fas fa-trash-alt mr-1"></i> ลบประวัติเก่า
+          </button>
+        </div>
+      </div>
+      <div class="border-t border-slate-100 pt-4">
+        <button onclick="scHistMgrDeleteAll()" class="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition w-full">
+          <i class="fas fa-trash mr-1"></i> ลบประวัติทั้งหมด
+        </button>
+        <p class="text-xs text-slate-400 mt-2 text-center">* การลบไม่สามารถกู้คืนได้</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: เพิ่มรายการนับ -->
 <div id="sc-add-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.45)">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
@@ -6565,6 +6601,9 @@ thead.sticky {
           </button>
           <button onclick="scSemiOpenAdd()" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
             <i class="fas fa-plus"></i> เพิ่มรายการ
+          </button>
+          <button onclick="scOpenHistoryManager('semi')" class="bg-orange-500 hover:bg-orange-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+            <i class="fas fa-database"></i> จัดการประวัติ
           </button>
         </div>
       </div>
@@ -30028,6 +30067,77 @@ window.viewTripResult = async function(planId) {
       tabSheet.className = 'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all';
       scLoadReconcile();
     }
+  };
+
+  // ── จัดการประวัติการนับ ──────────────────────────────────────────
+  var _histMgrType = 'fg'; // 'fg' | 'semi'
+  window.scOpenHistoryManager = async function(type){
+    _histMgrType = type;
+    var modal = document.getElementById('sc-hist-mgr-modal');
+    var stats = document.getElementById('sc-hist-mgr-stats');
+    modal.classList.remove('hidden');
+    stats.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังโหลดสถิติ...';
+    try {
+      var table = type === 'fg' ? 'stock_count_sessions' : 'stock_count_semi';
+      var dateCol = type === 'fg' ? 'count_date' : 'count_date';
+      // นับจำนวนและหาวันที่เก่าสุด-ใหม่สุด
+      var { data: oldest } = await window._sb.from(table).select(dateCol).order(dateCol,{ascending:true}).limit(1).maybeSingle();
+      var { data: newest } = await window._sb.from(table).select(dateCol).order(dateCol,{ascending:false}).limit(1).maybeSingle();
+      // นับ rows จาก items table
+      var itemTable = type === 'fg' ? 'stock_count_items' : 'stock_count_semi';
+      var countRes  = await window._sb.from(itemTable).select('id', {count:'exact', head:true});
+      var total = countRes.count || '?';
+      var oldDate = oldest ? oldest[dateCol] : '—';
+      var newDate = newest ? newest[dateCol] : '—';
+      var label = type === 'fg' ? 'FG Count' : 'SEMI Count';
+      stats.innerHTML =
+        '<div class="grid grid-cols-3 gap-3 text-center">'
+        + '<div class="bg-white rounded-xl p-3 border border-slate-200"><div class="text-2xl font-black text-slate-800">'+total+'</div><div class="text-xs text-slate-500 mt-1">รายการทั้งหมด</div></div>'
+        + '<div class="bg-white rounded-xl p-3 border border-slate-200"><div class="text-sm font-bold text-slate-700">'+oldDate+'</div><div class="text-xs text-slate-500 mt-1">เก่าสุด</div></div>'
+        + '<div class="bg-white rounded-xl p-3 border border-slate-200"><div class="text-sm font-bold text-slate-700">'+newDate+'</div><div class="text-xs text-slate-500 mt-1">ใหม่สุด</div></div>'
+        + '</div>'
+        + '<div class="mt-3 text-xs text-slate-500 text-center">ฐานข้อมูล: <b>'+itemTable+'</b>'+(type==='fg'?' + stock_count_sessions':'')+'</div>';
+    } catch(e){ stats.innerHTML = '<span class="text-red-500">โหลดสถิติล้มเหลว: '+e.message+'</span>'; }
+  };
+
+  window.scHistMgrDelete = async function(){
+    var months = parseInt(document.getElementById('sc-hist-mgr-months').value) || 6;
+    var cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    var cutoffStr = cutoff.toLocaleDateString('sv-SE');
+    if(!confirm('ลบประวัติที่เก่ากว่า '+cutoffStr+' ออก?\n(ไม่สามารถกู้คืนได้)')) return;
+    try {
+      if(_histMgrType === 'fg'){
+        // หา session IDs ที่เก่ากว่า cutoff
+        var { data: oldSess } = await window._sb.from('stock_count_sessions').select('id').lt('count_date', cutoffStr);
+        var ids = (oldSess||[]).map(function(r){ return r.id; });
+        if(ids.length){
+          await window._sb.from('stock_count_items').delete().in('session_id', ids);
+          await window._sb.from('stock_count_sessions').delete().in('id', ids);
+        }
+        showToast('✅ ลบ '+ids.length+' sessions (เก่ากว่า '+cutoffStr+') สำเร็จ');
+      } else {
+        var { error } = await window._sb.from('stock_count_semi').delete().lt('count_date', cutoffStr);
+        if(error) throw error;
+        showToast('✅ ลบประวัติ SEMI เก่ากว่า '+cutoffStr+' สำเร็จ');
+      }
+      scOpenHistoryManager(_histMgrType); // refresh stats
+    } catch(e){ showToast('❌ ลบล้มเหลว: '+e.message, true); }
+  };
+
+  window.scHistMgrDeleteAll = async function(){
+    var label = _histMgrType === 'fg' ? 'FG' : 'SEMI';
+    if(!confirm('ลบประวัติการนับ '+label+' ทั้งหมดออก?\n(ไม่สามารถกู้คืนได้)')) return;
+    try {
+      if(_histMgrType === 'fg'){
+        await window._sb.from('stock_count_items').delete().neq('id', 0);
+        await window._sb.from('stock_count_sessions').delete().neq('id', 0);
+      } else {
+        await window._sb.from('stock_count_semi').delete().neq('id', 0);
+      }
+      showToast('✅ ลบประวัติ '+label+' ทั้งหมดสำเร็จ');
+      scOpenHistoryManager(_histMgrType);
+    } catch(e){ showToast('❌ ลบล้มเหลว: '+e.message, true); }
   };
 
   // ── ล้างข้อมูลเมื่อเปลี่ยนวันที่ ────────────────────────────────
