@@ -30579,7 +30579,7 @@ window.viewTripResult = async function(planId) {
         seqNum++;
         var item = _scItems[i];
         var bg = rowBg[seqNum % 2];
-        var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2;
+        var counted = (item.bundle1 + item.bundle2) * (item.ppb||1) + item.pcs1 + item.pcs2 + (item.holdPcs||0);
         var isEmpty = (item.bundle1===0 && item.bundle2===0 && item.pcs1===0 && item.pcs2===0 && item.holdPcs===0);
         var diff = counted - item.systemQty;
         var diffHtml = isEmpty ? '<span style="color:#cbd5e1">—</span>'
@@ -30701,7 +30701,7 @@ window.viewTripResult = async function(planId) {
     // อัพเดต นับได้ / Diff ในแถว
     var it = _scItems[idx];
     if(it){
-      var counted = (it.bundle1 + it.bundle2) * (it.ppb||1) + it.pcs1 + it.pcs2;
+      var counted = (it.bundle1 + it.bundle2) * (it.ppb||1) + it.pcs1 + it.pcs2 + (it.holdPcs||0);
       var isEmpty = (it.bundle1===0 && it.bundle2===0 && it.pcs1===0 && it.pcs2===0 && it.holdPcs===0);
       var diff = counted - it.systemQty;
       var cEl = document.querySelector('[data-sc-counted="'+idx+'"]');
@@ -31181,7 +31181,8 @@ window.viewTripResult = async function(planId) {
           +'bundle_2: '+(item.bundle2_expr&&item.bundle2_expr!==String(item.bundle2)?item.bundle2_expr+' = ':'')+item.bundle2+' มัด × '+ppb+' = '+(item.bundle2*ppb)+'&#10;'
           +'Pcs.(1): '+(item.pcs1_expr&&item.pcs1_expr!==String(item.pcs1)?item.pcs1_expr+' = ':'')+item.pcs1+'&#10;'
           +'Pcs.(2): '+(item.pcs2_expr&&item.pcs2_expr!==String(item.pcs2)?item.pcs2_expr+' = ':'')+item.pcs2+'&#10;'
-          +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500&#10;'
+          +(item.holdPcs?'Hold: '+item.holdPcs+'&#10;':'')
+          +'─────────────&#10;'
           +'รวม = '+counted+' เส้น'
         );
         var countedCell = isEmpty ? '\u2014'
@@ -31460,7 +31461,7 @@ window.viewTripResult = async function(planId) {
     if(!_recItems.length){ showToast('ไม่มีข้อมูล', true); return; }
     var csv = 'No.,WH,Item number,Product name,bundle_1,bundle_2,Pcs.(1),Pcs.(2),Hold pcs.,นับได้ (เส้น),ระบบ (Counting),Diff,NOTE\n';
     _recItems.forEach(function(item,i){
-      var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+      var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2+(item.holdPcs||0);
       var diff    = counted - item.systemQty;
       csv += [(i+1), item.wh, item.sku, '"'+item.name+'"',
               item.bundle1, item.bundle2, item.pcs1, item.pcs2, item.holdPcs,
