@@ -32599,7 +32599,7 @@ window.dmSelectDriver=async function(){
   var uname=sel?sel.value:'';
   var area=document.getElementById('dm-area');
   if(!uname||!area){
-    area.innerHTML='<div style="text-align:center;padding:80px 20px;color:#475569;"><i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;opacity:.3;"></i><p style="font-weight:700;font-size:15px;">เลือกคนขับเพื่อดูสถานะ</p></div>';
+    if(area) area.innerHTML='<div style="text-align:center;padding:80px 20px;color:#475569;"><i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;opacity:.3;"></i><p style="font-weight:700;font-size:15px;">เลือกคนขับเพื่อดูสถานะ</p></div>';
     return;
   }
   var driver=_dmDrivers.find(function(d){return d.username===uname;});
@@ -32617,64 +32617,150 @@ window.dmSelectDriver=async function(){
   var {data:plans}=await q;
   plans=plans||[];
 
-  var tripLogs={};
+  var tripLogs={}, shopVisitsMap={};
   if(plans.length){
     var ids=plans.map(function(p){return p.plan_id;});
-    var {data:logs}=await window._sb.from('trip_logs').select('*').in('plan_id',ids);
+    var [{data:logs},{data:visits}]=await Promise.all([
+      window._sb.from('trip_logs').select('*').in('plan_id',ids),
+      window._sb.from('shop_visits').select('*').in('plan_id',ids)
+    ]);
     (logs||[]).forEach(function(l){tripLogs[l.plan_id]=l;});
+    shopVisitsMap={};
+    (visits||[]).forEach(function(v){
+      if(!shopVisitsMap[v.plan_id]) shopVisitsMap[v.plan_id]={};
+      shopVisitsMap[v.plan_id][v.shop_seq]=v;
+    });
   }
 
   var statusMeta={
-    idle:{color:'#475569',label:'รอเริ่มงาน',bg:'#1e293b',border:'#334155'},
-    traveling:{color:'#3b82f6',label:'กำลังเดินทาง',bg:'#1e3a8a',border:'#1d4ed8'},
-    at_shop:{color:'#f59e0b',label:'อยู่ที่ร้าน',bg:'#422006',border:'#d97706'},
-    returning:{color:'#a78bfa',label:'กำลังกลับ',bg:'#2d1b69',border:'#7c3aed'},
-    completed:{color:'#34d399',label:'เสร็จสิ้น',bg:'#064e3b',border:'#059669'}
+    idle:     {color:'#94a3b8',label:'รอเริ่มงาน',   icon:'fa-clock',       border:'#334155',bg:'#0f172a'},
+    traveling:{color:'#60a5fa',label:'กำลังเดินทาง', icon:'fa-truck-moving',border:'#1d4ed8',bg:'#0f172a'},
+    at_shop:  {color:'#fbbf24',label:'อยู่ที่ร้าน',  icon:'fa-store',       border:'#d97706',bg:'#0f172a'},
+    returning:{color:'#c4b5fd',label:'กำลังกลับ',    icon:'fa-route',       border:'#7c3aed',bg:'#0f172a'},
+    completed:{color:'#34d399',label:'เสร็จสิ้น',    icon:'fa-check-circle',border:'#059669',bg:'#0f172a'}
   };
 
-  var trucks=Array.from(new Set(plans.flatMap(function(p){return[p.truck_plate].filter(Boolean);}))).join(', ');
+  var trucks=Array.from(new Set(plans.map(function(p){return p.truck_plate;}).filter(Boolean))).join(', ');
   var done=plans.filter(function(p){var l=tripLogs[p.plan_id];return l&&l.status==='completed';}).length;
 
-  var html='<div style="padding:16px;font-family:\'Segoe UI\',sans-serif;color:#e2e8f0;">'
-    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 16px;background:#1e293b;border-radius:14px;">'
-    +'<div style="width:44px;height:44px;border-radius:12px;background:#065f46;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-id-badge" style="color:#6ee7b7;font-size:20px;"></i></div>'
-    +'<div><div style="font-weight:900;color:#fff;font-size:16px;">'+driver.driver_name+'</div>'
-    +'<div style="font-size:12px;color:#34d399;font-weight:700;">'+(trucks?'🚛 '+trucks:'ไม่มีรถวันนี้')+'</div></div>'
-    +'<div style="margin-left:auto;text-align:right;">'
-    +'<div style="font-size:22px;font-weight:900;color:#fff;">'+plans.length+'</div>'
-    +'<div style="font-size:10px;color:#64748b;">เที่ยว / '+done+' สำเร็จ</div></div>'
+  /* ── helper: render timeline (same logic as drvRenderTimeline) ── */
+  function dmTimeline(p, log, sv){
+    var shops=p.shops||[];
+    var st=log?log.status:'idle';
+    var steps=[{label:'ออก',key:'start'}]
+      .concat(shops.map(function(sh,i){return{label:sh.shopName||('ร้าน'+(i+1)),seq:i};}))
+      .concat([{label:'กลับ',key:'end'}]);
+    var html='<div style="display:flex;align-items:center;gap:0;width:100%;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;">';
+    steps.forEach(function(s,i){
+      var dotC,dotBg,icon,lineC;
+      if(i===0){
+        var started=st!=='idle';
+        dotC=started?'#34d399':'#475569';dotBg=started?'#064e3b':'#1e293b';
+        icon=started?'<i class="fas fa-check" style="font-size:9px;color:'+dotC+';"></i>':'<span style="font-size:10px;font-weight:900;color:'+dotC+';">S</span>';
+        lineC=started?'#34d399':'#334155';
+      } else if(i===steps.length-1){
+        var ret=(st==='returning'||st==='completed');
+        dotC=ret?'#34d399':'#475569';dotBg=ret?'#064e3b':'#1e293b';
+        icon=ret?'<i class="fas fa-check" style="font-size:9px;color:'+dotC+';"></i>':'<span style="font-size:10px;font-weight:900;color:'+dotC+';">E</span>';
+        lineC='#334155';
+      } else {
+        var visit=sv&&sv[s.seq];
+        var isDep=visit&&visit.departed_at, isArr=visit&&visit.arrived_at&&!visit.departed_at;
+        dotC=isDep?'#34d399':isArr?'#fbbf24':'#475569';
+        dotBg=isDep?'#064e3b':isArr?'#422006':'#1e293b';
+        icon=isDep?'<i class="fas fa-check" style="font-size:9px;color:'+dotC+';"></i>'
+            :isArr?'<i class="fas fa-circle" style="font-size:9px;color:'+dotC+';"></i>'
+            :'<span style="font-size:10px;font-weight:900;color:'+dotC+';">'+(i)+'</span>';
+        lineC=isDep?'#34d399':'#334155';
+      }
+      html+='<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">'
+        +'<div style="width:26px;height:26px;border-radius:50%;background:'+dotBg+';border:2px solid '+dotC+';display:flex;align-items:center;justify-content:center;">'+icon+'</div>'
+        +'<div style="font-size:9px;font-weight:700;color:'+dotC+';margin-top:3px;max-width:48px;text-align:center;white-space:normal;line-height:1.2;">'+s.label+'</div>'
+        +'</div>';
+      if(i<steps.length-1) html+='<div style="flex:1;min-width:10px;height:2px;background:'+lineC+';margin-bottom:14px;"></div>';
+    });
+    return html+'</div>';
+  }
+
+  /* ── helper: action buttons (admin override, no photo/mileage lock) ── */
+  function dmActionBtns(planId, st){
+    var BTN='width:100%;border:none;border-radius:14px;padding:16px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;';
+    var SBTN='width:100%;background:#1e293b;border:2px solid #334155;border-radius:14px;padding:13px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:6px;';
+    var b='<div style="margin-top:12px;">';
+    var pid="'"+planId+"'";
+    if(st==='idle')
+      b+='<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+pid+',\'traveling\')"><i class="fas fa-play"></i> เริ่มเดินทาง</button>';
+    else if(st==='traveling')
+      b+='<button style="'+BTN+'background:#d97706;" onclick="dmAdminSetStatus('+pid+',\'at_shop\')"><i class="fas fa-store"></i> บันทึกถึงร้าน</button>'
+        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+pid+',\'returning\')"><i class="fas fa-industry"></i> กลับบริษัท</button>';
+    else if(st==='at_shop')
+      b+='<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+pid+',\'traveling\')"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป</button>'
+        +'<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+pid+',\'returning\')"><i class="fas fa-industry"></i> กลับบริษัท</button>';
+    else if(st==='returning')
+      b+='<button style="'+BTN+'background:#7c3aed;" onclick="dmAdminSetStatus('+pid+',\'completed\')"><i class="fas fa-flag-checkered"></i> จบงาน / ถึงบริษัท</button>';
+    else if(st==='completed')
+      b+='<div style="text-align:center;padding:12px 0;color:#34d399;font-weight:900;font-size:14px;"><i class="fas fa-check-circle" style="margin-right:6px;"></i>เสร็จสิ้นแล้ว</div>';
+    if(st!=='idle')
+      b+='<button style="'+SBTN+'" onclick="dmAdminSetStatus('+pid+',\'idle\')"><i class="fas fa-undo"></i> รีเซ็ตสถานะ</button>';
+    return b+'</div>';
+  }
+
+  var html='<div style="background:#0f172a;min-height:100%;padding:16px;font-family:\'Segoe UI\',sans-serif;">'
+    /* driver header */
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:14px 16px;background:#1e293b;border-radius:16px;border:1px solid #334155;">'
+    +'<div style="width:48px;height:48px;border-radius:14px;background:#065f46;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;font-weight:900;color:#6ee7b7;">'+driver.driver_name.charAt(0)+'</div>'
+    +'<div style="flex:1;">'
+    +'<div style="font-weight:900;color:#fff;font-size:17px;">'+driver.driver_name+'</div>'
+    +'<div style="font-size:12px;color:#34d399;font-weight:700;margin-top:2px;">'+(trucks?'🚛 '+trucks:'ไม่มีรถวันนี้')+'</div>'
+    +'</div>'
+    +'<div style="text-align:right;">'
+    +'<div style="font-size:26px;font-weight:900;color:#fff;line-height:1;">'+plans.length+'</div>'
+    +'<div style="font-size:10px;color:#64748b;font-weight:700;">เที่ยว</div>'
+    +'<div style="font-size:13px;font-weight:900;color:#34d399;margin-top:2px;">'+done+' <span style="font-size:10px;color:#64748b;">สำเร็จ</span></div>'
+    +'</div>'
     +'</div>';
 
   if(!plans.length){
-    html+='<div style="text-align:center;padding:60px 0;color:#475569;"><i class="fas fa-clipboard-check" style="font-size:40px;display:block;margin-bottom:12px;opacity:.3;"></i><p style="font-weight:700;">ไม่มีแผนวันนี้</p></div>';
+    html+='<div style="text-align:center;padding:60px 0;color:#475569;"><i class="fas fa-clipboard-check" style="font-size:48px;display:block;margin-bottom:12px;opacity:.25;"></i><p style="font-weight:700;font-size:15px;">ไม่มีแผนวันนี้</p></div>';
   } else {
     html+=plans.map(function(p,pi){
       var log=tripLogs[p.plan_id];
+      var sv=shopVisitsMap[p.plan_id]||{};
       var st=log?log.status:'idle';
       var m=statusMeta[st]||statusMeta.idle;
       var shops=p.shops||[];
       var seq=log?log.current_shop_seq:0;
       var currentShop=shops[seq];
-      var contextLine='';
-      if(st==='traveling'&&currentShop) contextLine='<div style="font-size:12px;color:#93c5fd;margin-top:6px;"><i class="fas fa-map-marker-alt" style="margin-right:4px;"></i>กำลังไป: '+currentShop.shopName+'</div>';
-      else if(st==='at_shop'&&currentShop) contextLine='<div style="font-size:12px;color:#fbbf24;margin-top:6px;"><i class="fas fa-store" style="margin-right:4px;"></i>อยู่ที่: '+currentShop.shopName+'</div>';
-      var routeText=shops.map(function(sh){return sh.shopName||sh.shopId||'–';}).join(' → ');
       var startTime=log&&log.started_at?new Date(log.started_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'–';
-      var adminBtns='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1);">'
-        +(st!=='traveling'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'traveling\')" style="flex:1;min-width:80px;background:#1d4ed8;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">🚛 เดินทาง</button>':'')
-        +(st!=='at_shop'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'at_shop\')" style="flex:1;min-width:80px;background:#b45309;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">🏪 ถึงร้าน</button>':'')
-        +(st!=='returning'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'returning\')" style="flex:1;min-width:80px;background:#5b21b6;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">↩ กลับ</button>':'')
-        +(st!=='completed'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'completed\')" style="flex:1;min-width:80px;background:#065f46;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">✅ จบงาน</button>':'')
-        +(st!=='idle'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'idle\')" style="flex:1;min-width:60px;background:#374151;border:none;border-radius:8px;padding:7px 4px;color:#9ca3af;font-weight:900;font-size:11px;cursor:pointer;">↺ รีเซ็ต</button>':'')
-        +'</div>';
-      return '<div style="background:'+m.bg+';border:2px solid '+m.border+';border-radius:16px;padding:14px;margin-bottom:10px;">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-        +'<div style="font-weight:900;color:#fff;font-size:15px;">เที่ยวที่ '+(pi+1)+'<span style="font-size:11px;color:#64748b;font-weight:400;margin-left:8px;">'+p.plan_id+'</span></div>'
-        +'<span style="font-size:11px;font-weight:900;color:'+m.color+';padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.3);">'+m.label+'</span></div>'
-        +(log&&log.started_at?'<div style="font-size:11px;color:#64748b;margin-bottom:4px;"><i class="fas fa-clock" style="margin-right:4px;"></i>เริ่ม '+startTime+'</div>':'')
-        +'<div style="font-size:12px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:4px;opacity:.6;"></i>'+routeText+'</div>'
-        +contextLine
-        +adminBtns
+
+      /* context line (same style as driver app) */
+      var ctx='';
+      if(st==='traveling'&&currentShop)
+        ctx='<div style="background:#1e3a8a;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#93c5fd;font-weight:700;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>กำลังไป: '+(currentShop.shopName||'–')+'</div>';
+      else if(st==='at_shop'&&currentShop)
+        ctx='<div style="background:#422006;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#fbbf24;font-weight:700;"><i class="fas fa-store" style="margin-right:5px;"></i>อยู่ที่: '+(currentShop.shopName||'–')+'</div>';
+      else if(st==='returning')
+        ctx='<div style="background:#2d1b69;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#c4b5fd;font-weight:700;"><i class="fas fa-industry" style="margin-right:5px;"></i>กำลังกลับบริษัท</div>';
+
+      return '<div style="background:#1e293b;border:2px solid '+m.border+';border-radius:18px;padding:16px;margin-bottom:14px;">'
+        /* trip header */
+        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
+        +'<div><div style="font-weight:900;color:#fff;font-size:16px;">เที่ยวที่ '+(pi+1)+'</div>'
+        +'<div style="font-size:11px;color:#64748b;margin-top:2px;">'+p.plan_id+'</div></div>'
+        +'<span style="font-size:11px;font-weight:900;color:'+m.color+';background:rgba(0,0,0,.35);padding:4px 12px;border-radius:20px;display:flex;align-items:center;gap:5px;white-space:nowrap;">'
+        +'<i class="fas '+m.icon+'" style="font-size:10px;"></i>'+m.label+'</span>'
+        +'</div>'
+        /* truck + start time */
+        +'<div style="display:flex;gap:16px;margin-bottom:10px;font-size:12px;color:#64748b;">'
+        +'<span><i class="fas fa-truck" style="margin-right:4px;color:#475569;"></i>'+(p.truck_plate||'–')+'</span>'
+        +(log&&log.started_at?'<span><i class="fas fa-clock" style="margin-right:4px;color:#475569;"></i>เริ่ม '+startTime+'</span>':'')
+        +'</div>'
+        /* timeline */
+        +dmTimeline(p,log,sv)
+        /* context */
+        +ctx
+        /* admin action buttons */
+        +dmActionBtns(p.plan_id, st)
         +'</div>';
     }).join('');
   }
