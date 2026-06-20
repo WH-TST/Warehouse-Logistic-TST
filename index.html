@@ -32653,6 +32653,13 @@ window.dmSelectDriver=async function(){
       else if(st==='at_shop'&&currentShop) contextLine='<div style="font-size:12px;color:#fbbf24;margin-top:6px;"><i class="fas fa-store" style="margin-right:4px;"></i>อยู่ที่: '+currentShop.shopName+'</div>';
       var routeText=shops.map(function(sh){return sh.shopName||sh.shopId||'–';}).join(' → ');
       var startTime=log&&log.started_at?new Date(log.started_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'–';
+      var adminBtns='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1);">'
+        +(st!=='traveling'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'traveling\')" style="flex:1;min-width:80px;background:#1d4ed8;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">🚛 เดินทาง</button>':'')
+        +(st!=='at_shop'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'at_shop\')" style="flex:1;min-width:80px;background:#b45309;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">🏪 ถึงร้าน</button>':'')
+        +(st!=='returning'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'returning\')" style="flex:1;min-width:80px;background:#5b21b6;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">↩ กลับ</button>':'')
+        +(st!=='completed'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'completed\')" style="flex:1;min-width:80px;background:#065f46;border:none;border-radius:8px;padding:7px 4px;color:#fff;font-weight:900;font-size:11px;cursor:pointer;">✅ จบงาน</button>':'')
+        +(st!=='idle'?'<button onclick="dmAdminSetStatus(\''+p.plan_id+'\',\'idle\')" style="flex:1;min-width:60px;background:#374151;border:none;border-radius:8px;padding:7px 4px;color:#9ca3af;font-weight:900;font-size:11px;cursor:pointer;">↺ รีเซ็ต</button>':'')
+        +'</div>';
       return '<div style="background:'+m.bg+';border:2px solid '+m.border+';border-radius:16px;padding:14px;margin-bottom:10px;">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
         +'<div style="font-weight:900;color:#fff;font-size:15px;">เที่ยวที่ '+(pi+1)+'<span style="font-size:11px;color:#64748b;font-weight:400;margin-left:8px;">'+p.plan_id+'</span></div>'
@@ -32660,12 +32667,42 @@ window.dmSelectDriver=async function(){
         +(log&&log.started_at?'<div style="font-size:11px;color:#64748b;margin-bottom:4px;"><i class="fas fa-clock" style="margin-right:4px;"></i>เริ่ม '+startTime+'</div>':'')
         +'<div style="font-size:12px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:4px;opacity:.6;"></i>'+routeText+'</div>'
         +contextLine
+        +adminBtns
         +'</div>';
     }).join('');
   }
 
   html+='</div>';
   area.innerHTML=html;
+};
+
+window.dmAdminSetStatus=async function(planId,newStatus){
+  var labels={idle:'รีเซ็ต (Idle)',traveling:'กำลังเดินทาง',at_shop:'อยู่ที่ร้าน',returning:'กำลังกลับ',completed:'จบงาน'};
+  if(!confirm('บังคับอัปเดตสถานะ "'+planId+'" เป็น '+labels[newStatus]+'?')) return;
+  try {
+    showToast('กำลังอัปเดต…',false);
+    var now=new Date().toISOString();
+    var existing=await window._sb.from('trip_logs').select('id').eq('plan_id',planId).maybeSingle();
+    var updates={plan_id:planId,status:newStatus,updated_at:now};
+    if(newStatus==='traveling'||newStatus==='idle') updates.started_at=now;
+    if(newStatus==='completed') updates.finished_at=now;
+    var res;
+    if(existing.data){
+      res=await window._sb.from('trip_logs').update(updates).eq('plan_id',planId);
+    } else {
+      res=await window._sb.from('trip_logs').insert(updates);
+    }
+    if(res.error) throw res.error;
+    if(newStatus==='completed'){
+      await window._sb.from('logistic_plans').update({status:'success'}).eq('plan_id',planId);
+    } else if(newStatus==='traveling'){
+      await window._sb.from('logistic_plans').update({status:'inprogress'}).eq('plan_id',planId);
+    }
+    showToast('อัปเดตสถานะสำเร็จ',false);
+    dmSelectDriver();
+  } catch(e){
+    showToast('อัปเดตไม่สำเร็จ: '+(e.message||String(e)),true);
+  }
 };
 
 window.dmRefresh=function(){
