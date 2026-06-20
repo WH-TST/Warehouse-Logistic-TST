@@ -1840,6 +1840,33 @@ thead.sticky {
 <style>
 .wms-app-hidden { display: none !important; }
 </style>
+<style>
+/* ═══ DRIVER APP ═══ */
+#drv-screen{display:none;position:fixed;inset:0;z-index:10000;background:#0f172a;flex-direction:column;}
+#drv-screen.active{display:flex;}
+#drv-trip-screen{position:fixed;inset:0;background:#0f172a;z-index:10500;display:none;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);}
+#drv-trip-screen.open{display:flex;transform:translateX(0);}
+.drv-screen-pane{display:none;min-height:100dvh;flex-direction:column;}
+.drv-content-area{flex:1;overflow-y:auto;padding-bottom:72px;}
+.drv-action-area{flex:1;overflow-y:auto;padding:14px 14px 32px;}
+#drv-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:10999;pointer-events:none;transition:opacity .3s;white-space:nowrap;}
+#drv-ld{position:fixed;inset:0;background:rgba(13,27,42,.88);z-index:10998;display:none;align-items:center;justify-content:center;}
+#drv-ld.on{display:flex;}
+.drv-prog-bg{background:#334155;border-radius:99px;height:6px;overflow:hidden;}
+.drv-prog-fill{height:100%;border-radius:99px;transition:width .4s ease;}
+.drv-inp{width:100%;background:#0f172a;border:2px solid #334155;border-radius:14px;padding:14px 16px;color:#fff;font-weight:900;font-size:22px;text-align:center;outline:none;letter-spacing:.03em;}
+.drv-inp:focus{border-color:#059669;}
+.drv-btn-main{width:100%;border:none;border-radius:16px;padding:18px;color:#fff;font-weight:900;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:opacity .15s;}
+.drv-btn-main:active{opacity:.8;}
+.drv-btn-main:disabled{background:#334155!important;color:#64748b!important;cursor:not-allowed;}
+.drv-btn-secondary{width:100%;background:#1e293b;border:2px solid #334155;border-radius:16px;padding:14px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.drv-btn-secondary:active{background:#334155;}
+.drv-card{background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;}
+@keyframes drvFadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+.drv-fade-up{animation:drvFadeUp .22s ease;}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+</style>
 </head>
 <body>
 
@@ -28162,7 +28189,16 @@ window.doLogin = async function(){
     var cached=_loadUsers();
     for(var i=0;i<cached.length;i++){if(cached[i].username===uname&&cached[i].pwHash===hash){user=cached[i];break;}}
   }
-  if(!user){err.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';err.classList.remove('hidden');document.getElementById('login-password').value='';return;}
+  if(!user){
+    // ไม่เจอใน wms_users → ลองเช็ค driver_users (plain text password)
+    var dRes = await window._sb.from('driver_users').select('*').eq('username',uname).eq('active',true).maybeSingle();
+    if(dRes.data && dRes.data.password === pw){
+      var d = dRes.data;
+      window.drvInit({username:d.username, name:d.driver_name||d.username, driver_id:d.driver_id||'', bypass_timer:d.bypass_timer||false});
+      return;
+    }
+    err.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';err.classList.remove('hidden');document.getElementById('login-password').value='';return;
+  }
   _cu=user;_saveSess(user);window._currentUser=user.name||user.username;_applySession();
 };
 
@@ -32116,4 +32152,678 @@ window.viewTripResult = async function(planId) {
 })();
 </script>
 
+<!-- ══════════════════════════════════════════════════════════════
+     DRIVER APP SCREEN (role=driver)
+══════════════════════════════════════════════════════════════ -->
+<div id="drv-screen">
+
+  <!-- Loading -->
+  <div id="drv-ld">
+    <div style="text-align:center;">
+      <i class="fas fa-truck-moving" style="font-size:36px;color:#34d399;display:block;margin-bottom:12px;"></i>
+      <p style="color:#34d399;font-weight:900;font-size:13px;">กำลังโหลด...</p>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="drv-toast" style="display:none;">
+    <div id="drv-ti" style="display:inline-block;padding:12px 22px;border-radius:20px;font-weight:700;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.5);"></div>
+  </div>
+
+  <!-- Main screen -->
+  <div id="drv-sc-main" style="background:#0f172a;display:flex;flex-direction:column;flex:1;min-height:0;">
+
+    <!-- Header -->
+    <div style="background:#0d1b2a;border-bottom:1px solid rgba(255,255,255,.06);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:40px;height:40px;border-radius:12px;background:#065f46;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="fas fa-id-badge" style="color:#6ee7b7;font-size:18px;"></i>
+        </div>
+        <div style="min-width:0;">
+          <div id="drv-hn" style="font-weight:900;color:#fff;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
+          <div id="drv-ht" style="font-size:11px;color:#34d399;font-weight:700;">–</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <div style="text-align:right;">
+          <div id="drv-hd" style="font-size:12px;font-weight:900;color:#cbd5e1;">–</div>
+          <div id="drv-htime" style="font-size:10px;color:#64748b;font-weight:600;">–</div>
+        </div>
+        <button onclick="drvLogout()" style="width:36px;height:36px;border-radius:10px;background:#1e293b;border:none;color:#64748b;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <i class="fas fa-sign-out-alt" style="font-size:14px;"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="drv-content-area">
+      <!-- แผนวันนี้ -->
+      <div id="drv-tab-plan" style="padding:14px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div style="background:#1e293b;border-radius:14px;padding:12px;text-align:center;">
+            <div id="drv-st-total" style="font-size:22px;font-weight:900;color:#fff;">–</div>
+            <div style="font-size:10px;color:#64748b;font-weight:700;margin-top:2px;">เที่ยววิ่ง</div>
+          </div>
+          <div style="background:#064e3b;border-radius:14px;padding:12px;text-align:center;">
+            <div id="drv-st-done" style="font-size:22px;font-weight:900;color:#34d399;">0</div>
+            <div style="font-size:10px;color:#6ee7b7;font-weight:700;margin-top:2px;">เที่ยวสำเร็จ</div>
+          </div>
+        </div>
+        <div id="drv-plan-cards"></div>
+        <button onclick="drvLoadPlan()" style="width:100%;margin-top:8px;background:#1e293b;border:none;border-radius:12px;padding:10px;color:#64748b;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <i class="fas fa-sync-alt" style="font-size:11px;"></i> รีเฟรช
+        </button>
+      </div>
+      <!-- ประวัติ -->
+      <div id="drv-tab-history" style="display:none;padding:14px;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input type="date" id="drv-hf" style="flex:1;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:10px 12px;color:#fff;font-size:13px;font-weight:700;outline:none;">
+          <input type="date" id="drv-ht2" style="flex:1;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:10px 12px;color:#fff;font-size:13px;font-weight:700;outline:none;">
+          <button onclick="drvHistLoad()" style="width:44px;height:44px;background:#059669;border:none;border-radius:12px;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+        <div id="drv-hist-list">
+          <div style="text-align:center;padding:60px 0;color:#334155;">
+            <i class="fas fa-history" style="font-size:40px;display:block;margin-bottom:12px;opacity:.4;"></i>
+            <p style="font-weight:700;font-size:13px;">เลือกช่วงวันที่แล้วกดค้นหา</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom nav -->
+    <nav style="position:fixed;bottom:0;left:0;right:0;background:#0d1b2a;border-top:1px solid rgba(255,255,255,.07);height:64px;display:flex;z-index:100;">
+      <button id="drv-nav-plan" onclick="drvGoTab('plan')" style="flex:1;border:none;background:none;color:#34d399;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;">
+        <i class="fas fa-clipboard-list" style="font-size:20px;"></i>
+        <span style="font-size:10px;font-weight:900;">แผนวันนี้</span>
+      </button>
+      <button id="drv-nav-history" onclick="drvGoTab('history')" style="flex:1;border:none;background:none;color:#64748b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;">
+        <i class="fas fa-history" style="font-size:20px;"></i>
+        <span style="font-size:10px;font-weight:900;">ประวัติ</span>
+      </button>
+    </nav>
+  </div>
+</div>
+
+<!-- Trip screen -->
+<div id="drv-trip-screen">
+  <div style="background:#0d1b2a;border-bottom:1px solid rgba(255,255,255,.06);padding:12px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+    <button onclick="drvCloseTrip()" style="width:36px;height:36px;border-radius:10px;background:#1e293b;border:none;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <i class="fas fa-arrow-left" style="font-size:16px;"></i>
+    </button>
+    <div style="min-width:0;flex:1;">
+      <div id="drv-trip-title" style="font-weight:900;color:#fff;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
+      <div id="drv-trip-sub" style="font-size:11px;color:#64748b;font-weight:600;margin-top:1px;">–</div>
+    </div>
+  </div>
+  <div id="drv-trip-timeline" style="background:#0d1b2a;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;overflow-x:auto;"></div>
+  <div class="drv-action-area" id="drv-trip-action"></div>
+</div>
+
+<!-- Camera input -->
+<input type="file" id="drv-photo-input" accept="image/*" capture="environment" style="display:none" onchange="drvHandlePhoto(this)">
+
+<script>
+(function(){
+// ══════════════════════════════════════════════════════════════
+// DRIVER APP — embedded in WMS (uses window._sb)
+// ══════════════════════════════════════════════════════════════
+const DRV_MIN_TRAVEL_MINS=10;
+const DRV_PHOTO_BUCKET='delivery-photos';
+const DRV_MIN_MOVE_METERS=300;
+const DRV_TEST_USERNAMES=['test','ทดสอบ','demo'];
+var DRV_BYPASS_TIMER=false;
+var DRV_TEST_MODE=false;
+
+var _dSess=null;
+var _dPlans=[],_dTripLogs={};
+var _dTripPlan=null,_dTripLog=null,_dShopVisits={};
+var _dCapturedFile=null,_dCapturedPreviewUrl=null;
+var _dSelectedShopSeq=null;
+var _dTimerIv=null;
+var _dToastTimer=null;
+
+function drvShowL(){document.getElementById('drv-ld').classList.add('on');}
+function drvHideL(){document.getElementById('drv-ld').classList.remove('on');}
+function drvP2(n){return String(n).padStart(2,'0');}
+function drvEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+function drvShowToast(msg,isErr){
+  var el=document.getElementById('drv-toast'),ti=document.getElementById('drv-ti');
+  ti.textContent=msg;
+  ti.style.background=isErr?'#dc2626':'#059669';
+  ti.style.color='#fff';
+  el.style.display='block';el.style.opacity='1';
+  if(_dToastTimer)clearTimeout(_dToastTimer);
+  _dToastTimer=setTimeout(function(){el.style.opacity='0';setTimeout(function(){el.style.display='none';},300);},3200);
+}
+
+function drvFmtTime(iso){
+  if(!iso)return'–';
+  var d=new Date(iso);
+  return drvP2(d.getHours())+':'+drvP2(d.getMinutes());
+}
+
+function drvFmtDuration(fromIso,toIso){
+  if(!fromIso||!toIso)return'–';
+  var ms=new Date(toIso)-new Date(fromIso);
+  var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);
+  return (h>0?h+' ชม. ':'')+m+' นาที';
+}
+
+function drvRemainSecs(refIso){
+  if(!refIso)return 0;
+  var elapsed=(Date.now()-new Date(refIso).getTime())/1000;
+  return Math.max(0,Math.ceil(DRV_MIN_TRAVEL_MINS*60-elapsed));
+}
+
+function drvHaversineM(lat1,lng1,lat2,lng2){
+  var R=6371000,r=Math.PI/180;
+  var dLat=(lat2-lat1)*r,dLng=(lng2-lng1)*r;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function drvGetGPS(){
+  return new Promise(function(res,rej){
+    if(!navigator.geolocation){rej('no_device');return;}
+    navigator.geolocation.getCurrentPosition(
+      function(p){res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)});},
+      function(e){rej(e.code);},
+      {timeout:15000,enableHighAccuracy:true,maximumAge:0}
+    );
+  });
+}
+
+async function drvRequireGPS(){
+  if(DRV_TEST_MODE)return{lat:13.7563,lng:100.5018,acc:5};
+  try{return await drvGetGPS();}
+  catch(code){
+    var msg=code===1?'❌ กรุณาอนุญาตให้ใช้ GPS ก่อน':
+             code==='no_device'?'❌ อุปกรณ์ไม่รองรับ GPS':
+             '❌ GPS timeout — ลองใหม่อีกครั้ง';
+    drvShowToast(msg,true);return null;
+  }
+}
+
+function drvTick(){
+  var n=new Date();
+  var days=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+  var mos=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var de=document.getElementById('drv-hd'),te=document.getElementById('drv-htime');
+  if(de)de.textContent=days[n.getDay()]+' '+n.getDate()+' '+mos[n.getMonth()]+' '+(n.getFullYear()+543);
+  if(te)te.textContent=drvP2(n.getHours())+':'+drvP2(n.getMinutes());
+}
+
+// เรียกจาก WMS doLogin เมื่อ role=driver
+window.drvInit=function(wmsUser){
+  _dSess={username:wmsUser.username,driver_name:wmsUser.name||wmsUser.username,driver_id:wmsUser.driver_id||''};
+  DRV_TEST_MODE=DRV_TEST_USERNAMES.indexOf(wmsUser.username.toLowerCase())!==-1;
+  DRV_BYPASS_TIMER=DRV_TEST_MODE||(wmsUser.bypass_timer===true);
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('drv-screen').classList.add('active');
+  document.getElementById('drv-hn').textContent=_dSess.driver_name;
+  document.getElementById('drv-ht').textContent='– รอโหลดแผน –';
+  var today=new Date().toISOString().split('T')[0];
+  var w=new Date();w.setDate(w.getDate()-13);
+  document.getElementById('drv-hf').value=w.toISOString().split('T')[0];
+  document.getElementById('drv-ht2').value=today;
+  setInterval(drvTick,1000);drvTick();
+  drvGoTab('plan');drvLoadPlan();
+};
+
+window.drvLogout=function(){
+  if(!confirm('ออกจากระบบ?'))return;
+  _dSess=null;
+  document.getElementById('drv-screen').classList.remove('active');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-username').value='';
+  document.getElementById('login-password').value='';
+};
+
+window.drvGoTab=function(t){
+  document.getElementById('drv-tab-plan').style.display=t==='plan'?'block':'none';
+  document.getElementById('drv-tab-history').style.display=t==='history'?'block':'none';
+  document.getElementById('drv-nav-plan').style.color=t==='plan'?'#34d399':'#64748b';
+  document.getElementById('drv-nav-history').style.color=t==='history'?'#34d399':'#64748b';
+};
+
+window.drvLoadPlan=async function(){
+  var today=new Date().toISOString().split('T')[0];
+  document.getElementById('drv-plan-cards').innerHTML='<div style="text-align:center;padding:60px 0;"><i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:12px;color:#475569;"></i><p style="font-weight:700;font-size:13px;color:#475569;">กำลังโหลด...</p></div>';
+  drvShowL();
+  var orParts=[];
+  if(_dSess.driver_id) orParts.push('driver_id.eq.'+_dSess.driver_id);
+  if(_dSess.driver_name) orParts.push('driver_transport.eq.'+_dSess.driver_name);
+  var q=window._sb.from('logistic_plans')
+    .select('plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type')
+    .eq('plan_date',today).neq('status','success');
+  if(orParts.length) q=q.or(orParts.join(','));
+  var {data:plans,error}=await q;
+  if(error){drvHideL();drvShowToast('❌ โหลดแผนไม่สำเร็จ',true);drvRenderPlanCards([]);return;}
+  _dPlans=plans||[];_dTripLogs={};
+  if(_dPlans.length){
+    var ids=_dPlans.map(function(p){return p.plan_id;});
+    var {data:logs}=await window._sb.from('trip_logs').select('*').in('plan_id',ids);
+    (logs||[]).forEach(function(l){_dTripLogs[l.plan_id]=l;});
+    var trucks=Array.from(new Set(_dPlans.flatMap(function(p){return[p.truck_plate,p.child_plate].filter(Boolean);}))).join(', ');
+    document.getElementById('drv-ht').textContent=trucks?'🚛 '+trucks:'–';
+  }else{
+    document.getElementById('drv-ht').textContent='– ไม่มีแผนวันนี้ –';
+  }
+  drvHideL();drvRenderPlanCards(_dPlans);
+};
+
+function drvRenderPlanCards(plans){
+  var wrap=document.getElementById('drv-plan-cards');
+  if(!plans.length){
+    wrap.innerHTML='<div style="text-align:center;padding:60px 0;"><i class="fas fa-clipboard-check" style="font-size:48px;display:block;margin-bottom:12px;opacity:.25;color:#475569;"></i><p style="font-weight:900;color:#475569;font-size:15px;">ไม่มีแผนวันนี้</p><p style="font-size:13px;margin-top:6px;color:#334155;">'+drvEsc(_dSess.driver_name||_dSess.username)+'</p></div>';
+    document.getElementById('drv-st-total').textContent=0;
+    document.getElementById('drv-st-done').textContent=0;return;
+  }
+  var done=plans.filter(function(p){var l=_dTripLogs[p.plan_id];return l&&l.status==='completed';}).length;
+  document.getElementById('drv-st-total').textContent=plans.length;
+  document.getElementById('drv-st-done').textContent=done;
+  var statusMeta={
+    idle:{color:'#475569',label:'รอเริ่มงาน',icon:'fa-clock',border:'#334155',btnBg:'#059669',btnLabel:'🚀 เริ่มงาน'},
+    traveling:{color:'#3b82f6',label:'กำลังเดินทาง',icon:'fa-truck-moving',border:'#1d4ed8',btnBg:'#1d4ed8',btnLabel:'▶ ดำเนินการต่อ'},
+    at_shop:{color:'#f59e0b',label:'อยู่ที่ร้าน',icon:'fa-store',border:'#d97706',btnBg:'#d97706',btnLabel:'▶ ดำเนินการต่อ'},
+    returning:{color:'#a78bfa',label:'กำลังกลับ',icon:'fa-route',border:'#7c3aed',btnBg:'#7c3aed',btnLabel:'▶ ดำเนินการต่อ'},
+    completed:{color:'#34d399',label:'เสร็จสิ้น',icon:'fa-check-circle',border:'#059669',btnBg:'#1e3a8a',btnLabel:'📋 ดูสรุป'}
+  };
+  wrap.innerHTML=plans.map(function(p,pi){
+    var log=_dTripLogs[p.plan_id];
+    var st=log?log.status:'idle';
+    var m=statusMeta[st]||statusMeta.idle;
+    var shops=p.shops||[];
+    var seq=log?log.current_shop_seq:0;
+    var currentShop=shops[seq];
+    var contextLine='';
+    if(st==='traveling'&&currentShop){
+      contextLine='<div style="background:#1e3a8a;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#93c5fd;font-weight:700;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>กำลังไป: '+drvEsc(currentShop.shopName||currentShop.shopId||'–')+'</div>';
+    }else if(st==='at_shop'&&currentShop){
+      contextLine='<div style="background:#422006;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#fbbf24;font-weight:700;"><i class="fas fa-store" style="margin-right:5px;"></i>อยู่ที่: '+drvEsc(currentShop.shopName||currentShop.shopId||'–')+'</div>';
+    }
+    var routeText=shops.map(function(sh){return drvEsc(sh.shopName||sh.shopId||'–');}).join(' → ');
+    return '<div class="drv-fade-up drv-card" style="border:2px solid '+m.border+';">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
+      +'<div><div style="font-weight:900;color:#fff;font-size:16px;">เที่ยวที่ '+(pi+1)+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:2px;">'+drvEsc(p.plan_id)+'</div></div>'
+      +'<span style="font-size:11px;font-weight:900;color:'+m.color+';background:rgba(0,0,0,.3);padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
+      +'<i class="fas '+m.icon+'" style="font-size:10px;"></i>'+m.label+'</span></div>'
+      +contextLine
+      +'<div style="font-size:12px;color:#64748b;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:5px;opacity:.6;"></i>'+routeText+'</div>'
+      +'<div style="font-size:12px;color:#94a3b8;margin-bottom:12px;"><i class="fas fa-truck" style="margin-right:5px;"></i>'+drvEsc(p.truck_plate||'–')+'</div>'
+      +'<button onclick="drvOpenTrip(\''+drvEsc(p.plan_id)+'\')" style="width:100%;background:'+m.btnBg+';border:none;border-radius:12px;padding:13px;color:#fff;font-weight:900;font-size:14px;cursor:pointer;">'+m.btnLabel+'</button>'
+      +'</div>';
+  }).join('');
+}
+
+window.drvOpenTrip=async function(planId){
+  _dTripPlan=_dPlans.find(function(p){return p.plan_id===planId;})||null;
+  if(!_dTripPlan)return;
+  _dCapturedFile=null;_dCapturedPreviewUrl=null;_dSelectedShopSeq=null;
+  drvShowL();
+  await drvLoadTripState(planId);
+  drvHideL();
+  document.getElementById('drv-trip-title').textContent=_dTripPlan.plan_id;
+  document.getElementById('drv-trip-sub').textContent='🚛 '+(_dTripPlan.truck_plate||'–')+' • '+(_dTripPlan.shops||[]).length+' จุดส่ง';
+  drvRenderTimeline();drvRenderAction();
+  var ts=document.getElementById('drv-trip-screen');
+  ts.style.display='flex';
+  requestAnimationFrame(function(){ts.classList.add('open');});
+};
+
+window.drvCloseTrip=function(){
+  clearInterval(_dTimerIv);_dTimerIv=null;
+  var ts=document.getElementById('drv-trip-screen');
+  ts.classList.remove('open');
+  setTimeout(function(){ts.style.display='none';},280);
+  drvLoadPlan();
+};
+
+async function drvLoadTripState(planId){
+  var {data:log}=await window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle();
+  _dTripLog=log||null;
+  var {data:visits}=await window._sb.from('shop_visits').select('*').eq('plan_id',planId);
+  _dShopVisits={};
+  (visits||[]).forEach(function(v){_dShopVisits[v.shop_seq]=v;});
+}
+
+function drvRenderTimeline(){
+  var shops=_dTripPlan?(_dTripPlan.shops||[]):[];
+  var log=_dTripLog;
+  var st=log?log.status:'idle';
+  var steps=[{label:'ออก',key:'start'}]
+    .concat(shops.map(function(sh,i){return{label:sh.shopName||('ร้าน'+(i+1)),key:'shop'+i,seq:i};}))
+    .concat([{label:'กลับ',key:'end'}]);
+  var html='<div style="display:inline-flex;align-items:center;gap:0;min-width:100%;padding-bottom:4px;">';
+  steps.forEach(function(s,i){
+    var dotColor,dotBg,icon,lineColor;
+    if(i===0){
+      var started=st!=='idle';
+      dotColor=started?'#34d399':'#475569';dotBg=started?'#064e3b':'#1e293b';
+      icon=started?'<i class="fas fa-check" style="font-size:9px;color:'+dotColor+';"></i>':'<span style="font-size:10px;font-weight:900;color:'+dotColor+';">S</span>';
+      lineColor=started?'#34d399':'#334155';
+    }else if(i===steps.length-1){
+      var returned=(st==='returning'||st==='completed');
+      dotColor=returned?'#34d399':'#475569';dotBg=returned?'#064e3b':'#1e293b';
+      icon=returned?'<i class="fas fa-check" style="font-size:9px;color:'+dotColor+';"></i>':'<span style="font-size:10px;font-weight:900;color:'+dotColor+';">E</span>';
+      lineColor='#334155';
+    }else{
+      var sv=_dShopVisits[s.seq];
+      var isDepart=sv&&sv.departed_at;var isArrive=sv&&sv.arrived_at&&!sv.departed_at;
+      dotColor=isDepart?'#34d399':isArrive?'#fbbf24':'#475569';
+      dotBg=isDepart?'#064e3b':isArrive?'#422006':'#1e293b';
+      icon=isDepart?'<i class="fas fa-check" style="font-size:9px;color:'+dotColor+';"></i>'
+          :isArrive?'<i class="fas fa-circle" style="font-size:9px;color:'+dotColor+';"></i>'
+          :'<span style="font-size:10px;font-weight:900;color:'+dotColor+';">'+i+'</span>';
+      lineColor=isDepart?'#34d399':'#334155';
+    }
+    html+='<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">'
+      +'<div style="width:26px;height:26px;border-radius:50%;background:'+dotBg+';border:2px solid '+dotColor+';display:flex;align-items:center;justify-content:center;">'+icon+'</div>'
+      +'<div style="font-size:9px;font-weight:700;color:'+dotColor+';margin-top:3px;max-width:48px;text-align:center;white-space:normal;line-height:1.2;">'+drvEsc(s.label)+'</div>'
+      +'</div>';
+    if(i<steps.length-1){html+='<div style="flex:1;min-width:10px;height:2px;background:'+lineColor+';margin-bottom:14px;"></div>';}
+  });
+  html+='</div>';
+  document.getElementById('drv-trip-timeline').innerHTML=html;
+}
+
+function drvRenderAction(){
+  clearInterval(_dTimerIv);_dTimerIv=null;
+  var st=_dTripLog?_dTripLog.status:'idle';
+  var el=document.getElementById('drv-trip-action');
+  if(st==='idle')          el.innerHTML=drvRenderIdle();
+  else if(st==='traveling') el.innerHTML=drvRenderTraveling();
+  else if(st==='at_shop')   el.innerHTML=drvRenderAtShop();
+  else if(st==='returning') el.innerHTML=drvRenderReturning();
+  else if(st==='completed') el.innerHTML=drvRenderCompleted();
+  if(st==='traveling'){_dTimerIv=setInterval(drvTickTravelTimer,1000);drvTickTravelTimer();}
+  if(st==='returning'){_dTimerIv=setInterval(drvTickReturnTimer,1000);drvTickReturnTimer();}
+}
+
+function drvRenderIdle(){
+  var shops=_dTripPlan?(_dTripPlan.shops||[]):[];
+  if(shops.length>1&&(_dSelectedShopSeq===null||_dSelectedShopSeq===undefined)){
+    var shopBtns=shops.map(function(sh,i){
+      return '<button onclick="drvSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;">'
+        +'<div style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#64748b;flex-shrink:0;">'+(i+1)+'</div>'
+        +'<div style="flex:1;">'+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
+        +'<i class="fas fa-chevron-right" style="color:#475569;font-size:12px;"></i></button>';
+    }).join('');
+    return '<div class="drv-fade-up"><div class="drv-card"><div style="font-size:11px;font-weight:900;color:#93c5fd;margin-bottom:14px;"><i class="fas fa-route" style="margin-right:6px;"></i>เลือกร้านที่จะไปก่อน</div>'+shopBtns+'</div></div>';
+  }
+  var sel=_dSelectedShopSeq!==null&&_dSelectedShopSeq!==undefined?_dSelectedShopSeq:0;
+  var selShop=shops[sel]||shops[0]||{};
+  var backBtn=shops.length>1?('<button onclick="drvSelectShop(null)" class="drv-btn-secondary" style="margin-bottom:10px;"><i class="fas fa-arrow-left"></i> เลือกร้านใหม่</button>'):'';
+  return '<div class="drv-fade-up">'
+    +(shops.length>1?('<div class="drv-card" style="border:2px solid #1d4ed8;padding:12px 16px;"><div style="font-size:10px;font-weight:900;color:#93c5fd;margin-bottom:4px;"><i class="fas fa-truck-moving" style="margin-right:5px;"></i>จุดส่งแรก</div><div style="font-size:18px;font-weight:900;color:#fff;">'+drvEsc(selShop.shopName||selShop.shopId||'–')+'</div></div>'):'')
+    +'<div class="drv-card">'+backBtn
+    +'<div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">ไมล์ออกจากโรงงาน (หน้าปัดรถ)</div>'
+    +'<input id="drv-inp-mile-start" type="number" inputmode="numeric" placeholder="เช่น 125000" class="drv-inp" style="margin-bottom:8px;">'
+    +'<div style="font-size:11px;color:#64748b;text-align:center;margin-bottom:16px;"><i class="fas fa-map-marker-alt" style="color:#34d399;margin-right:4px;"></i>GPS จะถูกบันทึกอัตโนมัติ</div>'
+    +'<button class="drv-btn-main" style="background:#059669;" onclick="drvDoStartTrip()"><i class="fas fa-play"></i> เริ่มเดินทาง</button>'
+    +'</div></div>';
+}
+
+function drvRenderTraveling(){
+  var shops=_dTripPlan.shops||[];
+  if(_dSelectedShopSeq===null||_dSelectedShopSeq===undefined){
+    var remaining=shops.filter(function(sh,i){return !(_dShopVisits[i]&&_dShopVisits[i].departed_at);});
+    var shopBtns=shops.map(function(sh,i){
+      if(_dShopVisits[i]&&_dShopVisits[i].departed_at)return'';
+      return '<button onclick="drvSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;">'
+        +'<div style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#64748b;flex-shrink:0;">'+(i+1)+'</div>'
+        +'<div style="flex:1;">'+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
+        +'<i class="fas fa-chevron-right" style="color:#475569;font-size:12px;"></i></button>';
+    }).join('');
+    return '<div class="drv-fade-up"><div class="drv-card"><div style="font-size:11px;font-weight:900;color:#93c5fd;margin-bottom:14px;"><i class="fas fa-route" style="margin-right:6px;"></i>เลือกร้านถัดไปที่จะไป ('+remaining.length+' ร้านเหลือ)</div>'+shopBtns+'</div></div>';
+  }
+  var seq=_dSelectedShopSeq;var shop=shops[seq]||{};
+  var hasPhoto=!!_dCapturedPreviewUrl;
+  var photoHtml=hasPhoto
+    ?'<div style="position:relative;margin-bottom:10px;"><img src="'+_dCapturedPreviewUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;"><div style="position:absolute;top:8px;right:8px;background:rgba(5,150,105,.92);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:900;color:#fff;"><i class="fas fa-check" style="margin-right:4px;"></i>ถ่ายแล้ว</div></div><button class="drv-btn-secondary" style="margin-bottom:12px;" onclick="drvOpenCamera()"><i class="fas fa-redo"></i> ถ่ายใหม่</button>'
+    :'<button class="drv-btn-main" style="background:#d97706;margin-bottom:10px;" onclick="drvOpenCamera()"><i class="fas fa-camera"></i> ถ่ายรูปหลักฐาน (บังคับ)</button><div style="font-size:11px;color:#f59e0b;text-align:center;margin-bottom:12px;">⚠️ ต้องถ่ายรูปก่อนกดถึงร้าน</div>';
+  var canArrive=(hasPhoto||DRV_TEST_MODE);
+  return '<div class="drv-fade-up">'
+    +'<div class="drv-card" style="border:2px solid #1d4ed8;"><div style="font-size:10px;font-weight:900;color:#93c5fd;margin-bottom:6px;"><i class="fas fa-truck-moving" style="margin-right:5px;"></i>กำลังเดินทางไป</div><div style="font-size:20px;font-weight:900;color:#fff;margin-bottom:10px;">'+drvEsc(shop.shopName||shop.shopId||'–')+'</div><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="margin-right:4px;"></i>เวลาที่ใช้เดินทาง</span><span id="drv-travel-elapsed" style="font-size:14px;font-weight:900;color:#fbbf24;">–</span></div></div>'
+    +'<div id="drv-travel-countdown-box" class="drv-card" style="background:#1e3a8a;text-align:center;"><i class="fas fa-hourglass-half" style="font-size:24px;color:#93c5fd;margin-bottom:8px;display:block;"></i><div style="font-size:13px;font-weight:700;color:#93c5fd;">รออีก <span id="drv-travel-countdown">–</span> วินาที</div><div style="font-size:11px;color:#64748b;margin-top:4px;">ก่อนจะสามารถบันทึกถึงร้านได้</div></div>'
+    +'<div id="drv-arrive-action-box" class="drv-card"><div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">ไมล์เมื่อถึงร้าน (หน้าปัดรถ)</div><input id="drv-inp-mile-arr" type="number" inputmode="numeric" placeholder="เช่น 125060" class="drv-inp" style="margin-bottom:12px;">'+photoHtml+'<button id="drv-btn-arrive" class="drv-btn-main" style="background:#059669;" onclick="drvDoArriveAtShop()" '+(canArrive?'':'disabled')+'><i class="fas fa-store"></i> ถึง '+drvEsc(shop.shopName||shop.shopId||'ร้าน')+' แล้ว</button></div>'
+    +'</div>';
+}
+
+window.drvSelectShop=function(seq){_dSelectedShopSeq=seq;_dCapturedFile=null;_dCapturedPreviewUrl=null;drvRenderAction();};
+
+function drvTickTravelTimer(){
+  if(!_dTripLog||_dTripLog.status!=='traveling')return;
+  var refTime=_dTripLog.started_at;
+  Object.values(_dShopVisits).forEach(function(sv){if(sv.departed_at&&sv.departed_at>refTime)refTime=sv.departed_at;});
+  if(!refTime)return;
+  var elEl=document.getElementById('drv-travel-elapsed');
+  var cdBox=document.getElementById('drv-travel-countdown-box');
+  var cdEl=document.getElementById('drv-travel-countdown');
+  var actionBox=document.getElementById('drv-arrive-action-box');
+  if(!elEl)return;
+  var elapsed=Math.floor((Date.now()-new Date(refTime).getTime())/1000);
+  var m=Math.floor(elapsed/60),s=elapsed%60;
+  elEl.textContent=m+' นาที '+drvP2(s)+' วิ';
+  var remain=DRV_BYPASS_TIMER?0:drvRemainSecs(refTime);
+  if(remain>0){if(cdBox)cdBox.style.display='block';if(actionBox)actionBox.style.display='none';if(cdEl)cdEl.textContent=remain;}
+  else{if(cdBox)cdBox.style.display='none';if(actionBox)actionBox.style.display='block';}
+}
+
+function drvTickReturnTimer(){
+  if(!_dTripLog||_dTripLog.status!=='returning')return;
+  var refTime=_dTripLog.started_at;
+  Object.values(_dShopVisits).forEach(function(sv){if(sv.departed_at&&sv.departed_at>refTime)refTime=sv.departed_at;});
+  var elEl=document.getElementById('drv-return-elapsed');
+  var cdBox=document.getElementById('drv-return-countdown-box');
+  var cdEl=document.getElementById('drv-return-countdown');
+  var finishBox=document.getElementById('drv-finish-action-box');
+  if(!elEl)return;
+  var elapsed=Math.floor((Date.now()-new Date(refTime).getTime())/1000);
+  var m=Math.floor(elapsed/60),s=elapsed%60;
+  elEl.textContent=m+' นาที '+drvP2(s)+' วิ';
+  var remain=DRV_BYPASS_TIMER?0:drvRemainSecs(refTime);
+  if(remain>0){if(cdBox)cdBox.style.display='block';if(finishBox)finishBox.style.display='none';if(cdEl)cdEl.textContent=remain;}
+  else{if(cdBox)cdBox.style.display='none';if(finishBox)finishBox.style.display='block';}
+}
+
+function drvRenderAtShop(){
+  var seq=_dSelectedShopSeq!==null&&_dSelectedShopSeq!==undefined?_dSelectedShopSeq:_dTripLog.current_shop_seq;
+  var shops=_dTripPlan.shops||[];var shop=shops[seq]||{};var visit=_dShopVisits[seq]||{};
+  var remaining=shops.filter(function(sh,i){return i!==seq&&!(_dShopVisits[i]&&_dShopVisits[i].departed_at);});
+  var isLast=remaining.length===0;
+  var nextBtn=isLast
+    ?'<button class="drv-btn-main" style="background:#7c3aed;" onclick="drvDoDepartShop()"><i class="fas fa-industry"></i> กลับบริษัท</button>'
+    :'<button class="drv-btn-main" style="background:#059669;" onclick="drvDoDepartShop()"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป ('+remaining.length+' ร้านเหลือ)</button>';
+  var photoSection=visit.photo_url?'<div style="margin-bottom:10px;"><img src="'+visit.photo_url+'" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;"><div style="font-size:11px;color:#34d399;text-align:center;margin-top:6px;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>รูปหลักฐานบันทึกแล้ว</div></div>':'';
+  return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #059669;text-align:center;"><div style="font-size:28px;margin-bottom:6px;">📦</div><div style="font-size:16px;font-weight:900;color:#34d399;margin-bottom:4px;">ส่งของที่ร้านเรียบร้อย</div><div style="font-size:18px;font-weight:900;color:#fff;">'+drvEsc(shop.shopName||shop.shopId||'–')+'</div>'+(visit.arrived_at?'<div style="font-size:12px;color:#64748b;margin-top:4px;">ถึงเวลา '+drvFmtTime(visit.arrived_at)+'</div>':'')+'</div>'+(photoSection?'<div class="drv-card">'+photoSection+'</div>':'')+'<div class="drv-card">'+nextBtn+'</div></div>';
+}
+
+function drvRenderReturning(){
+  return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #7c3aed;"><div style="font-size:10px;font-weight:900;color:#a78bfa;margin-bottom:6px;"><i class="fas fa-route" style="margin-right:5px;"></i>กำลังกลับบริษัท</div><div style="font-size:16px;font-weight:900;color:#c4b5fd;margin-bottom:8px;">ส่งครบ '+(_dTripPlan.shops||[]).length+' ร้านแล้ว</div><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="margin-right:4px;"></i>เวลาที่ใช้กลับ</span><span id="drv-return-elapsed" style="font-size:14px;font-weight:900;color:#fbbf24;">–</span></div></div>'
+    +'<div id="drv-return-countdown-box" class="drv-card" style="background:#2d1b69;text-align:center;"><i class="fas fa-hourglass-half" style="font-size:24px;color:#a78bfa;margin-bottom:8px;display:block;"></i><div style="font-size:13px;font-weight:700;color:#a78bfa;">รออีก <span id="drv-return-countdown">–</span> วินาที</div><div style="font-size:11px;color:#64748b;margin-top:4px;">ก่อนสามารถบันทึกถึงบริษัทได้</div></div>'
+    +'<div id="drv-finish-action-box" class="drv-card"><div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">ไมล์เมื่อถึงบริษัท (หน้าปัดรถ)</div><input id="drv-inp-mile-end" type="number" inputmode="numeric" placeholder="เช่น 125120" class="drv-inp" style="margin-bottom:8px;"><div style="font-size:11px;color:#64748b;text-align:center;margin-bottom:16px;"><i class="fas fa-map-marker-alt" style="color:#34d399;margin-right:4px;"></i>GPS จะถูกบันทึกอัตโนมัติ</div><button class="drv-btn-main" style="background:#7c3aed;" onclick="drvDoFinishTrip()"><i class="fas fa-flag-checkered"></i> ถึงบริษัท / จบงาน</button></div></div>';
+}
+
+function drvRenderCompleted(){
+  var log=_dTripLog;var shops=_dTripPlan.shops||[];
+  var visits=Object.values(_dShopVisits).sort(function(a,b){return a.shop_seq-b.shop_seq;});
+  var km=(log.mileage_end&&log.mileage_start)?(log.mileage_end-log.mileage_start):null;
+  var dur=drvFmtDuration(log.started_at,log.completed_at);
+  return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #059669;text-align:center;"><div style="font-size:40px;margin-bottom:8px;">🎉</div><div style="font-size:20px;font-weight:900;color:#34d399;">จบงานเรียบร้อย!</div></div>'
+    +'<div class="drv-card"><div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">📊 สรุปการเดินทาง</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;"><div style="background:#0f172a;border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:900;color:#34d399;">'+(km!==null?km:'–')+'</div><div style="font-size:9px;color:#64748b;margin-top:2px;">กม.รวม</div></div><div style="background:#0f172a;border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:900;color:#34d399;">'+dur+'</div><div style="font-size:9px;color:#64748b;margin-top:2px;">เวลารวม</div></div><div style="background:#0f172a;border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:900;color:#34d399;">'+shops.length+'</div><div style="font-size:9px;color:#64748b;margin-top:2px;">ร้านที่ส่ง</div></div></div></div>'
+    +'<div class="drv-card"><div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">📍 ประวัติการส่ง</div>'
+    +visits.map(function(v){var sh=shops[v.shop_seq]||{};return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);"><div style="width:28px;height:28px;border-radius:50%;background:#064e3b;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-check" style="font-size:10px;color:#34d399;"></i></div><div style="flex:1;min-width:0;"><div style="font-weight:700;color:#e2e8f0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+drvEsc(sh.shopName||sh.shopId||v.shop_name||'–')+'</div><div style="font-size:11px;color:#64748b;margin-top:1px;">ถึง '+drvFmtTime(v.arrived_at)+' • ออก '+drvFmtTime(v.departed_at)+'</div></div>'+(v.photo_url?'<a href="'+v.photo_url+'" target="_blank"><img src="'+v.photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid #334155;"></a>':'<div style="width:44px;height:44px;border-radius:8px;background:#1e293b;display:flex;align-items:center;justify-content:center;"><i class="fas fa-image" style="color:#334155;font-size:16px;"></i></div>')+'</div>';}).join('')
+    +'</div></div>';
+}
+
+window.drvDoStartTrip=async function(){
+  var mile=parseInt((document.getElementById('drv-inp-mile-start')||{}).value||'');
+  if(DRV_TEST_MODE&&(!mile||mile<=0))mile=100000;
+  if(!mile||mile<=0){drvShowToast('❌ กรอกเลขไมล์ออกให้ถูกต้อง',true);return;}
+  drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
+  var now=new Date().toISOString();
+  var {data,error}=await window._sb.from('trip_logs').insert({
+    plan_id:_dTripPlan.plan_id,driver_username:_dSess.username,
+    status:'traveling',current_shop_seq:0,
+    mileage_start:mile,lat_start:gps.lat,lng_start:gps.lng,acc_start:gps.acc,
+    started_at:now,updated_at:now
+  }).select().single();
+  drvHideL();
+  if(error){drvShowToast('❌ '+error.message,true);return;}
+  _dTripLog=data;_dTripLogs[_dTripPlan.plan_id]=data;
+  await window._sb.from('logistic_plans').update({status:'inprogress'}).eq('plan_id',_dTripPlan.plan_id);
+  drvRenderTimeline();drvRenderAction();
+  drvShowToast('✅ เริ่มเดินทาง — GPS บันทึกแล้ว (±'+gps.acc+'ม.)');
+};
+
+window.drvDoArriveAtShop=async function(){
+  var seq=_dSelectedShopSeq!==null&&_dSelectedShopSeq!==undefined?_dSelectedShopSeq:_dTripLog.current_shop_seq;
+  var shops=_dTripPlan.shops||[];var shop=shops[seq]||{};
+  if(!DRV_BYPASS_TIMER){
+    var lastDepart=_dTripLog.started_at;
+    Object.values(_dShopVisits).forEach(function(sv){if(sv.departed_at&&sv.departed_at>lastDepart)lastDepart=sv.departed_at;});
+    var remain=drvRemainSecs(lastDepart);
+    if(remain>0){drvShowToast('❌ ต้องเดินทางอย่างน้อย '+DRV_MIN_TRAVEL_MINS+' นาที (เหลือ '+remain+' วิ)',true);return;}
+  }
+  var mile=parseInt((document.getElementById('drv-inp-mile-arr')||{}).value||'');
+  var minMile=_dTripLog.mileage_start||0;
+  Object.values(_dShopVisits).forEach(function(sv){if(sv.mileage_arrival>minMile)minMile=sv.mileage_arrival;});
+  if(DRV_TEST_MODE&&(!mile||mile<=minMile))mile=minMile+10;
+  if(!mile||mile<=0){drvShowToast('❌ กรอกเลขไมล์ถึงร้านให้ถูกต้อง',true);return;}
+  if(mile<=minMile){drvShowToast('❌ ไมล์ถึงร้านต้องมากกว่า '+minMile,true);return;}
+  drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
+  if(!DRV_TEST_MODE){
+    var prevLat=_dTripLog.lat_start,prevLng=_dTripLog.lng_start;
+    Object.values(_dShopVisits).forEach(function(sv){if(sv.departed_at){prevLat=sv.lat_depart||sv.lat_arrival;prevLng=sv.lng_depart||sv.lng_arrival;}});
+    if(prevLat&&prevLng){
+      var moved=Math.round(drvHaversineM(prevLat,prevLng,gps.lat,gps.lng));
+      if(moved<DRV_MIN_MOVE_METERS){drvHideL();drvShowToast('❌ พิกัดยังอยู่ใกล้จุดก่อนหน้าเกินไป (ห่างแค่ '+moved+' ม.)',true);return;}
+    }
+  }
+  var now=new Date().toISOString();
+  var photoUrl=null;
+  if(_dCapturedFile){
+    try{
+      var ext=(_dCapturedFile.name||'photo.jpg').split('.').pop()||'jpg';
+      var path=_dTripPlan.plan_id+'/'+seq+'/arrive_'+Date.now()+'.'+ext;
+      var {error:ue}=await window._sb.storage.from(DRV_PHOTO_BUCKET).upload(path,_dCapturedFile,{contentType:_dCapturedFile.type||'image/jpeg',upsert:true});
+      if(ue)throw ue;
+      var {data:ud}=window._sb.storage.from(DRV_PHOTO_BUCKET).getPublicUrl(path);
+      photoUrl=ud.publicUrl;
+    }catch(e){drvHideL();drvShowToast('❌ อัพโหลดรูปไม่ได้',true);return;}
+  }
+  var {data:visitData,error:ve}=await window._sb.from('shop_visits').upsert({
+    plan_id:_dTripPlan.plan_id,shop_seq:seq,shop_name:shop.shopName||shop.shopId||'',
+    mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
+    arrived_at:now,photo_url:photoUrl
+  },{onConflict:'plan_id,shop_seq'}).select().single();
+  var {data:newLog,error:le}=await window._sb.from('trip_logs').update({
+    status:'at_shop',current_shop_seq:seq,updated_at:now
+  }).eq('plan_id',_dTripPlan.plan_id).select().single();
+  drvHideL();
+  if(ve||le){drvShowToast('❌ '+(ve||le).message,true);return;}
+  _dTripLog=newLog;_dShopVisits[seq]=visitData;
+  _dCapturedFile=null;_dCapturedPreviewUrl=null;
+  drvRenderTimeline();drvRenderAction();
+  drvShowToast('✅ บันทึกถึงร้าน — GPS ±'+gps.acc+'ม.');
+};
+
+window.drvOpenCamera=function(){var inp=document.getElementById('drv-photo-input');inp.value='';inp.click();};
+window.drvHandlePhoto=function(input){
+  var file=input.files[0];if(!file)return;
+  _dCapturedFile=file;
+  if(_dCapturedPreviewUrl)URL.revokeObjectURL(_dCapturedPreviewUrl);
+  _dCapturedPreviewUrl=URL.createObjectURL(file);
+  drvRenderAction();
+};
+
+window.drvDoDepartShop=async function(){
+  var seq=_dSelectedShopSeq!==null&&_dSelectedShopSeq!==undefined?_dSelectedShopSeq:_dTripLog.current_shop_seq;
+  var shops=_dTripPlan.shops||[];
+  drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
+  var now=new Date().toISOString();
+  var visit=_dShopVisits[seq]||{};
+  var updateFn=visit.id
+    ?window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('id',visit.id)
+    :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('plan_id',_dTripPlan.plan_id).eq('shop_seq',seq);
+  await updateFn;
+  var updatedVisits=Object.assign({},_dShopVisits);
+  updatedVisits[seq]=Object.assign({},updatedVisits[seq]||{},{departed_at:now});
+  var allDone=shops.every(function(sh,i){return updatedVisits[i]&&updatedVisits[i].departed_at;});
+  var nextStatus=allDone?'returning':'traveling';
+  var {data:newLog,error:le}=await window._sb.from('trip_logs').update({
+    status:nextStatus,current_shop_seq:seq,updated_at:now
+  }).eq('plan_id',_dTripPlan.plan_id).select().single();
+  if(le){drvHideL();drvShowToast('❌ '+le.message,true);return;}
+  var {data:freshVisits}=await window._sb.from('shop_visits').select('*').eq('plan_id',_dTripPlan.plan_id);
+  _dShopVisits={};(freshVisits||[]).forEach(function(v){_dShopVisits[v.shop_seq]=v;});
+  drvHideL();
+  _dTripLog=Object.assign({},newLog||_dTripLog,{status:nextStatus});
+  _dCapturedFile=null;_dCapturedPreviewUrl=null;_dSelectedShopSeq=null;
+  drvRenderTimeline();drvRenderAction();
+  drvShowToast(allDone?'✅ ส่งครบ! กลับบริษัทได้เลย':'✅ ออกจากร้าน — เลือกร้านถัดไป');
+};
+
+window.drvDoFinishTrip=async function(){
+  var mile=parseInt((document.getElementById('drv-inp-mile-end')||{}).value||'');
+  if(DRV_TEST_MODE&&(!mile||mile<=_dTripLog.mileage_start))mile=(_dTripLog.mileage_start||100000)+50;
+  if(!mile||mile<=0){drvShowToast('❌ กรอกเลขไมล์กลับให้ถูกต้อง',true);return;}
+  if(mile<=_dTripLog.mileage_start){drvShowToast('❌ ไมล์กลับต้องมากกว่าไมล์ออก ('+_dTripLog.mileage_start+')',true);return;}
+  drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
+  var now=new Date().toISOString();
+  var {data:newLog,error}=await window._sb.from('trip_logs').update({
+    status:'completed',mileage_end:mile,lat_end:gps.lat,lng_end:gps.lng,acc_end:gps.acc,
+    completed_at:now,updated_at:now
+  }).eq('plan_id',_dTripPlan.plan_id).select().single();
+  drvHideL();
+  if(error){drvShowToast('❌ '+error.message,true);return;}
+  _dTripLog=newLog;_dTripLogs[_dTripPlan.plan_id]=newLog;
+  await window._sb.from('logistic_plans').update({status:'success'}).eq('plan_id',_dTripPlan.plan_id);
+  try{
+    var delivDate=newLog.started_at?newLog.started_at.slice(0,10):now.slice(0,10);
+    var totalKm=newLog.mileage_end&&newLog.mileage_start?(newLog.mileage_end-newLog.mileage_start):null;
+    var shops=_dTripPlan.shops||[];
+    var dalRows=shops.map(function(sh,idx){
+      var sv=_dShopVisits[idx]||{};
+      var tDep=newLog.started_at?newLog.started_at.slice(11,16):'';
+      var tArr=sv.arrived_at?sv.arrived_at.slice(11,16):'';
+      var tDep2=sv.departed_at?sv.departed_at.slice(11,16):'';
+      var travelMin=null,kmhr=null;
+      if(tDep&&tArr){var depM=parseInt(tDep.split(':')[0])*60+parseInt(tDep.split(':')[1]),arrM=parseInt(tArr.split(':')[0])*60+parseInt(tArr.split(':')[1]),diff=arrM-depM;if(diff>0){travelMin=diff;if(totalKm)kmhr=Math.round(totalKm/(diff/60)*10)/10;}}
+      return{delivery_date:delivDate,driver_name:_dSess.driver_name||_dSess.username||null,truck_plate:_dTripPlan.truck_plate||null,mileage_start:newLog.mileage_start||null,mileage_end:newLog.mileage_end||null,time_depart:tDep||null,time_arrive:tDep2||tArr||null,shop_code:sh.shopId||null,shop_name:sh.shopName||null,distance_km:totalKm||null,travel_minutes:travelMin,km_per_hr:kmhr,planned_distance:parseFloat(sh.distance)||null,sale:sh.sale||null,recorded_at:now};
+    });
+    if(dalRows.length)await window._sb.from('driver_activity_log').insert(dalRows);
+  }catch(e){console.warn('driver_activity_log insert failed',e);}
+  drvRenderTimeline();drvRenderAction();
+  drvShowToast('🎉 จบงานเรียบร้อย!');
+};
+
+window.drvHistLoad=async function(){
+  var from=document.getElementById('drv-hf').value;
+  var to=document.getElementById('drv-ht2').value;
+  if(!from||!to){drvShowToast('❌ เลือกช่วงวันที่ก่อน',true);return;}
+  drvShowL();
+  var {data:logs,error}=await window._sb.from('trip_logs').select('*')
+    .eq('driver_username',_dSess.username)
+    .gte('started_at',from+'T00:00:00.000Z')
+    .lte('started_at',to+'T23:59:59.999Z')
+    .order('started_at',{ascending:false});
+  drvHideL();
+  var list=document.getElementById('drv-hist-list');
+  if(error||!logs||!logs.length){list.innerHTML='<div style="text-align:center;padding:40px 0;color:#334155;font-weight:700;font-size:13px;">ไม่พบข้อมูลในช่วงวันที่นี้</div>';return;}
+  var stColor={completed:'#059669',returning:'#7c3aed',traveling:'#3b82f6',at_shop:'#f59e0b',idle:'#475569'};
+  var stLabel={completed:'เสร็จสิ้น',returning:'กลับบริษัท',traveling:'เดินทาง',at_shop:'ที่ร้าน',idle:'ยังไม่เริ่ม'};
+  list.innerHTML=logs.map(function(l){
+    var km=l.mileage_end&&l.mileage_start?(l.mileage_end-l.mileage_start):null;
+    var dateStr=l.started_at?new Date(l.started_at).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})+' '+drvFmtTime(l.started_at):'–';
+    return '<div class="drv-card" style="margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div style="font-weight:900;color:#fff;font-size:14px;">'+drvEsc(l.plan_id)+'</div><span style="font-size:11px;font-weight:700;color:'+(stColor[l.status]||'#475569')+'">'+(stLabel[l.status]||l.status)+'</span></div><div style="font-size:12px;color:#64748b;">'+dateStr+(km!==null?' • '+km+' กม.':'')+(l.completed_at?' • จบ '+drvFmtTime(l.completed_at):'')+'</div></div>';
+  }).join('');
+};
+
+})();
+</script>
 
