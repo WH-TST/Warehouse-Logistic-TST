@@ -30477,8 +30477,8 @@ window.viewTripResult = async function(planId) {
         return pa - pb;
       });
       _scItems = skuList.map(function(s){
-        var cntKey = s.sku + '|' + s.wh;
-        var sysQty = cntMapWH[cntKey] !== undefined ? cntMapWH[cntKey] : (cntMapAll[s.sku]||0);
+        // ยอดระบบ = รวมทุกคลัง (FG-BP + QC อยู่แถวเดียวกันใน Count Sheet)
+        var sysQty = cntMapAll[s.sku]||0;
         return {
           sku:       s.sku,
           name:      s.name,
@@ -30520,8 +30520,7 @@ window.viewTripResult = async function(planId) {
           });
           // เพิ่ม manual items ที่ไม่ได้อยู่ใน transection_fg
           Object.values(savedMap).forEach(function(s){
-            var cntKey = s.sku + '|' + (whFilter||'');
-            var sysQty = cntMapWH[cntKey] !== undefined ? cntMapWH[cntKey] : (cntMapAll[s.sku]||0);
+            var sysQty = cntMapAll[s.sku]||0;
             _scItems.push({
               sku:       s.sku,
               name:      s.sku,
