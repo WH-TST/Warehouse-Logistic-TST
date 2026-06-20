@@ -2080,6 +2080,9 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
             <button onclick="switchView('truck-dispatch')" id="nav-truck-dispatch" class="nav-btn" data-tip="Truck Dispatch">
                 <span class="nav-icon"><i class="fas fa-truck-loading"></i></span> Truck Dispatch
             </button>
+            <button onclick="switchView('driver-monitor')" id="nav-driver-monitor" class="nav-btn" data-tip="Driver Monitor">
+                <span class="nav-icon"><i class="fas fa-satellite-dish"></i></span> Driver Monitor
+            </button>
 
             <!-- ─── SUPERVISOR ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
@@ -7074,6 +7077,33 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     <div class="px-6 pb-5 flex gap-3 justify-end">
       <button onclick="prodCloseModal()" class="px-5 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition">ยกเลิก</button>
       <button onclick="prodSave()" class="px-5 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-500 transition shadow">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRIVER MONITOR                                               -->
+<!-- ============================================================ -->
+<div id="view-driver-monitor-content" class="hidden space-y-4">
+  <div class="rounded-2xl p-4" style="background:#f4f6f9;border:1px solid #bec8d8;border-left:4px solid #059669;">
+    <div class="flex items-center gap-3 flex-wrap">
+      <i class="fas fa-satellite-dish" style="color:#059669;font-size:20px;"></i>
+      <div style="flex:1;min-width:200px;">
+        <label style="font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;display:block;margin-bottom:4px;">เลือกคนขับ</label>
+        <select id="dm-driver-select" onchange="dmSelectDriver()" style="width:100%;max-width:320px;border:2px solid #cbd5e1;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:700;outline:none;background:#fff;">
+          <option value="">— เลือกคนขับ —</option>
+        </select>
+      </div>
+      <button onclick="dmRefresh()" style="background:#059669;border:none;border-radius:10px;padding:9px 16px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        <i class="fas fa-sync-alt"></i> รีเฟรช
+      </button>
+    </div>
+  </div>
+
+  <!-- Driver view area -->
+  <div id="dm-area" style="background:#0d1b2a;border-radius:20px;overflow:hidden;min-height:400px;">
+    <div style="text-align:center;padding:80px 20px;color:#475569;">
+      <i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;opacity:.3;"></i>
+      <p style="font-weight:700;font-size:15px;">เลือกคนขับเพื่อดูสถานะ</p>
     </div>
   </div>
 </div>
@@ -12110,7 +12140,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'driver-monitor', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -12137,6 +12167,7 @@ window.switchView = function switchView(view) {
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
             'truck-dispatch': 'จัดรถส่งสินค้า — Truck Dispatch',
+            'driver-monitor': 'Driver Monitor — ติดตามคนขับ',
             'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
             'products': 'จัดการสินค้า — Product Master',
             'user-accounts': 'ตั้งค่าบัญชีผู้ใช้ — Driver & WH Staff',
@@ -32356,6 +32387,112 @@ function drvTick(){
 }
 
 // เรียกจาก WMS doLogin เมื่อ role=driver
+// ══════════════════════════════════════════════════════════════
+// DRIVER MONITOR — admin view
+// ══════════════════════════════════════════════════════════════
+var _dmDrivers=[];
+
+window.dmInit=async function(){
+  var {data}=await window._sb.from('driver_users').select('username,driver_name,driver_id,active').eq('active',true).order('driver_name');
+  _dmDrivers=data||[];
+  var sel=document.getElementById('dm-driver-select');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— เลือกคนขับ —</option>'
+    +_dmDrivers.map(function(d){return'<option value="'+d.username+'">'+d.driver_name+'</option>';}).join('');
+};
+
+window.dmSelectDriver=async function(){
+  var sel=document.getElementById('dm-driver-select');
+  var uname=sel?sel.value:'';
+  var area=document.getElementById('dm-area');
+  if(!uname||!area){
+    area.innerHTML='<div style="text-align:center;padding:80px 20px;color:#475569;"><i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;opacity:.3;"></i><p style="font-weight:700;font-size:15px;">เลือกคนขับเพื่อดูสถานะ</p></div>';
+    return;
+  }
+  var driver=_dmDrivers.find(function(d){return d.username===uname;});
+  if(!driver)return;
+  area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
+
+  var today=new Date().toISOString().split('T')[0];
+  var orParts=[];
+  if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
+  if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
+  var q=window._sb.from('logistic_plans')
+    .select('plan_id,plan_date,status,truck_plate,shops,driver_transport')
+    .eq('plan_date',today);
+  if(orParts.length) q=q.or(orParts.join(','));
+  var {data:plans}=await q;
+  plans=plans||[];
+
+  var tripLogs={};
+  if(plans.length){
+    var ids=plans.map(function(p){return p.plan_id;});
+    var {data:logs}=await window._sb.from('trip_logs').select('*').in('plan_id',ids);
+    (logs||[]).forEach(function(l){tripLogs[l.plan_id]=l;});
+  }
+
+  var statusMeta={
+    idle:{color:'#475569',label:'รอเริ่มงาน',bg:'#1e293b',border:'#334155'},
+    traveling:{color:'#3b82f6',label:'กำลังเดินทาง',bg:'#1e3a8a',border:'#1d4ed8'},
+    at_shop:{color:'#f59e0b',label:'อยู่ที่ร้าน',bg:'#422006',border:'#d97706'},
+    returning:{color:'#a78bfa',label:'กำลังกลับ',bg:'#2d1b69',border:'#7c3aed'},
+    completed:{color:'#34d399',label:'เสร็จสิ้น',bg:'#064e3b',border:'#059669'}
+  };
+
+  var trucks=Array.from(new Set(plans.flatMap(function(p){return[p.truck_plate].filter(Boolean);}))).join(', ');
+  var done=plans.filter(function(p){var l=tripLogs[p.plan_id];return l&&l.status==='completed';}).length;
+
+  var html='<div style="padding:16px;font-family:\'Segoe UI\',sans-serif;color:#e2e8f0;">'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 16px;background:#1e293b;border-radius:14px;">'
+    +'<div style="width:44px;height:44px;border-radius:12px;background:#065f46;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-id-badge" style="color:#6ee7b7;font-size:20px;"></i></div>'
+    +'<div><div style="font-weight:900;color:#fff;font-size:16px;">'+driver.driver_name+'</div>'
+    +'<div style="font-size:12px;color:#34d399;font-weight:700;">'+(trucks?'🚛 '+trucks:'ไม่มีรถวันนี้')+'</div></div>'
+    +'<div style="margin-left:auto;text-align:right;">'
+    +'<div style="font-size:22px;font-weight:900;color:#fff;">'+plans.length+'</div>'
+    +'<div style="font-size:10px;color:#64748b;">เที่ยว / '+done+' สำเร็จ</div></div>'
+    +'</div>';
+
+  if(!plans.length){
+    html+='<div style="text-align:center;padding:60px 0;color:#475569;"><i class="fas fa-clipboard-check" style="font-size:40px;display:block;margin-bottom:12px;opacity:.3;"></i><p style="font-weight:700;">ไม่มีแผนวันนี้</p></div>';
+  } else {
+    html+=plans.map(function(p,pi){
+      var log=tripLogs[p.plan_id];
+      var st=log?log.status:'idle';
+      var m=statusMeta[st]||statusMeta.idle;
+      var shops=p.shops||[];
+      var seq=log?log.current_shop_seq:0;
+      var currentShop=shops[seq];
+      var contextLine='';
+      if(st==='traveling'&&currentShop) contextLine='<div style="font-size:12px;color:#93c5fd;margin-top:6px;"><i class="fas fa-map-marker-alt" style="margin-right:4px;"></i>กำลังไป: '+currentShop.shopName+'</div>';
+      else if(st==='at_shop'&&currentShop) contextLine='<div style="font-size:12px;color:#fbbf24;margin-top:6px;"><i class="fas fa-store" style="margin-right:4px;"></i>อยู่ที่: '+currentShop.shopName+'</div>';
+      var routeText=shops.map(function(sh){return sh.shopName||sh.shopId||'–';}).join(' → ');
+      var startTime=log&&log.started_at?new Date(log.started_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'–';
+      return '<div style="background:'+m.bg+';border:2px solid '+m.border+';border-radius:16px;padding:14px;margin-bottom:10px;">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+        +'<div style="font-weight:900;color:#fff;font-size:15px;">เที่ยวที่ '+(pi+1)+'<span style="font-size:11px;color:#64748b;font-weight:400;margin-left:8px;">'+p.plan_id+'</span></div>'
+        +'<span style="font-size:11px;font-weight:900;color:'+m.color+';padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.3);">'+m.label+'</span></div>'
+        +(log&&log.started_at?'<div style="font-size:11px;color:#64748b;margin-bottom:4px;"><i class="fas fa-clock" style="margin-right:4px;"></i>เริ่ม '+startTime+'</div>':'')
+        +'<div style="font-size:12px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:4px;opacity:.6;"></i>'+routeText+'</div>'
+        +contextLine
+        +'</div>';
+    }).join('');
+  }
+
+  html+='</div>';
+  area.innerHTML=html;
+};
+
+window.dmRefresh=function(){
+  dmSelectDriver();
+};
+
+// โหลด driver list เมื่อ switchView ไป driver-monitor
+var _dmOrigSW=window.switchView;
+window.switchView=function(v){
+  _dmOrigSW(v);
+  if(v==='driver-monitor') dmInit();
+};
+
 window.drvInit=function(wmsUser){
   _dSess={username:wmsUser.username,driver_name:wmsUser.name||wmsUser.username,driver_id:wmsUser.driver_id||''};
   DRV_TEST_MODE=DRV_TEST_USERNAMES.indexOf(wmsUser.username.toLowerCase())!==-1;
