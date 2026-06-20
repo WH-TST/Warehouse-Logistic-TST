@@ -31666,7 +31666,7 @@ window.viewTripResult = async function(planId) {
     var inner = document.getElementById(histId+'-inner');
     var { data: items, error } = await window._sb
       .from('stock_count_semi')
-      .select('count_date,count1,count2,total_count,system_qty,diff,note,fg_code_1,fg_code_2')
+      .select('count_date,count1,count2,total_count,system_qty,diff,note,fg_code_1,fg_name_1,fg_code_2,fg_name_2')
       .eq('semi_item', semiItem)
       .order('count_date', {ascending: false})
       .limit(60);
@@ -31677,12 +31677,13 @@ window.viewTripResult = async function(planId) {
     var rows = items.map(function(r){
       var diff = r.diff !== null ? r.diff : (r.total_count - r.system_qty);
       var dc = diff === 0 ? '#15803d' : diff > 0 ? '#d97706' : '#dc2626';
+      var hasFG2 = r.fg_code_2 && r.fg_code_2 !== '0' && r.fg_code_2 !== '–';
       return '<tr style="border-bottom:1px solid #ede9fe">'
         + '<td style="padding:4px 8px;color:#374151">'+r.count_date+'</td>'
-        + '<td style="padding:4px 8px;color:#374151;font-family:monospace;font-size:10px">'+r.fg_code_1+'</td>'
-        + '<td style="padding:4px 8px;text-align:right">'+r.count1+'</td>'
-        + '<td style="padding:4px 8px;font-family:monospace;font-size:10px;color:#1d4ed8">'+(r.fg_code_2||'—')+'</td>'
-        + '<td style="padding:4px 8px;text-align:right">'+(r.count2||'—')+'</td>'
+        + '<td style="padding:4px 8px;color:#166534;font-size:11px">'+(r.fg_name_1||r.fg_code_1||'—')+'</td>'
+        + '<td style="padding:4px 8px;text-align:right;font-weight:600">'+r.count1+'</td>'
+        + '<td style="padding:4px 8px;color:#1d4ed8;font-size:11px">'+(hasFG2?(r.fg_name_2||r.fg_code_2):'<span style="color:#cbd5e1">—</span>')+'</td>'
+        + '<td style="padding:4px 8px;text-align:right;font-weight:600">'+(hasFG2?r.count2:'<span style="color:#cbd5e1">—</span>')+'</td>'
         + '<td style="padding:4px 8px;text-align:right;font-weight:700">'+r.total_count+'</td>'
         + '<td style="padding:4px 8px;text-align:right;color:#534ab7">'+r.system_qty+'</td>'
         + '<td style="padding:4px 8px;text-align:right;color:'+dc+';font-weight:700">'+(diff>0?'+':'')+diff+'</td>'
@@ -31692,9 +31693,9 @@ window.viewTripResult = async function(planId) {
     inner.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
       + '<thead><tr style="background:#ede9fe;color:#5b21b6">'
       + '<th style="padding:4px 8px;text-align:left">วันที่นับ</th>'
-      + '<th style="padding:4px 8px;text-align:left">รหัส FG1</th>'
+      + '<th style="padding:4px 8px;text-align:left">ชื่อ FG1</th>'
       + '<th style="padding:4px 8px;text-align:right">นับ FG1</th>'
-      + '<th style="padding:4px 8px;text-align:left">รหัส FG2</th>'
+      + '<th style="padding:4px 8px;text-align:left">ชื่อ FG2</th>'
       + '<th style="padding:4px 8px;text-align:right">นับ FG2</th>'
       + '<th style="padding:4px 8px;text-align:right">รวมนับ</th>'
       + '<th style="padding:4px 8px;text-align:right">ยอดระบบ</th>'
