@@ -32690,10 +32690,18 @@ window.dmSelectDriver=async function(){
   }
 
   /* ── helper: action buttons (admin override — mileage บังคับทุกจุด) ── */
-  function dmActionBtns(planId, st){
+  function dmActionBtns(planId, st, shops, log){
     var pid=planId.replace(/[^a-zA-Z0-9]/g,'_');
+    shops=shops||[];
+    var seq=log?log.current_shop_seq:0;
+    var currentShop=shops[seq]||{};
+    var shopName=currentShop.shopName||currentShop.shopId||'ร้าน';
+    // หา shop ถัดไปที่ยังไม่ได้ไป (สำหรับ at_shop state)
+    var nextShop=shops[seq+1]||null;
+
     var INP='width:100%;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:12px 14px;color:#fff;font-size:15px;font-weight:700;margin-bottom:10px;outline:none;box-sizing:border-box;';
     var LBL='font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;';
+    var DEST='font-size:14px;font-weight:900;color:#fff;margin-bottom:10px;padding:10px 14px;background:#1e3a8a;border-radius:10px;display:flex;align-items:center;gap:8px;';
     var BTN='width:100%;border:none;border-radius:14px;padding:16px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;';
     var SBTN='width:100%;background:#1e293b;border:2px solid #334155;border-radius:14px;padding:13px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:6px;';
     var GPS_HINT='<div style="font-size:11px;color:#64748b;text-align:center;margin-bottom:12px;"><i class="fas fa-map-marker-alt" style="color:#34d399;margin-right:4px;"></i>GPS + เวลาไทยจะบันทึกอัตโนมัติ</div>';
@@ -32701,7 +32709,10 @@ window.dmSelectDriver=async function(){
     var qPid="'"+planId+"'";
 
     if(st==='idle'){
+      var firstShop=shops[0]||{};
+      var firstName=firstShop.shopName||firstShop.shopId||'';
       b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
+        +(firstName?'<div style="'+DEST+'"><i class="fas fa-map-marker-alt" style="color:#34d399;flex-shrink:0;"></i>ปลายทางแรก: '+firstName+'</div>':'')
         +'<label style="'+LBL+'"><i class="fas fa-tachometer-alt" style="margin-right:4px;"></i>ไมล์ออกจากโรงงาน (หน้าปัดรถ) *</label>'
         +'<input id="dm-mile-start-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125000" style="'+INP+'">'
         +GPS_HINT
@@ -32709,20 +32720,25 @@ window.dmSelectDriver=async function(){
         +'</div>';
     } else if(st==='traveling'){
       b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
-        +'<label style="'+LBL+'"><i class="fas fa-tachometer-alt" style="margin-right:4px;"></i>ไมล์เมื่อถึงร้าน (หน้าปัดรถ) *</label>'
+        +'<div style="'+DEST+'"><i class="fas fa-store" style="color:#fbbf24;flex-shrink:0;"></i>กำลังไปส่ง: '+shopName+'</div>'
+        +'<label style="'+LBL+'"><i class="fas fa-tachometer-alt" style="margin-right:4px;"></i>ไมล์เมื่อถึง '+shopName+' (หน้าปัดรถ) *</label>'
         +'<input id="dm-mile-arr-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125060" style="'+INP+'">'
         +GPS_HINT
-        +'<button style="'+BTN+'background:#d97706;" onclick="dmAdminSetStatus('+qPid+',\'at_shop\',\''+pid+'\')"><i class="fas fa-store"></i> บันทึกถึงร้าน</button>'
+        +'<button style="'+BTN+'background:#d97706;" onclick="dmAdminSetStatus('+qPid+',\'at_shop\',\''+pid+'\')"><i class="fas fa-store"></i> บันทึกถึง '+shopName+'</button>'
         +'<button style="'+BTN+'background:#7c3aed;margin-top:4px;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> กลับบริษัทเลย (ข้ามร้าน)</button>'
         +'</div>';
     } else if(st==='at_shop'){
       b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
+        +'<div style="'+DEST.replace('#1e3a8a','#422006')+'"><i class="fas fa-store" style="color:#fbbf24;flex-shrink:0;"></i>อยู่ที่: '+shopName+'</div>'
         +GPS_HINT
-        +'<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-arrow-right"></i> ออกจากร้าน / ไปร้านถัดไป</button>'
+        +(nextShop
+          ?'<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-arrow-right"></i> ออกจากร้าน → '+(nextShop.shopName||nextShop.shopId||'ร้านถัดไป')+'</button>'
+          :'<button style="'+BTN+'background:#059669;" onclick="dmAdminSetStatus('+qPid+',\'traveling\',\''+pid+'\')"><i class="fas fa-arrow-right"></i> ออกจากร้าน (ไปร้านถัดไป)</button>')
         +'<button style="'+BTN+'background:#7c3aed;margin-top:4px;" onclick="dmAdminSetStatus('+qPid+',\'returning\',\''+pid+'\')"><i class="fas fa-industry"></i> ส่งครบ — กลับบริษัท</button>'
         +'</div>';
     } else if(st==='returning'){
       b+='<div style="background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px;">'
+        +'<div style="'+DEST.replace('#1e3a8a','#2d1b69')+'"><i class="fas fa-industry" style="color:#c4b5fd;flex-shrink:0;"></i>กำลังกลับบริษัท</div>'
         +'<label style="'+LBL+'"><i class="fas fa-tachometer-alt" style="margin-right:4px;"></i>ไมล์เมื่อถึงบริษัท (หน้าปัดรถ) *</label>'
         +'<input id="dm-mile-end-'+pid+'" type="number" inputmode="numeric" placeholder="เช่น 125120" style="'+INP+'">'
         +GPS_HINT
@@ -32792,7 +32808,7 @@ window.dmSelectDriver=async function(){
         /* context */
         +ctx
         /* admin action buttons */
-        +dmActionBtns(p.plan_id, st)
+        +dmActionBtns(p.plan_id, st, shops, log)
         +'</div>';
     }).join('');
   }
