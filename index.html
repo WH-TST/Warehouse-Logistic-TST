@@ -13014,11 +13014,15 @@ let blockingChartInstance = null;
               var v = raw;
               if(typeof raw === 'string' && raw.length > 16 && raw.includes('T')){
                 var d = new Date(raw);
-                if(!isNaN(d)){
-                  v = d.toLocaleString('sv-SE', {timeZone:'Asia/Bangkok'}).slice(0,16);
-                }
+                if(!isNaN(d)) v = d.toLocaleString('sv-SE', {timeZone:'Asia/Bangkok'}).slice(0,16);
               }
-              return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="'+String(raw).replace(/"/g,'&quot;')+'">'+v+'</td>';
+              var cell = String(v);
+              if(c === 'w_range' && raw !== '—' && raw !== null){
+                var bg = raw==='OK' ? '#dcfce7' : raw==='Under' ? '#fee2e2' : '#fef3c7';
+                var fc = raw==='OK' ? '#166534' : raw==='Under' ? '#991b1b' : '#92400e';
+                cell = '<span style="background:'+bg+';color:'+fc+';padding:1px 8px;border-radius:4px;font-weight:700;font-size:10px">'+raw+'</span>';
+              }
+              return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="'+String(raw).replace(/"/g,'&quot;')+'">'+cell+'</td>';
             }).join('')
           + '</tr>';
       }).join('') : '<tr><td colspan="20" class="text-center text-slate-400 py-8">ไม่พบข้อมูล</td></tr>';
