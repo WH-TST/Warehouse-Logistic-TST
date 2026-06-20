@@ -12991,8 +12991,11 @@ let blockingChartInstance = null;
       document.getElementById('invd-tbody').innerHTML = filtered.length ? filtered.map(function(r,i){
         return '<tr style="background:'+rowBg[i%2]+';border-bottom:1px solid #f1f5f9">'
           + cols.map(function(c){
-              var v = r[c] !== null && r[c] !== undefined ? r[c] : '—';
-              return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="'+String(v).replace(/"/g,'&quot;')+'">'+v+'</td>';
+              var raw = r[c] !== null && r[c] !== undefined ? r[c] : '—';
+              var v = raw;
+              if(typeof raw === 'string' && raw.length > 16 && raw.includes('T') && raw.includes('+'))
+                v = raw.slice(0,10) + ' ' + raw.slice(11,16);
+              return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="'+String(raw).replace(/"/g,'&quot;')+'">'+v+'</td>';
             }).join('')
           + '</tr>';
       }).join('') : '<tr><td colspan="20" class="text-center text-slate-400 py-8">ไม่พบข้อมูล</td></tr>';
