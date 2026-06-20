@@ -6300,7 +6300,7 @@ thead.sticky {
       <div class="flex flex-wrap items-end gap-3 mb-4">
         <div>
           <label class="text-slate-500 text-xs font-bold mb-1 block">วันที่นับ</label>
-          <input type="date" id="sc-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+          <input type="date" id="sc-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400" onchange="scClearSheet()">
         </div>
         <div>
           <label class="text-slate-500 text-xs font-bold mb-1 block">WH</label>
@@ -6549,7 +6549,7 @@ thead.sticky {
         <div class="flex flex-wrap items-end gap-3 mb-4">
           <div>
             <label class="text-slate-500 text-xs font-bold mb-1 block">วันที่นับ</label>
-            <input type="date" id="sc-semi-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400">
+            <input type="date" id="sc-semi-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400" onchange="scSemiClearSheet()">
           </div>
           <button onclick="scSemiLoadSheet()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
             <i class="fas fa-search"></i> โหลดรายการ
@@ -30030,6 +30030,18 @@ window.viewTripResult = async function(planId) {
     }
   };
 
+  // ── ล้างข้อมูลเมื่อเปลี่ยนวันที่ ────────────────────────────────
+  window.scClearSheet = function(){
+    _scItems = [];
+    _scDate  = '';
+    var tbody = document.getElementById('sc-sheet-tbody');
+    if(tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">กรุณากดโหลดรายการ</td></tr>';
+    var info = document.getElementById('sc-sheet-info');
+    if(info) info.classList.add('hidden');
+    var btn = document.getElementById('sc-btn-reconcile');
+    if(btn) btn.classList.add('hidden');
+  };
+
   // ── load sheet from Supabase (transection_fg + counting) ───────
   window.scLoadSheet = async function(){
     var dateVal = document.getElementById('sc-date').value;
@@ -31201,6 +31213,12 @@ window.viewTripResult = async function(planId) {
   };
 
   // ── load sheet ──
+  window.scSemiClearSheet = function(){
+    _semiItems = [];
+    var tbody = document.getElementById('sc-semi-tbody');
+    if(tbody) tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">กรุณากดโหลดรายการ</td></tr>';
+  };
+
   window.scSemiLoadSheet = async function(){
     var date = (document.getElementById('sc-semi-date').value||'').trim();
     if(!date){ if(typeof showToast==='function') showToast('กรุณาเลือกวันที่ก่อน', true); return; }
