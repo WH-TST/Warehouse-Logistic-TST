@@ -31224,18 +31224,27 @@ window.viewTripResult = async function(planId) {
       var sysMap = {};
       (onhand||[]).forEach(function(r){ sysMap[r.item_number] = (sysMap[r.item_number]||0) + 1; });
 
-      // 4. build _semiItems (preserve existing count if reloading same date)
+      // 4. ดึงข้อมูลที่บันทึกไว้ (ถ้ามี) สำหรับวันนี้
+      var savedSemiMap = {};
+      var { data: savedSemi } = await window._sb.from('stock_count_semi')
+        .select('semi_item,count1,count2,note').eq('count_date', date);
+      (savedSemi||[]).forEach(function(r){ savedSemiMap[r.semi_item] = r; });
+
+      // 5. build _semiItems
       var prevMap = {};
       _semiItems.forEach(function(it){ prevMap[it.semi_item] = it; });
       _semiItems = mapping.map(function(m){
-        var prev = prevMap[m.semi_item] || {};
+        var prev  = prevMap[m.semi_item] || {};
+        var saved = savedSemiMap[m.semi_item] || {};
+        var hasPrev = prev.count1||prev.count2;
+        var src = hasPrev ? prev : saved;
         return {
           semi_item: m.semi_item, semi_name: m.semi_name||'',
           fg_code_1: m.fg_code_1||'', fg_name_1: m.fg_name_1||'',
           fg_code_2: m.fg_code_2||'', fg_name_2: m.fg_name_2||'',
-          count1: prev.count1||0, count2: prev.count2||0,
+          count1: src.count1||0, count2: src.count2||0,
           systemQty: sysMap[m.semi_item]||0,
-          note: prev.note||''
+          note: src.note||''
         };
       });
       _scSemiRender();
