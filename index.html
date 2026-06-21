@@ -32493,6 +32493,7 @@ window.viewTripResult = async function(planId) {
 
 <!-- Camera input -->
 <input type="file" id="drv-photo-input" accept="image/*" capture="environment" style="display:none" onchange="drvHandlePhoto(this)">
+<input type="file" id="dm-photo-input" accept="image/*" capture="environment" style="display:none" onchange="dmHandlePhoto(this)">
 
 <script>
 (function(){
@@ -32604,6 +32605,7 @@ window.dmInit=async function(){
 // ─── Admin Driver Monitor — Trip-Screen Replication (matches Driver-App-TST) ───
 var _dmTripPlan=null,_dmTripLog=null,_dmShopVisits={},_dmSelectedShopSeq=null,_dmTimerIv=null;
 var _dmPlans=[],_dmTripLogs={},_dmSvMap={},_dmCurrentDriver=null;
+var _dmCapturedFile=null,_dmCapturedPreviewUrl=null;
 
 function dmEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function dmFmtTime(iso){if(!iso)return'–';var d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
@@ -32733,6 +32735,7 @@ window.dmOpenTrip=async function(planId){
 window.dmCloseTrip=function(){
   clearInterval(_dmTimerIv);_dmTimerIv=null;
   _dmTripPlan=null;_dmTripLog=null;_dmShopVisits={};_dmSelectedShopSeq=null;
+  _dmCapturedFile=null;_dmCapturedPreviewUrl=null;
   var area=document.getElementById('dm-area');
   dmRenderPlanList(area);
 };
@@ -32846,9 +32849,12 @@ function dmRenderTraveling(){
     +'<div id="dm-travel-countdown" style="display:none;"></div>'
     +'<div id="dm-arrive-action" style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'
     +'<div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">ไมล์เมื่อถึงร้าน (หน้าปัดรถ)</div>'
-    +'<input id="dm-mile-arr" type="number" inputmode="numeric" placeholder="เช่น 125060" style="width:100%;background:#0f172a;border:2px solid #334155;border-radius:14px;padding:14px 16px;color:#fff;font-weight:900;font-size:22px;text-align:center;outline:none;letter-spacing:.03em;box-sizing:border-box;margin-bottom:12px;">'
+    +'<input id="dm-mile-arr" type="number" inputmode="numeric" placeholder="เช่น 125060" style="width:100%;background:#0f172a;border:2px solid #334155;border-radius:14px;padding:14px 16px;color:#fff;font-weight:900;font-size:22px;text-align:center;outline:none;letter-spacing:.03em;box-sizing:border-box;margin-bottom:14px;">'
+    +(_dmCapturedPreviewUrl
+      ?'<div style="position:relative;margin-bottom:10px;"><img src="'+_dmCapturedPreviewUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;"><div style="position:absolute;top:8px;right:8px;background:rgba(5,150,105,.92);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:900;color:#fff;"><i class="fas fa-check" style="margin-right:4px;"></i>ถ่ายแล้ว</div></div><button onclick="dmOpenCamera()" style="width:100%;background:#1e293b;border:2px solid #334155;border-radius:16px;padding:14px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;"><i class="fas fa-redo"></i> ถ่ายใหม่</button>'
+      :'<button onclick="dmOpenCamera()" style="width:100%;border:none;border-radius:16px;padding:16px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;background:#d97706;margin-bottom:8px;"><i class="fas fa-camera"></i> ถ่ายรูปหลักฐาน (บังคับ)</button><div style="font-size:11px;color:#f59e0b;text-align:center;margin-bottom:12px;">⚠️ ต้องถ่ายรูปก่อนกดถึงร้าน</div>')
     +'<div style="font-size:11px;color:#64748b;text-align:center;margin-bottom:16px;"><i class="fas fa-map-marker-alt" style="color:#34d399;margin-right:4px;"></i>GPS จะถูกบันทึกอัตโนมัติ</div>'
-    +'<button onclick="dmArriveAtShop()" style="width:100%;border:none;border-radius:16px;padding:18px;color:#fff;font-weight:900;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;background:#059669;"><i class="fas fa-store"></i> ถึง '+dmEsc(shop.shopName||shop.shopId||'ร้าน')+' แล้ว</button>'
+    +'<button onclick="dmArriveAtShop()" '+((!_dmCapturedFile)?'disabled style="width:100%;border:none;border-radius:16px;padding:18px;color:#64748b;font-weight:900;font-size:16px;cursor:not-allowed;display:flex;align-items:center;justify-content:center;gap:10px;background:#334155;"':'style="width:100%;border:none;border-radius:16px;padding:18px;color:#fff;font-weight:900;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;background:#059669;"')+'><i class="fas fa-store"></i> ถึง '+dmEsc(shop.shopName||shop.shopId||'ร้าน')+' แล้ว</button>'
     +'</div>'
     +'<button onclick="dmResetTrip()" style="width:100%;background:#1e293b;border:2px solid #334155;border-radius:16px;padding:14px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;"><i class="fas fa-undo"></i> รีเซ็ตสถานะ (Admin)</button>'
     +'</div>';
@@ -32927,7 +32933,15 @@ function dmRenderCompleted(){
     +'</div></div>';
 }
 
-window.dmSelectShop=function(seq){_dmSelectedShopSeq=seq;dmRenderAction();};
+window.dmSelectShop=function(seq){_dmSelectedShopSeq=seq;_dmCapturedFile=null;_dmCapturedPreviewUrl=null;dmRenderAction();};
+window.dmOpenCamera=function(){var inp=document.getElementById('dm-photo-input');if(inp){inp.value='';inp.click();}};
+window.dmHandlePhoto=function(input){
+  var file=input.files[0];if(!file)return;
+  _dmCapturedFile=file;
+  if(_dmCapturedPreviewUrl)URL.revokeObjectURL(_dmCapturedPreviewUrl);
+  _dmCapturedPreviewUrl=URL.createObjectURL(file);
+  dmRenderAction();
+};
 
 window.dmStartTrip=async function(){
   var mile=parseInt((document.getElementById('dm-mile-start')||{}).value||'');
@@ -32959,13 +32973,25 @@ window.dmArriveAtShop=async function(){
   Object.values(_dmShopVisits).forEach(function(sv){if(sv.mileage_arrival>minMile)minMile=sv.mileage_arrival;});
   if(!mile||mile<=0){showToast('❌ กรอกเลขไมล์ถึงร้านให้ถูกต้อง',true);return;}
   if(mile<=minMile){showToast('❌ ไมล์ถึงร้านต้องมากกว่า '+minMile,true);return;}
+  if(!_dmCapturedFile){showToast('❌ ต้องถ่ายรูปหลักฐานก่อน',true);return;}
   if(!confirm('บันทึกถึงร้าน '+dmEsc(shop.shopName||shop.shopId||'ร้าน')+'?'))return;
   var gps=await dmRequireGPS();if(!gps)return;
   var now=dmThaiNow();
   try{
+    // upload photo
+    var photoUrl=null;
+    try{
+      var ext=(_dmCapturedFile.name||'photo.jpg').split('.').pop()||'jpg';
+      var path=_dmTripPlan.plan_id+'/'+seq+'/arrive_'+now.slice(0,19).replace(/[:\-T]/g,'')+'.'+ext;
+      var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dmCapturedFile,{contentType:_dmCapturedFile.type||'image/jpeg',upsert:true});
+      if(ue)throw ue;
+      var {data:ud}=window._sb.storage.from('delivery-photos').getPublicUrl(path);
+      photoUrl=ud.publicUrl;
+    }catch(pe){showToast('❌ อัพโหลดรูปไม่ได้: '+pe.message,true);return;}
     var {data:visitData,error:ve}=await window._sb.from('shop_visits').upsert({
       plan_id:_dmTripPlan.plan_id,shop_seq:seq,shop_name:shop.shopName||shop.shopId||'',
-      mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,arrived_at:now
+      mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
+      arrived_at:now,photo_url:photoUrl
     },{onConflict:'plan_id,shop_seq'}).select().single();
     if(ve)throw ve;
     var {data:newLog,error:le}=await window._sb.from('trip_logs').update({
@@ -32973,8 +32999,9 @@ window.dmArriveAtShop=async function(){
     }).eq('plan_id',_dmTripPlan.plan_id).select().single();
     if(le)throw le;
     _dmTripLog=newLog;_dmShopVisits[seq]=visitData;_dmTripLogs[_dmTripPlan.plan_id]=newLog;
+    _dmCapturedFile=null;_dmCapturedPreviewUrl=null;
     dmRenderTimeline();dmRenderAction();
-    showToast('✅ บันทึกถึงร้าน — GPS ±'+gps.acc+'ม.',false);
+    showToast('✅ บันทึกถึงร้าน — GPS ±'+(gps.acc||'?')+'ม.',false);
   }catch(e){showToast('❌ '+e.message,true);}
 };
 
@@ -33001,6 +33028,7 @@ window.dmDepartShop=async function(){
     var {data:freshV}=await window._sb.from('shop_visits').select('*').eq('plan_id',_dmTripPlan.plan_id);
     _dmShopVisits={};(freshV||[]).forEach(function(v){_dmShopVisits[v.shop_seq]=v;});
     _dmTripLog=newLog;_dmTripLogs[_dmTripPlan.plan_id]=newLog;_dmSelectedShopSeq=null;
+    _dmCapturedFile=null;_dmCapturedPreviewUrl=null;
     dmRenderTimeline();dmRenderAction();
     showToast(allDone?'✅ ส่งครบ! กลับบริษัทได้เลย':'✅ ออกจากร้าน — เลือกร้านถัดไป',false);
   }catch(e){showToast('❌ '+e.message,true);}
