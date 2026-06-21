@@ -32603,19 +32603,22 @@ function drvGetGPS(){
     navigator.geolocation.getCurrentPosition(
       function(p){res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)});},
       function(e){rej(e.code);},
-      {timeout:15000,enableHighAccuracy:true,maximumAge:0}
+      {timeout:20000,enableHighAccuracy:true,maximumAge:30000}
     );
   });
 }
 
 async function drvRequireGPS(){
   if(DRV_TEST_MODE)return{lat:13.7563,lng:100.5018,acc:5};
-  try{return await drvGetGPS();}
-  catch(code){
-    var msg=code===1?'❌ กรุณาอนุญาตให้ใช้ GPS ก่อน':
-             code==='no_device'?'❌ อุปกรณ์ไม่รองรับ GPS':
-             '❌ GPS timeout — ลองใหม่อีกครั้ง';
-    drvShowToast(msg,true);return null;
+  drvShowToast('กำลังดึง GPS…',false);
+  try{
+    var g=await drvGetGPS();
+    drvShowToast('GPS ±'+g.acc+'ม.',false);
+    return g;
+  }catch(code){
+    if(code===1){drvShowToast('⚠️ GPS ถูกบล็อก — บันทึกโดยไม่มีพิกัด',false);}
+    else{drvShowToast('⚠️ GPS ไม่ได้รับสัญญาณ — บันทึกโดยไม่มีพิกัด',false);}
+    return {lat:null,lng:null,acc:null};
   }
 }
 
