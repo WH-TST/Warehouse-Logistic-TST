@@ -17488,9 +17488,23 @@ window.renderLogisticList = function renderLogisticList() {
         });
 
         if (rows.length === 0) {
+            // หา -M pair เพื่อดูว่ามีร้านค้าอยู่ที่แม่หรือไม่
+            const _isChildPlan = p.isChild || (p.id||'').endsWith('-C');
+            const _motherPlan = _isChildPlan
+                ? logiPlanList.find(function(q){ return q.id === ((p.pairId||p.id.replace(/-C$/,''))+'-M'); })
+                : null;
+            const _motherShopCount = (_motherPlan && (_motherPlan.shops||[]).length) || 0;
+            const _shopNamesFromMother = _motherShopCount > 0
+                ? (_motherPlan.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ')
+                : '';
+
+            const _emptyMsg = (_isChildPlan && _motherShopCount > 0)
+                ? `<span class="text-purple-400 font-semibold">สินค้าอยู่ที่รถแม่ทั้งหมด</span><span class="text-slate-400 ml-1">(${_shopNamesFromMother})</span>`
+                : `ไม่มีรายการร้านค้า`;
+
             rows.push(`<tr style="background:${rowBgColor}">
                 ${leftCells(1)}
-                <td colspan="7" class="px-3 py-3 text-center text-xs text-slate-300 italic" style="border-top:2px solid #d1d5db">ไม่มีรายการร้านค้า</td>
+                <td colspan="7" class="px-3 py-3 text-center text-xs text-slate-300 italic" style="border-top:2px solid #d1d5db">${_emptyMsg}</td>
                 ${weightCell(1, '')}
                 ${actionCell(1)}
             </tr>`);
