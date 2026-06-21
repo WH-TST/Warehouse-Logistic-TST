@@ -33605,7 +33605,15 @@ window.drvHandlePhoto=function(input){
   _dCapturedFile=file;
   if(_dCapturedPreviewUrl)URL.revokeObjectURL(_dCapturedPreviewUrl);
   _dCapturedPreviewUrl=URL.createObjectURL(file);
+  // preserve odometer values before re-render
+  var savedMileArr=(document.getElementById('drv-inp-mile-arr')||{}).value||'';
+  var savedMileEnd=(document.getElementById('drv-inp-mile-end')||{}).value||'';
+  var savedMileStart=(document.getElementById('drv-inp-mile-start')||{}).value||'';
   drvRenderAction();
+  // restore after re-render
+  if(savedMileArr){var el=document.getElementById('drv-inp-mile-arr');if(el)el.value=savedMileArr;}
+  if(savedMileEnd){var el2=document.getElementById('drv-inp-mile-end');if(el2)el2.value=savedMileEnd;}
+  if(savedMileStart){var el3=document.getElementById('drv-inp-mile-start');if(el3)el3.value=savedMileStart;}
 };
 
 window.drvDoDepartShop=async function(){
