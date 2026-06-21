@@ -33045,7 +33045,7 @@ window.dmFinishTrip=async function(){
   try{
     var {data:newLog,error}=await window._sb.from('trip_logs').update({
       status:'completed',mileage_end:mile,lat_end:gps.lat,lng_end:gps.lng,acc_end:gps.acc,
-      finished_at:now,completed_at:now,updated_at:now
+      completed_at:now,updated_at:now
     }).eq('plan_id',_dmTripPlan.plan_id).select().single();
     if(error)throw error;
     _dmTripLog=newLog;_dmTripLogs[_dmTripPlan.plan_id]=newLog;
@@ -33074,7 +33074,7 @@ window.dmResetTrip=async function(){
   var now=dmThaiNow();
   try{
     await window._sb.from('trip_logs').update({
-      status:'idle',started_at:null,finished_at:null,completed_at:null,
+      status:'idle',started_at:null,completed_at:null,
       mileage_start:null,mileage_end:null,updated_at:now
     }).eq('plan_id',planId);
     await window._sb.from('logistic_plans').update({status:'planned'}).eq('plan_id',planId);
