@@ -14912,6 +14912,7 @@ let LOGI_PRODUCTS_MASTER = []; // alias → ชี้ไปที่ LOGI_MASTER
 let logiShopList         = [];   // รายการร้านค้าในเที่ยวนี้
 let logiPlanList         = [];   // รายการแผนที่โหลดมาแสดง
 let logiShopVisitsMap    = {};   // {plan_id: {shop_seq: {arrived_at, departed_at}}}
+let logiTripLogMap       = {};   // {plan_id: {status, current_shop_seq}}
 let logiEditId           = null; // id ของแผนที่กำลังแก้ไข
 let logiShopCounter      = 0;    // นับลำดับร้านค้า
 let logiTrailerMode      = null; // null | 'mother_only' | 'full_trailer'
@@ -17004,9 +17005,13 @@ window.loadLogisticList = async function loadLogisticList() {
         const planIds = (data || []).map(r => r.plan_id);
         // โหลด trip_logs พร้อมกัน เพื่อ sync สถานะจริงจาก Driver App
         let tripLogMap = {};
+        logiTripLogMap = {};
         if (planIds.length) {
-            const { data: tl } = await window._sb.from('trip_logs').select('plan_id,status').in('plan_id', planIds);
-            (tl || []).forEach(t => { tripLogMap[t.plan_id] = t.status; });
+            const { data: tl } = await window._sb.from('trip_logs').select('plan_id,status,current_shop_seq').in('plan_id', planIds);
+            (tl || []).forEach(t => {
+                tripLogMap[t.plan_id] = t.status;
+                logiTripLogMap[t.plan_id] = { status: t.status, current_shop_seq: t.current_shop_seq };
+            });
         }
 
         // โหลด shop_visits เพื่อแสดงสถานะรายร้านในตาราง
@@ -17020,18 +17025,15 @@ window.loadLogisticList = async function loadLogisticList() {
             });
         }
 
-        // sync status ถ้า trip_log บอกว่าเริ่มแล้วแต่ plan ยังเป็น planned
+        // sync status จาก trip_log → logistic_plans
         const syncJobs = [];
         (data || []).forEach(row => {
             const tlStatus = tripLogMap[row.plan_id];
             if (!tlStatus) return;
-            // sync เฉพาะ planned → inprogress (ไดรเวอร์เริ่มแล้วแต่ plan ยังค้าง planned)
-            // ไม่ auto-sync เป็น success — ต้องให้ Driver App หรือ user ตั้งเอง
-            const want = (tlStatus !== 'idle' && tlStatus !== 'completed') ? 'inprogress' : null;
-            if (want && row.status === 'planned') {
-                syncJobs.push({ id: row.plan_id, status: want });
-                row.status = want;
-            }
+            let want = null;
+            if (tlStatus === 'completed' && row.status !== 'success') want = 'success';
+            else if (tlStatus !== 'idle' && tlStatus !== 'completed' && row.status === 'planned') want = 'inprogress';
+            if (want) { syncJobs.push({ id: row.plan_id, status: want }); row.status = want; }
         });
         if (syncJobs.length) {
             syncJobs.forEach(j => window._sb.from('logistic_plans').update({ status: j.status }).eq('plan_id', j.id));
@@ -17410,10 +17412,17 @@ window.renderLogisticList = function renderLogisticList() {
                 if (isFirstItem) {
                     const shopSeqKey = s.shopSeq != null ? s.shopSeq : si;
                     const sv = (logiShopVisitsMap[p.id] || {})[shopSeqKey];
+                    const tl = logiTripLogMap[p.id] || {};
+                    // หาร้านแรกที่ยังไม่มี arrived_at = ร้านที่กำลังเดินทางไป
+                    const allVisits = logiShopVisitsMap[p.id] || {};
+                    const isNextShop = !sv && (tl.status === 'traveling' || tl.status === 'at_shop' || tl.status === 'returning') &&
+                        (p.shops || []).slice(0, shopSeqKey).every((_,idx) => (allVisits[idx] || {}).arrived_at);
                     const shopStatusBadge = sv && sv.departed_at
                         ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#f0fdf4;color:#059669;border-color:#bbf7d0;">✓ ส่งแล้ว</span>`
                         : sv && sv.arrived_at
                         ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#fffbeb;color:#d97706;border-color:#fde68a;">📦 อยู่ที่ร้าน</span>`
+                        : isNextShop
+                        ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#eff6ff;color:#2563eb;border-color:#bfdbfe;">🚚 กำลังดำเนินการ</span>`
                         : '';
                     row += `
                     <td rowspan="${shopRows}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200 ${shopSepClass}" style="vertical-align:top">
