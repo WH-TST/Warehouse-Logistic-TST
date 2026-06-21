@@ -15526,11 +15526,13 @@ window.onLogiTruckPlateChange = function onLogiTruckPlateChange() {
         if (pmTargetSec) pmTargetSec.classList.add('hidden');
     }
 
-    // reset trailer state เมื่อเปลี่ยนรถ
-    logiTrailerMode = null;
-    logiChildAssignments = {};
-    document.querySelectorAll('input[name="logi-trailer-mode"]').forEach(function(r) { r.checked = false; });
-    if (plannerEl) plannerEl.classList.add('hidden');
+    // reset trailer state เมื่อเปลี่ยนรถ (ไม่ reset ถ้าอยู่ใน edit mode เพราะ assignments จะถูก restore ทีหลัง)
+    if (!logiEditId) {
+        logiTrailerMode = null;
+        logiChildAssignments = {};
+        document.querySelectorAll('input[name="logi-trailer-mode"]').forEach(function(r) { r.checked = false; });
+        if (plannerEl) plannerEl.classList.add('hidden');
+    }
 
     autoCalcFreeStop();
 };
