@@ -33334,9 +33334,21 @@ window.drvLoadPlan=async function(){
         var basePairId=p.plan_id.replace(/-M$/,'');
         var childPlan=childMap[basePairId+'-C'];
         if(childPlan){
-          p._motherShopCount=(p.shops||[]).length; // เก็บก่อน concat เพื่อแยก seq
-          p.shops=(p.shops||[]).concat(childPlan.shops||[]);
+          var mShops=p.shops||[];
+          p._motherShopCount=mShops.length;
           p._childPlanId=childPlan.plan_id;
+          // หา -C shops ที่ไม่ซ้ำกับ -M (deduplicate โดย shopId/shopName)
+          // _sharedChildSeqs: {motherMergedIdx: childOriginalSeq} สำหรับร้านที่ซ้ำ
+          p._sharedChildSeqs={};
+          var newChildShops=[];
+          (childPlan.shops||[]).forEach(function(cs,ci){
+            var mIdx=mShops.findIndex(function(ms){
+              return (ms.shopId&&ms.shopId===cs.shopId)||(ms.shopName&&ms.shopName===cs.shopName&&!ms.shopId&&!cs.shopId);
+            });
+            if(mIdx>=0){p._sharedChildSeqs[mIdx]=ci;}
+            else{newChildShops.push(cs);}
+          });
+          p.shops=mShops.concat(newChildShops);
         }
       }
     });
@@ -33429,10 +33441,13 @@ async function drvLoadTripState(planId){
   var {data:visits}=await window._sb.from('shop_visits').select('*').eq('plan_id',planId);
   _dShopVisits={};
   (visits||[]).forEach(function(v){_dShopVisits[v.shop_seq]=v;});
-  // รถพ่วง: โหลด shop_visits ของ -C ด้วย โดย offset seq ด้วย _motherShopCount
+  // รถพ่วง: โหลด shop_visits ของ -C ด้วย (ข้ามร้านที่ซ้ำกับ -M เพราะ -M ครอบคลุมแล้ว)
   if(_dTripPlan&&_dTripPlan._childPlanId&&_dTripPlan._motherShopCount!==undefined){
     var {data:cv}=await window._sb.from('shop_visits').select('*').eq('plan_id',_dTripPlan._childPlanId);
-    (cv||[]).forEach(function(v){_dShopVisits[v.shop_seq+_dTripPlan._motherShopCount]=v;});
+    var sharedVals=new Set(Object.values(_dTripPlan._sharedChildSeqs||{}));
+    (cv||[]).forEach(function(v){
+      if(!sharedVals.has(v.shop_seq)){_dShopVisits[v.shop_seq+_dTripPlan._motherShopCount]=v;}
+    });
   }
 }
 
@@ -33673,6 +33688,15 @@ window.drvDoArriveAtShop=async function(){
     mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
     arrived_at:now,photo_url:photoUrl
   },{onConflict:'plan_id,shop_seq'}).select().single();
+  // รถพ่วง: ถ้าร้านนี้เป็น shared (ซ้ำทั้ง -M และ -C) ให้บันทึก -C ด้วย
+  var sharedChildSeq=(_dTripPlan._sharedChildSeqs||{})[seq];
+  if(sharedChildSeq!==undefined&&_dTripPlan._childPlanId){
+    await window._sb.from('shop_visits').upsert({
+      plan_id:_dTripPlan._childPlanId,shop_seq:sharedChildSeq,shop_name:shop.shopName||shop.shopId||'',
+      mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
+      arrived_at:now,photo_url:photoUrl
+    },{onConflict:'plan_id,shop_seq'});
+  }
   var {data:newLog,error:le}=await window._sb.from('trip_logs').update({
     status:'at_shop',current_shop_seq:seq,updated_at:now
   }).eq('plan_id',_dTripPlan.plan_id).select().single();
@@ -33714,6 +33738,12 @@ window.drvDoDepartShop=async function(){
     ?window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('id',visit.id)
     :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('plan_id',deptPlanId).eq('shop_seq',deptSeq);
   await updateFn;
+  // รถพ่วง: ถ้าร้านนี้ shared ให้ update -C ด้วย
+  var sharedDeptChildSeq=(_dTripPlan._sharedChildSeqs||{})[seq];
+  if(sharedDeptChildSeq!==undefined&&_dTripPlan._childPlanId){
+    await window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng})
+      .eq('plan_id',_dTripPlan._childPlanId).eq('shop_seq',sharedDeptChildSeq);
+  }
   var updatedVisits=Object.assign({},_dShopVisits);
   updatedVisits[seq]=Object.assign({},updatedVisits[seq]||{},{departed_at:now});
   var allDone=shops.every(function(sh,i){return updatedVisits[i]&&updatedVisits[i].departed_at;});
