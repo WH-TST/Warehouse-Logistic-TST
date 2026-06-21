@@ -33271,6 +33271,8 @@ window.drvLoadPlan=async function(){
     var ids=_dPlans.map(function(p){return p.plan_id;});
     var {data:logs}=await window._sb.from('trip_logs').select('*').in('plan_id',ids);
     (logs||[]).forEach(function(l){_dTripLogs[l.plan_id]=l;});
+    // ซ่อนแผนที่ trip_log เสร็จแล้ว (กรณี logistic_plans.status ยังไม่อัพเดต)
+    _dPlans=_dPlans.filter(function(p){var l=_dTripLogs[p.plan_id];return !l||l.status!=='completed';});
     var trucks=Array.from(new Set(_dPlans.flatMap(function(p){return[p.truck_plate,p.child_plate].filter(Boolean);}))).join(', ');
     document.getElementById('drv-ht').textContent=trucks?'🚛 '+trucks:'–';
   }else{
