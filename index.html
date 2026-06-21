@@ -17041,9 +17041,9 @@ window.loadLogisticList = async function loadLogisticList() {
 
         logiPlanList = (data || []).map(row => ({
             id:              row.plan_id,
-            pairId:          row.pair_id || row.plan_id,
-            isMother:        row.is_mother || false,
-            isChild:         row.is_child  || false,
+            pairId:          row.pair_id || (row.plan_id?.replace(/-[MC]$/, '') || row.plan_id),
+            isMother:        row.is_mother || (!!row.pair_id && row.plan_id?.endsWith('-M')) || false,
+            isChild:         row.is_child  || (!!row.pair_id && row.plan_id?.endsWith('-C')) || false,
             date:            row.plan_date,
             truckType:       row.truck_type      || 'company',
             driverTransport: row.driver_transport || '',
@@ -17214,7 +17214,7 @@ window.renderLogisticList = function renderLogisticList() {
         const statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border whitespace-nowrap" style="${st.style || ''}"><span class="w-1.5 h-1.5 rounded-full" style="background:currentColor"></span>${st.label}</span>`;
 
         // แถว -C (รถลูก): ไม่มีปุ่มจัดการ (จัดการผ่านแถวรถแม่)
-        const actionBtns = p.isChild
+        const actionBtns = (p.isChild || p.id?.endsWith('-C'))
             ? `<div class="text-[10px] text-purple-300 text-center">—</div>`
             : `<div class="grid grid-cols-2 gap-1">
                     <button onclick="viewLogiPlan('${p.id}')" title="ดูรายละเอียด" class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white transition text-xs"><i class="fas fa-eye"></i></button>
@@ -22321,9 +22321,11 @@ window.editLogiPlan = function editLogiPlan(planId) {
 window.deleteLogiPlan = function deleteLogiPlan(planId) {
     // รองรับทั้งลบจาก -M และ -C — ลบคู่เสมอถ้าเป็นรถพ่วง
     const plan     = logiPlanList.find(p => p.id === planId);
-    const isMother = plan?.isMother;
-    const isChild  = plan?.isChild;
-    const pairId   = plan?.pairId;
+    // fallback: detect mother/child by ID suffix if DB flags not set
+    const isMother = plan?.isMother || planId.endsWith('-M');
+    const isChild  = plan?.isChild  || planId.endsWith('-C');
+    const baseId   = planId.replace(/-[MC]$/, '');
+    const pairId   = (plan?.pairId && plan.pairId !== planId) ? plan.pairId : baseId;
     const motherId = isMother ? planId : (isChild ? (pairId + '-M') : null);
     const childId  = isMother ? (pairId + '-C') : (isChild ? planId : null);
     const hasMother = isChild && logiPlanList.some(p => p.id === motherId);
@@ -22383,37 +22385,59 @@ window.deleteLogiPlan = function deleteLogiPlan(planId) {
 
 // ── ลบแผนจากหน้าปฏิทิน (อัปเดต logiCalPlanList + re-render) ──
 window.deleteLogiPlanFromCal = function deleteLogiPlanFromCal(planId) {
+    // ใช้ logic เดียวกับ deleteLogiPlan — detect pair by ID suffix
+    const plan     = (logiCalPlanList || []).concat(logiPlanList || []).find(p => p.id === planId);
+    const isMother = plan?.isMother || planId.endsWith('-M');
+    const isChild  = plan?.isChild  || planId.endsWith('-C');
+    const baseId   = planId.replace(/-[MC]$/, '');
+    const pairId   = (plan?.pairId && plan.pairId !== planId) ? plan.pairId : baseId;
+    const allPlans = (logiCalPlanList || []).concat(logiPlanList || []);
+    const motherId = isMother ? planId : (isChild ? (pairId + '-M') : null);
+    const childId  = isMother ? (pairId + '-C') : (isChild ? planId : null);
+    const hasMother = isChild && allPlans.some(p => p.id === motherId);
+    const hasChild  = isMother && allPlans.some(p => p.id === childId);
+    const isPair    = hasChild || hasMother;
+    const idsToDelete = [...new Set([planId, isPair && isMother ? childId : isPair && isChild ? motherId : null].filter(Boolean))];
+
+    const pairLabel = isPair
+        ? (isMother ? planId + ' + ' + childId + ' (รถลูก)' : motherId + ' (รถแม่) + ' + planId)
+        : planId;
+    const confirmMsg = isPair
+        ? 'ลบแผนรถพ่วง <strong class="text-white">' + pairLabel + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ลบพร้อมกันทั้งคู่ ไม่สามารถกู้คืนได้</span>'
+        : 'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>';
+
     showConfirmModal(
         'ยืนยันการลบแผน',
-        'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>',
+        confirmMsg,
         async function() {
-            showToast('⏳ กำลังลบ ' + planId + '...');
+            showToast('⏳ กำลังลบ ' + idsToDelete.join(' + ') + '...');
             try {
-                // ลบรูปใน Storage ก่อน
-                const { data: files } = await window._sb.storage.from('delivery-photos').list(planId, { limit: 200 });
-                if (files && files.length) {
-                    const allPaths = [];
-                    for (const f of files) {
-                        if (f.id) { allPaths.push(planId + '/' + f.name); }
-                        else {
-                            const { data: inner } = await window._sb.storage.from('delivery-photos').list(planId + '/' + f.name, { limit: 200 });
-                            (inner || []).forEach(fi => allPaths.push(planId + '/' + f.name + '/' + fi.name));
+                for (const pid of idsToDelete) {
+                    const { data: files } = await window._sb.storage.from('delivery-photos').list(pid, { limit: 200 });
+                    if (files && files.length) {
+                        const allPaths = [];
+                        for (const f of files) {
+                            if (f.id) { allPaths.push(pid + '/' + f.name); }
+                            else {
+                                const { data: inner } = await window._sb.storage.from('delivery-photos').list(pid + '/' + f.name, { limit: 200 });
+                                (inner || []).forEach(fi => allPaths.push(pid + '/' + f.name + '/' + fi.name));
+                            }
                         }
+                        if (allPaths.length) await window._sb.storage.from('delivery-photos').remove(allPaths);
                     }
-                    if (allPaths.length) await window._sb.storage.from('delivery-photos').remove(allPaths);
                 }
                 await Promise.all([
-                    window._sb.from('shop_visits').delete().eq('plan_id', planId),
-                    window._sb.from('trip_logs').delete().eq('plan_id', planId),
+                    window._sb.from('shop_visits').delete().in('plan_id', idsToDelete),
+                    window._sb.from('trip_logs').delete().in('plan_id', idsToDelete),
                 ]);
-                const res = await window._sb.from('logistic_plans').delete().eq('plan_id', planId);
+                const res = await window._sb.from('logistic_plans').delete().in('plan_id', idsToDelete);
                 if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
-                logiPlanList    = (logiPlanList    || []).filter(p => p.id !== planId);
-                logiCalPlanList = (logiCalPlanList || []).filter(p => p.id !== planId);
+                logiPlanList    = (logiPlanList    || []).filter(p => !idsToDelete.includes(p.id));
+                logiCalPlanList = (logiCalPlanList || []).filter(p => !idsToDelete.includes(p.id));
                 renderLogiCalendar();
                 updateLogiKPI();
-                showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
-                logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + ' (from Calendar)');
+                showToast('🗑️ ลบ ' + idsToDelete.join(' + ') + ' เรียบร้อยแล้ว');
+                logAudit('Logistic', 'DELETE', 'Plan ID: ' + idsToDelete.join(' + ') + ' (from Calendar)');
             } catch(err) {
                 showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
             }
