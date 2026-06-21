@@ -4884,7 +4884,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
               <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">ชื่อคนขับ</th>
               <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">Driver ID</th>
               <th class="px-4 py-3 text-center font-black text-slate-500 text-xs uppercase">สถานะ</th>
-              <th class="px-4 py-3 text-center font-black text-slate-500 text-xs uppercase">รอเวลา</th>
+              <th class="px-4 py-3 text-center font-black text-slate-500 text-xs uppercase">เงื่อนไข</th>
               <th class="px-4 py-3 text-center font-black text-slate-500 text-xs uppercase">จัดการ</th>
             </tr>
           </thead>
@@ -29536,7 +29536,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
         +'<td class="px-4 py-3 text-center">'
           +'<button onclick="duToggleTimer('+u.id+','+u.bypass_timer+')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border transition-all cursor-pointer '
           +(timerOn?'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100':'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200')+'">'
-          +(timerOn?'<i class="fas fa-clock"></i> รอเวลา':'<i class="fas fa-forward"></i> ข้ามเวลา')+'</button>'
+          +(timerOn?'<i class="fas fa-lock"></i> ติดเงื่อนไข':'<i class="fas fa-unlock"></i> ไม่มีเงื่อนไข')+'</button>'
         +'</td>'
         +'<td class="px-4 py-3 text-center">'
           +'<button onclick="duOpenForm('+u.id+')" class="px-3 py-1.5 rounded-lg text-xs font-black bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100 mr-1"><i class="fas fa-edit mr-1"></i>แก้ไข</button>'
@@ -29612,7 +29612,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
     var newBypass = !currentBypass;
     var res = await window._sb.from('driver_users').update({bypass_timer: newBypass}).eq('id', id);
     if (res.error) { showWMSToast('❌ '+res.error.message, true); return; }
-    showWMSToast(newBypass ? '⏩ ข้ามการรอเวลาแล้ว' : '⏱ กลับมารอเวลาแล้ว');
+    showWMSToast(newBypass ? '🔓 ไม่มีเงื่อนไขแล้ว' : '🔒 ติดเงื่อนไขแล้ว');
     await duLoadList();
   };
 
@@ -33562,7 +33562,7 @@ function drvRenderCompleted(){
 window.drvDoStartTrip=async function(){
   var mile=parseInt((document.getElementById('drv-inp-mile-start')||{}).value||'');
   if(DRV_TEST_MODE&&(!mile||mile<=0))mile=100000;
-  if(!mile||mile<=0){drvShowToast('❌ กรอกเลขไมล์ออกให้ถูกต้อง',true);return;}
+  if(!DRV_BYPASS_TIMER&&(!mile||mile<=0)){drvShowToast('❌ กรอกเลขไมล์ออกให้ถูกต้อง',true);return;}
   drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
   var now=new Date().toISOString();
   var {data,error}=await window._sb.from('trip_logs').insert({
@@ -33592,10 +33592,12 @@ window.drvDoArriveAtShop=async function(){
   var minMile=_dTripLog.mileage_start||0;
   Object.values(_dShopVisits).forEach(function(sv){if(sv.mileage_arrival>minMile)minMile=sv.mileage_arrival;});
   if(DRV_TEST_MODE&&(!mile||mile<=minMile))mile=minMile+10;
-  if(!mile||mile<=0){drvShowToast('❌ กรอกเลขไมล์ถึงร้านให้ถูกต้อง',true);return;}
-  if(mile<=minMile){drvShowToast('❌ ไมล์ถึงร้านต้องมากกว่า '+minMile,true);return;}
+  if(!DRV_BYPASS_TIMER){
+    if(!mile||mile<=0){drvShowToast('❌ กรอกเลขไมล์ถึงร้านให้ถูกต้อง',true);return;}
+    if(mile<=minMile){drvShowToast('❌ ไมล์ถึงร้านต้องมากกว่า '+minMile,true);return;}
+  }
   drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
-  if(!DRV_TEST_MODE){
+  if(!DRV_TEST_MODE&&!DRV_BYPASS_TIMER){
     var prevLat=_dTripLog.lat_start,prevLng=_dTripLog.lng_start;
     Object.values(_dShopVisits).forEach(function(sv){if(sv.departed_at){prevLat=sv.lat_depart||sv.lat_arrival;prevLng=sv.lng_depart||sv.lng_arrival;}});
     if(prevLat&&prevLng){
@@ -33678,8 +33680,8 @@ window.drvDoDepartShop=async function(){
 window.drvDoFinishTrip=async function(){
   var mile=parseInt((document.getElementById('drv-inp-mile-end')||{}).value||'');
   if(DRV_TEST_MODE&&(!mile||mile<=_dTripLog.mileage_start))mile=(_dTripLog.mileage_start||100000)+50;
-  if(!mile||mile<=0){drvShowToast('❌ กรอกเลขไมล์กลับให้ถูกต้อง',true);return;}
-  if(mile<=_dTripLog.mileage_start){drvShowToast('❌ ไมล์กลับต้องมากกว่าไมล์ออก ('+_dTripLog.mileage_start+')',true);return;}
+  if(!DRV_BYPASS_TIMER&&(!mile||mile<=0)){drvShowToast('❌ กรอกเลขไมล์กลับให้ถูกต้อง',true);return;}
+  if(!DRV_BYPASS_TIMER&&mile<=_dTripLog.mileage_start){drvShowToast('❌ ไมล์กลับต้องมากกว่าไมล์ออก ('+_dTripLog.mileage_start+')',true);return;}
   drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
   var now=new Date().toISOString();
   var {data:newLog,error}=await window._sb.from('trip_logs').update({
