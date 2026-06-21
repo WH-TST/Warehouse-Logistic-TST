@@ -33152,17 +33152,12 @@ var _dPrevPlanIds=null;
 
 function drvPlayNewOrder(){
   try{
-    var ctx=new(window.AudioContext||window.webkitAudioContext)();
-    // เสียง ding-dong สองโน้ต
-    [[880,0,0.18],[1108,0.2,0.18],[880,0.42,0.18],[1108,0.62,0.22]].forEach(function(n){
-      var o=ctx.createOscillator();var g=ctx.createGain();
-      o.connect(g);g.connect(ctx.destination);
-      o.type='sine';o.frequency.value=n[0];
-      g.gain.setValueAtTime(0,ctx.currentTime+n[1]);
-      g.gain.linearRampToValueAtTime(0.5,ctx.currentTime+n[1]+0.02);
-      g.gain.linearRampToValueAtTime(0,ctx.currentTime+n[1]+n[2]);
-      o.start(ctx.currentTime+n[1]);o.stop(ctx.currentTime+n[1]+n[2]+0.05);
-    });
+    if(window.speechSynthesis){
+      window.speechSynthesis.cancel();
+      var u=new SpeechSynthesisUtterance('ออเดอร์มาแล้ว');
+      u.lang='th-TH';u.rate=0.9;u.pitch=1.1;u.volume=1;
+      window.speechSynthesis.speak(u);
+    }
   }catch(e){}
 }
 
