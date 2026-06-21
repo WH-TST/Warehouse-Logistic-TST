@@ -1856,16 +1856,17 @@ thead.sticky {
 </style>
 <style>
 /* ═══ DRIVER APP ═══ */
-#drv-screen{display:none;position:fixed;inset:0;z-index:10000;background:#0f172a;flex-direction:column;overflow:hidden;width:100%;height:100%;}
+#drv-screen{display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);flex-direction:column;align-items:center;justify-content:center;}
 #drv-screen.active{display:flex;}
 #drv-sc-main{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
-#drv-trip-screen{position:fixed;inset:0;background:#0f172a;z-index:10500;display:none;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);width:100%;height:100%;}
+#drv-phone-wrap{width:100%;max-width:430px;height:100%;max-height:100dvh;background:#0f172a;display:flex;flex-direction:column;overflow:hidden;position:relative;}
+#drv-trip-screen{position:absolute;inset:0;background:#0f172a;z-index:100;display:none;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);}
 #drv-trip-screen.open{display:flex;transform:translateX(0);}
 .drv-screen-pane{display:none;flex-direction:column;}
 .drv-content-area{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:10px 10px 10px;}
 .drv-action-area{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:10px 10px 24px;}
-#drv-toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);z-index:10999;pointer-events:none;transition:opacity .3s;white-space:nowrap;}
-#drv-ld{position:fixed;inset:0;background:rgba(13,27,42,.88);z-index:10998;display:none;align-items:center;justify-content:center;}
+#drv-toast{position:absolute;bottom:72px;left:50%;transform:translateX(-50%);z-index:200;pointer-events:none;transition:opacity .3s;white-space:nowrap;}
+#drv-ld{position:absolute;inset:0;background:rgba(13,27,42,.88);z-index:199;display:none;align-items:center;justify-content:center;}
 #drv-ld.on{display:flex;}
 .drv-prog-bg{background:#334155;border-radius:99px;height:6px;overflow:hidden;}
 .drv-prog-fill{height:100%;border-radius:99px;transition:width .4s ease;}
@@ -32388,6 +32389,7 @@ window.viewTripResult = async function(planId) {
      DRIVER APP SCREEN (role=driver)
 ══════════════════════════════════════════════════════════════ -->
 <div id="drv-screen">
+<div id="drv-phone-wrap">
 
   <!-- Loading -->
   <div id="drv-ld">
@@ -32475,22 +32477,24 @@ window.viewTripResult = async function(planId) {
       </button>
     </nav>
   </div>
-</div>
 
-<!-- Trip screen -->
-<div id="drv-trip-screen">
-  <div style="background:#0d1b2a;border-bottom:1px solid rgba(255,255,255,.06);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-    <button onclick="drvCloseTrip()" style="width:40px;height:40px;border-radius:10px;background:#1e293b;border:none;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-      <i class="fas fa-arrow-left" style="font-size:18px;"></i>
-    </button>
-    <div style="min-width:0;flex:1;">
-      <div id="drv-trip-title" style="font-weight:900;color:#fff;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
-      <div id="drv-trip-sub" style="font-size:13px;color:#64748b;font-weight:600;margin-top:2px;">–</div>
+  <!-- Trip screen (inside phone-wrap so it's constrained too) -->
+  <div id="drv-trip-screen">
+    <div style="background:#0d1b2a;border-bottom:1px solid rgba(255,255,255,.06);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <button onclick="drvCloseTrip()" style="width:40px;height:40px;border-radius:10px;background:#1e293b;border:none;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-arrow-left" style="font-size:18px;"></i>
+      </button>
+      <div style="min-width:0;flex:1;">
+        <div id="drv-trip-title" style="font-weight:900;color:#fff;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
+        <div id="drv-trip-sub" style="font-size:13px;color:#64748b;font-weight:600;margin-top:2px;">–</div>
+      </div>
     </div>
+    <div id="drv-trip-timeline" style="background:#0d1b2a;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;overflow-x:auto;"></div>
+    <div class="drv-action-area" id="drv-trip-action"></div>
   </div>
-  <div id="drv-trip-timeline" style="background:#0d1b2a;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;overflow-x:auto;"></div>
-  <div class="drv-action-area" id="drv-trip-action"></div>
-</div>
+
+</div><!-- /drv-phone-wrap -->
+</div><!-- /drv-screen -->
 
 <!-- Camera input -->
 <input type="file" id="drv-photo-input" accept="image/*" capture="environment" style="display:none" onchange="drvHandlePhoto(this)">
