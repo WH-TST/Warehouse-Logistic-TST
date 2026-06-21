@@ -22319,24 +22319,19 @@ window.editLogiPlan = function editLogiPlan(planId) {
 }
 
 window.deleteLogiPlan = function deleteLogiPlan(planId) {
-    // รองรับทั้งลบจาก -M และ -C — ลบคู่เสมอถ้าเป็นรถพ่วง
     const plan     = logiPlanList.find(p => p.id === planId);
-    // fallback: detect mother/child by ID suffix if DB flags not set
     const isMother = plan?.isMother || planId.endsWith('-M');
     const isChild  = plan?.isChild  || planId.endsWith('-C');
     const baseId   = planId.replace(/-[MC]$/, '');
     const pairId   = (plan?.pairId && plan.pairId !== planId) ? plan.pairId : baseId;
-    const motherId = isMother ? planId : (isChild ? (pairId + '-M') : null);
-    const childId  = isMother ? (pairId + '-C') : (isChild ? planId : null);
-    const hasMother = isChild && logiPlanList.some(p => p.id === motherId);
-    const hasChild  = isMother && logiPlanList.some(p => p.id === childId);
-    const isPair    = hasChild || hasMother;
+    // pairedId: เสมอ derive จาก suffix — ไม่รอหาใน local list
+    const pairedId = isMother ? (pairId + '-C') : (isChild ? (pairId + '-M') : null);
+    const isTrailer = isMother || isChild;
 
-    // แสดง confirm ครอบคลุมทั้งคู่
     const pairLabel = isMother
-        ? planId + ' + ' + childId + ' (รถลูก)'
-        : motherId + ' (รถแม่) + ' + planId;
-    const confirmMsg = isPair
+        ? planId + ' + ' + pairedId + ' (รถลูก)'
+        : pairedId + ' (รถแม่) + ' + planId;
+    const confirmMsg = isTrailer
         ? 'ลบแผนรถพ่วง <strong class="text-white">' + pairLabel + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ลบพร้อมกันทั้งคู่ ไม่สามารถกู้คืนได้</span>'
         : 'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>';
 
@@ -22344,8 +22339,8 @@ window.deleteLogiPlan = function deleteLogiPlan(planId) {
         'ยืนยันการลบแผน',
         confirmMsg,
         async function() {
-            // รวม id ทั้งคู่ (กรองซ้ำและ null ออก)
-            const idsToDelete = [...new Set([planId, isPair && isMother ? childId : isPair && isChild ? motherId : null].filter(Boolean))];
+            // ลบทั้งคู่เสมอ — ถ้า pairedId ไม่มีใน DB ก็ไม่เป็นไร (delete 0 rows)
+            const idsToDelete = [...new Set([planId, pairedId].filter(Boolean))];
             showToast('⏳ กำลังลบ ' + idsToDelete.join(' + ') + '...');
             try {
                 // ลบรูปใน Storage ก่อน
@@ -22385,24 +22380,19 @@ window.deleteLogiPlan = function deleteLogiPlan(planId) {
 
 // ── ลบแผนจากหน้าปฏิทิน (อัปเดต logiCalPlanList + re-render) ──
 window.deleteLogiPlanFromCal = function deleteLogiPlanFromCal(planId) {
-    // ใช้ logic เดียวกับ deleteLogiPlan — detect pair by ID suffix
     const plan     = (logiCalPlanList || []).concat(logiPlanList || []).find(p => p.id === planId);
     const isMother = plan?.isMother || planId.endsWith('-M');
     const isChild  = plan?.isChild  || planId.endsWith('-C');
     const baseId   = planId.replace(/-[MC]$/, '');
     const pairId   = (plan?.pairId && plan.pairId !== planId) ? plan.pairId : baseId;
-    const allPlans = (logiCalPlanList || []).concat(logiPlanList || []);
-    const motherId = isMother ? planId : (isChild ? (pairId + '-M') : null);
-    const childId  = isMother ? (pairId + '-C') : (isChild ? planId : null);
-    const hasMother = isChild && allPlans.some(p => p.id === motherId);
-    const hasChild  = isMother && allPlans.some(p => p.id === childId);
-    const isPair    = hasChild || hasMother;
-    const idsToDelete = [...new Set([planId, isPair && isMother ? childId : isPair && isChild ? motherId : null].filter(Boolean))];
+    const pairedId = isMother ? (pairId + '-C') : (isChild ? (pairId + '-M') : null);
+    const isTrailer = isMother || isChild;
+    const idsToDelete = [...new Set([planId, pairedId].filter(Boolean))];
 
-    const pairLabel = isPair
-        ? (isMother ? planId + ' + ' + childId + ' (รถลูก)' : motherId + ' (รถแม่) + ' + planId)
-        : planId;
-    const confirmMsg = isPair
+    const pairLabel = isMother
+        ? planId + ' + ' + pairedId + ' (รถลูก)'
+        : pairedId + ' (รถแม่) + ' + planId;
+    const confirmMsg = isTrailer
         ? 'ลบแผนรถพ่วง <strong class="text-white">' + pairLabel + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ลบพร้อมกันทั้งคู่ ไม่สามารถกู้คืนได้</span>'
         : 'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>';
 
