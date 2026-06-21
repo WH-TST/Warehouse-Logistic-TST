@@ -32561,14 +32561,14 @@ function drvHideL(){document.getElementById('drv-ld').classList.remove('on');}
 function drvP2(n){return String(n).padStart(2,'0');}
 function drvEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-function drvShowToast(msg,isErr){
+function drvShowToast(msg,isErr,dur){
   var el=document.getElementById('drv-toast'),ti=document.getElementById('drv-ti');
   ti.textContent=msg;
   ti.style.background=isErr?'#dc2626':'#059669';
   ti.style.color='#fff';
   el.style.display='block';el.style.opacity='1';
   if(_dToastTimer)clearTimeout(_dToastTimer);
-  _dToastTimer=setTimeout(function(){el.style.opacity='0';setTimeout(function(){el.style.display='none';},300);},3200);
+  _dToastTimer=setTimeout(function(){el.style.opacity='0';setTimeout(function(){el.style.display='none';},300);},(dur||3200));
 }
 
 function drvFmtTime(iso){
@@ -33144,6 +33144,25 @@ window.switchView=function(v){
   if(v==='driver-monitor') dmInit();
 };
 
+var _dRtChannel=null;
+var _dPrevPlanIds=null;
+
+function drvPlayNewOrder(){
+  try{
+    var ctx=new(window.AudioContext||window.webkitAudioContext)();
+    // เสียง ding-dong สองโน้ต
+    [[880,0,0.18],[1108,0.2,0.18],[880,0.42,0.18],[1108,0.62,0.22]].forEach(function(n){
+      var o=ctx.createOscillator();var g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.type='sine';o.frequency.value=n[0];
+      g.gain.setValueAtTime(0,ctx.currentTime+n[1]);
+      g.gain.linearRampToValueAtTime(0.5,ctx.currentTime+n[1]+0.02);
+      g.gain.linearRampToValueAtTime(0,ctx.currentTime+n[1]+n[2]);
+      o.start(ctx.currentTime+n[1]);o.stop(ctx.currentTime+n[1]+n[2]+0.05);
+    });
+  }catch(e){}
+}
+
 window.drvInit=function(wmsUser){
   _dSess={username:wmsUser.username,driver_name:wmsUser.name||wmsUser.username,driver_id:wmsUser.driver_id||''};
   DRV_TEST_MODE=DRV_TEST_USERNAMES.indexOf(wmsUser.username.toLowerCase())!==-1;
@@ -33158,6 +33177,24 @@ window.drvInit=function(wmsUser){
   document.getElementById('drv-ht2').value=today;
   setInterval(drvTick,1000);drvTick();
   drvGoTab('plan');drvLoadPlan();
+
+  // Realtime: แจ้งเตือนเมื่อมีแผนใหม่
+  if(_dRtChannel){window._sb.removeChannel(_dRtChannel);}
+  _dRtChannel=window._sb.channel('drv-plans-rt')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'logistic_plans'},function(payload){
+      var p=payload.new;
+      if(!p)return;
+      var today2=new Date().toISOString().split('T')[0];
+      if(p.plan_date!==today2)return;
+      // ตรวจว่าเป็นแผนของคนขับคนนี้
+      var mine=(p.driver_id&&_dSess.driver_id&&p.driver_id===_dSess.driver_id)||
+               (p.driver_transport&&_dSess.driver_name&&p.driver_transport===_dSess.driver_name);
+      if(!mine)return;
+      drvPlayNewOrder();
+      drvShowToast('🔔 ออเดอร์มาแล้ว! แผน '+p.plan_id,false,5000);
+      drvLoadPlan();
+    })
+    .subscribe();
 };
 
 window.drvLogout=function(){
