@@ -16820,7 +16820,7 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 plan_id:          pid,
                 plan_date:        payload.date,
                 job_type:         payload.jobType        || '',
-                status:           payload.status         || 'planned',
+                status:           isUpdate ? (payload.status || 'planned') : 'planned',
                 truck_type:       payload.truckType      || 'company',
                 truck_plate:      plate                  || '',
                 child_plate:      isTrailerSplit ? (payload.childPlate || '') : '',
@@ -33226,8 +33226,8 @@ window.drvInit=function(wmsUser){
       var today2=new Date().toISOString().split('T')[0];
       if(p.plan_date!==today2)return;
       // ตรวจว่าเป็นแผนของคนขับคนนี้
-      var mine=(p.driver_id&&_dSess.driver_id&&p.driver_id===_dSess.driver_id)||
-               (p.driver_transport&&_dSess.driver_name&&p.driver_transport===_dSess.driver_name);
+      var mine=(_dSess.driver_id&&p.driver_id&&p.driver_id===_dSess.driver_id)||
+               (_dSess.driver_name&&p.driver_transport&&p.driver_transport===_dSess.driver_name);
       if(!mine)return;
       drvPlayNewOrder();
       drvShowToast('🔔 ออเดอร์มาแล้ว! แผน '+p.plan_id,false,5000);
