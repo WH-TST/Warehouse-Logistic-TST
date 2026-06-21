@@ -33150,14 +33150,42 @@ window.switchView=function(v){
 var _dRtChannel=null;
 var _dPrevPlanIds=null;
 
-function drvPlayNewOrder(){
+var _dAudioCtx=null;
+function _dGetAudioCtx(){
+  if(!_dAudioCtx)_dAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(_dAudioCtx.state==='suspended')_dAudioCtx.resume();
+  return _dAudioCtx;
+}
+function _dBeep(){
   try{
-    if(window.speechSynthesis){
-      window.speechSynthesis.cancel();
+    var ctx=_dGetAudioCtx();
+    [[660,0,0.12],[880,0.15,0.12],[660,0.30,0.12],[880,0.45,0.18]].forEach(function(n){
+      var o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.type='triangle';o.frequency.value=n[0];
+      g.gain.setValueAtTime(0.001,ctx.currentTime+n[1]);
+      g.gain.linearRampToValueAtTime(0.6,ctx.currentTime+n[1]+0.02);
+      g.gain.linearRampToValueAtTime(0,ctx.currentTime+n[1]+n[2]);
+      o.start(ctx.currentTime+n[1]);o.stop(ctx.currentTime+n[1]+n[2]+0.05);
+    });
+  }catch(e){}
+}
+function drvPlayNewOrder(){
+  _dBeep();
+  try{
+    if(!window.speechSynthesis)return;
+    window.speechSynthesis.cancel();
+    var doSpeak=function(){
+      var voices=window.speechSynthesis.getVoices();
       var u=new SpeechSynthesisUtterance('ออเดอร์มาแล้ว');
-      u.lang='th-TH';u.rate=0.9;u.pitch=1.1;u.volume=1;
+      var thVoice=voices.find(function(v){return v.lang==='th-TH'||v.lang==='th';});
+      if(thVoice)u.voice=thVoice;
+      u.lang='th-TH';u.rate=0.85;u.pitch=1.0;u.volume=1;
       window.speechSynthesis.speak(u);
-    }
+    };
+    var v=window.speechSynthesis.getVoices();
+    if(v&&v.length>0){doSpeak();}
+    else{window.speechSynthesis.onvoiceschanged=function(){doSpeak();window.speechSynthesis.onvoiceschanged=null;};}
   }catch(e){}
 }
 
