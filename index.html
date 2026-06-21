@@ -33649,7 +33649,9 @@ window.drvDoStartTrip=async function(){
   drvHideL();
   if(error){drvShowToast('❌ '+error.message,true);return;}
   _dTripLog=data;_dTripLogs[_dTripPlan.plan_id]=data;
-  await window._sb.from('logistic_plans').update({status:'inprogress'}).eq('plan_id',_dTripPlan.plan_id);
+  var _startPlanIds=[_dTripPlan.plan_id];
+  if(_dTripPlan._childPlanId)_startPlanIds.push(_dTripPlan._childPlanId);
+  await window._sb.from('logistic_plans').update({status:'inprogress'}).in('plan_id',_startPlanIds);
   drvRenderTimeline();drvRenderAction();
   drvShowToast('✅ เริ่มเดินทาง — GPS บันทึกแล้ว (±'+gps.acc+'ม.)');
 };
@@ -33792,7 +33794,9 @@ window.drvDoFinishTrip=async function(){
   drvHideL();
   if(error){drvShowToast('❌ '+error.message,true);return;}
   _dTripLog=newLog;_dTripLogs[_dTripPlan.plan_id]=newLog;
-  await window._sb.from('logistic_plans').update({status:'success'}).eq('plan_id',_dTripPlan.plan_id);
+  var _finishPlanIds=[_dTripPlan.plan_id];
+  if(_dTripPlan._childPlanId)_finishPlanIds.push(_dTripPlan._childPlanId);
+  await window._sb.from('logistic_plans').update({status:'success'}).in('plan_id',_finishPlanIds);
   try{
     var delivDate=newLog.started_at?newLog.started_at.slice(0,10):now.slice(0,10);
     var totalKm=newLog.mileage_end&&newLog.mileage_start?(newLog.mileage_end-newLog.mileage_start):null;
