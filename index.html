@@ -22320,24 +22320,32 @@ window.editLogiPlan = function editLogiPlan(planId) {
 }
 
 window.deleteLogiPlan = function deleteLogiPlan(planId) {
-    // ถ้าเป็นแผนแม่ (-M) → ลบคู่พร้อมกัน
-    const plan    = logiPlanList.find(p => p.id === planId);
+    // รองรับทั้งลบจาก -M และ -C — ลบคู่เสมอถ้าเป็นรถพ่วง
+    const plan     = logiPlanList.find(p => p.id === planId);
     const isMother = plan?.isMother;
+    const isChild  = plan?.isChild;
     const pairId   = plan?.pairId;
-    const childId  = isMother ? (pairId + '-C') : null;
-    const hasChild = isMother && logiPlanList.some(p => p.id === childId);
+    const motherId = isMother ? planId : (isChild ? (pairId + '-M') : null);
+    const childId  = isMother ? (pairId + '-C') : (isChild ? planId : null);
+    const hasMother = isChild && logiPlanList.some(p => p.id === motherId);
+    const hasChild  = isMother && logiPlanList.some(p => p.id === childId);
+    const isPair    = hasChild || hasMother;
 
-    const confirmMsg = hasChild
-        ? 'ลบแผน <strong class="text-white">' + planId + '</strong> และ <strong class="text-white">' + childId + '</strong> (รถลูก) ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ลบพร้อมกันทั้งคู่ ไม่สามารถกู้คืนได้</span>'
+    // แสดง confirm ครอบคลุมทั้งคู่
+    const pairLabel = isMother
+        ? planId + ' + ' + childId + ' (รถลูก)'
+        : motherId + ' (รถแม่) + ' + planId;
+    const confirmMsg = isPair
+        ? 'ลบแผนรถพ่วง <strong class="text-white">' + pairLabel + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ ลบพร้อมกันทั้งคู่ ไม่สามารถกู้คืนได้</span>'
         : 'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>';
 
     showConfirmModal(
         'ยืนยันการลบแผน',
         confirmMsg,
         async function() {
-            showToast('⏳ กำลังลบ ' + planId + (hasChild ? ' + ' + childId : '') + '...');
-            const idsToDelete = [planId];
-            if (hasChild && childId) idsToDelete.push(childId);
+            // รวม id ทั้งคู่ (กรองซ้ำและ null ออก)
+            const idsToDelete = [...new Set([planId, isPair && isMother ? childId : isPair && isChild ? motherId : null].filter(Boolean))];
+            showToast('⏳ กำลังลบ ' + idsToDelete.join(' + ') + '...');
             try {
                 // ลบรูปใน Storage ก่อน
                 for (const pid of idsToDelete) {
@@ -22361,11 +22369,11 @@ window.deleteLogiPlan = function deleteLogiPlan(planId) {
                 ]);
                 const res = await window._sb.from('logistic_plans').delete().in('plan_id', idsToDelete);
                 if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
-                logiPlanList = logiPlanList.filter(p => p.id !== planId && p.id !== childId);
+                logiPlanList = logiPlanList.filter(p => !idsToDelete.includes(p.id));
                 renderLogisticList();
                 updateLogiKPI();
-                showToast('🗑️ ลบ ' + planId + (hasChild ? ' + ' + childId : '') + ' เรียบร้อยแล้ว');
-                logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + (hasChild ? ' + ' + childId : ''));
+                showToast('🗑️ ลบ ' + idsToDelete.join(' + ') + ' เรียบร้อยแล้ว');
+                logAudit('Logistic', 'DELETE', 'Plan ID: ' + idsToDelete.join(' + '));
             } catch(err) {
                 showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
             }
