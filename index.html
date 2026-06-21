@@ -33175,9 +33175,16 @@ var _dBeepUri=null;
 window.drvPlayNewOrder=function drvPlayNewOrder(){
   try{
     if(!_dBeepUri)_dBeepUri=_dMakeBeepWav();
-    var a=new Audio(_dBeepUri);
-    a.volume=1;
-    a.play().catch(function(){});
+    var count=0;
+    var playOnce=function(){
+      if(count>=5)return;
+      count++;
+      var a=new Audio(_dBeepUri);
+      a.volume=1;
+      a.onended=function(){setTimeout(playOnce,300);};
+      a.play().catch(function(){});
+    };
+    playOnce();
   }catch(e){}
   try{
     if(!window.speechSynthesis)return;
