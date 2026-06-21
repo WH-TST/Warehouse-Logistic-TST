@@ -33334,7 +33334,7 @@ window.drvLoadPlan=async function(){
         var basePairId=p.plan_id.replace(/-M$/,'');
         var childPlan=childMap[basePairId+'-C'];
         if(childPlan){
-          // รวม shops ของ child เข้า mother (ต่อท้าย)
+          p._motherShopCount=(p.shops||[]).length; // เก็บก่อน concat เพื่อแยก seq
           p.shops=(p.shops||[]).concat(childPlan.shops||[]);
           p._childPlanId=childPlan.plan_id;
         }
@@ -33429,6 +33429,11 @@ async function drvLoadTripState(planId){
   var {data:visits}=await window._sb.from('shop_visits').select('*').eq('plan_id',planId);
   _dShopVisits={};
   (visits||[]).forEach(function(v){_dShopVisits[v.shop_seq]=v;});
+  // รถพ่วง: โหลด shop_visits ของ -C ด้วย โดย offset seq ด้วย _motherShopCount
+  if(_dTripPlan&&_dTripPlan._childPlanId&&_dTripPlan._motherShopCount!==undefined){
+    var {data:cv}=await window._sb.from('shop_visits').select('*').eq('plan_id',_dTripPlan._childPlanId);
+    (cv||[]).forEach(function(v){_dShopVisits[v.shop_seq+_dTripPlan._motherShopCount]=v;});
+  }
 }
 
 function drvRenderTimeline(){
@@ -33648,11 +33653,15 @@ window.drvDoArriveAtShop=async function(){
     }
   }
   var now=new Date().toISOString();
+  // รถพ่วง: ถ้า seq >= _motherShopCount ให้บันทึกใต้ -C plan_id ด้วย original seq
+  var mCount=(_dTripPlan._motherShopCount!==undefined)?_dTripPlan._motherShopCount:shops.length;
+  var visitPlanId=(seq>=mCount&&_dTripPlan._childPlanId)?_dTripPlan._childPlanId:_dTripPlan.plan_id;
+  var visitSeq=(seq>=mCount&&_dTripPlan._childPlanId)?(seq-mCount):seq;
   var photoUrl=null;
   if(_dCapturedFile){
     try{
       var ext=(_dCapturedFile.name||'photo.jpg').split('.').pop()||'jpg';
-      var path=_dTripPlan.plan_id+'/'+seq+'/arrive_'+Date.now()+'.'+ext;
+      var path=visitPlanId+'/'+visitSeq+'/arrive_'+Date.now()+'.'+ext;
       var {error:ue}=await window._sb.storage.from(DRV_PHOTO_BUCKET).upload(path,_dCapturedFile,{contentType:_dCapturedFile.type||'image/jpeg',upsert:true});
       if(ue)throw ue;
       var {data:ud}=window._sb.storage.from(DRV_PHOTO_BUCKET).getPublicUrl(path);
@@ -33660,7 +33669,7 @@ window.drvDoArriveAtShop=async function(){
     }catch(e){drvHideL();drvShowToast('❌ อัพโหลดรูปไม่ได้',true);return;}
   }
   var {data:visitData,error:ve}=await window._sb.from('shop_visits').upsert({
-    plan_id:_dTripPlan.plan_id,shop_seq:seq,shop_name:shop.shopName||shop.shopId||'',
+    plan_id:visitPlanId,shop_seq:visitSeq,shop_name:shop.shopName||shop.shopId||'',
     mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
     arrived_at:now,photo_url:photoUrl
   },{onConflict:'plan_id,shop_seq'}).select().single();
@@ -33698,9 +33707,12 @@ window.drvDoDepartShop=async function(){
   drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
   var now=new Date().toISOString();
   var visit=_dShopVisits[seq]||{};
+  var mCount2=(_dTripPlan._motherShopCount!==undefined)?_dTripPlan._motherShopCount:shops.length;
+  var deptPlanId=(seq>=mCount2&&_dTripPlan._childPlanId)?_dTripPlan._childPlanId:_dTripPlan.plan_id;
+  var deptSeq=(seq>=mCount2&&_dTripPlan._childPlanId)?(seq-mCount2):seq;
   var updateFn=visit.id
     ?window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('id',visit.id)
-    :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('plan_id',_dTripPlan.plan_id).eq('shop_seq',seq);
+    :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('plan_id',deptPlanId).eq('shop_seq',deptSeq);
   await updateFn;
   var updatedVisits=Object.assign({},_dShopVisits);
   updatedVisits[seq]=Object.assign({},updatedVisits[seq]||{},{departed_at:now});
@@ -33712,6 +33724,10 @@ window.drvDoDepartShop=async function(){
   if(le){drvHideL();drvShowToast('❌ '+le.message,true);return;}
   var {data:freshVisits}=await window._sb.from('shop_visits').select('*').eq('plan_id',_dTripPlan.plan_id);
   _dShopVisits={};(freshVisits||[]).forEach(function(v){_dShopVisits[v.shop_seq]=v;});
+  if(_dTripPlan._childPlanId&&_dTripPlan._motherShopCount!==undefined){
+    var {data:freshChildVisits}=await window._sb.from('shop_visits').select('*').eq('plan_id',_dTripPlan._childPlanId);
+    (freshChildVisits||[]).forEach(function(v){_dShopVisits[v.shop_seq+_dTripPlan._motherShopCount]=v;});
+  }
   drvHideL();
   _dTripLog=Object.assign({},newLog||_dTripLog,{status:nextStatus});
   _dCapturedFile=null;_dCapturedPreviewUrl=null;_dSelectedShopSeq=null;
