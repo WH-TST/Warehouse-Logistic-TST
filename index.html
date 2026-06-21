@@ -33326,6 +33326,22 @@ window.drvLoadPlan=async function(){
   if(error){drvHideL();drvShowToast('❌ โหลดแผนไม่สำเร็จ',true);drvRenderPlanCards([]);return;}
   _dPlans=plans||[];_dTripLogs={};
   if(_dPlans.length){
+    // รถพ่วง: merge shops ของ -C เข้า -M แล้วซ่อน -C
+    var childMap={};
+    _dPlans.forEach(function(p){if(p.is_child)childMap[p.plan_id]=p;});
+    _dPlans.forEach(function(p){
+      if(p.is_mother){
+        var basePairId=p.plan_id.replace(/-M$/,'');
+        var childPlan=childMap[basePairId+'-C'];
+        if(childPlan){
+          // รวม shops ของ child เข้า mother (ต่อท้าย)
+          p.shops=(p.shops||[]).concat(childPlan.shops||[]);
+          p._childPlanId=childPlan.plan_id;
+        }
+      }
+    });
+    _dPlans=_dPlans.filter(function(p){return !p.is_child;});
+
     var ids=_dPlans.map(function(p){return p.plan_id;});
     var {data:logs}=await window._sb.from('trip_logs').select('*').in('plan_id',ids);
     (logs||[]).forEach(function(l){_dTripLogs[l.plan_id]=l;});
