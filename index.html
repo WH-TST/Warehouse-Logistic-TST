@@ -22325,24 +22325,41 @@ window.deleteLogiPlan = function deleteLogiPlan(planId) {
     showConfirmModal(
         'ยืนยันการลบแผน',
         confirmMsg,
-        function() {
+        async function() {
             showToast('⏳ กำลังลบ ' + planId + (hasChild ? ' + ' + childId : '') + '...');
             const idsToDelete = [planId];
             if (hasChild && childId) idsToDelete.push(childId);
-            window._sb.from('logistic_plans')
-                .delete()
-                .in('plan_id', idsToDelete)
-                .then(function(res) {
-                    if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
-                    logiPlanList = logiPlanList.filter(p => p.id !== planId && p.id !== childId);
-                    renderLogisticList();
-                    updateLogiKPI();
-                    showToast('🗑️ ลบ ' + planId + (hasChild ? ' + ' + childId : '') + ' เรียบร้อยแล้ว');
-                    logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + (hasChild ? ' + ' + childId : ''));
-                })
-                .catch(function(err) {
-                    showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-                });
+            try {
+                // ลบรูปใน Storage ก่อน
+                for (const pid of idsToDelete) {
+                    const { data: files } = await window._sb.storage.from('delivery-photos').list(pid, { limit: 200 });
+                    if (files && files.length) {
+                        const allPaths = [];
+                        for (const f of files) {
+                            if (f.id) { allPaths.push(pid + '/' + f.name); }
+                            else {
+                                const { data: inner } = await window._sb.storage.from('delivery-photos').list(pid + '/' + f.name, { limit: 200 });
+                                (inner || []).forEach(fi => allPaths.push(pid + '/' + f.name + '/' + fi.name));
+                            }
+                        }
+                        if (allPaths.length) await window._sb.storage.from('delivery-photos').remove(allPaths);
+                    }
+                }
+                // ลบ trip_logs, shop_visits, และ logistic_plans พร้อมกัน
+                await Promise.all([
+                    window._sb.from('shop_visits').delete().in('plan_id', idsToDelete),
+                    window._sb.from('trip_logs').delete().in('plan_id', idsToDelete),
+                ]);
+                const res = await window._sb.from('logistic_plans').delete().in('plan_id', idsToDelete);
+                if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
+                logiPlanList = logiPlanList.filter(p => p.id !== planId && p.id !== childId);
+                renderLogisticList();
+                updateLogiKPI();
+                showToast('🗑️ ลบ ' + planId + (hasChild ? ' + ' + childId : '') + ' เรียบร้อยแล้ว');
+                logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + (hasChild ? ' + ' + childId : ''));
+            } catch(err) {
+                showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
+            }
         },
         { type: 'danger', okText: 'ลบเลย' }
     );
@@ -22353,23 +22370,37 @@ window.deleteLogiPlanFromCal = function deleteLogiPlanFromCal(planId) {
     showConfirmModal(
         'ยืนยันการลบแผน',
         'ลบแผน <strong class="text-white">' + planId + '</strong> ออกจากระบบ?<br><span class="text-rose-400 text-xs mt-1 block">⚠️ การลบจะไม่สามารถกู้คืนได้</span>',
-        function() {
+        async function() {
             showToast('⏳ กำลังลบ ' + planId + '...');
-            window._sb.from('logistic_plans')
-                .delete()
-                .eq('plan_id', planId)
-                .then(function(res) {
-                    if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
-                    logiPlanList    = (logiPlanList    || []).filter(p => p.id !== planId);
-                    logiCalPlanList = (logiCalPlanList || []).filter(p => p.id !== planId);
-                    renderLogiCalendar();
-                    updateLogiKPI();
-                    showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
-                    logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + ' (from Calendar)');
-                })
-                .catch(function(err) {
-                    showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-                });
+            try {
+                // ลบรูปใน Storage ก่อน
+                const { data: files } = await window._sb.storage.from('delivery-photos').list(planId, { limit: 200 });
+                if (files && files.length) {
+                    const allPaths = [];
+                    for (const f of files) {
+                        if (f.id) { allPaths.push(planId + '/' + f.name); }
+                        else {
+                            const { data: inner } = await window._sb.storage.from('delivery-photos').list(planId + '/' + f.name, { limit: 200 });
+                            (inner || []).forEach(fi => allPaths.push(planId + '/' + f.name + '/' + fi.name));
+                        }
+                    }
+                    if (allPaths.length) await window._sb.storage.from('delivery-photos').remove(allPaths);
+                }
+                await Promise.all([
+                    window._sb.from('shop_visits').delete().eq('plan_id', planId),
+                    window._sb.from('trip_logs').delete().eq('plan_id', planId),
+                ]);
+                const res = await window._sb.from('logistic_plans').delete().eq('plan_id', planId);
+                if (res.error) { showToast('ลบไม่สำเร็จ: ' + res.error.message, true); return; }
+                logiPlanList    = (logiPlanList    || []).filter(p => p.id !== planId);
+                logiCalPlanList = (logiCalPlanList || []).filter(p => p.id !== planId);
+                renderLogiCalendar();
+                updateLogiKPI();
+                showToast('🗑️ ลบ ' + planId + ' เรียบร้อยแล้ว');
+                logAudit('Logistic', 'DELETE', 'Plan ID: ' + planId + ' (from Calendar)');
+            } catch(err) {
+                showToast('เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
+            }
         },
         { type: 'danger', okText: 'ลบเลย' }
     );
