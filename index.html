@@ -32609,8 +32609,9 @@ function dmEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function dmFmtTime(iso){if(!iso)return'–';var d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 function dmFmtDur(a,b){if(!a||!b)return'–';var ms=new Date(b)-new Date(a);var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return(h>0?h+' ชม. ':'')+m+' นาที';}
 function dmThaiNow(){var d=new Date(),t=new Date(d.getTime()+7*3600000);return t.toISOString().replace('Z','+07:00');}
-function dmGetGPS(){return new Promise(function(res,rej){if(!navigator.geolocation){rej(new Error('ไม่รองรับ GPS'));return;}navigator.geolocation.getCurrentPosition(function(p){res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)});},function(e){rej(new Error(e.message));},{timeout:15000,enableHighAccuracy:true,maximumAge:0});});}
-async function dmRequireGPS(){showToast('กำลังดึง GPS…',false);try{return await dmGetGPS();}catch(e){showToast('❌ GPS: '+e.message,true);return null;}}
+function dmGetGPS(){return new Promise(function(res,rej){if(!navigator.geolocation){rej(new Error('no_device'));return;}navigator.geolocation.getCurrentPosition(function(p){res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)});},function(e){rej(e);},{timeout:15000,enableHighAccuracy:true,maximumAge:0});});}
+async function dmRequireGPS(){showToast('กำลังดึง GPS…',false);try{var g=await dmGetGPS();showToast('GPS ±'+g.acc+'ม.',false);return g;}catch(e){// Admin: GPS optional — proceed with null if denied or unavailable
+showToast('⚠️ GPS ไม่ได้ (บันทึกโดยไม่มีพิกัด)',false);return {lat:null,lng:null,acc:null};}}
 
 window.dmSelectDriver=async function(){
   var sel=document.getElementById('dm-driver-select');
