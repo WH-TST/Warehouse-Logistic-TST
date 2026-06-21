@@ -29273,13 +29273,17 @@ window.loRefreshOrderList = window.loRefreshHistory;
     }
   };
 
+  var _dtLoading = false;
   window.dtLoad = async function() {
+    if (_dtLoading) return;          // ป้องกัน concurrent calls
+    _dtLoading = true;
     var dateVal = (document.getElementById('dt-date')||{}).value || new Date().toISOString().slice(0,10);
     var listEl  = document.getElementById('dt-plan-list');
     var sumEl   = document.getElementById('dt-summary');
     if (listEl) listEl.innerHTML = '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
     if (sumEl)  sumEl.classList.add('hidden');
 
+    try {
     // โหลด plans ของวันนั้น
     var {data: plans, error: pe} = await window._sb.from('logistic_plans')
       .select('plan_id,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child')
@@ -29490,6 +29494,11 @@ window.loRefreshOrderList = window.loRefreshHistory;
         +'</div>'
       +'</div>';
     }).join('');
+    } catch(e) {
+      if (listEl) listEl.innerHTML = '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-400"><i class="fas fa-exclamation-circle text-4xl mb-3 block opacity-50"></i><p class="font-bold">โหลดไม่สำเร็จ</p></div>';
+    } finally {
+      _dtLoading = false;
+    }
   };
 
   function p2t(n){ return String(n).padStart(2,'0'); }
