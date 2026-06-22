@@ -34031,15 +34031,26 @@ window.drvMaintPhotoSel=function(input){
   reader.readAsDataURL(file);
 };
 
+function _dMaintGeo(){
+  return new Promise(function(res){
+    if(!navigator.geolocation){res(null);return;}
+    navigator.geolocation.getCurrentPosition(
+      function(p){res(p.coords);},
+      function(){res(null);},
+      {timeout:5000,maximumAge:30000}
+    );
+  });
+}
+
 window.drvMaintDrop=async function(){
-  var mileage=Number(document.getElementById('dm-mileage-in')?.value||0);
+  var mileage=Number((document.getElementById('dm-mileage-in')||{}).value||0);
   if(!mileage){drvShowToast('กรุณากรอกเลขไมล์',true);return;}
   var btn=document.querySelector('#drv-maint-body button:last-child');
   if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
   try{
-    // บันทึก trip_log
     var now=new Date().toISOString();
-    var pos=await new Promise(function(res){navigator.geolocation?navigator.geolocation.getCurrentPosition(function(p){res(p.coords);}):res(null);}).catch(function(){return null;});
+    var pos=await _dMaintGeo();
+    // บันทึก trip_log
     var logData={plan_id:_dMaintPlan.plan_id,driver_username:_dSess.username,
       status:'at_service',mileage_start:mileage,started_at:now,
       lat_start:pos?pos.latitude:null,lng_start:pos?pos.longitude:null,acc_start:pos?Math.round(pos.accuracy):null};
@@ -34052,19 +34063,18 @@ window.drvMaintDrop=async function(){
       var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dMaintPhotoFile,{contentType:'image/jpeg',upsert:true});
       if(!ue) photoUrl=window._sb.storage.from('delivery-photos').getPublicUrl(path).data.publicUrl;
     }
-    // บันทึก shop_visit seq=0 (ส่งรถ)
-    await window._sb.from('shop_visits').upsert({
-      plan_id:_dMaintPlan.plan_id,shop_seq:0,
-      shop_name:(_dMaintPlan.shops[0]?.shopName)||'ศูนย์ซ่อม',
-      mileage_arrival:mileage,arrived_at:now,
+    // บันทึก shop_visit seq=0 — insert แล้ว update ถ้ามีอยู่แล้ว
+    var shopData={plan_id:_dMaintPlan.plan_id,shop_seq:0,
+      shop_name:(_dMaintPlan.shops&&_dMaintPlan.shops[0]&&_dMaintPlan.shops[0].shopName)||'ศูนย์ซ่อม',
+      mileage_arrival:mileage,arrived_at:now,departed_at:now,
       lat_arrival:pos?pos.latitude:null,lng_arrival:pos?pos.longitude:null,
-      acc_arrival:pos?Math.round(pos.accuracy):null,
-      photo_url:photoUrl,departed_at:now
-    },{onConflict:'plan_id,shop_seq'});
-    // อัพเดต plan status
+      acc_arrival:pos?Math.round(pos.accuracy):null,photo_url:photoUrl};
+    var {data:ex}=await window._sb.from('shop_visits').select('id').eq('plan_id',_dMaintPlan.plan_id).eq('shop_seq',0).maybeSingle();
+    if(ex){await window._sb.from('shop_visits').update(shopData).eq('id',ex.id);}
+    else{await window._sb.from('shop_visits').insert(shopData);}
     await window._sb.from('logistic_plans').update({status:'in_progress'}).eq('plan_id',_dMaintPlan.plan_id);
-    _dMaintLog={...(logData),mileage_start:mileage};
-    _dMaintVisits[0]={shop_seq:0,arrived_at:now,photo_url:photoUrl,mileage_arrival:mileage};
+    _dMaintLog=Object.assign({},logData);
+    _dMaintVisits[0]=Object.assign({},shopData);
     _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
     _dMaintRender();
   }catch(e){drvShowToast('❌ '+e.message,true);if(btn){btn.disabled=false;btn.textContent='ส่งรถเข้าศูนย์ซ่อม';}}
@@ -34077,7 +34087,7 @@ window.drvMaintPickup=async function(){
   if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
   try{
     var now=new Date().toISOString();
-    var pos=await new Promise(function(res){navigator.geolocation?navigator.geolocation.getCurrentPosition(function(p){res(p.coords);}):res(null);}).catch(function(){return null;});
+    var pos=await _dMaintGeo();
     // อัพโหลดรูปใบเสร็จ
     var photoUrl=null;
     if(_dMaintPhotoFile){
@@ -34085,22 +34095,21 @@ window.drvMaintPickup=async function(){
       var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dMaintPhotoFile,{contentType:'image/jpeg',upsert:true});
       if(!ue) photoUrl=window._sb.storage.from('delivery-photos').getPublicUrl(path).data.publicUrl;
     }
-    // shop_visit seq=1 (รับรถกลับ)
-    await window._sb.from('shop_visits').upsert({
-      plan_id:_dMaintPlan.plan_id,shop_seq:1,
-      shop_name:'รับรถกลับ',
+    // shop_visit seq=1 — insert หรือ update
+    var pickupData={plan_id:_dMaintPlan.plan_id,shop_seq:1,shop_name:'รับรถกลับ',
       mileage_arrival:mileage,arrived_at:now,departed_at:now,
       lat_arrival:pos?pos.latitude:null,lng_arrival:pos?pos.longitude:null,
-      acc_arrival:pos?Math.round(pos.accuracy):null,
-      photo_url:photoUrl
-    },{onConflict:'plan_id,shop_seq'});
+      acc_arrival:pos?Math.round(pos.accuracy):null,photo_url:photoUrl};
+    var {data:ex2}=await window._sb.from('shop_visits').select('id').eq('plan_id',_dMaintPlan.plan_id).eq('shop_seq',1).maybeSingle();
+    if(ex2){await window._sb.from('shop_visits').update(pickupData).eq('id',ex2.id);}
+    else{await window._sb.from('shop_visits').insert(pickupData);}
     // อัพเดต trip_log
     await window._sb.from('trip_logs').update({status:'completed',mileage_end:mileage,completed_at:now,
       lat_end:pos?pos.latitude:null,lng_end:pos?pos.longitude:null,acc_end:pos?Math.round(pos.accuracy):null})
       .eq('plan_id',_dMaintPlan.plan_id);
     await window._sb.from('logistic_plans').update({status:'completed'}).eq('plan_id',_dMaintPlan.plan_id);
-    _dMaintLog={..._dMaintLog,status:'completed',mileage_end:mileage};
-    _dMaintVisits[1]={shop_seq:1,arrived_at:now,photo_url:photoUrl,mileage_arrival:mileage};
+    _dMaintLog=Object.assign({},_dMaintLog,{status:'completed',mileage_end:mileage});
+    _dMaintVisits[1]=Object.assign({},pickupData);
     _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
     drvShowToast('✅ บันทึกเสร็จสิ้น',false,3000);
     _dMaintRender();
