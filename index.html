@@ -27103,53 +27103,171 @@ window.loadKpiWH = function loadKpiWH() {
     kpiWHAutoData  = {};
     kpiWHSavedData = {};
 
-    // โหลด AUTO data (GAS) และ history (Supabase) พร้อมกัน
-    let autoLoaded = false, histLoaded = false;
-    const tryRender = () => { if (autoLoaded && histLoaded) renderKpiWHTable(startStr, endStr); };
+    // ดึงข้อมูลทั้งหมดจาก Supabase พร้อมกัน 3 ตาราง
+    Promise.all([
+        // 1. kpi_inventory → FG/SEMI Checker, Prod KPI, Final Adj
+        window._sb.from('kpi_inventory').select('cycle_date,type,kpi_checker,kpi_prd,kpi_final')
+            .gte('cycle_date', startStr).lte('cycle_date', endStr),
+        // 2. wh_activity_log → ทุก record (ใช้คำนวณ Load/Damage Score)
+        window._sb.from('wh_activity_log').select('type,date,min_per_item,weight_per_unit,truck_plate'),
+        // 3. kpi_wh_log → ข้อมูลที่เคยบันทึกไว้
+        window._sb.from('kpi_wh_log').select('*').gte('cycle_date', startStr).lte('cycle_date', endStr),
+        // 4. logistic_plans → plan hours per date (งานส่งเท่านั้น ไม่รวม maintenance)
+        window._sb.from('logistic_plans').select('plan_date,prod_time_day')
+            .gte('plan_date', startStr).lte('plan_date', endStr)
+            .neq('job_type','maintenance_pm')
+    ]).then(function(results) {
+        var kpiRows   = (results[0].data || []);
+        var actRows   = (results[1].data || []);
+        var savedRows = (results[2].data || []);
+        var planRows  = (results[3].data || []);
 
-    google.script.run
-        .withSuccessHandler(res => {
-            if (res && res.success && res.data) {
-                res.data.forEach(r => { kpiWHAutoData[r.date] = r; });
-            }
-            autoLoaded = true;
-            tryRender();
-        })
-        .withFailureHandler(err => {
-            console.error('❌ getKpiWHLGData error:', err);
-            autoLoaded = true;
-            tryRender();
-        })
-        .getKpiWHLGData(startStr, endStr);
-
-    // ดึง history จาก Supabase แทน GAS
-    window._sb.from('kpi_wh_log').select('*')
-        .gte('cycle_date', startStr).lte('cycle_date', endStr)
-        .then(function(res) {
-            if (res.data) {
-                res.data.forEach(function(r) {
-                    var iso = r.cycle_date;
-                    var p = iso.split('-');
-                    var ddmm = p[2]+'/'+p[1]+'/'+p[0];
-                    var mapped = {
-                        date: ddmm, id: r.id,
-                        checkerFGPct:   r.checker_fg,
-                        checkerSEMIPct: r.checker_semi,
-                        finalAdjFG:     r.final_adj_fg,
-                        finalAdjSEMI:   r.final_adj_semi,
-                        spaceBreakdown: r.space_breakdown,
-                        loadScore:      r.load_score,
-                        damageScore:    r.damage_score,
-                        dataErrFG:      r.data_err_fg,
-                        dataErrSEMI:    r.data_err_semi,
-                    };
-                    kpiWHSavedData[iso]  = mapped;
-                    kpiWHSavedData[ddmm] = mapped;
-                });
-            }
-            histLoaded = true;
-            tryRender();
+        // ── Build kpiWHSavedData จาก kpi_wh_log ──
+        savedRows.forEach(function(r) {
+            var iso = r.cycle_date;
+            var p = iso.split('-');
+            var ddmm = p[2]+'/'+p[1]+'/'+p[0];
+            var mapped = {
+                date: ddmm, id: r.id,
+                checkerFGPct:   r.checker_fg,
+                checkerSEMIPct: r.checker_semi,
+                finalAdjFG:     r.final_adj_fg,
+                finalAdjSEMI:   r.final_adj_semi,
+                spaceBreakdown: r.space_breakdown,
+                loadScore:      r.load_score,
+                damageScore:    r.damage_score,
+                dataErrFG:      r.data_err_fg,
+                dataErrSEMI:    r.data_err_semi,
+            };
+            kpiWHSavedData[iso]  = mapped;
+            kpiWHSavedData[ddmm] = mapped;
         });
+
+        // ── Build kpiInvMap จาก kpi_inventory ──
+        var kpiInvMap = {}; // key=yyyy-MM-dd → { FG:{checker,prd,final}, SEMI:{...} }
+        kpiRows.forEach(function(r) {
+            var iso = r.cycle_date;
+            if (!kpiInvMap[iso]) kpiInvMap[iso] = {};
+            kpiInvMap[iso][r.type] = { checker: r.kpi_checker, prd: r.kpi_prd, finalAdj: r.kpi_final };
+        });
+
+        // ── Build planMap จาก logistic_plans ──
+        var planMap = {}; // key=yyyy-MM-dd → totalMinutes
+        planRows.forEach(function(r) {
+            var key = r.plan_date;
+            planMap[key] = (planMap[key] || 0) + (parseFloat(r.prod_time_day) || 0);
+        });
+        Object.keys(planMap).forEach(function(k) { planMap[k] = Math.round(planMap[k] * 60); });
+
+        // ── คำนวณ Median MPI/KG ทุก historical trip (baseline สำหรับ efficiency) ──
+        var allMpiKgA=[], allMpiKgB=[], allMpiKgC=[], allMpiKgD=[];
+        var whaMap = {}; // key=yyyy-MM-dd → { wpuList, mpiList, wrongCount, claimCount, dmgLoad, dmgStore }
+        actRows.forEach(function(r) {
+            var key = r.date;
+            if (!whaMap[key]) whaMap[key] = { wpuList:[], mpiList:[], wrongCount:0, claimCount:0, dmgLoad:0, dmgStore:0 };
+            if (r.type === 'โหลดสินค้าผิด')         { whaMap[key].wrongCount++; return; }
+            if (r.type === 'เคลมสินค้า')             { whaMap[key].claimCount++; return; }
+            if (r.type === 'สินค้าเสียหาย-การโหลด') { whaMap[key].dmgLoad++;    return; }
+            if (r.type === 'สินค้าเสียหาย-การเก็บ') { whaMap[key].dmgStore++;   return; }
+            if (r.type !== 'บันทึกการโหลด') return;
+            var wpu = parseFloat(r.weight_per_unit) || 0;
+            var mpi = parseFloat(r.min_per_item)    || 0;
+            if (wpu <= 0 || mpi <= 0) return;
+            whaMap[key].wpuList.push(wpu);
+            whaMap[key].mpiList.push(mpi);
+            var mpkg = mpi / wpu;
+            if      (wpu < 3000)   allMpiKgA.push(mpkg);
+            else if (wpu <= 8000)  allMpiKgB.push(mpkg);
+            else if (wpu <= 16000) allMpiKgC.push(mpkg);
+            else                   allMpiKgD.push(mpkg);
+        });
+
+        function median(arr) {
+            if (!arr.length) return null;
+            var s = arr.slice().sort(function(a,b){return a-b;});
+            var mid = Math.floor(s.length/2);
+            return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+        }
+        var medA = median(allMpiKgA), medB = median(allMpiKgB), medC = median(allMpiKgC), medD = median(allMpiKgD);
+        var medAll = median(allMpiKgA.concat(allMpiKgB,allMpiKgC,allMpiKgD));
+        function groupMedian(wpu) {
+            if (wpu < 3000)   return medA || medAll;
+            if (wpu <= 8000)  return medB || medAll;
+            if (wpu <= 16000) return medC || medAll;
+            return medD || medAll;
+        }
+
+        // ── สร้าง kpiWHAutoData ทีละวันในช่วง ──
+        var cur = new Date(startStr);
+        var endD = new Date(endStr);
+        while (cur <= endD) {
+            var key = cur.toISOString().slice(0,10);
+            var wha = whaMap[key] || null;
+            var kpiLog = kpiInvMap[key] || {};
+            var kpiFG   = kpiLog['FG']   || {};
+            var kpiSEMI = kpiLog['SEMI'] || {};
+
+            // Checker, Prod KPI, Final Adj จาก kpi_inventory
+            var checkerFGPct    = kpiFG.checker   != null ? Math.round(kpiFG.checker   * 10)/10 : null;
+            var checkerSEMIPct  = kpiSEMI.checker != null ? Math.round(kpiSEMI.checker * 10)/10 : null;
+            var finalAdjFGPct   = kpiFG.finalAdj  != null ? Math.round(kpiFG.finalAdj  * 10)/10 : null;
+            var finalAdjSEMIPct = kpiSEMI.finalAdj!= null ? Math.round(kpiSEMI.finalAdj*10)/10  : null;
+            var prdKPIFG        = kpiFG.prd   != null ? Math.round(kpiFG.prd   * 10)/10 : null;
+            var prdKPISEMI      = kpiSEMI.prd != null ? Math.round(kpiSEMI.prd * 10)/10 : null;
+
+            // Load Score จาก wh_activity_log
+            var efficiency=null, effStep1=null, accuracyScore=null;
+            var wrongCount  = wha ? (wha.wrongCount||0) : 0;
+            var claimCount  = wha ? (wha.claimCount||0) : 0;
+            var dmgLoad     = wha ? (wha.dmgLoad||0)    : 0;
+            var dmgStore    = wha ? (wha.dmgStore||0)   : 0;
+            if (wha && wha.wpuList.length > 0 && medAll) {
+                var effList = [];
+                for (var t=0; t<wha.wpuList.length; t++) {
+                    var wpu_t = wha.wpuList[t], mpi_t = wha.mpiList[t];
+                    if (wpu_t>0 && mpi_t>0) {
+                        var gm = groupMedian(wpu_t);
+                        if (gm) effList.push(Math.min(100, (gm/(mpi_t/wpu_t))*100));
+                    }
+                }
+                if (effList.length > 0) {
+                    effStep1 = effList.reduce(function(a,b){return a+b;},0)/effList.length;
+                    accuracyScore = Math.max(0, 100 - wrongCount*15 - claimCount*10);
+                    efficiency = Math.round((effStep1*0.6 + accuracyScore*0.4)*10)/10;
+                }
+            } else if (wha && (wrongCount>0||claimCount>0)) {
+                accuracyScore = Math.max(0, 100-wrongCount*15-claimCount*10);
+                efficiency = Math.round(accuracyScore*10)/10;
+            }
+
+            // Damage Score
+            var scoreLoad  = Math.max(0, 100 - dmgLoad*20);
+            var scoreStore = Math.max(0, 100 - dmgStore*10);
+            var damagePct  = Math.round((scoreLoad*0.6 + scoreStore*0.4)*10)/10;
+
+            // Plan Minutes
+            var planMinutes = planMap[key] != null ? planMap[key] : null;
+            var planHours   = planMinutes != null ? Math.round((planMinutes/60)*10)/10 : null;
+
+            var ddmm = key.split('-').reverse().join('/');
+            kpiWHAutoData[key]  = {
+                date: ddmm, efficiency: efficiency,
+                effStep1:      effStep1 != null ? Math.round(effStep1*10)/10 : null,
+                accuracyScore: accuracyScore != null ? Math.round(accuracyScore*10)/10 : null,
+                checkerFGPct: checkerFGPct, checkerSEMIPct: checkerSEMIPct,
+                finalAdjFGPct: finalAdjFGPct, finalAdjSEMIPct: finalAdjSEMIPct,
+                scoreLoad: scoreLoad, scoreStore: scoreStore, damagePct: damagePct,
+                prdKPIFG: prdKPIFG, prdKPISEMI: prdKPISEMI,
+                planHours: planHours, planMinutes: planMinutes,
+            };
+            kpiWHAutoData[ddmm] = kpiWHAutoData[key];
+            cur.setDate(cur.getDate()+1);
+        }
+
+        var btn2 = safeGet('btn-kpi-wh-load');
+        if (btn2) { btn2.innerHTML = '<i class="fas fa-search"></i> แสดงผล'; btn2.disabled = false; }
+        renderKpiWHTable(startStr, endStr);
+    });
 };
 
 // ── สร้างตาราง ──────────────────────────────────────────────────────────
