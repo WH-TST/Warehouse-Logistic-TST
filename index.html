@@ -33469,12 +33469,16 @@ window.drvPlayNewOrder=function drvPlayNewOrder(){
   try{
     if(!window.speechSynthesis)return;
     window.speechSynthesis.cancel();
+    var speakCount=0;
     var doSpeak=function(){
+      if(speakCount>=3)return;
+      speakCount++;
       var u=new SpeechSynthesisUtterance('ออเดอร์มาแล้ว');
       var voices=window.speechSynthesis.getVoices();
       var th=voices.find(function(v){return v.lang==='th-TH'||v.lang==='th';});
       if(th)u.voice=th;
-      u.lang='th-TH';u.rate=0.85;u.volume=1;
+      u.lang='th-TH';u.rate=1.4;u.volume=1;
+      u.onend=function(){setTimeout(doSpeak,200);};
       window.speechSynthesis.speak(u);
     };
     if(window.speechSynthesis.getVoices().length>0)doSpeak();
