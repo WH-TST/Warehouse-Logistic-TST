@@ -33394,7 +33394,8 @@ var _dRtChannel=null;
 var _dPrevPlanIds=null;
 
 function _dMakeBeepWav(){
-  var sr=22050,dur=0.8,freq=880;
+  // กริ๊งงงงงง — เสียงกระดิ่งสูง มี vibrato decay ยาว 5 วินาที
+  var sr=22050,dur=5.0;
   var n=Math.floor(sr*dur);
   var buf=new ArrayBuffer(44+n*2);
   var v=new DataView(buf);
@@ -33405,9 +33406,15 @@ function _dMakeBeepWav(){
   wr(36,'data');v.setUint32(40,n*2,true);
   for(var i=0;i<n;i++){
     var t=i/sr;
-    var env=t<0.05?t/0.05:t>0.6?1-(t-0.6)/0.2:1;
-    var s=env*0.8*Math.sin(2*Math.PI*freq*t);
-    if(t>0.2)s+=env*0.4*Math.sin(2*Math.PI*(freq*1.5)*t);
+    // attack เร็ว 0.02s, decay ยาวตลอด
+    var env=t<0.02?(t/0.02):Math.exp(-t*1.1);
+    // vibrato 8Hz สร้างความสั่น "กริ๊ง"
+    var vibrato=1+0.012*Math.sin(2*Math.PI*8*t);
+    var freq=1760*vibrato;
+    // เสียงหลัก + overtone ให้ฟังดูกระดิ่ง
+    var s=env*(0.7*Math.sin(2*Math.PI*freq*t)
+              +0.2*Math.sin(2*Math.PI*freq*2*t)
+              +0.08*Math.sin(2*Math.PI*freq*3*t));
     v.setInt16(44+i*2,Math.max(-32767,Math.min(32767,s*32767)),true);
   }
   var b=new Uint8Array(buf),str='';
@@ -33418,13 +33425,14 @@ var _dBeepUri=null;
 window.drvPlayNewOrder=function drvPlayNewOrder(){
   try{
     if(!_dBeepUri)_dBeepUri=_dMakeBeepWav();
+    // เล่น 3 รอบ ห่างกัน 200ms — กริ๊งงง กริ๊งงง กริ๊งงง
     var count=0;
     var playOnce=function(){
-      if(count>=5)return;
+      if(count>=3)return;
       count++;
       var a=new Audio(_dBeepUri);
       a.volume=1;
-      a.onended=function(){setTimeout(playOnce,300);};
+      a.onended=function(){setTimeout(playOnce,200);};
       a.play().catch(function(){});
     };
     playOnce();
