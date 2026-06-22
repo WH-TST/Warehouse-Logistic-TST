@@ -33024,6 +33024,37 @@ function dmRenderPlanList(area){
     html+=plans.map(function(p,pi){
       var log=_dmTripLogs[p.plan_id];
       var st=log?log.status:'idle';
+      var isMaint=p.job_type==='maintenance_pm';
+
+      // ── MAINTENANCE CARD (Driver Monitor) ────────────────────────
+      if(isMaint){
+        var maintMeta={
+          idle:      {color:'#fbbf24',label:'รอนำรถเข้า',   icon:'fa-clock',       border:'#92400e',btnBg:'#d97706'},
+          at_service:{color:'#fb923c',label:'รถอยู่ที่ศูนย์',icon:'fa-wrench',     border:'#c2410c',btnBg:'#ea580c'},
+          completed: {color:'#34d399',label:'เสร็จสิ้น',    icon:'fa-check-circle',border:'#059669',btnBg:'#1e3a8a'}
+        };
+        var mm=maintMeta[st]||maintMeta.idle;
+        var center=(p.shops&&p.shops[0]&&p.shops[0].shopName)||'ศูนย์ซ่อม';
+        var remark=(p.shops&&p.shops[0]&&p.shops[0].remark)||'';
+        var mLog=log||{};
+        return '<div style="background:linear-gradient(160deg,#1e293b 80%,#431407 100%);border:2px solid '+mm.border+';border-radius:20px;padding:18px;margin-bottom:12px;">'
+          +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
+          +'<div><div style="font-weight:900;color:#fbbf24;font-size:15px;"><i class="fas fa-wrench" style="margin-right:6px;"></i>ซ่อมบำรุงรถ</div>'
+          +'<div style="font-size:11px;color:#64748b;margin-top:2px;">'+dmEsc(p.plan_id)+'</div></div>'
+          +'<span style="font-size:11px;font-weight:900;color:'+mm.color+';background:rgba(0,0,0,.35);padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
+          +'<i class="fas '+mm.icon+'" style="font-size:10px;"></i>'+mm.label+'</span></div>'
+          +'<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:8px 12px;margin-bottom:10px;">'
+          +'<div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:3px;">ศูนย์ซ่อม</div>'
+          +'<div style="font-size:14px;font-weight:900;color:#fde68a;">'+dmEsc(center)+'</div>'
+          +(remark?'<div style="font-size:11px;color:#f59e0b;margin-top:3px;">'+dmEsc(remark)+'</div>':'')
+          +'</div>'
+          +(mLog.mileage_start?'<div style="font-size:11px;color:#64748b;margin-bottom:8px;">ไมล์เข้า: <b style="color:#fbbf24;">'+mLog.mileage_start+' กม.</b>'+(mLog.mileage_end?' · ไมล์ออก: <b style="color:#34d399;">'+mLog.mileage_end+' กม.</b>':'')+'</div>':'')
+          +'<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;"><i class="fas fa-truck" style="margin-right:5px;"></i>'+dmEsc(p.truck_plate||'–')+'</div>'
+          +'<button onclick="dmOpenTrip(\''+dmEsc(p.plan_id)+'\')" style="width:100%;background:'+mm.btnBg+';border:none;border-radius:12px;padding:13px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-eye" style="margin-right:6px;"></i>ดูรายละเอียด</button>'
+          +'</div>';
+      }
+
+      // ── DELIVERY CARD (เดิม) ──────────────────────────────────────
       var m=statusMeta[st]||statusMeta.idle;
       var shops=p.shops||[];
       var seq=log?log.current_shop_seq:0;
