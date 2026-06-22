@@ -1863,6 +1863,7 @@ thead.sticky {
 #drv-phone-wrap{width:100%;height:100%;background:#0f172a;display:flex;flex-direction:column;overflow:hidden;position:relative;}
 #drv-trip-screen{position:absolute;inset:0;background:#0f172a;z-index:100;display:none;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);}
 #drv-trip-screen.open{display:flex;transform:translateX(0);}
+#drv-maint-screen.open{display:flex;transform:translateX(0);}
 @media(min-width:600px){
   #drv-screen{background:rgba(0,0,0,.7);}
   #drv-phone-wrap{max-width:430px;height:calc(100% - 32px);max-height:860px;border-radius:24px;box-shadow:0 0 0 1px rgba(255,255,255,.08);}
@@ -32678,6 +32679,26 @@ window.viewTripResult = async function(planId) {
     </div>
   </div>
 
+  <!-- Maintenance screen -->
+  <div id="drv-maint-screen" style="display:none;position:absolute;inset:0;background:#0f172a;z-index:100;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);">
+    <!-- Header -->
+    <div style="background:#0d1b2a;border-bottom:1px solid rgba(255,255,255,.06);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <button onclick="drvCloseMaint()" style="width:40px;height:40px;border-radius:10px;background:#1e293b;border:none;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-arrow-left" style="font-size:18px;"></i>
+      </button>
+      <div style="min-width:0;flex:1;">
+        <div id="drv-maint-title" style="font-weight:900;color:#fbbf24;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+        <div id="drv-maint-sub" style="font-size:11px;color:#64748b;margin-top:1px;"></div>
+      </div>
+      <div style="background:#78350f;padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;">
+        <i class="fas fa-wrench" style="color:#fbbf24;font-size:12px;"></i>
+        <span style="color:#fbbf24;font-size:11px;font-weight:900;">ซ่อมบำรุง</span>
+      </div>
+    </div>
+    <!-- Body -->
+    <div id="drv-maint-body" style="flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch;"></div>
+  </div>
+
   <!-- Trip screen (inside phone-wrap so it's constrained too) -->
   <div id="drv-trip-screen">
     <div style="background:#0d1b2a;border-bottom:1px solid rgba(255,255,255,.06);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
@@ -33752,6 +33773,35 @@ function drvRenderPlanCards(plans){
   wrap.innerHTML=plans.map(function(p,pi){
     var log=_dTripLogs[p.plan_id];
     var st=log?log.status:'idle';
+    var isMaint=p.job_type==='maintenance_pm';
+
+    // ── MAINTENANCE CARD ──────────────────────────────────────────
+    if(isMaint){
+      var maintMeta={
+        idle:      {color:'#fbbf24',label:'รอนำรถเข้า',   icon:'fa-clock',   border:'#92400e',btnBg:'#d97706',btnLabel:'🔧 นำรถเข้าศูนย์ซ่อม'},
+        at_service:{color:'#fb923c',label:'รถอยู่ที่ศูนย์',icon:'fa-wrench',  border:'#c2410c',btnBg:'#ea580c',btnLabel:'✅ รับรถกลับแล้ว'},
+        completed: {color:'#34d399',label:'เสร็จสิ้น',    icon:'fa-check-circle',border:'#059669',btnBg:'#1e3a8a',btnLabel:'📋 ดูสรุป'}
+      };
+      var mm=maintMeta[st]||maintMeta.idle;
+      var center=(p.shops&&p.shops[0]&&p.shops[0].shopName)||'ศูนย์ซ่อม';
+      var remark=(p.shops&&p.shops[0]&&p.shops[0].remark)||'';
+      return '<div class="drv-fade-up drv-card" style="border:2px solid '+mm.border+';background:linear-gradient(160deg,#1e293b 80%,#431407 100%);">'
+        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
+        +'<div><div style="font-weight:900;color:#fbbf24;font-size:16px;"><i class="fas fa-wrench" style="margin-right:6px;"></i>ซ่อมบำรุงรถ</div>'
+        +'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+drvEsc(p.plan_id)+'</div></div>'
+        +'<span style="font-size:12px;font-weight:900;color:'+mm.color+';background:rgba(0,0,0,.35);padding:5px 12px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
+        +'<i class="fas '+mm.icon+'"></i>'+mm.label+'</span></div>'
+        +'<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:10px 12px;margin-bottom:10px;">'
+        +'<div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">ศูนย์ซ่อม</div>'
+        +'<div style="font-size:15px;font-weight:900;color:#fde68a;">'+drvEsc(center)+'</div>'
+        +(remark?'<div style="font-size:12px;color:#f59e0b;margin-top:4px;">'+drvEsc(remark)+'</div>':'')
+        +'</div>'
+        +'<div style="font-size:13px;color:#94a3b8;margin-bottom:14px;"><i class="fas fa-truck" style="margin-right:5px;"></i>'+drvEsc(p.truck_plate||'–')+'</div>'
+        +'<button onclick="drvOpenMaint(\''+drvEsc(p.plan_id)+'\')" style="width:100%;background:'+mm.btnBg+';border:none;border-radius:12px;padding:16px;color:#fff;font-weight:900;font-size:16px;cursor:pointer;">'+mm.btnLabel+'</button>'
+        +'</div>';
+    }
+
+    // ── DELIVERY CARD (เดิม) ───────────────────────────────────────
     var m=statusMeta[st]||statusMeta.idle;
     var shops=p.shops||[];
     var seq=log?log.current_shop_seq:0;
@@ -33798,6 +33848,232 @@ window.drvCloseTrip=function(){
   ts.classList.remove('open');
   setTimeout(function(){ts.style.display='none';},280);
   drvLoadPlan();
+};
+
+// ═══════════════════════════════════════════════════════
+// MAINTENANCE PM — open / close / render / actions
+// ═══════════════════════════════════════════════════════
+var _dMaintPlan=null, _dMaintLog=null, _dMaintVisits={};
+var _dMaintPhotoFile=null, _dMaintPhotoPreview=null;
+
+window.drvOpenMaint=async function(planId){
+  _dMaintPlan=_dPlans.find(function(p){return p.plan_id===planId;})||null;
+  if(!_dMaintPlan)return;
+  _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
+  drvShowL();
+  // โหลด trip_log + shop_visits
+  var {data:log}=await window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle();
+  _dMaintLog=log||null;
+  var {data:visits}=await window._sb.from('shop_visits').select('*').eq('plan_id',planId);
+  _dMaintVisits={};
+  (visits||[]).forEach(function(v){_dMaintVisits[v.shop_seq]=v;});
+  drvHideL();
+  var center=(_dMaintPlan.shops&&_dMaintPlan.shops[0]&&_dMaintPlan.shops[0].shopName)||'ศูนย์ซ่อม';
+  document.getElementById('drv-maint-title').textContent=center;
+  document.getElementById('drv-maint-sub').textContent='🚛 '+(_dMaintPlan.truck_plate||'–')+' · '+planId;
+  _dMaintRender();
+  var ms=document.getElementById('drv-maint-screen');
+  ms.style.display='flex';
+  requestAnimationFrame(function(){ms.classList.add('open');});
+};
+
+window.drvCloseMaint=function(){
+  var ms=document.getElementById('drv-maint-screen');
+  ms.classList.remove('open');
+  setTimeout(function(){ms.style.display='none';},280);
+  drvLoadPlan();
+};
+
+function _dMaintRender(){
+  var body=document.getElementById('drv-maint-body');
+  var st=_dMaintLog?_dMaintLog.status:'idle';
+  var plan=_dMaintPlan;
+  var center=(plan.shops&&plan.shops[0]&&plan.shops[0].shopName)||'–';
+  var remark=(plan.shops&&plan.shops[0]&&plan.shops[0].remark)||'';
+
+  // ── step indicator ──
+  var steps=[
+    {key:'idle',      label:'เตรียมนำรถเข้า'},
+    {key:'at_service',label:'รถอยู่ที่ศูนย์'},
+    {key:'completed', label:'เสร็จสิ้น'}
+  ];
+  var stIdx=st==='at_service'?1:st==='completed'?2:0;
+  var stepHtml='<div style="display:flex;align-items:center;gap:0;margin-bottom:20px;">'
+    +steps.map(function(s,i){
+      var active=i===stIdx, done=i<stIdx;
+      var c=done?'#059669':active?'#d97706':'#334155';
+      var tc=done?'#34d399':active?'#fbbf24':'#475569';
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">'
+        +'<div style="width:28px;height:28px;border-radius:50%;background:'+c+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff;">'
+        +(done?'✓':(i+1))+'</div>'
+        +'<div style="font-size:10px;font-weight:700;color:'+tc+';text-align:center;line-height:1.3;">'+s.label+'</div>'
+        +'</div>'
+        +(i<steps.length-1?'<div style="flex:0 0 20px;height:2px;background:'+(done?'#059669':'#334155')+';margin-top:-14px;"></div>':'');
+    }).join('')+'</div>';
+
+  // ── info card (ศูนย์ซ่อม) ──
+  var infoHtml='<div style="background:#1e293b;border-radius:14px;padding:14px 16px;margin-bottom:16px;">'
+    +'<div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:6px;">ศูนย์ซ่อม</div>'
+    +'<div style="font-size:18px;font-weight:900;color:#fde68a;">'+drvEsc(center)+'</div>'
+    +(remark?'<div style="font-size:13px;color:#f59e0b;margin-top:6px;"><i class="fas fa-clipboard-list" style="margin-right:5px;"></i>'+drvEsc(remark)+'</div>':'')
+    +'</div>';
+
+  var html=stepHtml+infoHtml;
+
+  if(st==='idle'){
+    // ── ฟอร์มส่งรถเข้า ──
+    var mStart=_dMaintLog?(_dMaintLog.mileage_start||''):'';
+    html+='<div style="background:#1e293b;border-radius:14px;padding:16px;margin-bottom:14px;">'
+      +'<div style="font-size:13px;font-weight:900;color:#fbbf24;margin-bottom:14px;"><i class="fas fa-tachometer-alt" style="margin-right:6px;"></i>เลขไมล์ก่อนนำรถเข้า</div>'
+      +'<input id="dm-mileage-in" type="number" placeholder="กรอกเลขไมล์ (กม.)" value="'+mStart+'" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;color:#fff;font-size:16px;font-weight:700;outline:none;box-sizing:border-box;">'
+      +'</div>'
+      +'<div style="background:#1e293b;border-radius:14px;padding:16px;margin-bottom:20px;">'
+      +'<div style="font-size:13px;font-weight:900;color:#fbbf24;margin-bottom:12px;"><i class="fas fa-camera" style="margin-right:6px;"></i>ถ่ายรูปรถก่อนเข้าศูนย์</div>'
+      +'<div id="dm-photo-drop-preview" style="'+('' )+'">'
+      +(_dMaintPhotoPreview?'<img src="'+_dMaintPhotoPreview+'" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;">':'<div style="border:2px dashed #334155;border-radius:10px;padding:30px;text-align:center;color:#475569;"><i class="fas fa-image" style="font-size:32px;display:block;margin-bottom:8px;"></i><div style="font-size:13px;font-weight:700;">แตะเพื่อถ่ายรูป</div></div>')
+      +'</div>'
+      +'<input type="file" id="dm-photo-drop-input" accept="image/*" capture="environment" style="display:none;" onchange="drvMaintPhotoSel(this)">'
+      +'<button onclick="document.getElementById(\'dm-photo-drop-input\').click()" style="width:100%;margin-top:10px;background:#1e3a8a;border:none;border-radius:10px;padding:12px;color:#93c5fd;font-weight:700;font-size:14px;cursor:pointer;"><i class="fas fa-camera" style="margin-right:6px;"></i>เลือก/ถ่ายรูป</button>'
+      +'</div>'
+      +'<button onclick="drvMaintDrop()" style="width:100%;background:#d97706;border:none;border-radius:14px;padding:18px;color:#fff;font-weight:900;font-size:17px;cursor:pointer;"><i class="fas fa-wrench" style="margin-right:8px;"></i>ส่งรถเข้าศูนย์ซ่อม</button>';
+
+  }else if(st==='at_service'){
+    // ── แสดงข้อมูลที่ส่งแล้ว + ฟอร์มรับกลับ ──
+    var dropVisit=_dMaintVisits[0];
+    var mIn=_dMaintLog?(_dMaintLog.mileage_start||'–'):'–';
+    var dropTime=dropVisit&&dropVisit.arrived_at?new Date(dropVisit.arrived_at).toLocaleTimeString('th',{hour:'2-digit',minute:'2-digit'}):'–';
+    html+='<div style="background:#064e3b;border:1px solid #059669;border-radius:14px;padding:14px 16px;margin-bottom:16px;">'
+      +'<div style="font-size:11px;color:#34d399;font-weight:700;margin-bottom:8px;">✓ ส่งรถเข้าศูนย์แล้ว เวลา '+dropTime+'</div>'
+      +'<div style="font-size:13px;color:#6ee7b7;">เลขไมล์ขาเข้า: <b>'+mIn+' กม.</b></div>'
+      +(dropVisit&&dropVisit.photo_url?'<img src="'+dropVisit.photo_url+'" style="width:100%;border-radius:8px;margin-top:10px;max-height:160px;object-fit:cover;">':'')
+      +'</div>'
+      +'<div style="background:#1e293b;border-radius:14px;padding:16px;margin-bottom:14px;">'
+      +'<div style="font-size:13px;font-weight:900;color:#fbbf24;margin-bottom:14px;"><i class="fas fa-tachometer-alt" style="margin-right:6px;"></i>เลขไมล์หลังรับรถกลับ</div>'
+      +'<input id="dm-mileage-out" type="number" placeholder="กรอกเลขไมล์ (กม.)" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;color:#fff;font-size:16px;font-weight:700;outline:none;box-sizing:border-box;">'
+      +'</div>'
+      +'<div style="background:#1e293b;border-radius:14px;padding:16px;margin-bottom:20px;">'
+      +'<div style="font-size:13px;font-weight:900;color:#fbbf24;margin-bottom:12px;"><i class="fas fa-receipt" style="margin-right:6px;"></i>ถ่ายรูปใบเสร็จ / รถหลังซ่อม</div>'
+      +'<div id="dm-photo-pickup-preview">'
+      +(_dMaintPhotoPreview?'<img src="'+_dMaintPhotoPreview+'" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;">':'<div style="border:2px dashed #334155;border-radius:10px;padding:30px;text-align:center;color:#475569;"><i class="fas fa-receipt" style="font-size:32px;display:block;margin-bottom:8px;"></i><div style="font-size:13px;font-weight:700;">แตะเพื่อถ่ายรูป</div></div>')
+      +'</div>'
+      +'<input type="file" id="dm-photo-pickup-input" accept="image/*" capture="environment" style="display:none;" onchange="drvMaintPhotoSel(this)">'
+      +'<button onclick="document.getElementById(\'dm-photo-pickup-input\').click()" style="width:100%;margin-top:10px;background:#1e3a8a;border:none;border-radius:10px;padding:12px;color:#93c5fd;font-weight:700;font-size:14px;cursor:pointer;"><i class="fas fa-camera" style="margin-right:6px;"></i>เลือก/ถ่ายรูป</button>'
+      +'</div>'
+      +'<button onclick="drvMaintPickup()" style="width:100%;background:#059669;border:none;border-radius:14px;padding:18px;color:#fff;font-weight:900;font-size:17px;cursor:pointer;"><i class="fas fa-check-circle" style="margin-right:8px;"></i>รับรถกลับแล้ว — เสร็จสิ้น</button>';
+
+  }else{
+    // ── completed ──
+    var v0=_dMaintVisits[0], v1=_dMaintVisits[1];
+    var mIn2=_dMaintLog?(_dMaintLog.mileage_start||'–'):'–';
+    var mOut2=_dMaintLog?(_dMaintLog.mileage_end||'–'):'–';
+    var dist=(mOut2!=='–'&&mIn2!=='–')?(Number(mOut2)-Number(mIn2))+' กม.':'–';
+    html+='<div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:16px;margin-bottom:16px;">'
+      +'<div style="font-size:13px;font-weight:900;color:#34d399;margin-bottom:12px;"><i class="fas fa-check-circle" style="margin-right:6px;"></i>เสร็จสิ้น</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">'
+      +'<div style="background:#1e293b;border-radius:10px;padding:12px;text-align:center;">'
+      +'<div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px;">ไมล์ขาเข้า</div>'
+      +'<div style="font-size:16px;font-weight:900;color:#fbbf24;">'+mIn2+'</div></div>'
+      +'<div style="background:#1e293b;border-radius:10px;padding:12px;text-align:center;">'
+      +'<div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px;">ไมล์ขาออก</div>'
+      +'<div style="font-size:16px;font-weight:900;color:#fbbf24;">'+mOut2+'</div></div>'
+      +'</div>'
+      +'<div style="font-size:13px;color:#64748b;text-align:center;margin-bottom:12px;">ระยะทางรวม: <b style="color:#94a3b8;">'+dist+'</b></div>'
+      +(v0&&v0.photo_url?'<div style="margin-bottom:8px;"><div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:4px;">รูปก่อนเข้า</div><img src="'+v0.photo_url+'" style="width:100%;border-radius:8px;max-height:140px;object-fit:cover;"></div>':'')
+      +(v1&&v1.photo_url?'<div><div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:4px;">รูปใบเสร็จ/หลังซ่อม</div><img src="'+v1.photo_url+'" style="width:100%;border-radius:8px;max-height:140px;object-fit:cover;"></div>':'')
+      +'</div>'
+      +'<button onclick="drvCloseMaint()" style="width:100%;background:#1e3a8a;border:none;border-radius:14px;padding:16px;color:#93c5fd;font-weight:900;font-size:16px;cursor:pointer;">← กลับหน้าหลัก</button>';
+  }
+
+  body.innerHTML=html;
+}
+
+window.drvMaintPhotoSel=function(input){
+  var file=input.files&&input.files[0];
+  if(!file)return;
+  _dMaintPhotoFile=file;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _dMaintPhotoPreview=e.target.result;
+    var prev=document.getElementById('dm-photo-drop-preview')||document.getElementById('dm-photo-pickup-preview');
+    if(prev) prev.innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;">';
+  };
+  reader.readAsDataURL(file);
+};
+
+window.drvMaintDrop=async function(){
+  var mileage=Number(document.getElementById('dm-mileage-in')?.value||0);
+  if(!mileage){drvShowToast('กรุณากรอกเลขไมล์',true);return;}
+  var btn=document.querySelector('#drv-maint-body button:last-child');
+  if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
+  try{
+    // บันทึก trip_log
+    var now=new Date().toISOString();
+    var pos=await new Promise(function(res){navigator.geolocation?navigator.geolocation.getCurrentPosition(function(p){res(p.coords);}):res(null);}).catch(function(){return null;});
+    var logData={plan_id:_dMaintPlan.plan_id,driver_username:_dSess.username,
+      status:'at_service',mileage_start:mileage,started_at:now,
+      lat_start:pos?pos.latitude:null,lng_start:pos?pos.longitude:null,acc_start:pos?Math.round(pos.accuracy):null};
+    var {error:le}=await window._sb.from('trip_logs').upsert(logData,{onConflict:'plan_id'});
+    if(le)throw le;
+    // อัพโหลดรูป (optional)
+    var photoUrl=null;
+    if(_dMaintPhotoFile){
+      var path=_dMaintPlan.plan_id+'/maint_drop_'+Date.now()+'.jpg';
+      var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dMaintPhotoFile,{contentType:'image/jpeg',upsert:true});
+      if(!ue) photoUrl=window._sb.storage.from('delivery-photos').getPublicUrl(path).data.publicUrl;
+    }
+    // บันทึก shop_visit seq=0 (ส่งรถ)
+    await window._sb.from('shop_visits').upsert({
+      plan_id:_dMaintPlan.plan_id,shop_seq:0,
+      shop_name:(_dMaintPlan.shops[0]?.shopName)||'ศูนย์ซ่อม',
+      mileage_arrival:mileage,arrived_at:now,
+      lat_arrival:pos?pos.latitude:null,lng_arrival:pos?pos.longitude:null,
+      acc_arrival:pos?Math.round(pos.accuracy):null,
+      photo_url:photoUrl,departed_at:now
+    },{onConflict:'plan_id,shop_seq'});
+    // อัพเดต plan status
+    await window._sb.from('logistic_plans').update({status:'in_progress'}).eq('plan_id',_dMaintPlan.plan_id);
+    _dMaintLog={...(logData),mileage_start:mileage};
+    _dMaintVisits[0]={shop_seq:0,arrived_at:now,photo_url:photoUrl,mileage_arrival:mileage};
+    _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
+    _dMaintRender();
+  }catch(e){drvShowToast('❌ '+e.message,true);if(btn){btn.disabled=false;btn.textContent='ส่งรถเข้าศูนย์ซ่อม';}}
+};
+
+window.drvMaintPickup=async function(){
+  var mileage=Number(document.getElementById('dm-mileage-out')?.value||0);
+  if(!mileage){drvShowToast('กรุณากรอกเลขไมล์',true);return;}
+  var btn=document.querySelector('#drv-maint-body button:last-child');
+  if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
+  try{
+    var now=new Date().toISOString();
+    var pos=await new Promise(function(res){navigator.geolocation?navigator.geolocation.getCurrentPosition(function(p){res(p.coords);}):res(null);}).catch(function(){return null;});
+    // อัพโหลดรูปใบเสร็จ
+    var photoUrl=null;
+    if(_dMaintPhotoFile){
+      var path=_dMaintPlan.plan_id+'/maint_pickup_'+Date.now()+'.jpg';
+      var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dMaintPhotoFile,{contentType:'image/jpeg',upsert:true});
+      if(!ue) photoUrl=window._sb.storage.from('delivery-photos').getPublicUrl(path).data.publicUrl;
+    }
+    // shop_visit seq=1 (รับรถกลับ)
+    await window._sb.from('shop_visits').upsert({
+      plan_id:_dMaintPlan.plan_id,shop_seq:1,
+      shop_name:'รับรถกลับ',
+      mileage_arrival:mileage,arrived_at:now,departed_at:now,
+      lat_arrival:pos?pos.latitude:null,lng_arrival:pos?pos.longitude:null,
+      acc_arrival:pos?Math.round(pos.accuracy):null,
+      photo_url:photoUrl
+    },{onConflict:'plan_id,shop_seq'});
+    // อัพเดต trip_log
+    await window._sb.from('trip_logs').update({status:'completed',mileage_end:mileage,completed_at:now,
+      lat_end:pos?pos.latitude:null,lng_end:pos?pos.longitude:null,acc_end:pos?Math.round(pos.accuracy):null})
+      .eq('plan_id',_dMaintPlan.plan_id);
+    await window._sb.from('logistic_plans').update({status:'completed'}).eq('plan_id',_dMaintPlan.plan_id);
+    _dMaintLog={..._dMaintLog,status:'completed',mileage_end:mileage};
+    _dMaintVisits[1]={shop_seq:1,arrived_at:now,photo_url:photoUrl,mileage_arrival:mileage};
+    _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
+    drvShowToast('✅ บันทึกเสร็จสิ้น',false,3000);
+    _dMaintRender();
+  }catch(e){drvShowToast('❌ '+e.message,true);if(btn){btn.disabled=false;btn.textContent='รับรถกลับแล้ว — เสร็จสิ้น';}}
 };
 
 async function drvLoadTripState(planId){
