@@ -8737,19 +8737,21 @@ function updateKpiWHToSheet(dataJson) {
   var lastRow  = sheet.getLastRow();
   var dateVals = sheet.getRange(1, 1, lastRow, 1).getValues();
 
-  var thaiM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  function toThaiDate(iso) {
-    var p = iso.split('-');
-    return parseInt(p[2]) + '-' + thaiM[parseInt(p[1])-1] + '-' + p[0];
-  }
-
-  // สร้าง map: thai date string → row number
+  // สร้าง map: yyyy-MM-dd → row number (รองรับทั้ง Date object และ string)
   var dateMap = {};
   for (var i = 0; i < dateVals.length; i++) {
     var cell = dateVals[i][0];
     if (!cell) continue;
-    var str = cell.toString().trim();
-    dateMap[str] = i + 1;
+    var iso;
+    if (cell instanceof Date) {
+      iso = Utilities.formatDate(cell, 'GMT+7', 'yyyy-MM-dd');
+    } else {
+      // พยายาม parse จาก string เช่น "1-มิ.ย.-2026"
+      var d = parseDateValue(cell.toString().trim());
+      if (!d) continue;
+      iso = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+    }
+    dateMap[iso] = i + 1;
   }
 
   var _pct = function(v) { return (v != null && v !== '') ? v / 100 : ''; };
@@ -8757,8 +8759,7 @@ function updateKpiWHToSheet(dataJson) {
   var updated = 0, skipped = 0;
 
   data.forEach(function(row) {
-    var tdate = toThaiDate(row.date);
-    var ri = dateMap[tdate];
+    var ri = dateMap[row.date];
     if (!ri) { skipped++; return; }
     sheet.getRange(ri, BL, 1, 9).setValues([[
       _pct(row.prdKPIFG),    _pct(row.prdKPISEMI),
