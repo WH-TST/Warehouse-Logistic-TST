@@ -27393,6 +27393,19 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             </td>`;
         };
 
+        // ตรวจว่ามีค่า auto ใหม่ที่ต่างจาก saved หรือ saved เป็น null แต่ auto มีค่า
+        const hasNewAutoVal = (sv, av) => av != null && (sv == null || Math.abs((sv||0) - (av||0)) > 0.05);
+        const autoLoad   = calcLoadScoreKPI(auto);
+        const autoDamage = calcDamageScoreKPI(auto);
+        const hasUpdate = isSaved && (
+            hasNewAutoVal(saved.loadScore,      autoLoad)   ||
+            hasNewAutoVal(saved.damageScore,    autoDamage) ||
+            hasNewAutoVal(saved.checkerFGPct,   auto.checkerFGPct)   ||
+            hasNewAutoVal(saved.checkerSEMIPct, auto.checkerSEMIPct) ||
+            hasNewAutoVal(saved.finalAdjFG,     auto.finalAdjFGPct)  ||
+            hasNewAutoVal(saved.finalAdjSEMI,   auto.finalAdjSEMIPct)
+        );
+
         // ถ้าบันทึกแล้ว ใช้ค่า saved ก่อน fallback ไป auto
         const disp = isSaved ? {
             checkerFGPct:   saved.checkerFGPct   ?? auto.checkerFGPct,
@@ -27429,16 +27442,23 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             ${autoCell(disp.prdKPIFG)}
             ${autoCell(disp.prdKPISEMI)}
             <td class="px-4 py-2 text-center">
-                ${isSaved
+                ${!isSaved
                     ? `<button id="btn-kpi-save-${isoDate}"
-                            onclick="openKpiWHEditModal('${isoDate}')"
-                            class="bg-slate-600 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
-                            <i class="fas fa-edit"></i> แก้ไข
-                        </button>`
-                    : `<button id="btn-kpi-save-${isoDate}"
                             onclick="saveKpiWHRow('${isoDate}')"
                             class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
                             <i class="fas fa-save"></i> บันทึก
+                        </button>`
+                    : hasUpdate
+                    ? `<button id="btn-kpi-save-${isoDate}"
+                            onclick="saveKpiWHRow('${isoDate}')"
+                            title="มีค่าใหม่จากระบบ กดเพื่ออัปเดต"
+                            class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
+                            <i class="fas fa-sync-alt"></i> บันทึก
+                        </button>`
+                    : `<button id="btn-kpi-save-${isoDate}"
+                            onclick="openKpiWHEditModal('${isoDate}')"
+                            class="bg-slate-600 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
+                            <i class="fas fa-edit"></i> แก้ไข
                         </button>`
                 }
             </td>
