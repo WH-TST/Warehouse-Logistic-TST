@@ -27108,8 +27108,8 @@ window.loadKpiWH = function loadKpiWH() {
         // 1. kpi_inventory → FG/SEMI Checker, Prod KPI, Final Adj
         window._sb.from('kpi_inventory').select('cycle_date,type,kpi_checker,kpi_prd,kpi_final')
             .gte('cycle_date', startStr).lte('cycle_date', endStr),
-        // 2. wh_activity_log → ทุก record (ใช้คำนวณ Load/Damage Score)
-        window._sb.from('wh_activity_log').select('type,date,min_per_item,weight_per_unit,truck_plate').limit(50000),
+        // 2. wh_activity_log → เฉพาะช่วงวันที่เลือก (ใช้คำนวณ Load/Damage Score)
+        window._sb.from('wh_activity_log').select('type,date,min_per_item,weight_per_unit,truck_plate').gte('date', startStr).lte('date', endStr),
         // 3. kpi_wh_log → ข้อมูลที่เคยบันทึกไว้
         window._sb.from('kpi_wh_log').select('*').gte('cycle_date', startStr).lte('cycle_date', endStr),
         // 4. production_plan_cache → planMinutes per date
