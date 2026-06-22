@@ -41,6 +41,7 @@ function _handleApiPost(e) {
       'getTagSystemStartDate','setTagSystemStartDate',
       'getDeliveryTypeData',
       'loCreateOrder','loGetPendingOrders','loGetOrderDetail',
+      'updateKpiWHToSheet',
     ];
 
     if (allowedActions.indexOf(action) === -1) {
