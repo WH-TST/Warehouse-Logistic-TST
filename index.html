@@ -7138,15 +7138,34 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 
   <!-- Inspection Status Panel -->
   <div class="rounded-2xl p-4" style="background:#fff;border:1px solid #e2e8f0;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:900;color:#1e293b;display:flex;align-items:center;gap:8px;">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:900;color:#1e293b;display:flex;align-items:center;gap:8px;flex:1;min-width:160px;">
         <i class="fas fa-clipboard-check" style="color:#059669;"></i> ตรวจสภาพรถประจำวัน
-        <span id="dm-inspect-date" style="font-size:11px;font-weight:700;color:#94a3b8;"></span>
       </div>
-      <button onclick="dmLoadInspections()" style="background:#f1f5f9;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#475569;cursor:pointer;"><i class="fas fa-sync-alt"></i></button>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <input type="date" id="dm-inspect-date-pick" onchange="dmLoadInspections()" style="border:1px solid #e2e8f0;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;color:#1e293b;outline:none;background:#f8fafc;">
+        <select id="dm-inspect-plate-filter" onchange="dmLoadInspections()" style="border:1px solid #e2e8f0;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;color:#1e293b;outline:none;background:#f8fafc;">
+          <option value="">ทุกคัน</option>
+        </select>
+        <button onclick="dmLoadInspections()" style="background:#f1f5f9;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#475569;cursor:pointer;"><i class="fas fa-sync-alt"></i></button>
+      </div>
     </div>
-    <div id="dm-inspect-list" style="display:flex;flex-wrap:wrap;gap:8px;">
-      <span style="font-size:12px;color:#94a3b8;">กำลังโหลด...</span>
+    <div id="dm-inspect-list" style="display:flex;flex-direction:column;gap:0;">
+      <span style="font-size:12px;color:#94a3b8;padding:8px 0;">กำลังโหลด...</span>
+    </div>
+  </div>
+
+  <!-- Inspection Detail Modal -->
+  <div id="dm-inspect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;overflow-y:auto;padding:24px 16px;">
+    <div style="background:#fff;border-radius:20px;max-width:560px;margin:0 auto;overflow:hidden;">
+      <div style="background:#0f172a;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div id="dm-imd-name" style="font-size:16px;font-weight:900;color:#fff;"></div>
+          <div id="dm-imd-sub" style="font-size:11px;color:#64748b;margin-top:2px;"></div>
+        </div>
+        <button onclick="document.getElementById('dm-inspect-modal').style.display='none'" style="width:36px;height:36px;border-radius:10px;background:#1e293b;border:none;color:#94a3b8;cursor:pointer;font-size:18px;">✕</button>
+      </div>
+      <div id="dm-imd-body" style="padding:16px 20px;max-height:70vh;overflow-y:auto;"></div>
     </div>
   </div>
 
@@ -32780,51 +32799,97 @@ window.dmInit=async function(){
 };
 
 window.dmLoadInspections=async function(){
-  var today=new Date().toISOString().split('T')[0];
   var el=document.getElementById('dm-inspect-list');
-  var dateEl=document.getElementById('dm-inspect-date');
   if(!el)return;
-  if(dateEl) dateEl.textContent=today;
-  el.innerHTML='<span style="font-size:12px;color:#94a3b8;">กำลังโหลด...</span>';
+  var datePick=document.getElementById('dm-inspect-date-pick');
+  var today=new Date().toISOString().split('T')[0];
+  if(datePick&&!datePick.value) datePick.value=today;
+  var dateVal=(datePick&&datePick.value)||today;
+  var plateFilter=(document.getElementById('dm-inspect-plate-filter')||{}).value||'';
+  el.innerHTML='<span style="font-size:12px;color:#94a3b8;padding:8px 0;">กำลังโหลด...</span>';
 
-  // โหลด drivers ที่มีแผนวันนี้
   var {data:plans}=await window._sb.from('logistic_plans')
-    .select('driver_id,driver_transport,truck_plate').eq('plan_date',today).eq('is_child',false);
-  // โหลด inspections วันนี้
-  var {data:inspects}=await window._sb.from('truck_inspections').select('*').eq('inspect_date',today);
+    .select('driver_id,driver_transport,truck_plate').eq('plan_date',dateVal).eq('is_child',false);
+  var {data:inspects}=await window._sb.from('truck_inspections').select('*').eq('inspect_date',dateVal);
   var inspectByPlate={};
   (inspects||[]).forEach(function(r){inspectByPlate[r.truck_plate]=r;});
 
-  // รวม drivers จากแผน (dedup)
   var seen=new Set();
   var drivers=[];
   (plans||[]).forEach(function(p){
-    var key=(p.driver_id||p.driver_transport||'')+'|'+(p.truck_plate||'');
-    if(seen.has(key))return;
-    seen.add(key);
-    drivers.push({name:p.driver_transport||p.driver_id||'–',plate:p.truck_plate||''});
+    if(!p.truck_plate||seen.has(p.truck_plate))return;
+    seen.add(p.truck_plate);
+    drivers.push({name:p.driver_transport||p.driver_id||'–',plate:p.truck_plate});
+  });
+  (inspects||[]).forEach(function(r){
+    if(!r.truck_plate||seen.has(r.truck_plate))return;
+    seen.add(r.truck_plate);
+    drivers.push({name:r.driver_name||'–',plate:r.truck_plate});
   });
 
+  var plateSel=document.getElementById('dm-inspect-plate-filter');
+  if(plateSel){
+    var plates=Array.from(seen).filter(Boolean).sort();
+    plateSel.innerHTML='<option value="">ทุกคัน</option>'+plates.map(function(p){return'<option value="'+p+'"'+(p===plateFilter?' selected':'')+'>'+p+'</option>';}).join('');
+  }
+
+  if(plateFilter) drivers=drivers.filter(function(d){return d.plate===plateFilter;});
   if(!drivers.length){
-    el.innerHTML='<span style="font-size:12px;color:#94a3b8;">ไม่มีคนขับวันนี้</span>';
+    el.innerHTML='<span style="font-size:12px;color:#94a3b8;padding:8px 0;">ไม่มีข้อมูลวันที่นี้</span>';
     return;
   }
 
   el.innerHTML=drivers.map(function(d){
     var ins=inspectByPlate[d.plate];
-    var hasIssue=ins&&ins.overall==='issue';
+    var isIssue=ins&&ins.overall==='issue';
     var checked=!!ins;
-    var bg=checked?(hasIssue?'#fef2f2':'#f0fdf4'):'#fafafa';
-    var border=checked?(hasIssue?'#fca5a5':'#86efac'):'#e2e8f0';
-    var icon=checked?(hasIssue?'⚠️':'✅'):'⏳';
-    var statusText=checked?(hasIssue?'<span style="color:#ef4444;font-size:10px;font-weight:700;">พบปัญหา '+(ins.items||[]).filter(function(it){return it.status==='issue';}).length+' รายการ</span>':'<span style="color:#16a34a;font-size:10px;font-weight:700;">ปกติทุกรายการ</span>'):'<span style="color:#f59e0b;font-size:10px;font-weight:700;">ยังไม่ตรวจ</span>';
-    return '<div style="background:'+bg+';border:1.5px solid '+border+';border-radius:12px;padding:10px 12px;min-width:140px;flex:1;">'
-      +'<div style="font-size:13px;font-weight:900;color:#1e293b;margin-bottom:2px;">'+icon+' '+dmEsc(d.name)+'</div>'
-      +'<div style="font-size:11px;color:#64748b;">🚛 '+dmEsc(d.plate)+'</div>'
-      +'<div style="margin-top:4px;">'+statusText+'</div>'
-      +(ins&&ins.notes?'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">📝 '+dmEsc(ins.notes)+'</div>':'')
+    var initials=d.name.replace(/^นาย|^นางสาว|^น\.ส\.|^นาง/,'').trim().charAt(0)||'?';
+    var avatarBg=checked?(isIssue?'#FCEBEB':'#EAF3DE'):'#FAEEDA';
+    var avatarColor=checked?(isIssue?'#791F1F':'#27500A'):'#633806';
+    var badge=checked
+      ?(isIssue?'<span style="background:#FCEBEB;color:#791F1F;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">⚠️ พบปัญหา '+(ins.items||[]).filter(function(it){return it.status==='issue';}).length+' รายการ</span>'
+        :'<span style="background:#EAF3DE;color:#27500A;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">✅ ปกติทุกรายการ</span>')
+      :'<span style="background:#FAEEDA;color:#633806;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">⏳ ยังไม่ตรวจ</span>';
+    var time=ins&&ins.created_at?' · '+new Date(ins.created_at).toLocaleTimeString('th',{hour:'2-digit',minute:'2-digit'}):'';
+    var clickable=checked?'style="cursor:pointer;" onclick="dmShowInspectDetail(\''+d.plate+'\',\''+dateVal+'\')" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'"':'';
+    return '<div '+clickable+' style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:.5px solid #f1f5f9;">'
+      +'<div style="width:38px;height:38px;border-radius:50%;background:'+avatarBg+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:'+avatarColor+';flex-shrink:0;">'+dmEsc(initials)+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+dmEsc(d.name)+'</div>'
+      +'<div style="font-size:11px;color:#64748b;">🚛 '+dmEsc(d.plate)+time+'</div></div>'
+      +badge
+      +(checked?'<i class="fas fa-chevron-right" style="font-size:11px;color:#cbd5e1;flex-shrink:0;margin-left:4px;"></i>':'')
       +'</div>';
   }).join('');
+};
+
+window.dmShowInspectDetail=async function(plate,dateVal){
+  var modal=document.getElementById('dm-inspect-modal');
+  var body=document.getElementById('dm-imd-body');
+  if(!modal||!body)return;
+  body.innerHTML='<div style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin" style="font-size:24px;color:#475569;"></i></div>';
+  modal.style.display='block';
+  var {data:ins}=await window._sb.from('truck_inspections').select('*')
+    .eq('inspect_date',dateVal).eq('truck_plate',plate).maybeSingle();
+  if(!ins){modal.style.display='none';return;}
+  document.getElementById('dm-imd-name').textContent=ins.driver_name||'–';
+  document.getElementById('dm-imd-sub').textContent=plate+' · '+dateVal+(ins.created_at?' · '+new Date(ins.created_at).toLocaleTimeString('th',{hour:'2-digit',minute:'2-digit'}):'');
+  var issueCount=(ins.items||[]).filter(function(it){return it.status==='issue';}).length;
+  var overallBadge=issueCount>0
+    ?'<span style="background:#FCEBEB;color:#791F1F;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;">⚠️ พบปัญหา '+issueCount+' รายการ</span>'
+    :'<span style="background:#EAF3DE;color:#27500A;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;">✅ ปกติทุกรายการ</span>';
+  var itemsHtml=(ins.items||[]).map(function(it){
+    var bad=it.status==='issue';
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:.5px solid #f1f5f9;">'
+      +'<span style="width:20px;font-size:11px;color:#94a3b8;flex-shrink:0;margin-top:2px;">'+it.id+'.</span>'
+      +'<div style="flex:1;"><div style="font-size:13px;font-weight:700;color:#1e293b;">'+dmEsc(it.name||'')+'</div>'
+      +(bad&&it.symptom?'<div style="font-size:11px;color:#dc2626;margin-top:3px;background:#fef2f2;padding:3px 8px;border-radius:6px;">'+dmEsc(it.symptom)+'</div>':'')
+      +'</div>'
+      +(it.photo_url?'<a href="'+it.photo_url+'" target="_blank" style="flex-shrink:0;"><img src="'+it.photo_url+'" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;" onerror="this.style.display=\'none\'"></a>':'')
+      +'<span style="flex-shrink:0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;'+(bad?'background:#FCEBEB;color:#791F1F':'background:#EAF3DE;color:#27500A')+'">'+(bad?'พบอาการ':'ปกติ')+'</span>'
+      +'</div>';
+  }).join('');
+  body.innerHTML='<div style="margin-bottom:12px;">'+overallBadge+'</div>'+itemsHtml
+    +(ins.notes?'<div style="margin-top:12px;background:#f8fafc;border-radius:10px;padding:10px 12px;font-size:12px;color:#475569;"><i class="fas fa-sticky-note" style="margin-right:6px;"></i>'+dmEsc(ins.notes)+'</div>':'');
 };
 
 // ─── Admin Driver Monitor — Trip-Screen Replication (matches Driver-App-TST) ───
