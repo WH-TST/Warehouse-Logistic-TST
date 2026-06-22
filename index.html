@@ -27886,18 +27886,37 @@ window.kpiOnDateChange = function(dateVal) {
     }
     const loading = document.getElementById('kpi-date-loading');
     loading?.classList.remove('hidden');
-    google.script.run
-        .withSuccessHandler(res => {
-            loading?.classList.add('hidden');
-            if (res && res.success && res.data) {
-                document.getElementById('kpi-edit-banner')?.classList.remove('hidden');
-                kpiLoadExistingData(res.data);
-            } else {
-                document.getElementById('kpi-edit-banner')?.classList.add('hidden');
-            }
-        })
-        .withFailureHandler(() => { loading?.classList.add('hidden'); })
-        .getInventoryKPIByDate(dateVal);
+    window._sb.from('kpi_inventory').select('*').eq('cycle_date', dateVal).then(function(res) {
+        loading?.classList.add('hidden');
+        var rows = res.data || [];
+        if (rows.length === 0) {
+            document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+            return;
+        }
+        var fg   = rows.find(function(r){ return r.type === 'FG'; });
+        var semi = rows.find(function(r){ return r.type === 'SEMI'; });
+        var mapped = {};
+        if (fg) mapped.fg = {
+            totalSKU: fg.total_sku, totalPCS: fg.total_lines,
+            prodSKU: fg.prd_total_sku, prodPCS: fg.prd_total_lines,
+            checkerErrSKU: fg.checker_error_sku, checkerErrPCS: fg.checker_error_lines,
+            prodErrSKU: fg.prd_error_sku, prodErrPCS: fg.prd_error_lines,
+            weightSKU: fg.weight_sku, weightPCS: fg.weight_pcs
+        };
+        if (semi) mapped.semi = {
+            totalSKU: semi.total_sku, totalBand: semi.total_lines,
+            prodSKU: semi.prd_total_sku, prodBand: semi.prd_total_lines,
+            checkerErrSKU: semi.checker_error_sku, checkerErrBand: semi.checker_error_lines,
+            prodErrSKU: semi.prd_error_sku, prodErrBand: semi.prd_error_lines,
+            weightSKU: semi.weight_sku, weightPCS: semi.weight_pcs
+        };
+        if (fg || semi) {
+            document.getElementById('kpi-edit-banner')?.classList.remove('hidden');
+            kpiLoadExistingData(mapped);
+        } else {
+            document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+        }
+    });
 };
 
 // ── Load existing data into both forms ────────────────────────
