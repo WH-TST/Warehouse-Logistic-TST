@@ -33584,7 +33584,7 @@ window.daLoad=async function(){
     var d=driverMap[key];
     d.plans.push(p);
     d.trips++;
-    if(p.status==='completed') d.doneTrips++;
+    if(p.status==='completed'||p.status==='success') d.doneTrips++;
     else if(p.status==='failed'||p.status==='cancelled') d.failedShops++;
     if(p.truck_plate){d.trucks[p.truck_plate]=(d.trucks[p.truck_plate]||0)+1;}
     var log=logMap[p.plan_id];
@@ -33729,8 +33729,10 @@ window.daShowDetail=function(driverKey,metric){
   function fmtN(n,d){if(!n&&n!==0)return'-';return Number(n).toFixed(d||0).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
   function fmtDur(s,e){if(!s||!e)return'-';var sec=(new Date(e)-new Date(s))/1000;return Math.floor(sec/3600)+'ชม. '+Math.floor((sec%3600)/60)+'น.';}
   function statusBadge(s){
-    if(s==='completed')return'<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">สำเร็จ</span>';
+    if(s==='completed'||s==='success')return'<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">สำเร็จ</span>';
     if(s==='failed'||s==='cancelled')return'<span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">ไม่สำเร็จ</span>';
+    if(s==='inprogress'||s==='in_progress')return'<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">กำลังส่ง</span>';
+    if(s==='planned')return'<span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">รอดำเนินการ</span>';
     return'<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">'+s+'</span>';
   }
   function tbl(heads,rows){
