@@ -33552,10 +33552,12 @@ window.daLoad=async function(){
     .select('plan_id,driver_id,driver_transport,truck_plate,plan_date,status,job_type')
     .gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false);
   if(driverSel) planQ=planQ.or('driver_id.eq.'+driverSel+',driver_transport.ilike.%'+(_daDrivers.find(function(d){return d.username===driverSel;})||{}).driver_name+'%');
-  var [{data:plans},{data:logs},{data:inspects}]=await Promise.all([
+  var [{data:plans},{data:logs},{data:inspects},{data:incidents},{data:maintPlans}]=await Promise.all([
     planQ,
     window._sb.from('trip_logs').select('*').gte('started_at',dateFrom+'T00:00:00').lte('started_at',dateTo+'T23:59:59'),
-    window._sb.from('truck_inspections').select('*').gte('inspect_date',dateFrom).lte('inspect_date',dateTo)
+    window._sb.from('truck_inspections').select('*').gte('inspect_date',dateFrom).lte('inspect_date',dateTo),
+    window._sb.from('driver_incidents').select('*').gte('incident_date',dateFrom).lte('incident_date',dateTo).then(function(r){return r;},function(){return{data:[]};}),
+    window._sb.from('logistic_plans').select('plan_id,driver_id,driver_transport,status').eq('job_type','maintenance_pm').gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false)
   ]);
 
   // ── จัดกลุ่มตามคนขับ ─────────────────────────────────
@@ -33564,11 +33566,12 @@ window.daLoad=async function(){
   (plans||[]).forEach(function(p){
     var key=p.driver_id||p.driver_transport||'–';
     var dName=(_daDrivers.find(function(d){return d.driver_id===p.driver_id;})||{}).driver_name||p.driver_transport||key;
-    if(!driverMap[key]) driverMap[key]={name:dName,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0};
+    if(!driverMap[key]) driverMap[key]={name:dName,driverKey:key,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0,failedShops:0,maintTrips:0,maintCost:0};
     var d=driverMap[key];
     d.plans.push(p);
     d.trips++;
     if(p.status==='completed') d.doneTrips++;
+    else if(p.status==='failed'||p.status==='cancelled') d.failedShops++;
     if(p.truck_plate){d.trucks[p.truck_plate]=(d.trucks[p.truck_plate]||0)+1;}
     var log=logMap[p.plan_id];
     if(log){
@@ -33578,6 +33581,27 @@ window.daLoad=async function(){
         d.totalTimeSec+=(new Date(log.completed_at)-new Date(log.started_at))/1000;
       }
     }
+  });
+
+  // ── maintenance trips ─────────────────────────────────
+  var maintLogMap={};(logs||[]).forEach(function(l){maintLogMap[l.plan_id]=l;});
+  (maintPlans||[]).forEach(function(p){
+    var key=p.driver_id||p.driver_transport||'–';
+    if(!driverMap[key]) return;
+    var d=driverMap[key];
+    d.maintTrips++;
+    var ml=maintLogMap[p.plan_id];
+    if(ml&&ml.repair_cost) d.maintCost+=Number(ml.repair_cost)||0;
+  });
+
+  // ── incidents ──────────────────────────────────────────
+  var incidentMap={};
+  (incidents||[]).forEach(function(inc){
+    var key=inc.driver_id||inc.driver_username||'–';
+    if(!incidentMap[key]) incidentMap[key]={tickets:0,fines:0,accidents:0,damage:0};
+    var m=incidentMap[key];
+    if(inc.incident_type==='ticket'){m.tickets++;m.fines+=Number(inc.amount)||0;}
+    else if(inc.incident_type==='accident'){m.accidents++;m.damage+=Number(inc.amount)||0;}
   });
 
   // ── inspection ─────────────────────────────────────────
@@ -33610,6 +33634,7 @@ window.daLoad=async function(){
       return dr&&(dr.driver_name===d.name||dr.driver_id===(d.plans[0]||{}).driver_id);
     });
     var ins=inspectMap[iKey||'']||{total:0,ok:0,issue:0};
+    var inc=incidentMap[d.driverKey]||{tickets:0,fines:0,accidents:0,damage:0};
     var avgSpeed=d.totalTimeSec>0&&d.totalMileage>0?(d.totalMileage/(d.totalTimeSec/3600)).toFixed(1):'-';
     var truckList=Object.entries(d.trucks).sort(function(a,b){return b[1]-a[1];});
     var truckCount=truckList.length;
@@ -33632,8 +33657,15 @@ window.daLoad=async function(){
         {icon:'fa-gauge-high',color:'#059669',label:'ความเร็วเฉลี่ย',val:avgSpeed!=='-'?avgSpeed+' กม/ชม':'-'},
         {icon:'fa-check-circle',color:'#16a34a',label:'เที่ยวสำเร็จ',val:d.doneTrips+'/'+d.trips},
         {icon:'fa-truck',color:'#d97706',label:'จำนวนรถที่ขับ',val:truckCount+' คัน'},
-        {icon:'fa-clipboard-check',color:'#be185d',label:'ตรวจสภาพรถ',val:ins.total+'ครั้ง'},
-        {icon:'fa-triangle-exclamation',color:'#dc2626',label:'พบปัญหา',val:ins.issue?ins.issue+' ครั้ง':'ปกติ'}
+        {icon:'fa-clipboard-check',color:'#be185d',label:'ตรวจสภาพรถ',val:ins.total?ins.total+'ครั้ง':'-'},
+        {icon:'fa-triangle-exclamation',color:'#dc2626',label:'พบปัญหา (ตรวจ)',val:ins.issue?ins.issue+' ครั้ง':'ปกติ'},
+        {icon:'fa-store-slash',color:'#b45309',label:'ไม่สำเร็จ (ร้าน)',val:d.failedShops?d.failedShops+' ร้าน':'-'},
+        {icon:'fa-file-invoice',color:'#7c3aed',label:'ใบสั่ง (ใบ)',val:inc.tickets?inc.tickets+' ใบ':'-'},
+        {icon:'fa-baht-sign',color:'#9d174d',label:'ค่าปรับ (บาท)',val:inc.fines?fmt(inc.fines)+' ฿':'-'},
+        {icon:'fa-car-burst',color:'#dc2626',label:'อุบัติเหตุ (ครั้ง)',val:inc.accidents?inc.accidents+' ครั้ง':'-'},
+        {icon:'fa-hand-holding-dollar',color:'#b91c1c',label:'ค่าเสียหาย (บาท)',val:inc.damage?fmt(inc.damage)+' ฿':'-'},
+        {icon:'fa-screwdriver-wrench',color:'#c2410c',label:'ซ่อมรถ (ครั้ง)',val:d.maintTrips?d.maintTrips+' ครั้ง':'-'},
+        {icon:'fa-receipt',color:'#92400e',label:'ค่าซ่อม (บาท)',val:d.maintCost?fmt(d.maintCost)+' ฿':'-'}
       ].map(function(m){
         return '<div style="background:#fff;padding:14px 16px;">'
           +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
@@ -33652,11 +33684,16 @@ window.daLoad=async function(){
           +'🚛 '+t[0]+' <span style="color:#2563eb;">×'+t[1]+'</span></div>';
       }).join('')
       +'</div></div>'
-      // inspection detail
-      +(ins.total?'<div style="padding:10px 20px 14px;border-top:1px solid #f1f5f9;display:flex;gap:8px;flex-wrap:wrap;">'
-        +'<span style="background:#dcfce7;color:#15803d;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">✔ ปกติ '+ins.ok+' ครั้ง</span>'
-        +(ins.issue?'<span style="background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">⚠ พบปัญหา '+ins.issue+' ครั้ง</span>':'')
-        +'</div>':'')
+      // inspection + safety badges
+      +'<div style="padding:10px 20px 14px;border-top:1px solid #f1f5f9;display:flex;gap:8px;flex-wrap:wrap;">'
+      +(ins.total?'<span style="background:#dcfce7;color:#15803d;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">✔ ตรวจปกติ '+ins.ok+'</span>':'')
+      +(ins.issue?'<span style="background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">⚠ ตรวจพบปัญหา '+ins.issue+'</span>':'')
+      +(d.failedShops?'<span style="background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">🚫 ไม่สำเร็จ '+d.failedShops+' ร้าน</span>':'')
+      +(inc.tickets?'<span style="background:#ede9fe;color:#6d28d9;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">🗒 ใบสั่ง '+inc.tickets+' ใบ ('+fmt(inc.fines)+' ฿)</span>':'')
+      +(inc.accidents?'<span style="background:#fee2e2;color:#7f1d1d;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">💥 อุบัติเหตุ '+inc.accidents+' ครั้ง ('+fmt(inc.damage)+' ฿)</span>':'')
+      +(d.maintTrips?'<span style="background:#ffedd5;color:#9a3412;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">🔧 ซ่อม '+d.maintTrips+' ครั้ง'+(d.maintCost?' ('+fmt(d.maintCost)+' ฿)':'')+'</span>':'')
+      +(!ins.total&&!d.failedShops&&!inc.tickets&&!inc.accidents&&!d.maintTrips?'<span style="background:#f0fdf4;color:#15803d;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">✅ ไม่มีเหตุการณ์</span>':'')
+      +'</div>'
       +'</div>';
   }).join('');
 
