@@ -31656,8 +31656,17 @@ window.viewTripResult = async function(planId) {
       _recItems = orderedKeys.map(function(k){ return map[k]; }).map(function(s){
         var isQCwh = s.wh === 'QC';
         var mem   = memMap[s.sku+'|'+s.wh] || {};
-        // fallback: session ที่บันทึกโดยไม่ filter WH จะ key เป็น "sku|" → ใช้ได้ทุก WH แต่ apply เฉพาะแถว FG-BP
-        var saved = savedMap[s.sku+'|'+s.wh] || (s.wh === 'FG-BP' ? (savedMap[s.sku+'|'] || {}) : {});
+        // เลือก session ที่ใหม่กว่า (session_id สูงกว่า) ระหว่าง exact-wh กับ null-wh session
+        var savedExact = savedMap[s.sku+'|'+s.wh] || null;
+        var savedNull  = savedMap[s.sku+'|'] || null;
+        var saved;
+        if (!isQCwh && savedExact && savedNull) {
+          saved = (savedNull._sessId > savedExact._sessId) ? savedNull : savedExact;
+        } else if (!isQCwh && savedNull && !savedExact) {
+          saved = savedNull;
+        } else {
+          saved = savedExact || {};
+        }
         // QC row: holdPcs มาจาก Count Sheet ของ FG-BP หรือ FG-BB (แถวเดียวกัน)
         var holdMem = isQCwh
           ? (memMap[s.sku+'|FG-BP'] || memMap[s.sku+'|FG-BB'] || {})
