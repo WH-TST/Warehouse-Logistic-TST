@@ -32603,6 +32603,35 @@ window.viewTripResult = async function(planId) {
     </nav>
   </div>
 
+  <!-- ====== Vehicle Inspection Popup ====== -->
+  <div id="drv-inspect-overlay" style="display:none;position:absolute;inset:0;background:#0f172a;z-index:900;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="padding:16px 14px 100px;">
+      <!-- Header -->
+      <div style="text-align:center;margin-bottom:18px;">
+        <div style="font-size:22px;margin-bottom:4px;">🔍</div>
+        <div style="font-size:17px;font-weight:900;color:#fff;">ตรวจสภาพรถประจำวัน</div>
+        <div id="drv-inspect-subtitle" style="font-size:12px;color:#64748b;margin-top:3px;">–</div>
+        <div style="margin-top:8px;background:#1e3a8a;border-radius:10px;padding:7px 12px;font-size:11px;color:#93c5fd;font-weight:700;">
+          ⚠️ ต้องตรวจสภาพรถก่อนเริ่มงานทุกครั้ง
+        </div>
+      </div>
+
+      <!-- Checklist -->
+      <div id="drv-inspect-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+
+      <!-- Notes -->
+      <div style="margin-top:14px;">
+        <div style="font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:6px;">หมายเหตุเพิ่มเติม</div>
+        <textarea id="drv-inspect-notes" rows="2" placeholder="ระบุหมายเหตุ (ถ้ามี)" style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:10px 12px;color:#fff;font-size:13px;font-weight:600;outline:none;resize:none;box-sizing:border-box;"></textarea>
+      </div>
+
+      <!-- Save Button -->
+      <button onclick="drvInspectSave()" id="drv-inspect-save-btn" style="width:100%;margin-top:16px;background:#059669;border:none;border-radius:14px;padding:16px;color:#fff;font-weight:900;font-size:16px;cursor:pointer;">
+        บันทึกผลการตรวจ
+      </button>
+    </div>
+  </div>
+
   <!-- Trip screen (inside phone-wrap so it's constrained too) -->
   <div id="drv-trip-screen">
     <div style="background:#0d1b2a;border-bottom:1px solid rgba(255,255,255,.06);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
@@ -33394,6 +33423,136 @@ window.drvLoadPlan=async function(){
     document.getElementById('drv-ht').textContent='– ไม่มีแผนวันนี้ –';
   }
   drvHideL();drvRenderPlanCards(_dPlans);
+  // ตรวจสอบว่าต้องแสดง popup ตรวจสภาพรถไหม (เฉพาะเมื่อมีแผนวันนี้)
+  if(_dPlans.length) drvInspectCheck();
+};
+
+// ─── Vehicle Inspection ────────────────────────────────────────────────────
+var _DRV_INSPECT_ITEMS=[
+  'ระดับน้ำมันเครื่อง','ระดับน้ำมันเบรค','ระดับน้ำมันครัช','ระดับน้ำหม้อน้ำ',
+  'ระดับน้ำหม้อพักน้ำ','สภาพท่อน้ำบน','สภาพท่อน้ำล่าง','ระดับน้ำฉีดกระจก',
+  'ระดับน้ำกลั่น','ระดับน้ำมันเพาเวอร์','ความตึงของสายพานหน้าเครื่อง',
+  'ระบบไฟส่องสว่างทั้งคัน','สภาพกรองอากาศ','ระบบเครื่องปรับอากาศ',
+  'สภาพที่นั่งคนขับ','สภาพเบาะที่นั่งผู้โดยสาร','ความสะอาดภายใน',
+  'ความสะอาดนอกรถ','สภาพยาง และลมยางทั้งคัน','รอยตำหนิรอบตัวรถ'
+];
+var _dInspectPhotos={}; // {itemIndex: File}
+
+async function drvInspectCheck(){
+  var today=new Date().toISOString().split('T')[0];
+  var plate=(_dPlans[0]?.truck_plate)||'';
+  if(!plate)return;
+  var {data}=await window._sb.from('truck_inspections')
+    .select('id').eq('inspect_date',today).eq('truck_plate',plate).maybeSingle();
+  if(data)return; // มีบันทึกแล้ว ไม่ต้องแสดง
+  drvInspectShow(today,plate);
+}
+
+function drvInspectShow(date,plate){
+  _dInspectPhotos={};
+  var overlay=document.getElementById('drv-inspect-overlay');
+  var sub=document.getElementById('drv-inspect-subtitle');
+  var list=document.getElementById('drv-inspect-list');
+  var notes=document.getElementById('drv-inspect-notes');
+  if(!overlay||!list)return;
+  sub.textContent=plate+' · '+date;
+  notes.value='';
+
+  list.innerHTML=_DRV_INSPECT_ITEMS.map(function(name,i){
+    return '<div id="drv-inspect-item-'+i+'" style="background:#1e293b;border-radius:14px;padding:14px;">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
+      +'<div style="font-size:13px;font-weight:700;color:#e2e8f0;line-height:1.3;">'+(i+1)+'. '+name+'</div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0;">'
+      +'<button onclick="drvInspectSetStatus('+i+',\'ok\')" id="drv-ii-ok-'+i+'" style="padding:5px 12px;border-radius:20px;border:none;background:#059669;color:#fff;font-size:11px;font-weight:900;cursor:pointer;">ปกติ</button>'
+      +'<button onclick="drvInspectSetStatus('+i+',\'issue\')" id="drv-ii-iss-'+i+'" style="padding:5px 12px;border-radius:20px;border:1px solid #ef4444;background:transparent;color:#94a3b8;font-size:11px;font-weight:900;cursor:pointer;">พบอาการ</button>'
+      +'</div></div>'
+      +'<div id="drv-inspect-issue-'+i+'" style="display:none;margin-top:6px;">'
+      +'<input type="text" id="drv-inspect-sym-'+i+'" placeholder="ระบุอาการที่พบ..." style="width:100%;background:#0f172a;border:1px solid #ef4444;border-radius:10px;padding:8px 10px;color:#fff;font-size:12px;font-weight:600;outline:none;box-sizing:border-box;">'
+      +'</div>'
+      +'<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">'
+      +'<label style="display:flex;align-items:center;gap:6px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:11px;color:#94a3b8;font-weight:700;">'
+      +'<i class="fas fa-camera"></i> แนบรูป'
+      +'<input type="file" accept="image/*" capture="environment" style="display:none;" onchange="drvInspectSetPhoto('+i+',this)">'
+      +'</label>'
+      +'<span id="drv-inspect-photo-name-'+i+'" style="font-size:11px;color:#34d399;font-weight:700;"></span>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+
+  overlay.style.display='block';
+}
+
+window.drvInspectSetStatus=function(i,status){
+  var okBtn=document.getElementById('drv-ii-ok-'+i);
+  var issBtn=document.getElementById('drv-ii-iss-'+i);
+  var issueRow=document.getElementById('drv-inspect-issue-'+i);
+  var card=document.getElementById('drv-inspect-item-'+i);
+  if(status==='ok'){
+    okBtn.style.background='#059669';okBtn.style.color='#fff';okBtn.style.border='none';
+    issBtn.style.background='transparent';issBtn.style.color='#94a3b8';issBtn.style.border='1px solid #ef4444';
+    issueRow.style.display='none';
+    card.style.borderLeft='';
+  } else {
+    issBtn.style.background='#ef4444';issBtn.style.color='#fff';issBtn.style.border='none';
+    okBtn.style.background='transparent';okBtn.style.color='#94a3b8';okBtn.style.border='1px solid #334155';
+    issueRow.style.display='block';
+    card.style.borderLeft='3px solid #ef4444';
+  }
+  card.dataset.status=status;
+};
+
+window.drvInspectSetPhoto=function(i,input){
+  var file=input.files[0];if(!file)return;
+  _dInspectPhotos[i]=file;
+  var nameEl=document.getElementById('drv-inspect-photo-name-'+i);
+  if(nameEl)nameEl.textContent='✓ '+file.name.substring(0,20);
+};
+
+window.drvInspectSave=async function(){
+  var btn=document.getElementById('drv-inspect-save-btn');
+  btn.disabled=true;btn.textContent='กำลังบันทึก...';
+  var today=new Date().toISOString().split('T')[0];
+  var plate=(_dPlans[0]?.truck_plate)||'';
+
+  // เก็บข้อมูลแต่ละรายการ
+  var items=await Promise.all(_DRV_INSPECT_ITEMS.map(async function(name,i){
+    var card=document.getElementById('drv-inspect-item-'+i);
+    var status=card?.dataset?.status||'ok';
+    var symptom=document.getElementById('drv-inspect-sym-'+i)?.value||'';
+    var photoUrl='';
+    if(_dInspectPhotos[i]){
+      try{
+        var ext=_dInspectPhotos[i].name.split('.').pop()||'jpg';
+        var path='truck-inspect/'+today+'/'+plate+'/'+i+'.'+ext;
+        var {data:up}=await window._sb.storage.from('delivery-photos').upload(path,_dInspectPhotos[i],{upsert:true});
+        if(up){
+          var {data:pu}=window._sb.storage.from('delivery-photos').getPublicUrl(path);
+          photoUrl=pu?.publicUrl||'';
+        }
+      }catch(e){}
+    }
+    return {id:i+1,name:name,status:status,symptom:symptom,photo_url:photoUrl};
+  }));
+
+  var hasIssue=items.some(function(it){return it.status==='issue';});
+  var notes=document.getElementById('drv-inspect-notes')?.value||'';
+
+  var {error}=await window._sb.from('truck_inspections').upsert({
+    inspect_date:today,
+    truck_plate:plate,
+    driver_id:_dSess?.driver_id||'',
+    driver_name:_dSess?.driver_name||_dSess?.username||'',
+    items:items,
+    overall:hasIssue?'issue':'ok',
+    notes:notes
+  },{onConflict:'inspect_date,truck_plate'});
+
+  if(error){
+    btn.disabled=false;btn.textContent='บันทึกผลการตรวจ';
+    drvShowToast('❌ บันทึกไม่สำเร็จ: '+error.message,true);return;
+  }
+  document.getElementById('drv-inspect-overlay').style.display='none';
+  drvShowToast(hasIssue?'⚠️ บันทึกแล้ว — พบปัญหา '+items.filter(function(it){return it.status==='issue';}).length+' รายการ':'✅ ตรวจสภาพรถเรียบร้อย',false,4000);
 };
 
 function drvRenderPlanCards(plans){
