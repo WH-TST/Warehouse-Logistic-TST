@@ -33888,24 +33888,30 @@ var _dMaintPlan=null, _dMaintLog=null, _dMaintVisits={};
 var _dMaintPhotoFile=null, _dMaintPhotoPreview=null;
 
 window.drvOpenMaint=async function(planId){
-  _dMaintPlan=_dPlans.find(function(p){return p.plan_id===planId;})||null;
-  if(!_dMaintPlan)return;
-  _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
-  drvShowL();
-  // โหลด trip_log + shop_visits
-  var {data:log}=await window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle();
-  _dMaintLog=log||null;
-  var {data:visits}=await window._sb.from('shop_visits').select('*').eq('plan_id',planId);
-  _dMaintVisits={};
-  (visits||[]).forEach(function(v){_dMaintVisits[v.shop_seq]=v;});
-  drvHideL();
-  var center=(_dMaintPlan.shops&&_dMaintPlan.shops[0]&&_dMaintPlan.shops[0].shopName)||'ศูนย์ซ่อม';
-  document.getElementById('drv-maint-title').textContent=center;
-  document.getElementById('drv-maint-sub').textContent='🚛 '+(_dMaintPlan.truck_plate||'–')+' · '+planId;
-  _dMaintRender();
-  var ms=document.getElementById('drv-maint-screen');
-  ms.style.display='flex';
-  requestAnimationFrame(function(){ms.classList.add('open');});
+  try{
+    _dMaintPlan=_dPlans.find(function(p){return p.plan_id===planId;})||null;
+    console.log('[Maint] open',planId,'plan=',_dMaintPlan);
+    if(!_dMaintPlan){drvShowToast('ไม่พบแผน '+planId,true);return;}
+    _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
+    drvShowL();
+    var r1=await window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle();
+    console.log('[Maint] trip_log',r1);
+    _dMaintLog=r1.data||null;
+    var r2=await window._sb.from('shop_visits').select('*').eq('plan_id',planId);
+    console.log('[Maint] shop_visits',r2);
+    _dMaintVisits={};
+    (r2.data||[]).forEach(function(v){_dMaintVisits[v.shop_seq]=v;});
+    drvHideL();
+    var ms=document.getElementById('drv-maint-screen');
+    console.log('[Maint] screen el=',ms);
+    if(!ms){drvShowToast('หาหน้า maintenance ไม่เจอ',true);return;}
+    var center=(_dMaintPlan.shops&&_dMaintPlan.shops[0]&&_dMaintPlan.shops[0].shopName)||'ศูนย์ซ่อม';
+    document.getElementById('drv-maint-title').textContent=center;
+    document.getElementById('drv-maint-sub').textContent='🚛 '+(_dMaintPlan.truck_plate||'–')+' · '+planId;
+    _dMaintRender();
+    ms.style.display='flex';
+    requestAnimationFrame(function(){ms.classList.add('open');});
+  }catch(e){drvHideL();console.error('[Maint]',e);drvShowToast('❌ '+e.message,true);}
 };
 
 window.drvCloseMaint=function(){
