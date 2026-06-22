@@ -33610,10 +33610,13 @@ var _dInspectPhotos={}; // {itemIndex: File}
 async function drvInspectCheck(){
   var today=new Date().toISOString().split('T')[0];
   var plate=(_dPlans[0]?.truck_plate)||'';
+  var driverId=_dSess?.driver_id||'';
   if(!plate)return;
-  var {data}=await window._sb.from('truck_inspections')
-    .select('id').eq('inspect_date',today).eq('truck_plate',plate).maybeSingle();
-  if(data)return; // มีบันทึกแล้ว ไม่ต้องแสดง
+  // เช็คต่อ driver+truck+วัน — ขับหลายคันได้ ต้องตรวจแต่ละคัน
+  var q=window._sb.from('truck_inspections').select('id').eq('inspect_date',today).eq('truck_plate',plate);
+  if(driverId) q=q.eq('driver_id',driverId);
+  var {data}=await q.maybeSingle();
+  if(data)return;
   drvInspectShow(today,plate);
 }
 
@@ -33714,7 +33717,7 @@ window.drvInspectSave=async function(){
     items:items,
     overall:hasIssue?'issue':'ok',
     notes:notes
-  },{onConflict:'inspect_date,truck_plate'});
+  },{onConflict:'inspect_date,truck_plate,driver_id'});
 
   if(error){
     btn.disabled=false;btn.textContent='บันทึกผลการตรวจ';
