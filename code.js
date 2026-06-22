@@ -8665,3 +8665,58 @@ function getProductionPlanByDate(dateStr, spreadsheetId) {
 
   return { success: true, machines: machines, hours: machineHours, dateStr: dateStr };
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// MIGRATE KPI WH&LG → Supabase kpi_wh_log
+// รันครั้งเดียวใน GAS Editor: เลือก migrateKpiWHToSupabase แล้วกด Run
+// ════════════════════════════════════════════════════════════════════════
+function migrateKpiWHToSupabase() {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName('Master KPI WH&LG');
+  if (!sheet || sheet.getLastRow() < 2) {
+    Logger.log('❌ ไม่พบ sheet หรือไม่มีข้อมูล');
+    return;
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var rows = [];
+  var _pf  = function(v) { return (v !== '' && v !== null && v !== undefined) ? parseFloat(v) : null; };
+
+  for (var i = 1; i < data.length; i++) {
+    var rawDate = data[i][1];
+    if (!rawDate) continue;
+    var d = parseDateValue(rawDate);
+    if (!d) continue;
+    var iso = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
+    var createdRaw = data[i][0];
+    var createdAt  = createdRaw instanceof Date
+      ? Utilities.formatDate(createdRaw, 'GMT+7', "yyyy-MM-dd'T'HH:mm:ss+07:00")
+      : null;
+
+    rows.push({
+      cycle_date:      iso,
+      checker_fg:      _pf(data[i][2]),
+      checker_semi:    _pf(data[i][3]),
+      final_adj_fg:    _pf(data[i][4]),
+      final_adj_semi:  _pf(data[i][5]),
+      space_breakdown: _pf(data[i][6]),
+      load_score:      _pf(data[i][7]),
+      damage_score:    _pf(data[i][8]),
+      data_err_fg:     _pf(data[i][9]),
+      data_err_semi:   _pf(data[i][10]),
+      created_at:      createdAt
+    });
+  }
+
+  if (rows.length === 0) { Logger.log('ไม่มีข้อมูลที่จะ migrate'); return; }
+
+  // upsert ทีละ 50 แถว
+  var batchSize = 50, total = rows.length, ok = 0;
+  for (var s = 0; s < total; s += batchSize) {
+    var batch = rows.slice(s, s + batchSize);
+    var resp  = _sbFetch('POST', 'kpi_wh_log?on_conflict=cycle_date', batch);
+    Logger.log('batch ' + (s/batchSize+1) + ': ' + JSON.stringify(resp));
+    ok += batch.length;
+  }
+  Logger.log('✅ migrate เสร็จ ' + ok + '/' + total + ' แถว');
+}
