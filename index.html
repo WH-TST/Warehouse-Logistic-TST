@@ -31102,7 +31102,7 @@ window.viewTripResult = async function(planId) {
           if(checkerEl && sessRes.data.checker_name) checkerEl.value = sessRes.data.checker_name;
           // ดึง items ทั้งหมดของ session นั้น
           var savedItemsRes = await window._sb.from('stock_count_items')
-            .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,ppb')
+            .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,note,ppb')
             .eq('session_id', sessId);
           var savedMap = {};
           (savedItemsRes.data||[]).forEach(function(r){ savedMap[r.sku] = r; });
@@ -31114,6 +31114,7 @@ window.viewTripResult = async function(planId) {
             item.bundle2  = Number(s.bundle2)||0;
             item.pcs1     = Number(s.scrap1)||0;
             item.pcs2     = Number(s.scrap2)||0;
+            item.holdPcs  = Number(s.hold_pcs)||0;
             item.note     = s.note||'';
             delete savedMap[item.sku]; // ลบออกเพื่อเหลือแต่ manual items
           });
@@ -31130,7 +31131,7 @@ window.viewTripResult = async function(planId) {
               bundle2:   Number(s.bundle2)||0,
               pcs1:      Number(s.scrap1)||0,
               pcs2:      Number(s.scrap2)||0,
-              holdPcs:   0,
+              holdPcs:   Number(s.hold_pcs)||0,
               note:      s.note||''
             });
           });
