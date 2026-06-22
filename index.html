@@ -27103,7 +27103,7 @@ window.loadKpiWH = function loadKpiWH() {
     kpiWHAutoData  = {};
     kpiWHSavedData = {};
 
-    // โหลด AUTO data และ history พร้อมกัน
+    // โหลด AUTO data (GAS) และ history (Supabase) พร้อมกัน
     let autoLoaded = false, histLoaded = false;
     const tryRender = () => { if (autoLoaded && histLoaded) renderKpiWHTable(startStr, endStr); };
 
@@ -27122,20 +27122,34 @@ window.loadKpiWH = function loadKpiWH() {
         })
         .getKpiWHLGData(startStr, endStr);
 
-    google.script.run
-        .withSuccessHandler(res => {
-            if (res && res.success && res.data) {
-                res.data.forEach(r => { kpiWHSavedData[r.date] = r; });
+    // ดึง history จาก Supabase แทน GAS
+    window._sb.from('kpi_wh_log').select('*')
+        .gte('cycle_date', startStr).lte('cycle_date', endStr)
+        .then(function(res) {
+            if (res.data) {
+                res.data.forEach(function(r) {
+                    var iso = r.cycle_date;
+                    var p = iso.split('-');
+                    var ddmm = p[2]+'/'+p[1]+'/'+p[0];
+                    var mapped = {
+                        date: ddmm, id: r.id,
+                        checkerFGPct:   r.checker_fg,
+                        checkerSEMIPct: r.checker_semi,
+                        finalAdjFG:     r.final_adj_fg,
+                        finalAdjSEMI:   r.final_adj_semi,
+                        spaceBreakdown: r.space_breakdown,
+                        loadScore:      r.load_score,
+                        damageScore:    r.damage_score,
+                        dataErrFG:      r.data_err_fg,
+                        dataErrSEMI:    r.data_err_semi,
+                    };
+                    kpiWHSavedData[iso]  = mapped;
+                    kpiWHSavedData[ddmm] = mapped;
+                });
             }
             histLoaded = true;
             tryRender();
-        })
-        .withFailureHandler(err => {
-            console.error('❌ getKpiWHLGHistory error:', err);
-            histLoaded = true;
-            tryRender();
-        })
-        .getKpiWHLGHistory(startStr, endStr);
+        });
 };
 
 // ── สร้างตาราง ──────────────────────────────────────────────────────────
@@ -27329,45 +27343,49 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
     const saveBtn = safeGet(`btn-kpi-save-${isoDate}`);
     if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; saveBtn.disabled = true; }
 
-    google.script.run
-        .withSuccessHandler(res => {
-            if (res && res.success) {
-                showToast(`✅ บันทึก KPI วันที่ ${ddmmyyyy} สำเร็จ`);
-                kpiWHSavedData[isoDate] = row;
-                // ไฮไลต์แถว + ล็อค inputs + เปลี่ยนปุ่มเป็น แก้ไข
-                const tr = safeGet(`kpi-row-${isoDate}`);
-                if (tr) {
-                    tr.classList.remove('bg-slate-900', 'border-slate-700/60', 'hover:bg-slate-800');
-                    tr.classList.add('bg-emerald-900/40', 'border-b-2', 'border-emerald-700/60');
-                    const dateCell = tr.querySelector('td:first-child');
-                    if (dateCell && !dateCell.querySelector('.fa-check-circle')) {
-                        dateCell.innerHTML = '<i class="fas fa-check-circle text-emerald-400 mr-1"></i>' + dateCell.innerHTML;
-                    }
-                    // ล็อค manual inputs
-                    tr.querySelectorAll('input[type="number"]').forEach(inp => {
-                        inp.readOnly = true;
-                        inp.classList.remove('bg-slate-700', 'border-amber-700/50', 'text-white', 'focus:border-amber-400');
-                        inp.classList.add('bg-slate-800', 'border-slate-600', 'text-slate-400', 'cursor-not-allowed');
-                    });
-                }
-                // เปลี่ยนปุ่มเป็น แก้ไข
-                if (saveBtn) {
-                    saveBtn.className = 'bg-slate-600 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto';
-                    saveBtn.innerHTML = '<i class="fas fa-edit"></i> แก้ไข';
-                    saveBtn.disabled  = false;
-                    saveBtn.onclick   = () => openKpiWHEditModal(isoDate);
-                }
-            } else {
-                showToast(`❌ บันทึกไม่สำเร็จ: ${res ? res.message : 'unknown error'}`, true);
-                if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-save"></i> บันทึก'; saveBtn.disabled = false; }
-            }
-        })
-        .withFailureHandler(err => {
-            console.error('❌ saveKpiWHLG error:', err);
-            showToast('❌ เกิดข้อผิดพลาดในการบันทึก', true);
+    var sbRow = {
+        cycle_date: isoDate,
+        checker_fg:      row.checkerFGPct,
+        checker_semi:    row.checkerSEMIPct,
+        final_adj_fg:    row.finalAdjFG,
+        final_adj_semi:  row.finalAdjSEMI,
+        space_breakdown: row.spaceBreakdown,
+        load_score:      row.loadScore,
+        damage_score:    row.damageScore,
+        data_err_fg:     row.dataErrFG,
+        data_err_semi:   row.dataErrSEMI,
+        recorded_by:     window._currentUser || null,
+    };
+    window._sb.from('kpi_wh_log').upsert(sbRow, {onConflict:'cycle_date'}).then(function(res2) {
+        if (res2.error) {
+            showToast('❌ บันทึกไม่สำเร็จ: ' + res2.error.message, true);
             if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-save"></i> บันทึก'; saveBtn.disabled = false; }
-        })
-        .saveKpiWHLG(row);
+            return;
+        }
+        showToast('✅ บันทึก KPI วันที่ ' + ddmmyyyy + ' สำเร็จ');
+        kpiWHSavedData[isoDate] = row;
+        kpiWHSavedData[ddmmyyyy] = row;
+        const tr = safeGet('kpi-row-' + isoDate);
+        if (tr) {
+            tr.classList.remove('bg-slate-900', 'border-slate-700/60', 'hover:bg-slate-800');
+            tr.classList.add('bg-emerald-900/40', 'border-b-2', 'border-emerald-700/60');
+            const dateCell = tr.querySelector('td:first-child');
+            if (dateCell && !dateCell.querySelector('.fa-check-circle')) {
+                dateCell.innerHTML = '<i class="fas fa-check-circle text-emerald-400 mr-1"></i>' + dateCell.innerHTML;
+            }
+            tr.querySelectorAll('input[type="number"]').forEach(function(inp) {
+                inp.readOnly = true;
+                inp.classList.remove('bg-slate-700', 'border-amber-700/50', 'text-white', 'focus:border-amber-400');
+                inp.classList.add('bg-slate-800', 'border-slate-600', 'text-slate-400', 'cursor-not-allowed');
+            });
+        }
+        if (saveBtn) {
+            saveBtn.className = 'bg-slate-600 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto';
+            saveBtn.innerHTML = '<i class="fas fa-edit"></i> แก้ไข';
+            saveBtn.disabled  = false;
+            saveBtn.onclick   = () => openKpiWHEditModal(isoDate);
+        }
+    });
 };
 
 // ── คำนวณ Summary Row ──────────────────────────────────────────────────
@@ -27533,38 +27551,42 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
     const submitBtn = safeGet('btn-kpi-edit-submit');
     if (submitBtn) { submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; submitBtn.disabled = true; }
 
-    google.script.run
-        .withSuccessHandler(res => {
-            if (submitBtn) { submitBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกการแก้ไข'; submitBtn.disabled = false; }
-            if (res && res.success) {
-                closeKpiWHEditModal();
-                showToast(`✅ แก้ไข KPI วันที่ ${ddmmyyyy} สำเร็จ`);
-                // อัปเดต saved data
-                kpiWHSavedData[isoDate] = row;
-                // อัปเดต auto data ด้วยค่าที่ override เพื่อให้ตารางแสดงผลทันที
-                kpiWHAutoData[isoDate] = Object.assign({}, auto, {
-                    checkerFGPct:  row.checkerFGPct,
-                    checkerSEMIPct: row.checkerSEMIPct,
-                    finalAdjFGPct: row.finalAdjFG,
-                    efficiency:    row.loadScore,
-                    damagePct:     row.damageScore,
-                    prdKPIFG:      row.dataErrFG,
-                    prdKPISEMI:    row.dataErrSEMI,
-                });
-                // re-render ตารางให้แสดงค่าใหม่ทันที
-                const fromEl = safeGet('kpi-wh-date-from');
-                const toEl   = safeGet('kpi-wh-date-to');
-                if (fromEl && toEl) renderKpiWHTable(fromEl.value, toEl.value);
-            } else {
-                showToast(`❌ แก้ไขไม่สำเร็จ: ${res ? res.message : 'unknown error'}`, true);
-            }
-        })
-        .withFailureHandler(err => {
-            console.error('❌ saveKpiWHLG (edit) error:', err);
-            showToast('❌ เกิดข้อผิดพลาดในการแก้ไข', true);
-            if (submitBtn) { submitBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกการแก้ไข'; submitBtn.disabled = false; }
-        })
-        .saveKpiWHLG(row);
+    var sbRow2 = {
+        cycle_date:      isoDate,
+        checker_fg:      row.checkerFGPct,
+        checker_semi:    row.checkerSEMIPct,
+        final_adj_fg:    row.finalAdjFG,
+        final_adj_semi:  row.finalAdjSEMI,
+        space_breakdown: row.spaceBreakdown,
+        load_score:      row.loadScore,
+        damage_score:    row.damageScore,
+        data_err_fg:     row.dataErrFG,
+        data_err_semi:   row.dataErrSEMI,
+        recorded_by:     window._currentUser || null,
+    };
+    window._sb.from('kpi_wh_log').upsert(sbRow2, {onConflict:'cycle_date'}).then(function(res2) {
+        if (submitBtn) { submitBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกการแก้ไข'; submitBtn.disabled = false; }
+        if (res2.error) {
+            showToast('❌ แก้ไขไม่สำเร็จ: ' + res2.error.message, true);
+            return;
+        }
+        closeKpiWHEditModal();
+        showToast('✅ แก้ไข KPI วันที่ ' + ddmmyyyy + ' สำเร็จ');
+        kpiWHSavedData[isoDate]  = row;
+        kpiWHSavedData[ddmmyyyy] = row;
+        kpiWHAutoData[isoDate] = Object.assign({}, auto, {
+            checkerFGPct:   row.checkerFGPct,
+            checkerSEMIPct: row.checkerSEMIPct,
+            finalAdjFGPct:  row.finalAdjFG,
+            efficiency:     row.loadScore,
+            damagePct:      row.damageScore,
+            prdKPIFG:       row.dataErrFG,
+            prdKPISEMI:     row.dataErrSEMI,
+        });
+        const fromEl = safeGet('kpi-wh-date-from');
+        const toEl   = safeGet('kpi-wh-date-to');
+        if (fromEl && toEl) renderKpiWHTable(fromEl.value, toEl.value);
+    });
 };
 
 // ══════════════════════════════════════════════════════════════
