@@ -33562,10 +33562,20 @@ window.daLoad=async function(){
 
   // ── จัดกลุ่มตามคนขับ ─────────────────────────────────
   var logMap={};(logs||[]).forEach(function(l){logMap[l.plan_id]=l;});
+  // pre-populate จาก driver_users ทุกคน (กรอง ทดสอบ ออก)
   var driverMap={};
+  var _activeDrivers=driverSel
+    ? _daDrivers.filter(function(d){return d.username===driverSel;})
+    : _daDrivers.filter(function(d){return !/ทดสอบ|test/i.test(d.driver_name||'');});
+  _activeDrivers.forEach(function(dr){
+    var key=dr.driver_id||dr.username;
+    driverMap[key]={name:dr.driver_name,driverKey:key,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0,failedShops:0,maintTrips:0,maintCost:0};
+  });
   (plans||[]).forEach(function(p){
     var key=p.driver_id||p.driver_transport||'–';
+    // กรอง ทดสอบ ออก
     var dName=(_daDrivers.find(function(d){return d.driver_id===p.driver_id;})||{}).driver_name||p.driver_transport||key;
+    if(/ทดสอบ|test/i.test(dName)) return;
     if(!driverMap[key]) driverMap[key]={name:dName,driverKey:key,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0,failedShops:0,maintTrips:0,maintCost:0};
     var d=driverMap[key];
     d.plans.push(p);
