@@ -28428,28 +28428,44 @@ window.confirmSaveInvKPI = function() {
         semi: !isFG ? (_lastSemiKPIResult ? Object.assign({}, _lastSemiKPIResult) : null) : null
     };
 
-    google.script.run
-        .withSuccessHandler(res => {
-            btn.innerHTML = '<i class="fas fa-save"></i> ยืนยันบันทึก';
-            btn.disabled  = false;
-            if (res && res.success) {
-                closeKpiEmpModal();
-                showToast(`✅ บันทึก ${typeLabel} สำเร็จ (รหัส: ${empId}) — KPI Final: ${finalVal}%`);
-                const b = document.getElementById('kpi-edit-banner');
-                if (b) {
-                    b.classList.remove('hidden');
-                    b.querySelector('p').textContent = `บันทึก ${typeLabel} สำเร็จ — ข้อมูลวันนี้ถูกอัปเดตแล้ว`;
-                }
-            } else {
-                showToast('❌ บันทึกไม่สำเร็จ: ' + (res?.message || 'unknown'), true);
-            }
-        })
-        .withFailureHandler(err => {
-            btn.innerHTML = '<i class="fas fa-save"></i> ยืนยันบันทึก';
-            btn.disabled  = false;
-            showToast('❌ เกิดข้อผิดพลาด: ' + (err?.message || String(err)), true);
-        })
-        .saveInventoryKPI(payload);
+    // ── บันทึกลง Supabase ────────────────────────────────────────
+    var r = isFG ? _lastInvKPIResult : _lastSemiKPIResult;
+    if (!r) { showToast('❌ ไม่พบผลคำนวณ กรุณาคำนวณใหม่', true); btn.innerHTML='<i class="fas fa-save"></i> ยืนยันบันทึก'; btn.disabled=false; return; }
+    var row = {
+      cycle_date:         sharedDate || r.countDate || '',
+      type:               typeLabel,
+      employee_id:        empId,
+      kpi_final:          parseFloat(finalVal) || null,
+      total_sku:          r.totalSKU   || 0,
+      total_lines:        r.totalPCS   || 0,
+      prd_total_sku:      r.prodSKU    || 0,
+      prd_total_lines:    r.prodPCS    || 0,
+      checker_error_sku:  r.checkerErrSKU || 0,
+      checker_error_lines:r.checkerErrPCS || 0,
+      prd_error_sku:      r.prodErrSKU || 0,
+      prd_error_lines:    r.prodErrPCS || 0,
+      weight_sku:         r.weightSKU  || 40,
+      weight_pcs:         r.weightPCS  || 60,
+      checker_sku_pct:    r.checkerSKUpct || null,
+      checker_pcs_pct:    r.checkerPCSpct || null,
+      kpi_checker:        r.checkerKPI || null,
+      prd_sku_pct:        r.prodSKUpct || null,
+      prd_pcs_pct:        r.prodPCSpct || null,
+      kpi_prd:            r.prodKPI    || null,
+      recorded_by:        window._currentUser || empId
+    };
+    window._sb.from('kpi_inventory').insert(row).then(function(res2) {
+      btn.innerHTML = '<i class="fas fa-save"></i> ยืนยันบันทึก';
+      btn.disabled  = false;
+      if (res2.error) {
+        showToast('❌ บันทึกไม่สำเร็จ: ' + res2.error.message, true);
+      } else {
+        closeKpiEmpModal();
+        showToast('✅ บันทึก ' + typeLabel + ' สำเร็จ (รหัส: ' + empId + ') — KPI Final: ' + finalVal + '%');
+        const b = document.getElementById('kpi-edit-banner');
+        if (b) { b.classList.remove('hidden'); b.querySelector('p').textContent = 'บันทึก ' + typeLabel + ' สำเร็จ — ข้อมูลวันนี้ถูกอัปเดตแล้ว'; }
+      }
+    });
 };
 
 </script>
