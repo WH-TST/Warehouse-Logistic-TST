@@ -27393,17 +27393,16 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
             </td>`;
         };
 
-        // ตรวจว่ามีค่า auto ใหม่ที่ต่างจาก saved หรือ saved เป็น null แต่ auto มีค่า
-        const hasNewAutoVal = (sv, av) => av != null && (sv == null || Math.abs((sv||0) - (av||0)) > 0.05);
+        // ตรวจเฉพาะกรณี saved เป็น null แต่ auto มีค่าแล้ว (ไม่เช็คความต่างของตัวเลข)
         const autoLoad   = calcLoadScoreKPI(auto);
         const autoDamage = calcDamageScoreKPI(auto);
         const hasUpdate = isSaved && (
-            hasNewAutoVal(saved.loadScore,      autoLoad)   ||
-            hasNewAutoVal(saved.damageScore,    autoDamage) ||
-            hasNewAutoVal(saved.checkerFGPct,   auto.checkerFGPct)   ||
-            hasNewAutoVal(saved.checkerSEMIPct, auto.checkerSEMIPct) ||
-            hasNewAutoVal(saved.finalAdjFG,     auto.finalAdjFGPct)  ||
-            hasNewAutoVal(saved.finalAdjSEMI,   auto.finalAdjSEMIPct)
+            (saved.loadScore      == null && autoLoad   != null) ||
+            (saved.damageScore    == null && autoDamage != null) ||
+            (saved.checkerFGPct   == null && auto.checkerFGPct   != null) ||
+            (saved.checkerSEMIPct == null && auto.checkerSEMIPct != null) ||
+            (saved.finalAdjFG     == null && auto.finalAdjFGPct  != null) ||
+            (saved.finalAdjSEMI   == null && auto.finalAdjSEMIPct!= null)
         );
 
         // ถ้าบันทึกแล้ว ใช้ค่า saved ก่อน fallback ไป auto
