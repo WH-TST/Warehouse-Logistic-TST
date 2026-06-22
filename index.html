@@ -33412,9 +33412,9 @@ var _dRtChannel=null;
 var _dPrevPlanIds=null;
 
 function _dMakeBeepWav(){
-  // จำลองกระดิ่งโทรศัพท์ตั้งโต๊ะ: ดริ๊ง-ดริ๊ง ... ดริ๊ง-ดริ๊ง
-  // Pattern: ring0.45s → เงียบ0.1s → ring0.45s → เงียบ1.5s → วนซ้ำ (cycle=2.5s)
-  // กระดิ่ง mechanical: ~2000Hz + 3000Hz + 20Hz clapper AM
+  // ดิงดิงดิง . ดิงดิงดิง . ดิงดิงดิง
+  // แต่ละ "ดิง" = เคาะกระดิ่ง 0.13s decay เร็ว, ห่างกัน 0.18s
+  // 3 ดิง = 0.54s, หยุด 0.65s → cycle = 1.19s → 5s ได้ ~4 รอบ
   var sr=22050,dur=5.0;
   var n=Math.floor(sr*dur);
   var buf=new ArrayBuffer(44+n*2);
@@ -33425,31 +33425,31 @@ function _dMakeBeepWav(){
   v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
   wr(36,'data');v.setUint32(40,n*2,true);
 
-  var r=0.45,g=0.1,pause=1.5; // ring, gap, silence
-  var cycle=r+g+r+pause;      // 2.5s per double-ring
+  var dingLen=0.18;   // ระยะห่างระหว่าง ding แต่ละตัว
+  var pause=0.65;     // หยุดหลังครบ 3 ดิง
+  var cycle=dingLen*3+pause; // 1 รอบ = 0.54+0.65 = 1.19s
 
-  function bellSample(t,tLocal){
-    // decay exponential ต่อ strike — ยิ่งนานยิ่งเงียบ
-    var decay=Math.exp(-tLocal*6);
-    // clapper AM ~20Hz ทำให้ได้ยินเป็น "ดริ๊ง" ไม่ใช่เสียงต่อเนื่อง
-    var clap=0.5+0.5*Math.abs(Math.sin(2*Math.PI*20*tLocal));
-    // สองความถี่ของกระดิ่งโลหะ
-    var bell=0.55*Math.sin(2*Math.PI*1975*t)
-            +0.30*Math.sin(2*Math.PI*2800*t)
-            +0.15*Math.sin(2*Math.PI*4200*t);
-    return decay*clap*bell;
+  // เสียงเคาะกระดิ่งแต่ละครั้ง: decay เร็ว ชัด
+  function dingSample(t,tLocal){
+    var decay=Math.exp(-tLocal*28); // decay เร็ว เหมือนเคาะจริง
+    return decay*(
+       0.6*Math.sin(2*Math.PI*2100*t)
+      +0.3*Math.sin(2*Math.PI*3150*t)
+      +0.1*Math.sin(2*Math.PI*5250*t)
+    );
   }
 
   for(var i=0;i<n;i++){
     var t=i/sr;
     var tc=t%cycle;
     var samp=0;
-    if(tc<r){
-      samp=bellSample(t,tc);
-    } else if(tc<r+g){
-      samp=0;
-    } else if(tc<r+g+r){
-      samp=bellSample(t,tc-(r+g));
+    // ดิง 1, 2, 3
+    for(var d=0;d<3;d++){
+      var start=d*dingLen;
+      if(tc>=start && tc<start+dingLen){
+        samp=dingSample(t, tc-start);
+        break;
+      }
     }
     v.setInt16(44+i*2,Math.max(-32767,Math.min(32767,samp*32767)),true);
   }
