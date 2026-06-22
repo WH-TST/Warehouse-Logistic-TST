@@ -33891,20 +33891,16 @@ var _dMaintPhotoFile=null, _dMaintPhotoPreview=null;
 window.drvOpenMaint=async function(planId){
   try{
     _dMaintPlan=_dPlans.find(function(p){return p.plan_id===planId;})||null;
-    console.log('[Maint] open',planId,'plan=',_dMaintPlan);
     if(!_dMaintPlan){drvShowToast('ไม่พบแผน '+planId,true);return;}
     _dMaintPhotoFile=null;_dMaintPhotoPreview=null;
     drvShowL();
     var r1=await window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle();
-    console.log('[Maint] trip_log',r1);
     _dMaintLog=r1.data||null;
     var r2=await window._sb.from('shop_visits').select('*').eq('plan_id',planId);
-    console.log('[Maint] shop_visits',r2);
     _dMaintVisits={};
     (r2.data||[]).forEach(function(v){_dMaintVisits[v.shop_seq]=v;});
     drvHideL();
     var ms=document.getElementById('drv-maint-screen');
-    console.log('[Maint] screen el=',ms);
     if(!ms){drvShowToast('หาหน้า maintenance ไม่เจอ',true);return;}
     var center=(_dMaintPlan.shops&&_dMaintPlan.shops[0]&&_dMaintPlan.shops[0].shopName)||'ศูนย์ซ่อม';
     document.getElementById('drv-maint-title').textContent=center;
