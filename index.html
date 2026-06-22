@@ -7136,6 +7136,20 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     </div>
   </div>
 
+  <!-- Inspection Status Panel -->
+  <div class="rounded-2xl p-4" style="background:#fff;border:1px solid #e2e8f0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:900;color:#1e293b;display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-clipboard-check" style="color:#059669;"></i> ตรวจสภาพรถประจำวัน
+        <span id="dm-inspect-date" style="font-size:11px;font-weight:700;color:#94a3b8;"></span>
+      </div>
+      <button onclick="dmLoadInspections()" style="background:#f1f5f9;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#475569;cursor:pointer;"><i class="fas fa-sync-alt"></i></button>
+    </div>
+    <div id="dm-inspect-list" style="display:flex;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:12px;color:#94a3b8;">กำลังโหลด...</span>
+    </div>
+  </div>
+
   <!-- Driver view area -->
   <div id="dm-area" style="background:#0d1b2a;border-radius:20px;overflow:hidden;min-height:400px;">
     <div style="text-align:center;padding:80px 20px;color:#475569;">
@@ -32762,6 +32776,55 @@ window.dmInit=async function(){
   if(!sel)return;
   sel.innerHTML='<option value="">— เลือกคนขับ —</option>'
     +_dmDrivers.map(function(d){return'<option value="'+d.username+'">'+d.driver_name+'</option>';}).join('');
+  dmLoadInspections();
+};
+
+window.dmLoadInspections=async function(){
+  var today=new Date().toISOString().split('T')[0];
+  var el=document.getElementById('dm-inspect-list');
+  var dateEl=document.getElementById('dm-inspect-date');
+  if(!el)return;
+  if(dateEl) dateEl.textContent=today;
+  el.innerHTML='<span style="font-size:12px;color:#94a3b8;">กำลังโหลด...</span>';
+
+  // โหลด drivers ที่มีแผนวันนี้
+  var {data:plans}=await window._sb.from('logistic_plans')
+    .select('driver_id,driver_transport,truck_plate').eq('plan_date',today).eq('is_child',false);
+  // โหลด inspections วันนี้
+  var {data:inspects}=await window._sb.from('truck_inspections').select('*').eq('inspect_date',today);
+  var inspectByPlate={};
+  (inspects||[]).forEach(function(r){inspectByPlate[r.truck_plate]=r;});
+
+  // รวม drivers จากแผน (dedup)
+  var seen=new Set();
+  var drivers=[];
+  (plans||[]).forEach(function(p){
+    var key=(p.driver_id||p.driver_transport||'')+'|'+(p.truck_plate||'');
+    if(seen.has(key))return;
+    seen.add(key);
+    drivers.push({name:p.driver_transport||p.driver_id||'–',plate:p.truck_plate||''});
+  });
+
+  if(!drivers.length){
+    el.innerHTML='<span style="font-size:12px;color:#94a3b8;">ไม่มีคนขับวันนี้</span>';
+    return;
+  }
+
+  el.innerHTML=drivers.map(function(d){
+    var ins=inspectByPlate[d.plate];
+    var hasIssue=ins&&ins.overall==='issue';
+    var checked=!!ins;
+    var bg=checked?(hasIssue?'#fef2f2':'#f0fdf4'):'#fafafa';
+    var border=checked?(hasIssue?'#fca5a5':'#86efac'):'#e2e8f0';
+    var icon=checked?(hasIssue?'⚠️':'✅'):'⏳';
+    var statusText=checked?(hasIssue?'<span style="color:#ef4444;font-size:10px;font-weight:700;">พบปัญหา '+(ins.items||[]).filter(function(it){return it.status==='issue';}).length+' รายการ</span>':'<span style="color:#16a34a;font-size:10px;font-weight:700;">ปกติทุกรายการ</span>'):'<span style="color:#f59e0b;font-size:10px;font-weight:700;">ยังไม่ตรวจ</span>';
+    return '<div style="background:'+bg+';border:1.5px solid '+border+';border-radius:12px;padding:10px 12px;min-width:140px;flex:1;">'
+      +'<div style="font-size:13px;font-weight:900;color:#1e293b;margin-bottom:2px;">'+icon+' '+dmEsc(d.name)+'</div>'
+      +'<div style="font-size:11px;color:#64748b;">🚛 '+dmEsc(d.plate)+'</div>'
+      +'<div style="margin-top:4px;">'+statusText+'</div>'
+      +(ins&&ins.notes?'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">📝 '+dmEsc(ins.notes)+'</div>':'')
+      +'</div>';
+  }).join('');
 };
 
 // ─── Admin Driver Monitor — Trip-Screen Replication (matches Driver-App-TST) ───
