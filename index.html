@@ -30758,10 +30758,14 @@ window.viewTripResult = async function(planId) {
         if(skuOrder.indexOf(sku) === -1) skuOrder.push(sku); // first-seen order by id
       });
 
-      // 3. ดึง PPB จาก products
-      var prodRes = await window._sb.from('products').select('sku,lines_per_bundle').in('sku', itemNums);
-      var ppbMap = {};
-      (prodRes.data||[]).forEach(function(p){ ppbMap[p.sku] = Number(p.lines_per_bundle)||0; });
+      // 3. ดึง PPB + ชื่อจาก products
+      var prodRes = await window._sb.from('products').select('sku,lines_per_bundle,name').in('sku', itemNums);
+      var ppbMap = {}, prodNameMap = {};
+      (prodRes.data||[]).forEach(function(p){
+        ppbMap[p.sku] = Number(p.lines_per_bundle)||0;
+        // ตัด Thai สำหรับใบพิมพ์ — เหลือแค่ภาษาอังกฤษ/ตัวเลข
+        prodNameMap[p.sku] = (p.name||'').replace(/[฀-๿]+/g,'').replace(/\s{2,}/g,' ').trim();
+      });
 
       // 4. เรียง skuList ตาม skuOrder (counting physical order) — match ด้วย item_number เท่านั้น
       //    เพื่อหลีกเลี่ยงปัญหา warehouse ใน counting ≠ warehouse ใน transection_fg
@@ -30778,6 +30782,7 @@ window.viewTripResult = async function(planId) {
         return {
           sku:       s.sku,
           name:      s.name,
+          printName: prodNameMap[s.sku] || s.name,
           wh:        s.wh,
           ppb:       ppbMap[s.sku] || 0,
           systemQty: sysQty,
@@ -31554,7 +31559,7 @@ window.viewTripResult = async function(planId) {
             + '<td style="padding:4px 6px;text-align:center;border-right:1px solid #ccc">'+_prtSeq+'</td>'
             + '<td style="padding:4px 6px;border-right:1px solid #ccc">'+item.wh+'</td>'
             + '<td style="padding:4px 6px;border-right:1px solid #ccc;font-family:monospace;font-size:11px">'+item.sku+'</td>'
-            + '<td style="padding:4px 8px;border-right:1px solid #ccc">'+item.name+'</td>'
+            + '<td style="padding:4px 8px;border-right:1px solid #ccc">'+(item.printName||item.name)+'</td>'
             + '<td style="border-right:1px solid #ccc"></td>'
             + '<td style="border-right:1px solid #ccc"></td>'
             + '<td style="border-right:1px solid #ccc"></td>'
