@@ -27878,10 +27878,10 @@ window.resetAllKPI = function() {
 
 // ── Date change → check for existing data ─────────────────────
 window.kpiOnDateChange = function(dateVal) {
-    kpiInvAutoCalc();
-    kpiSemiAutoCalc();
     if (!dateVal) {
         document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+        kpiInvAutoCalc();
+        kpiSemiAutoCalc();
         return;
     }
     const loading = document.getElementById('kpi-date-loading');
@@ -27891,6 +27891,8 @@ window.kpiOnDateChange = function(dateVal) {
         var rows = res.data || [];
         if (rows.length === 0) {
             document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+            kpiInvAutoCalc();
+            kpiSemiAutoCalc();
             return;
         }
         var fg   = rows.find(function(r){ return r.type === 'FG'; });
@@ -27915,6 +27917,8 @@ window.kpiOnDateChange = function(dateVal) {
             kpiLoadExistingData(mapped);
         } else {
             document.getElementById('kpi-edit-banner')?.classList.add('hidden');
+            kpiInvAutoCalc();
+            kpiSemiAutoCalc();
         }
     });
 };
