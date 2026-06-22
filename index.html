@@ -31665,6 +31665,10 @@ window.viewTripResult = async function(planId) {
           ? holdPcsVal > 0
           : (mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs);
         var src = hasMem ? mem : saved;
+        // holdPcs: ใช้ memory ถ้ามี, fallback ไป saved (Supabase)
+        var holdPcsFinal = holdPcsVal || (isQCwh
+          ? ((savedMap[s.sku+'|FG-BP']||savedMap[s.sku+'|FG-BB']||{}).holdPcs||0)
+          : (saved.holdPcs||0));
         return {
           sku:       s.sku,
           name:      s.name,
@@ -31675,7 +31679,7 @@ window.viewTripResult = async function(planId) {
           bundle2:   src.bundle2||0,  bundle2_expr: mem.bundle2_expr||'',
           pcs1:      src.pcs1||0,     pcs1_expr:    mem.pcs1_expr||'',
           pcs2:      src.pcs2||0,     pcs2_expr:    mem.pcs2_expr||'',
-          holdPcs:   holdPcsVal,      holdPcs_expr: holdMem.holdPcs_expr||'',
+          holdPcs:   holdPcsFinal,    holdPcs_expr: holdMem.holdPcs_expr||'',
           note:      src.note||'',
           count_date: hasMem ? (_scDate||'') : (saved._date||'')
         };
