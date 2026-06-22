@@ -31666,10 +31666,12 @@ window.viewTripResult = async function(planId) {
           ? holdPcsVal > 0
           : (mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs);
         var src = hasMem ? mem : saved;
-        // holdPcs: ใช้ memory ถ้ามี, fallback ไป saved (Supabase)
-        var holdPcsFinal = holdPcsVal || (isQCwh
-          ? ((savedMap[s.sku+'|FG-BP']||savedMap[s.sku+'|FG-BB']||{}).holdPcs||0)
-          : (saved.holdPcs||0));
+        // holdPcs: แสดงเฉพาะแถว QC เท่านั้น — WH อื่นเป็น 0
+        var holdPcsFinal = 0;
+        if (isQCwh) {
+          holdPcsFinal = holdPcsVal ||
+            (savedMap[s.sku+'|FG-BP']||savedMap[s.sku+'|FG-BB']||savedMap[s.sku+'|']||{}).holdPcs||0;
+        }
         return {
           sku:       s.sku,
           name:      s.name,
