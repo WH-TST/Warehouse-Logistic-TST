@@ -33560,8 +33560,11 @@ window.daLoad=async function(){
     window._sb.from('logistic_plans').select('plan_id,driver_id,driver_transport,status').eq('job_type','maintenance_pm').gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false)
   ]);
 
-  // ── จัดกลุ่มตามคนขับ ─────────────────────────────────
+  // ── เก็บ raw data ไว้สำหรับ drill-down ─────────────────
   var logMap={};(logs||[]).forEach(function(l){logMap[l.plan_id]=l;});
+  window._daRaw={plans:plans||[],logs:logs||[],logMap:logMap,inspects:inspects||[],incidents:incidents||[],maintPlans:maintPlans||[]};
+
+  // ── จัดกลุ่มตามคนขับ ─────────────────────────────────
   // pre-populate จาก driver_users ทุกคน (กรอง ทดสอบ ออก)
   var driverMap={};
   var _activeDrivers=driverSel
@@ -33662,26 +33665,28 @@ window.daLoad=async function(){
       // metric grid
       +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:#e2e8f0;">'
       +[
-        {icon:'fa-tachometer-alt',color:'#2563eb',label:'ระยะ (ไมล์)',val:fmt(d.totalMileage)+' กม.'},
-        {icon:'fa-map-marker-alt',color:'#7c3aed',label:'ระยะ (GPS)',val:fmt(d.totalGpsDist,1)+' กม.'},
-        {icon:'fa-clock',color:'#0891b2',label:'เวลาทำงานรวม',val:fmtTime(d.totalTimeSec)},
-        {icon:'fa-gauge-high',color:'#059669',label:'ความเร็วเฉลี่ย',val:avgSpeed!=='-'?avgSpeed+' กม/ชม':'-'},
-        {icon:'fa-check-circle',color:'#16a34a',label:'เที่ยวสำเร็จ',val:d.doneTrips+'/'+d.trips},
-        {icon:'fa-truck',color:'#d97706',label:'จำนวนรถที่ขับ',val:truckCount+' คัน'},
-        {icon:'fa-clipboard-check',color:'#be185d',label:'ตรวจสภาพรถ',val:ins.total?ins.total+'ครั้ง':'-'},
-        {icon:'fa-triangle-exclamation',color:'#dc2626',label:'พบปัญหา (ตรวจ)',val:ins.issue?ins.issue+' ครั้ง':'ปกติ'},
-        {icon:'fa-store-slash',color:'#b45309',label:'ไม่สำเร็จ (ร้าน)',val:d.failedShops?d.failedShops+' ร้าน':'-'},
-        {icon:'fa-file-invoice',color:'#7c3aed',label:'ใบสั่ง (ใบ)',val:inc.tickets?inc.tickets+' ใบ':'-'},
-        {icon:'fa-baht-sign',color:'#9d174d',label:'ค่าปรับ (บาท)',val:inc.fines?fmt(inc.fines)+' ฿':'-'},
-        {icon:'fa-car-burst',color:'#dc2626',label:'อุบัติเหตุ (ครั้ง)',val:inc.accidents?inc.accidents+' ครั้ง':'-'},
-        {icon:'fa-hand-holding-dollar',color:'#b91c1c',label:'ค่าเสียหาย (บาท)',val:inc.damage?fmt(inc.damage)+' ฿':'-'},
-        {icon:'fa-screwdriver-wrench',color:'#c2410c',label:'ซ่อมรถ (ครั้ง)',val:d.maintTrips?d.maintTrips+' ครั้ง':'-'},
-        {icon:'fa-receipt',color:'#92400e',label:'ค่าซ่อม (บาท)',val:d.maintCost?fmt(d.maintCost)+' ฿':'-'}
+        {icon:'fa-tachometer-alt',color:'#2563eb',label:'ระยะ (ไมล์)',val:fmt(d.totalMileage)+' กม.',key:'mileage'},
+        {icon:'fa-map-marker-alt',color:'#7c3aed',label:'ระยะ (GPS)',val:fmt(d.totalGpsDist,1)+' กม.',key:'gps'},
+        {icon:'fa-clock',color:'#0891b2',label:'เวลาทำงานรวม',val:fmtTime(d.totalTimeSec),key:'time'},
+        {icon:'fa-gauge-high',color:'#059669',label:'ความเร็วเฉลี่ย',val:avgSpeed!=='-'?avgSpeed+' กม/ชม':'-',key:'speed'},
+        {icon:'fa-check-circle',color:'#16a34a',label:'เที่ยวสำเร็จ',val:d.doneTrips+'/'+d.trips,key:'trips'},
+        {icon:'fa-truck',color:'#d97706',label:'จำนวนรถที่ขับ',val:truckCount+' คัน',key:'trucks'},
+        {icon:'fa-clipboard-check',color:'#be185d',label:'ตรวจสภาพรถ',val:ins.total?ins.total+' ครั้ง':'-',key:'inspect'},
+        {icon:'fa-triangle-exclamation',color:'#dc2626',label:'พบปัญหา (ตรวจ)',val:ins.issue?ins.issue+' ครั้ง':'ปกติ',key:'inspect_issue'},
+        {icon:'fa-store-slash',color:'#b45309',label:'ไม่สำเร็จ (ร้าน)',val:d.failedShops?d.failedShops+' ร้าน':'-',key:'failed'},
+        {icon:'fa-file-invoice',color:'#7c3aed',label:'ใบสั่ง (ใบ)',val:inc.tickets?inc.tickets+' ใบ':'-',key:'ticket'},
+        {icon:'fa-baht-sign',color:'#9d174d',label:'ค่าปรับ (บาท)',val:inc.fines?fmt(inc.fines)+' ฿':'-',key:'fine'},
+        {icon:'fa-car-burst',color:'#dc2626',label:'อุบัติเหตุ (ครั้ง)',val:inc.accidents?inc.accidents+' ครั้ง':'-',key:'accident'},
+        {icon:'fa-hand-holding-dollar',color:'#b91c1c',label:'ค่าเสียหาย (บาท)',val:inc.damage?fmt(inc.damage)+' ฿':'-',key:'damage'},
+        {icon:'fa-screwdriver-wrench',color:'#c2410c',label:'ซ่อมรถ (ครั้ง)',val:d.maintTrips?d.maintTrips+' ครั้ง':'-',key:'maint'},
+        {icon:'fa-receipt',color:'#92400e',label:'ค่าซ่อม (บาท)',val:d.maintCost?fmt(d.maintCost)+' ฿':'-',key:'repair_cost'}
       ].map(function(m){
-        return '<div style="background:#fff;padding:14px 16px;">'
+        var dk=d.driverKey;
+        return '<div style="background:#fff;padding:14px 16px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'#fff\'" onclick="daShowDetail(\''+dk+'\',\''+m.key+'\')">'
           +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
           +'<i class="fas '+m.icon+'" style="color:'+m.color+';font-size:13px;"></i>'
-          +'<span style="font-size:11px;font-weight:700;color:#64748b;">'+m.label+'</span></div>'
+          +'<span style="font-size:11px;font-weight:700;color:#64748b;">'+m.label+'</span>'
+          +'<i class="fas fa-chevron-right" style="font-size:9px;color:#cbd5e1;margin-left:auto;"></i></div>'
           +'<div style="font-size:16px;font-weight:900;color:#0f172a;">'+m.val+'</div>'
           +'</div>';
       }).join('')
@@ -33709,6 +33714,86 @@ window.daLoad=async function(){
   }).join('');
 
   body.innerHTML=html;
+};
+
+window.daShowDetail=function(driverKey,metric){
+  var raw=window._daRaw||{};
+  var dr=_daDrivers.find(function(x){return x.driver_id===driverKey||x.username===driverKey;})||{};
+  var dName=dr.driver_name||driverKey;
+  var logMap=raw.logMap||{};
+  var dPlans=(raw.plans||[]).filter(function(p){return (p.driver_id||p.driver_transport||'–')===driverKey;});
+  var dInspects=(raw.inspects||[]).filter(function(i){return i.driver_id===driverKey;});
+  var dIncidents=(raw.incidents||[]).filter(function(i){return i.driver_id===driverKey||i.driver_username===driverKey;});
+  var dMaint=(raw.maintPlans||[]).filter(function(p){return (p.driver_id||p.driver_transport||'–')===driverKey;});
+
+  function fmtN(n,d){if(!n&&n!==0)return'-';return Number(n).toFixed(d||0).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+  function fmtDur(s,e){if(!s||!e)return'-';var sec=(new Date(e)-new Date(s))/1000;return Math.floor(sec/3600)+'ชม. '+Math.floor((sec%3600)/60)+'น.';}
+  function statusBadge(s){
+    if(s==='completed')return'<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">สำเร็จ</span>';
+    if(s==='failed'||s==='cancelled')return'<span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">ไม่สำเร็จ</span>';
+    return'<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">'+s+'</span>';
+  }
+  function tbl(heads,rows){
+    if(!rows.length)return'<div style="text-align:center;padding:40px;color:#94a3b8;font-weight:700;">ไม่มีข้อมูล</div>';
+    return'<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">'
+      +'<thead><tr>'+heads.map(function(h){return'<th style="background:#0f172a;color:#94a3b8;padding:10px 12px;text-align:left;font-weight:700;white-space:nowrap;">'+h+'</th>';}).join('')+'</tr></thead>'
+      +'<tbody>'+rows.map(function(r,i){return'<tr style="background:'+(i%2===0?'#fff':'#f8fafc')+';">'+r.map(function(c){return'<td style="padding:9px 12px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">'+c+'</td>';}).join('')+'</tr>';}).join('')
+      +'</tbody></table></div>';
+  }
+
+  var titles={mileage:'ระยะทาง (เลขไมล์)',gps:'ระยะทาง (GPS)',time:'เวลาทำงาน',speed:'ความเร็วเฉลี่ย',trips:'รายการเที่ยวทั้งหมด',trucks:'รถที่ขับในช่วงนี้',inspect:'ประวัติตรวจสภาพรถ',inspect_issue:'ผลตรวจที่พบปัญหา',failed:'เที่ยวที่ไม่สำเร็จ',ticket:'ใบสั่ง',fine:'ค่าปรับ',accident:'อุบัติเหตุ',damage:'ค่าเสียหาย',maint:'ประวัติซ่อมรถ',repair_cost:'ค่าซ่อมรถ'};
+  var title=titles[metric]||metric;
+  var html='';
+
+  if(['mileage','gps','time','speed'].includes(metric)){
+    html=tbl(['วันที่','ทะเบียน','ระยะ(ไมล์)','ระยะ(GPS)','เวลา','ความเร็ว','สถานะ'],
+      dPlans.map(function(p){
+        var log=logMap[p.plan_id];
+        var mi=log&&log.mileage_start&&log.mileage_end?fmtN(Number(log.mileage_end)-Number(log.mileage_start))+' กม.':'-';
+        var gps=log&&log.lat_start&&log.lat_end?_daHaversine(log.lat_start,log.lng_start,log.lat_end,log.lng_end).toFixed(1)+' กม.':'-';
+        var dur=log?fmtDur(log.started_at,log.completed_at):'-';
+        var spd='-';
+        if(log&&log.mileage_start&&log.mileage_end&&log.started_at&&log.completed_at){var s=(new Date(log.completed_at)-new Date(log.started_at))/1000;if(s>0)spd=((Number(log.mileage_end)-Number(log.mileage_start))/(s/3600)).toFixed(1)+' กม/ชม';}
+        return[p.plan_date||'-',p.truck_plate||'-',mi,gps,dur,spd,statusBadge(p.status)];
+      }));
+  } else if(metric==='trips'){
+    html=tbl(['วันที่','ทะเบียน','ประเภท','สถานะ'],dPlans.map(function(p){return[p.plan_date||'-',p.truck_plate||'-',p.job_type==='maintenance_pm'?'🔧 ซ่อม':'🚚 ส่ง',statusBadge(p.status)];}));
+  } else if(metric==='trucks'){
+    var tc={};dPlans.forEach(function(p){if(p.truck_plate)tc[p.truck_plate]=(tc[p.truck_plate]||0)+1;});
+    html=tbl(['ทะเบียน','จำนวนเที่ยว'],Object.entries(tc).sort(function(a,b){return b[1]-a[1];}).map(function(t){return['🚛 '+t[0],t[1]+' เที่ยว'];}));
+  } else if(metric==='inspect'||metric==='inspect_issue'){
+    var list=metric==='inspect_issue'?dInspects.filter(function(i){return i.overall==='issue';}):dInspects;
+    html=tbl(['วันที่','ทะเบียน','ผล','หมายเหตุ'],list.map(function(i){
+      var ok=i.overall!=='issue';
+      return[i.inspect_date||'-',i.truck_plate||'-',ok?'<span style="color:#16a34a;font-weight:700;">✔ ปกติ</span>':'<span style="color:#dc2626;font-weight:700;">⚠ พบปัญหา</span>',i.note||'-'];
+    }));
+  } else if(metric==='failed'){
+    html=tbl(['วันที่','ทะเบียน','สถานะ'],dPlans.filter(function(p){return p.status==='failed'||p.status==='cancelled';}).map(function(p){return[p.plan_date||'-',p.truck_plate||'-',statusBadge(p.status)];}));
+  } else if(metric==='ticket'||metric==='fine'){
+    var tks=dIncidents.filter(function(i){return i.incident_type==='ticket';});
+    html=tbl(['วันที่','ค่าปรับ (฿)','หมายเหตุ'],tks.map(function(i){return[i.incident_date||'-',fmtN(i.amount)+' ฿',i.note||'-'];}));
+  } else if(metric==='accident'||metric==='damage'){
+    var acc=dIncidents.filter(function(i){return i.incident_type==='accident';});
+    html=tbl(['วันที่','ค่าเสียหาย (฿)','หมายเหตุ'],acc.map(function(i){return[i.incident_date||'-',fmtN(i.amount)+' ฿',i.note||'-'];}));
+  } else if(metric==='maint'||metric==='repair_cost'){
+    html=tbl(['วันที่','ทะเบียน','ค่าซ่อม (฿)'],dMaint.map(function(p){var log=logMap[p.plan_id];return[p.plan_date||'-',p.truck_plate||'-',log&&log.repair_cost?fmtN(log.repair_cost)+' ฿':'-'];}));
+  }
+
+  var modal=document.getElementById('da-detail-modal');
+  if(modal) modal.remove();
+  modal=document.createElement('div');
+  modal.id='da-detail-modal';
+  modal.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.55);';
+  modal.innerHTML='<div style="background:#fff;width:100%;max-width:960px;max-height:82vh;border-radius:20px 20px 0 0;overflow:hidden;display:flex;flex-direction:column;">'
+    +'<div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:16px 20px;display:flex;align-items:center;gap:12px;">'
+    +'<div style="flex:1;"><div style="font-size:15px;font-weight:900;color:#fff;">'+dName+'</div>'
+    +'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+title+'</div></div>'
+    +'<button onclick="document.getElementById(\'da-detail-modal\').remove()" style="background:#334155;border:none;border-radius:10px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✕ ปิด</button>'
+    +'</div>'
+    +'<div style="overflow-y:auto;flex:1;">'+html+'</div>'
+    +'</div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click',function(e){if(e.target===modal)modal.remove();});
 };
 
 // โหลด driver list เมื่อ switchView ไป driver-monitor
