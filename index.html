@@ -27112,10 +27112,31 @@ window.loadKpiWH = function loadKpiWH() {
         window._sb.from('wh_activity_log').select('type,date,min_per_item,weight_per_unit,truck_plate'),
         // 3. kpi_wh_log → ข้อมูลที่เคยบันทึกไว้
         window._sb.from('kpi_wh_log').select('*').gte('cycle_date', startStr).lte('cycle_date', endStr),
-        // 4. logistic_plans → plan hours per date (งานส่งเท่านั้น ไม่รวม maintenance)
-        window._sb.from('logistic_plans').select('plan_date,prod_time_day')
-            .gte('plan_date', startStr).lte('plan_date', endStr)
-            .neq('job_type','maintenance_pm')
+        // 4. production_plan_cache → planMinutes per date
+        (async function() {
+            var planMap2 = {};
+            var months = {};
+            var cur0 = new Date(startStr), end0 = new Date(endStr);
+            while (cur0 <= end0) {
+                var mk = cur0.getFullYear() + '-' + String(cur0.getMonth()+1).padStart(2,'0');
+                months[mk] = { y: cur0.getFullYear(), m: cur0.getMonth()+1 };
+                cur0.setDate(cur0.getDate()+1);
+            }
+            await Promise.all(Object.values(months).map(function(mo) {
+                return window._sbGetProductionPlan(mo.m, mo.y).then(function(res) {
+                    if (!res || !res.machines) return;
+                    res.machines.forEach(function(mach) {
+                        var pdTime = mach.pdTime || {};
+                        Object.keys(pdTime).forEach(function(day) {
+                            planMap2[day] = (planMap2[day] || 0) + (Number(pdTime[day]) || 0);
+                        });
+                    });
+                });
+            }));
+            // แปลงชั่วโมง → นาที
+            Object.keys(planMap2).forEach(function(k) { planMap2[k] = Math.round(planMap2[k] * 60); });
+            return { data: Object.keys(planMap2).map(function(k){ return { plan_date: k, total_mins: planMap2[k] }; }) };
+        })()
     ]).then(function(results) {
         var kpiRows   = (results[0].data || []);
         var actRows   = (results[1].data || []);
@@ -27151,13 +27172,11 @@ window.loadKpiWH = function loadKpiWH() {
             kpiInvMap[iso][r.type] = { checker: r.kpi_checker, prd: r.kpi_prd, finalAdj: r.kpi_final };
         });
 
-        // ── Build planMap จาก logistic_plans ──
+        // ── Build planMap จาก production_plan_cache ──
         var planMap = {}; // key=yyyy-MM-dd → totalMinutes
         planRows.forEach(function(r) {
-            var key = r.plan_date;
-            planMap[key] = (planMap[key] || 0) + (parseFloat(r.prod_time_day) || 0);
+            planMap[r.plan_date] = r.total_mins || 0;
         });
-        Object.keys(planMap).forEach(function(k) { planMap[k] = Math.round(planMap[k] * 60); });
 
         // ── คำนวณ Median MPI/KG ทุก historical trip (baseline สำหรับ efficiency) ──
         var allMpiKgA=[], allMpiKgB=[], allMpiKgC=[], allMpiKgD=[];
