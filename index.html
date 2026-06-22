@@ -2106,6 +2106,9 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
             <button onclick="switchView('driver-monitor')" id="nav-driver-monitor" class="nav-btn" data-tip="Driver Monitor">
                 <span class="nav-icon"><i class="fas fa-satellite-dish"></i></span> Driver Monitor
             </button>
+            <button onclick="switchView('driver-analytics')" id="nav-driver-analytics" class="nav-btn" data-tip="Driver Analytics">
+                <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Driver Analytics
+            </button>
 
             <!-- ─── SUPERVISOR ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
@@ -7186,6 +7189,57 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
       <div id="dm-imd-body" style="padding:16px 20px;max-height:70vh;overflow-y:auto;"></div>
     </div>
   </div>
+
+</div>
+
+<!-- DRIVER ANALYTICS                                              -->
+<!-- ============================================================ -->
+<div id="view-driver-analytics-content" class="hidden space-y-4">
+  <!-- Header -->
+  <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="width:48px;height:48px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-chart-line" style="color:#fff;font-size:22px;"></i>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:20px;font-weight:900;color:#fff;">Driver Analytics</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.65);font-weight:600;">สถิติและภาพรวมการปฏิบัติงานคนขับ</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="rounded-2xl p-4" style="background:#f8fafc;border:1px solid #e2e8f0;">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px;">คนขับ</div>
+        <select id="da-driver-sel" style="border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;color:#1e293b;outline:none;background:#fff;min-width:160px;">
+          <option value="">ทุกคน</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px;">จาก</div>
+        <input type="date" id="da-date-from" style="border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;color:#1e293b;outline:none;background:#fff;">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px;">ถึง</div>
+        <input type="date" id="da-date-to" style="border:1px solid #cbd5e1;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;color:#1e293b;outline:none;background:#fff;">
+      </div>
+      <div style="margin-top:18px;">
+        <button onclick="daLoad()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;">
+          <i class="fas fa-search"></i> แสดงผล
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result area -->
+  <div id="da-body">
+    <div style="text-align:center;padding:60px;color:#94a3b8;font-size:14px;font-weight:700;">
+      <i class="fas fa-chart-bar" style="font-size:40px;display:block;margin-bottom:12px;opacity:.3;"></i>
+      เลือกช่วงวันที่แล้วกด "แสดงผล"
+    </div>
+  </div>
 </div>
 
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
@@ -12220,7 +12274,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'driver-monitor', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'truck-dispatch', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -12235,6 +12289,7 @@ window.switchView = function switchView(view) {
     if (activeNav) activeNav.classList.add('active');
 
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
+    if (view === 'driver-analytics' && window.daInit) window.daInit();
 
     const titleEl = document.getElementById('view-title');
     if (titleEl) {
@@ -12250,6 +12305,7 @@ window.switchView = function switchView(view) {
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
             'truck-dispatch': 'จัดรถส่งสินค้า — Truck Dispatch',
             'driver-monitor': 'Driver Monitor — ติดตามคนขับ',
+            'driver-analytics': 'Driver Analytics — สถิติคนขับ',
             'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
             'products': 'จัดการสินค้า — Product Master',
             'user-accounts': 'ตั้งค่าบัญชีผู้ใช้ — Driver & WH Staff',
@@ -33457,6 +33513,154 @@ window.dmResetTrip=async function(){
 
 window.dmRefresh=function(){
   if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}else{dmSelectDriver();}
+};
+
+// ═══════════════════════════════════════════════════════
+// DRIVER ANALYTICS
+// ═══════════════════════════════════════════════════════
+var _daDrivers=[];
+
+window.daInit=async function(){
+  if(_daDrivers.length) return;
+  var {data}=await window._sb.from('driver_users').select('username,driver_name,driver_id').eq('active',true).order('driver_name');
+  _daDrivers=data||[];
+  var sel=document.getElementById('da-driver-sel');
+  if(sel) sel.innerHTML='<option value="">ทุกคน</option>'+_daDrivers.map(function(d){return'<option value="'+d.username+'">'+d.driver_name+'</option>';}).join('');
+  // default: เดือนนี้
+  var now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
+  var df=document.getElementById('da-date-from'), dt=document.getElementById('da-date-to');
+  if(df&&!df.value) df.value=y+'-'+m+'-01';
+  if(dt&&!dt.value) dt.value=now.toISOString().split('T')[0];
+};
+
+function _daHaversine(la1,lo1,la2,lo2){
+  var R=6371,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;
+  var a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)*Math.sin(dLo/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+window.daLoad=async function(){
+  var body=document.getElementById('da-body');
+  var dateFrom=(document.getElementById('da-date-from')||{}).value||'';
+  var dateTo=(document.getElementById('da-date-to')||{}).value||'';
+  var driverSel=(document.getElementById('da-driver-sel')||{}).value||'';
+  if(!dateFrom||!dateTo){body.innerHTML='<div style="padding:40px;text-align:center;color:#ef4444;font-weight:700;">กรุณาเลือกช่วงวันที่</div>';return;}
+  body.innerHTML='<div style="text-align:center;padding:60px;color:#64748b;"><i class="fas fa-spinner fa-spin" style="font-size:28px;"></i></div>';
+
+  // ── โหลดข้อมูล ──────────────────────────────────────
+  var planQ=window._sb.from('logistic_plans')
+    .select('plan_id,driver_id,driver_transport,truck_plate,plan_date,status,job_type')
+    .gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false);
+  if(driverSel) planQ=planQ.or('driver_id.eq.'+driverSel+',driver_transport.ilike.%'+(_daDrivers.find(function(d){return d.username===driverSel;})||{}).driver_name+'%');
+  var [{data:plans},{data:logs},{data:inspects}]=await Promise.all([
+    planQ,
+    window._sb.from('trip_logs').select('*').gte('started_at',dateFrom+'T00:00:00').lte('started_at',dateTo+'T23:59:59'),
+    window._sb.from('truck_inspections').select('*').gte('inspect_date',dateFrom).lte('inspect_date',dateTo)
+  ]);
+
+  // ── จัดกลุ่มตามคนขับ ─────────────────────────────────
+  var logMap={};(logs||[]).forEach(function(l){logMap[l.plan_id]=l;});
+  var driverMap={};
+  (plans||[]).forEach(function(p){
+    var key=p.driver_id||p.driver_transport||'–';
+    var dName=(_daDrivers.find(function(d){return d.driver_id===p.driver_id;})||{}).driver_name||p.driver_transport||key;
+    if(!driverMap[key]) driverMap[key]={name:dName,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0};
+    var d=driverMap[key];
+    d.plans.push(p);
+    d.trips++;
+    if(p.status==='completed') d.doneTrips++;
+    if(p.truck_plate){d.trucks[p.truck_plate]=(d.trucks[p.truck_plate]||0)+1;}
+    var log=logMap[p.plan_id];
+    if(log){
+      if(log.mileage_start&&log.mileage_end) d.totalMileage+=Number(log.mileage_end)-Number(log.mileage_start);
+      if(log.lat_start&&log.lat_end) d.totalGpsDist+=_daHaversine(log.lat_start,log.lng_start,log.lat_end,log.lng_end);
+      if(log.started_at&&log.completed_at){
+        d.totalTimeSec+=(new Date(log.completed_at)-new Date(log.started_at))/1000;
+      }
+    }
+  });
+
+  // ── inspection ─────────────────────────────────────────
+  var inspectMap={};
+  (inspects||[]).forEach(function(ins){
+    var key=ins.driver_id||ins.driver_name||'–';
+    if(!inspectMap[key]) inspectMap[key]={total:0,ok:0,issue:0};
+    inspectMap[key].total++;
+    if(ins.overall==='issue') inspectMap[key].issue++;
+    else inspectMap[key].ok++;
+  });
+
+  var drivers=Object.values(driverMap);
+  if(!drivers.length){
+    body.innerHTML='<div style="text-align:center;padding:60px;color:#94a3b8;font-weight:700;">ไม่พบข้อมูลในช่วงวันที่นี้</div>';
+    return;
+  }
+
+  // ── Render ─────────────────────────────────────────────
+  function fmt(n,dec){return n?(n.toFixed(dec||0).replace(/\B(?=(\d{3})+(?!\d))/g,',')):'-';}
+  function fmtTime(sec){
+    if(!sec)return '-';
+    var h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);
+    return h+'ชม. '+m+'น.';
+  }
+
+  var html=drivers.map(function(d){
+    var iKey=Object.keys(inspectMap).find(function(k){
+      var dr=_daDrivers.find(function(x){return x.driver_id===k||x.driver_name===k;});
+      return dr&&(dr.driver_name===d.name||dr.driver_id===(d.plans[0]||{}).driver_id);
+    });
+    var ins=inspectMap[iKey||'']||{total:0,ok:0,issue:0};
+    var avgSpeed=d.totalTimeSec>0&&d.totalMileage>0?(d.totalMileage/(d.totalTimeSec/3600)).toFixed(1):'-';
+    var truckList=Object.entries(d.trucks).sort(function(a,b){return b[1]-a[1];});
+    var truckCount=truckList.length;
+
+    return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;margin-bottom:16px;">'
+      // name header
+      +'<div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:16px 20px;display:flex;align-items:center;gap:12px;">'
+      +'<div style="width:44px;height:44px;border-radius:14px;background:#1d4ed8;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;flex-shrink:0;">'+d.name.replace(/^นาย|^นางสาว|^น\.ส\.|^นาง/,'').trim().charAt(0)+'</div>'
+      +'<div><div style="font-size:17px;font-weight:900;color:#fff;">'+d.name+'</div>'
+      +'<div style="font-size:12px;color:#64748b;margin-top:2px;">'+dateFrom+' ถึง '+dateTo+'</div></div>'
+      +'<div style="margin-left:auto;text-align:right;"><div style="font-size:22px;font-weight:900;color:#fff;">'+d.trips+'</div>'
+      +'<div style="font-size:10px;color:#64748b;">เที่ยว</div></div>'
+      +'</div>'
+      // metric grid
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:#e2e8f0;">'
+      +[
+        {icon:'fa-tachometer-alt',color:'#2563eb',label:'ระยะ (ไมล์)',val:fmt(d.totalMileage)+' กม.'},
+        {icon:'fa-map-marker-alt',color:'#7c3aed',label:'ระยะ (GPS)',val:fmt(d.totalGpsDist,1)+' กม.'},
+        {icon:'fa-clock',color:'#0891b2',label:'เวลาทำงานรวม',val:fmtTime(d.totalTimeSec)},
+        {icon:'fa-gauge-high',color:'#059669',label:'ความเร็วเฉลี่ย',val:avgSpeed!=='-'?avgSpeed+' กม/ชม':'-'},
+        {icon:'fa-check-circle',color:'#16a34a',label:'เที่ยวสำเร็จ',val:d.doneTrips+'/'+d.trips},
+        {icon:'fa-truck',color:'#d97706',label:'จำนวนรถที่ขับ',val:truckCount+' คัน'},
+        {icon:'fa-clipboard-check',color:'#be185d',label:'ตรวจสภาพรถ',val:ins.total+'ครั้ง'},
+        {icon:'fa-triangle-exclamation',color:'#dc2626',label:'พบปัญหา',val:ins.issue?ins.issue+' ครั้ง':'ปกติ'}
+      ].map(function(m){
+        return '<div style="background:#fff;padding:14px 16px;">'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
+          +'<i class="fas '+m.icon+'" style="color:'+m.color+';font-size:13px;"></i>'
+          +'<span style="font-size:11px;font-weight:700;color:#64748b;">'+m.label+'</span></div>'
+          +'<div style="font-size:16px;font-weight:900;color:#0f172a;">'+m.val+'</div>'
+          +'</div>';
+      }).join('')
+      +'</div>'
+      // truck breakdown
+      +'<div style="padding:14px 20px;border-top:1px solid #f1f5f9;">'
+      +'<div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:10px;"><i class="fas fa-truck" style="margin-right:5px;"></i>รถที่ขับในช่วงนี้</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+      +truckList.map(function(t){
+        return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;color:#1e293b;">'
+          +'🚛 '+t[0]+' <span style="color:#2563eb;">×'+t[1]+'</span></div>';
+      }).join('')
+      +'</div></div>'
+      // inspection detail
+      +(ins.total?'<div style="padding:10px 20px 14px;border-top:1px solid #f1f5f9;display:flex;gap:8px;flex-wrap:wrap;">'
+        +'<span style="background:#dcfce7;color:#15803d;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">✔ ปกติ '+ins.ok+' ครั้ง</span>'
+        +(ins.issue?'<span style="background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">⚠ พบปัญหา '+ins.issue+' ครั้ง</span>':'')
+        +'</div>':'')
+      +'</div>';
+  }).join('');
+
+  body.innerHTML=html;
 };
 
 // โหลด driver list เมื่อ switchView ไป driver-monitor
