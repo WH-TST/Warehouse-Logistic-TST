@@ -27159,6 +27159,7 @@ window.loadKpiWH = function loadKpiWH() {
                 damageScore:    r.damage_score,
                 dataErrFG:      r.data_err_fg,
                 dataErrSEMI:    r.data_err_semi,
+                planMinutes:    r.plan_minutes ?? null,
             };
             kpiWHSavedData[iso]  = mapped;
             kpiWHSavedData[ddmm] = mapped;
@@ -27491,6 +27492,7 @@ window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
         damage_score:    row.damageScore,
         data_err_fg:     row.dataErrFG,
         data_err_semi:   row.dataErrSEMI,
+        plan_minutes:    auto.planMinutes ?? null,
         recorded_by:     window._currentUser || null,
     };
     window._sb.from('kpi_wh_log').upsert(sbRow, {onConflict:'cycle_date'}).then(function(res2) {
@@ -27631,11 +27633,11 @@ window.openKpiWHEditModal = function openKpiWHEditModal(isoDate) {
     // MANUAL field
     setField('kpi-edit-finalAdjSEMI', saved.finalAdjSEMI);
 
-    // Space Breakdown
+    // Space Breakdown — ใช้ planMinutes ที่บันทึกไว้ก่อน fallback ไป auto
+    const planM = saved.planMinutes ?? auto.planMinutes ?? 0;
     const planHEl = safeGet('kpi-edit-space-planhours');
-    if (planHEl) planHEl.textContent = (auto.planHours !== null && auto.planHours !== undefined) ? auto.planHours.toFixed(1) + ' ชม.' : '—';
+    if (planHEl) planHEl.textContent = planM > 0 ? (planM/60).toFixed(1) + ' ชม.' : '—';
     // Back-calculate breakdownMins จาก spaceBreakdown% ที่บันทึกไว้
-    const planM = auto.planMinutes ?? 0;
     if (saved.spaceBreakdown !== null && saved.spaceBreakdown !== undefined && planM > 0) {
         const backMins = Math.round(planM * (1 - saved.spaceBreakdown / 100));
         setField('kpi-edit-breakdownMins', backMins);
@@ -27699,6 +27701,7 @@ window.submitKpiWHEdit = function submitKpiWHEdit() {
         damage_score:    row.damageScore,
         data_err_fg:     row.dataErrFG,
         data_err_semi:   row.dataErrSEMI,
+        plan_minutes:    auto.planMinutes ?? null,
         recorded_by:     window._currentUser || null,
     };
     window._sb.from('kpi_wh_log').upsert(sbRow2, {onConflict:'cycle_date'}).then(function(res2) {
