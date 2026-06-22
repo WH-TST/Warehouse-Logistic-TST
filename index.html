@@ -7136,22 +7136,38 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     </div>
   </div>
 
+  <!-- Driver view area -->
+  <div id="dm-area" style="background:#0d1b2a;border-radius:20px;overflow:hidden;min-height:400px;">
+    <div style="text-align:center;padding:80px 20px;color:#475569;">
+      <i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;opacity:.3;"></i>
+      <p style="font-weight:700;font-size:15px;">เลือกคนขับเพื่อดูสถานะ</p>
+    </div>
+  </div>
+
   <!-- Inspection Status Panel -->
-  <div class="rounded-2xl p-4" style="background:#fff;border:1px solid #e2e8f0;">
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:900;color:#1e293b;display:flex;align-items:center;gap:8px;flex:1;min-width:160px;">
-        <i class="fas fa-clipboard-check" style="color:#059669;"></i> ตรวจสภาพรถประจำวัน
+  <div class="rounded-2xl" style="background:#fff;border:1px solid #e2e8f0;overflow:hidden;">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#064e3b,#059669);padding:14px 20px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:160px;">
+        <div style="width:36px;height:36px;background:rgba(255,255,255,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          <i class="fas fa-clipboard-check" style="color:#fff;font-size:16px;"></i>
+        </div>
+        <div>
+          <div style="font-size:14px;font-weight:900;color:#fff;line-height:1.2;">ตรวจสภาพรถประจำวัน</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.65);font-weight:600;">Daily Vehicle Inspection</div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <input type="date" id="dm-inspect-date-pick" onchange="dmLoadInspections()" style="border:1px solid #e2e8f0;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;color:#1e293b;outline:none;background:#f8fafc;">
-        <select id="dm-inspect-plate-filter" onchange="dmLoadInspections()" style="border:1px solid #e2e8f0;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;color:#1e293b;outline:none;background:#f8fafc;">
+        <input type="date" id="dm-inspect-date-pick" onchange="dmLoadInspections()" style="border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;color:#1e293b;outline:none;background:rgba(255,255,255,.9);">
+        <select id="dm-inspect-plate-filter" onchange="dmLoadInspections()" style="border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;color:#1e293b;outline:none;background:rgba(255,255,255,.9);">
           <option value="">ทุกคัน</option>
         </select>
-        <button onclick="dmLoadInspections()" style="background:#f1f5f9;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:#475569;cursor:pointer;"><i class="fas fa-sync-alt"></i></button>
+        <button onclick="dmLoadInspections()" style="background:rgba(255,255,255,.2);border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;"><i class="fas fa-sync-alt"></i></button>
       </div>
     </div>
+    <!-- List -->
     <div id="dm-inspect-list" style="display:flex;flex-direction:column;gap:0;">
-      <span style="font-size:12px;color:#94a3b8;padding:8px 0;">กำลังโหลด...</span>
+      <span style="font-size:12px;color:#94a3b8;padding:12px 20px;">กำลังโหลด...</span>
     </div>
   </div>
 
@@ -7166,14 +7182,6 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
         <button onclick="document.getElementById('dm-inspect-modal').style.display='none'" style="width:36px;height:36px;border-radius:10px;background:#1e293b;border:none;color:#94a3b8;cursor:pointer;font-size:18px;">✕</button>
       </div>
       <div id="dm-imd-body" style="padding:16px 20px;max-height:70vh;overflow-y:auto;"></div>
-    </div>
-  </div>
-
-  <!-- Driver view area -->
-  <div id="dm-area" style="background:#0d1b2a;border-radius:20px;overflow:hidden;min-height:400px;">
-    <div style="text-align:center;padding:80px 20px;color:#475569;">
-      <i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;opacity:.3;"></i>
-      <p style="font-weight:700;font-size:15px;">เลือกคนขับเพื่อดูสถานะ</p>
     </div>
   </div>
 </div>
@@ -32839,25 +32847,35 @@ window.dmLoadInspections=async function(){
     return;
   }
 
-  el.innerHTML=drivers.map(function(d){
+  el.innerHTML=drivers.map(function(d,idx){
     var ins=inspectByPlate[d.plate];
     var isIssue=ins&&ins.overall==='issue';
     var checked=!!ins;
     var initials=d.name.replace(/^นาย|^นางสาว|^น\.ส\.|^นาง/,'').trim().charAt(0)||'?';
-    var avatarBg=checked?(isIssue?'#FCEBEB':'#EAF3DE'):'#FAEEDA';
-    var avatarColor=checked?(isIssue?'#791F1F':'#27500A'):'#633806';
+    var avatarBg=checked?(isIssue?'#fee2e2':'#dcfce7'):'#fef3c7';
+    var avatarColor=checked?(isIssue?'#b91c1c':'#15803d'):'#92400e';
+    var avatarBorder=checked?(isIssue?'2px solid #fca5a5':'2px solid #86efac'):'2px solid #fcd34d';
+    var statusStrip=checked?(isIssue?'#ef4444':'#22c55e'):'#f59e0b';
     var badge=checked
-      ?(isIssue?'<span style="background:#FCEBEB;color:#791F1F;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">⚠️ พบปัญหา '+(ins.items||[]).filter(function(it){return it.status==='issue';}).length+' รายการ</span>'
-        :'<span style="background:#EAF3DE;color:#27500A;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">✅ ปกติทุกรายการ</span>')
-      :'<span style="background:#FAEEDA;color:#633806;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;">⏳ ยังไม่ตรวจ</span>';
+      ?(isIssue
+        ?'<span style="background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:800;padding:3px 10px;border-radius:999px;white-space:nowrap;">⚠ พบปัญหา '+(ins.items||[]).filter(function(it){return it.status==='issue';}).length+' รายการ</span>'
+        :'<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:800;padding:3px 10px;border-radius:999px;white-space:nowrap;">✔ ปกติทุกรายการ</span>')
+      :'<span style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:800;padding:3px 10px;border-radius:999px;white-space:nowrap;">⏳ ยังไม่ตรวจ</span>';
     var time=ins&&ins.created_at?' · '+new Date(ins.created_at).toLocaleTimeString('th',{hour:'2-digit',minute:'2-digit'}):'';
-    var clickable=checked?'style="cursor:pointer;" onclick="dmShowInspectDetail(\''+d.plate+'\',\''+dateVal+'\')" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'"':'';
-    return '<div '+clickable+' style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:.5px solid #f1f5f9;">'
-      +'<div style="width:38px;height:38px;border-radius:50%;background:'+avatarBg+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:'+avatarColor+';flex-shrink:0;">'+dmEsc(initials)+'</div>'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+dmEsc(d.name)+'</div>'
-      +'<div style="font-size:11px;color:#64748b;">🚛 '+dmEsc(d.plate)+time+'</div></div>'
+    var isLast=idx===drivers.length-1;
+    var border=isLast?'none':'border-bottom:1px solid #f1f5f9';
+    var clickAttr=checked?'onclick="dmShowInspectDetail(\''+d.plate+'\',\''+dateVal+'\')"':'';
+    var hoverStyle=checked?'cursor:pointer;':'';
+    return '<div '+clickAttr+' style="display:flex;align-items:center;gap:12px;padding:12px 20px;'+border+';'+hoverStyle+'transition:background .15s;" '
+      +(checked?'onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'transparent\'"':'')+'>'
+      +'<div style="width:4px;height:44px;border-radius:4px;background:'+statusStrip+';flex-shrink:0;"></div>'
+      +'<div style="width:40px;height:40px;border-radius:50%;background:'+avatarBg+';border:'+avatarBorder+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:'+avatarColor+';flex-shrink:0;">'+dmEsc(initials)+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-size:13px;font-weight:800;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+dmEsc(d.name)+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:2px;">🚛 '+dmEsc(d.plate)+time+'</div>'
+      +'</div>'
       +badge
-      +(checked?'<i class="fas fa-chevron-right" style="font-size:11px;color:#cbd5e1;flex-shrink:0;margin-left:4px;"></i>':'')
+      +(checked?'<i class="fas fa-chevron-right" style="font-size:11px;color:#cbd5e1;flex-shrink:0;margin-left:6px;"></i>':'')
       +'</div>';
   }).join('');
 };
