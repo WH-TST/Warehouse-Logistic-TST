@@ -8720,3 +8720,53 @@ function migrateKpiWHToSupabase() {
   }
   Logger.log('✅ migrate เสร็จ ' + ok + '/' + total + ' แถว');
 }
+
+// ── ส่งข้อมูล KPI WH&LG ไปยัง Google Sheet DailyOperation ──────────────────
+var KPI_WH_SHEET_ID   = '1Q8U4Ar2GvXChnOE7Ip2_Pxy0rvnkwPI2K8scLpXbT1I';
+var KPI_WH_SHEET_NAME = 'DailyOperation';
+// คอลัมน์ BL = 64: [BL]prdFG, [BM]prdSEMI, [BN]chkFG, [BO]chkSEMI,
+//                   [BP]adjFG, [BQ]adjSEMI, [BR]space, [BS]damage, [BT]load
+
+function updateKpiWHToSheet(dataJson) {
+  var data = JSON.parse(dataJson);
+  var ss    = SpreadsheetApp.openById(KPI_WH_SHEET_ID);
+  var sheet = ss.getSheetByName(KPI_WH_SHEET_NAME);
+  if (!sheet) return JSON.stringify({ error: 'ไม่พบ sheet: ' + KPI_WH_SHEET_NAME });
+
+  var lastRow  = sheet.getLastRow();
+  var dateVals = sheet.getRange(1, 1, lastRow, 1).getValues();
+
+  var thaiM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  function toThaiDate(iso) {
+    var p = iso.split('-');
+    return parseInt(p[2]) + '-' + thaiM[parseInt(p[1])-1] + '-' + p[0];
+  }
+
+  // สร้าง map: thai date string → row number
+  var dateMap = {};
+  for (var i = 0; i < dateVals.length; i++) {
+    var cell = dateVals[i][0];
+    if (!cell) continue;
+    var str = cell.toString().trim();
+    dateMap[str] = i + 1;
+  }
+
+  var _pct = function(v) { return (v != null && v !== '') ? v / 100 : ''; };
+  var BL = 64;
+  var updated = 0, skipped = 0;
+
+  data.forEach(function(row) {
+    var tdate = toThaiDate(row.date);
+    var ri = dateMap[tdate];
+    if (!ri) { skipped++; return; }
+    sheet.getRange(ri, BL, 1, 9).setValues([[
+      _pct(row.prdKPIFG),    _pct(row.prdKPISEMI),
+      _pct(row.checkerFGPct),_pct(row.checkerSEMIPct),
+      _pct(row.finalAdjFGPct),_pct(row.finalAdjSEMIPct),
+      _pct(row.spaceBreakdown),_pct(row.damageScore),_pct(row.loadScore),
+    ]]);
+    updated++;
+  });
+
+  return JSON.stringify({ updated: updated, skipped: skipped });
+}

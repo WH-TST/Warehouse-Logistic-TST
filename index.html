@@ -7287,6 +7287,10 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
         class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-8 py-3 rounded-xl font-black text-sm shadow-lg transition-all flex items-center gap-2 whitespace-nowrap">
         <i class="fas fa-search"></i> แสดงผล
       </button>
+      <button onclick="exportKpiWHToGSheet()" id="btn-kpi-wh-export"
+        class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-black text-sm shadow-lg transition-all flex items-center gap-2 whitespace-nowrap hidden">
+        <i class="fab fa-google"></i> ส่งไป Google Sheet
+      </button>
     </div>
   </div>
 
@@ -27287,6 +27291,8 @@ window.loadKpiWH = function loadKpiWH() {
 
         var btn2 = safeGet('btn-kpi-wh-load');
         if (btn2) { btn2.innerHTML = '<i class="fas fa-search"></i> แสดงผล'; btn2.disabled = false; }
+        var btnEx = safeGet('btn-kpi-wh-export');
+        if (btnEx) btnEx.classList.remove('hidden');
         renderKpiWHTable(startStr, endStr);
     });
 };
@@ -27470,6 +27476,63 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
     renderKpiWHSummary(dates);
 };
 
+
+// ── ส่งข้อมูลไป Google Sheet DailyOperation ─────────────────────────────
+window.exportKpiWHToGSheet = function exportKpiWHToGSheet() {
+    const startStr = safeGet('kpi-wh-date-from')?.value;
+    const endStr   = safeGet('kpi-wh-date-to')?.value;
+    if (!startStr || !endStr) { showToast('⚠️ กรุณาเลือกช่วงวันที่ก่อน', true); return; }
+
+    const rows = [];
+    const cur = new Date(startStr), end = new Date(endStr);
+    while (cur <= end) {
+        const iso = cur.toISOString().slice(0, 10);
+        const auto  = kpiWHAutoData[iso]  || {};
+        const saved = kpiWHSavedData[iso] || {};
+        const isSaved = !!saved.date;
+
+        // ใช้ค่า disp เดียวกับที่แสดงในตาราง
+        const loadScore      = isSaved ? (saved.loadScore      ?? calcLoadScoreKPI(auto))   : calcLoadScoreKPI(auto);
+        const damageScore    = isSaved ? (saved.damageScore    ?? calcDamageScoreKPI(auto)) : calcDamageScoreKPI(auto);
+        const checkerFGPct   = isSaved ? (saved.checkerFGPct   ?? auto.checkerFGPct)   : auto.checkerFGPct;
+        const checkerSEMIPct = isSaved ? (saved.checkerSEMIPct ?? auto.checkerSEMIPct) : auto.checkerSEMIPct;
+        const finalAdjFGPct  = isSaved ? (saved.finalAdjFG     ?? auto.finalAdjFGPct)  : auto.finalAdjFGPct;
+        const finalAdjSEMIPct= isSaved ? (saved.finalAdjSEMI   ?? auto.finalAdjSEMIPct): auto.finalAdjSEMIPct;
+        const spaceBreakdown = isSaved ? saved.spaceBreakdown : null;
+        const prdKPIFG       = isSaved ? (saved.dataErrFG   ?? auto.prdKPIFG)   : auto.prdKPIFG;
+        const prdKPISEMI     = isSaved ? (saved.dataErrSEMI ?? auto.prdKPISEMI) : auto.prdKPISEMI;
+
+        // ส่งเฉพาะวันที่มีข้อมูลอย่างน้อย 1 ช่อง
+        const hasAny = [loadScore, damageScore, checkerFGPct, checkerSEMIPct,
+                        finalAdjFGPct, finalAdjSEMIPct, spaceBreakdown, prdKPIFG, prdKPISEMI]
+                        .some(v => v != null);
+        if (hasAny) {
+            rows.push({ date: iso, loadScore, damageScore, checkerFGPct, checkerSEMIPct,
+                        finalAdjFGPct, finalAdjSEMIPct, spaceBreakdown, prdKPIFG, prdKPISEMI });
+        }
+        cur.setDate(cur.getDate() + 1);
+    }
+
+    if (rows.length === 0) { showToast('ไม่มีข้อมูลในช่วงที่เลือก', true); return; }
+
+    const btn = safeGet('btn-kpi-wh-export');
+    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังส่ง...'; btn.disabled = true; }
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (btn) { btn.innerHTML = '<i class="fab fa-google"></i> ส่งไป Google Sheet'; btn.disabled = false; }
+            try {
+                const r = JSON.parse(res);
+                if (r.error) { showToast('❌ ' + r.error, true); return; }
+                showToast('✅ ส่งข้อมูลสำเร็จ ' + r.updated + ' วัน' + (r.skipped ? ' (ข้าม ' + r.skipped + ' วัน)' : ''));
+            } catch(e) { showToast('✅ ส่งข้อมูลสำเร็จ'); }
+        })
+        .withFailureHandler(function(err) {
+            if (btn) { btn.innerHTML = '<i class="fab fa-google"></i> ส่งไป Google Sheet'; btn.disabled = false; }
+            showToast('❌ ส่งข้อมูลล้มเหลว: ' + err.message, true);
+        })
+        .updateKpiWHToSheet(JSON.stringify(rows));
+};
 
 // ── บันทึกแถว ──────────────────────────────────────────────────────────
 window.saveKpiWHRow = function saveKpiWHRow(isoDate) {
