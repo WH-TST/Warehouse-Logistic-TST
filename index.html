@@ -33412,7 +33412,8 @@ var _dRtChannel=null;
 var _dPrevPlanIds=null;
 
 function _dMakeBeepWav(){
-  // กริ๊งงงงงง — เสียงกระดิ่งสูง มี vibrato decay ยาว 5 วินาที
+  // เสียงโทรศัพท์แบบ PSTN: 440Hz+480Hz ผสมกัน, pattern กริ๊ง 0.4s / เงียบ 0.2s
+  // รวม 5 วินาที: กริ๊ง-กริ๊ง x4 แล้วเงียบท้าย
   var sr=22050,dur=5.0;
   var n=Math.floor(sr*dur);
   var buf=new ArrayBuffer(44+n*2);
@@ -33422,18 +33423,21 @@ function _dMakeBeepWav(){
   wr(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
   v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
   wr(36,'data');v.setUint32(40,n*2,true);
+  // กริ๊ง 0.4s, เงียบ 0.2s — วนซ้ำ (1 คู่ = 0.6s → 8 กริ๊งใน 5s)
+  var ringDur=0.4,silDur=0.2,cycle=ringDur+silDur;
   for(var i=0;i<n;i++){
     var t=i/sr;
-    // attack เร็ว 0.02s, decay ยาวตลอด
-    var env=t<0.02?(t/0.02):Math.exp(-t*1.1);
-    // vibrato 8Hz สร้างความสั่น "กริ๊ง"
-    var vibrato=1+0.012*Math.sin(2*Math.PI*8*t);
-    var freq=1760*vibrato;
-    // เสียงหลัก + overtone ให้ฟังดูกระดิ่ง
-    var s=env*(0.7*Math.sin(2*Math.PI*freq*t)
-              +0.2*Math.sin(2*Math.PI*freq*2*t)
-              +0.08*Math.sin(2*Math.PI*freq*3*t));
-    v.setInt16(44+i*2,Math.max(-32767,Math.min(32767,s*32767)),true);
+    var tInCycle=t%cycle;
+    var samp=0;
+    if(tInCycle<ringDur){
+      // attack 10ms, release 30ms ก่อนหมด ring
+      var tr=tInCycle;
+      var env=tr<0.01?(tr/0.01):tr>(ringDur-0.03)?((ringDur-tr)/0.03):1.0;
+      env=Math.max(0,Math.min(1,env));
+      // 440Hz + 480Hz ผสม — เสียงโทรศัพท์มาตรฐาน
+      samp=env*0.45*(Math.sin(2*Math.PI*440*t)+Math.sin(2*Math.PI*480*t));
+    }
+    v.setInt16(44+i*2,Math.max(-32767,Math.min(32767,samp*32767)),true);
   }
   var b=new Uint8Array(buf),str='';
   for(var j=0;j<b.length;j++)str+=String.fromCharCode(b[j]);
@@ -33443,17 +33447,10 @@ var _dBeepUri=null;
 window.drvPlayNewOrder=function drvPlayNewOrder(){
   try{
     if(!_dBeepUri)_dBeepUri=_dMakeBeepWav();
-    // เล่น 3 รอบ ห่างกัน 200ms — กริ๊งงง กริ๊งงง กริ๊งงง
-    var count=0;
-    var playOnce=function(){
-      if(count>=3)return;
-      count++;
-      var a=new Audio(_dBeepUri);
-      a.volume=1;
-      a.onended=function(){setTimeout(playOnce,200);};
-      a.play().catch(function(){});
-    };
-    playOnce();
+    // เล่นครั้งเดียว 5 วินาที — มี pattern กริ๊งซ้ำอยู่ใน WAV แล้ว
+    var a=new Audio(_dBeepUri);
+    a.volume=1;
+    a.play().catch(function(){});
   }catch(e){}
   try{
     if(!window.speechSynthesis)return;
