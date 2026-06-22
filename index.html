@@ -31628,7 +31628,7 @@ window.viewTripResult = async function(planId) {
       try {
         var savedRes = await window._sb
           .from('stock_count_items')
-          .select('sku,bundle1,bundle2,scrap1,scrap2,system_pcs,note,session_id,stock_count_sessions(count_date,wh)')
+          .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,note,session_id,stock_count_sessions(count_date,wh)')
           .order('session_id', {ascending: false});
         // dedup: เก็บเฉพาะ occurrence แรกต่อ sku|wh (= session ล่าสุด แยกคลัง)
         (savedRes.data||[]).forEach(function(r){
@@ -31640,7 +31640,7 @@ window.viewTripResult = async function(planId) {
             bundle2: Number(r.bundle2)||0,
             pcs1:    Number(r.scrap1)||0,
             pcs2:    Number(r.scrap2)||0,
-            holdPcs: 0,
+            holdPcs: Number(r.hold_pcs)||0,
             note:    r.note||'',
             _date:   sess.count_date||'',
             _sessId: r.session_id||0
@@ -31968,7 +31968,7 @@ window.viewTripResult = async function(planId) {
     var itemsPayload = _scItems.map(function(item){
       return { session_id: sessionId, sku: item.sku, sku_name: item.name,
         ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
-        scrap1: item.pcs1||0, scrap2: item.pcs2||0,
+        scrap1: item.pcs1||0, scrap2: item.pcs2||0, hold_pcs: item.holdPcs||0,
         system_pcs: item.systemQty||0,
         note: item.note||null };
     });
