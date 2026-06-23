@@ -35078,45 +35078,14 @@ var _INSPECT_TYPES={
       {name:'รอยเสียหายใหม่รอบตัวรถ (ถ้ามี)',req_photo:false},
     ]
   },
-  standard:{
-    label:'ตรวจสภาพรถประจำวัน',
-    icon:'🔍',
-    color:'#059669',
-    desc:'ตรวจสภาพรถก่อนเริ่มงานประจำวัน',
-    items:[
-      {name:'ระดับน้ำมันเครื่อง',req_photo:false},
-      {name:'ระดับน้ำมันเบรค / ครัช',req_photo:false},
-      {name:'ระดับน้ำหม้อน้ำ / น้ำหม้อพัก',req_photo:false},
-      {name:'ระดับน้ำกลั่น / น้ำฉีดกระจก',req_photo:false},
-      {name:'ระดับน้ำมันเพาเวอร์',req_photo:false},
-      {name:'ความตึงสายพาน / สภาพสายไฟ',req_photo:false},
-      {name:'แบตเตอรี่ — ขั้วแน่น / ไม่บวม',req_photo:false},
-      {name:'สภาพท่อน้ำบน / ล่าง',req_photo:false},
-      {name:'สภาพกรองอากาศ',req_photo:false},
-      {name:'เบรคเท้า / เบรคมือ — ทดสอบแล้ว',req_photo:false},
-      {name:'⭐ ยาง — ดอกยาง / แรงดันลม / น็อตล้อ ทุกเส้น',req_photo:true},
-      {name:'⭐ สภาพผ้าใบ — ไม่ขาด / ไม่มีรู / ตะขอครบ',req_photo:true},
-      {name:'⭐ สายรัด / โซ่ยึด — ครบชุด / ไม่ชำรุด',req_photo:true},
-      {name:'พื้นพ่วง — สะอาด / ไม่มีของหลงเหลือ',req_photo:false},
-      {name:'ประตูพ่วง / กลอนล็อค',req_photo:false},
-      {name:'ระบบไฟส่องสว่างทั้งคัน',req_photo:false},
-      {name:'ไฟฉุกเฉิน (hazard) — ทดสอบแล้ว',req_photo:false},
-      {name:'กระจกมองข้าง — ปรับแล้ว / สะอาด',req_photo:false},
-      {name:'ระบบเครื่องปรับอากาศ',req_photo:false},
-      {name:'รอยตำหนิรอบตัวรถ',req_photo:false},
-    ]
-  }
 };
 var _dInspectPhotos={};
-var _dInspectType='standard';
+var _dInspectType='pre_load';
 
 function _drvDetectInspectType(){
-  // มีแผนโหลดค้างคืน → pre_departure
+  // มีแผนโหลดค้างคืน → pre_departure (งานวันนี้เสร็จ แผนพรุ่งนี้ขึ้นแล้ว)
   if(_dPlans&&_dPlans.some(function(p){return p._isOvernight;})) return 'pre_departure';
-  // เช้า (ก่อน 10 โมง) → pre_load
-  var hr=new Date().getHours();
-  if(hr<10) return 'pre_load';
-  return 'standard';
+  return 'pre_load';
 }
 
 async function drvInspectCheck(){
