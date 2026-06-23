@@ -5969,19 +5969,43 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
   <!-- SUB-TAB: DAMAGE REQUEST -->
   <div id="inv-sub-damage" class="hidden space-y-5">
 
-    <!-- Settings: recipient email -->
-    <div class="bg-white rounded-2xl shadow border border-slate-100 p-5">
-      <div class="flex items-center gap-3 mb-3">
-        <i class="fas fa-cog text-slate-400"></i>
-        <span class="font-black text-slate-600 text-sm uppercase">ตั้งค่าผู้รับเมล</span>
+    <!-- Recipients bar -->
+    <div class="bg-white rounded-2xl shadow border border-slate-100 p-4 flex items-center gap-3 flex-wrap">
+      <span class="font-black text-slate-600 text-sm flex items-center gap-2"><i class="fas fa-users text-slate-400"></i> ผู้รับเมล</span>
+      <div id="dmg-recipient-chips" class="flex flex-wrap gap-2 flex-1"></div>
+      <button onclick="dmgOpenContacts()" class="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-xs flex items-center gap-2 transition-all">
+        <i class="fas fa-cog"></i> จัดการรายชื่อ
+      </button>
+    </div>
+
+    <!-- Select recipients dropdown area -->
+    <div class="bg-white rounded-2xl shadow border border-slate-100 p-4">
+      <label class="text-xs font-black text-slate-500 uppercase mb-2 block">เลือกผู้รับ (เลือกได้หลายคน)</label>
+      <div id="dmg-select-contacts" class="flex flex-wrap gap-2">
+        <span class="text-xs text-slate-400">ยังไม่มีรายชื่อ — กด "จัดการรายชื่อ" เพื่อเพิ่ม</span>
       </div>
-      <div class="flex gap-3 items-end">
-        <div class="flex-1">
-          <label class="text-xs text-slate-400 font-bold mb-1 block">อีเมลผู้รับ (คั่นด้วย , ถ้าหลายคน)</label>
-          <input id="dmg-recipient" type="text" placeholder="example@company.com, manager@company.com"
-            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+    </div>
+
+    <!-- Contacts Manager Modal -->
+    <div id="dmg-contacts-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px;">
+      <div style="background:#fff;border-radius:20px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-weight:900;font-size:15px;color:#1e293b;"><i class="fas fa-address-book" style="color:#3b82f6;margin-right:8px;"></i>จัดการรายชื่อผู้รับเมล</span>
+          <button onclick="dmgCloseContacts()" style="background:none;border:none;font-size:18px;color:#94a3b8;cursor:pointer;">&times;</button>
         </div>
-        <button onclick="dmgSaveRecipient()" class="px-5 py-2.5 bg-slate-700 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all">บันทึก</button>
+        <div style="padding:20px 24px;">
+          <!-- Add new contact -->
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <input id="dmg-ct-name" type="text" placeholder="ชื่อ-นามสกุล" style="flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;">
+            <input id="dmg-ct-email" type="email" placeholder="อีเมล @gmail.com" style="flex:1.5;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;">
+            <button onclick="dmgAddContact()" style="padding:8px 14px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;">เพิ่ม</button>
+          </div>
+          <!-- Contact list -->
+          <div id="dmg-ct-list" style="max-height:280px;overflow-y:auto;space-y:4px;"></div>
+        </div>
+        <div style="padding:12px 24px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end;">
+          <button onclick="dmgCloseContacts()" style="padding:10px 24px;background:#1e293b;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:13px;cursor:pointer;">เสร็จสิ้น</button>
+        </div>
       </div>
     </div>
 
@@ -36018,21 +36042,83 @@ window.drvInit = function(u){
 // ═══════════════════════════════════════════════════════════════════
 (function(){
 
-var DMG_RECIPIENT_KEY = 'wms_dmg_recipient';
+var DMG_CONTACTS_KEY = 'wms_dmg_contacts';   // [{name, email}]
+var DMG_SELECTED_KEY = 'wms_dmg_selected';   // [email, ...]
+var _dmgContacts = [];
+var _dmgSelected = new Set();
 
-// โหลดอีเมลที่บันทึกไว้เมื่อเปิดหน้า
-document.addEventListener('DOMContentLoaded', function(){
-  var saved = localStorage.getItem(DMG_RECIPIENT_KEY)||'';
-  var el = document.getElementById('dmg-recipient');
-  if(el && saved) el.value = saved;
-  var dateEl = document.getElementById('dmg-date');
-  if(dateEl) dateEl.value = new Date().toISOString().split('T')[0];
-});
-
-window.dmgSaveRecipient = function(){
-  var v = (document.getElementById('dmg-recipient').value||'').trim();
-  localStorage.setItem(DMG_RECIPIENT_KEY, v);
-  showToast('บันทึกอีเมลผู้รับแล้ว');
+function dmgLoadContacts(){
+  try { _dmgContacts = JSON.parse(localStorage.getItem(DMG_CONTACTS_KEY)||'[]'); } catch(e){ _dmgContacts=[]; }
+}
+function dmgSaveContacts(){
+  localStorage.setItem(DMG_CONTACTS_KEY, JSON.stringify(_dmgContacts));
+}
+function dmgRenderSelectChips(){
+  var wrap = document.getElementById('dmg-select-contacts');
+  if(!wrap) return;
+  if(!_dmgContacts.length){
+    wrap.innerHTML='<span class="text-xs text-slate-400">ยังไม่มีรายชื่อ — กด "จัดการรายชื่อ" เพื่อเพิ่ม</span>'; return;
+  }
+  wrap.innerHTML = _dmgContacts.map(function(c){
+    var sel = _dmgSelected.has(c.email);
+    return '<button type="button" onclick="dmgToggleRecipient(\''+c.email+'\')" '
+      +'style="padding:6px 14px;border-radius:99px;border:2px solid '+(sel?'#3b82f6':'#e2e8f0')+';background:'+(sel?'#eff6ff':'#f8fafc')+';'
+      +'color:'+(sel?'#1d4ed8':'#475569')+';font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;">'
+      +(sel?'<i class="fas fa-check-circle" style="color:#3b82f6;"></i>':'<i class="far fa-circle" style="color:#cbd5e1;"></i>')
+      +c.name+'</button>';
+  }).join('');
+  // แสดง chips ที่เลือกไว้
+  var chips = document.getElementById('dmg-recipient-chips');
+  if(chips){
+    var selected = _dmgContacts.filter(function(c){ return _dmgSelected.has(c.email); });
+    chips.innerHTML = selected.length
+      ? selected.map(function(c){ return '<span style="padding:4px 10px;background:#dbeafe;color:#1d4ed8;border-radius:99px;font-size:12px;font-weight:700;">'+c.name+'</span>'; }).join('')
+      : '<span class="text-xs text-slate-400">ยังไม่ได้เลือกผู้รับ</span>';
+  }
+}
+window.dmgToggleRecipient = function(email){
+  if(_dmgSelected.has(email)) _dmgSelected.delete(email);
+  else _dmgSelected.add(email);
+  dmgRenderSelectChips();
+};
+window.dmgOpenContacts = function(){
+  dmgLoadContacts();
+  dmgRenderCtList();
+  document.getElementById('dmg-contacts-modal').style.display='flex';
+};
+window.dmgCloseContacts = function(){
+  document.getElementById('dmg-contacts-modal').style.display='none';
+  dmgRenderSelectChips();
+};
+window.dmgAddContact = function(){
+  var name  = (document.getElementById('dmg-ct-name').value||'').trim();
+  var email = (document.getElementById('dmg-ct-email').value||'').trim();
+  if(!name||!email){ showToast('กรุณากรอกชื่อและอีเมล',true); return; }
+  if(_dmgContacts.find(function(c){ return c.email===email; })){ showToast('อีเมลนี้มีอยู่แล้ว',true); return; }
+  _dmgContacts.push({name,email});
+  dmgSaveContacts();
+  document.getElementById('dmg-ct-name').value='';
+  document.getElementById('dmg-ct-email').value='';
+  dmgRenderCtList();
+};
+function dmgRenderCtList(){
+  var list = document.getElementById('dmg-ct-list');
+  if(!list) return;
+  if(!_dmgContacts.length){ list.innerHTML='<div style="text-align:center;color:#94a3b8;font-size:13px;padding:20px;">ยังไม่มีรายชื่อ</div>'; return; }
+  list.innerHTML = _dmgContacts.map(function(c,i){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border-radius:12px;margin-bottom:6px;">'
+      +'<div><div style="font-weight:700;font-size:13px;color:#1e293b;">'+c.name+'</div>'
+      +'<div style="font-size:11px;color:#64748b;">'+c.email+'</div></div>'
+      +'<button onclick="dmgRemoveContact('+i+')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:4px 8px;">'
+      +'<i class="fas fa-times"></i></button></div>';
+  }).join('');
+}
+window.dmgRemoveContact = function(i){
+  var removed = _dmgContacts[i];
+  _dmgContacts.splice(i,1);
+  dmgSaveContacts();
+  if(removed) _dmgSelected.delete(removed.email);
+  dmgRenderCtList();
 };
 
 window.dmgSelectType = function(btn, val){
@@ -36074,7 +36160,7 @@ window.dmgClearForm = function(){
 };
 
 window.dmgSendEmail = async function(){
-  var recipient = (document.getElementById('dmg-recipient').value||'').trim();
+  var recipient = Array.from(_dmgSelected).join(',');
   var date      = (document.getElementById('dmg-date').value||'').trim();
   var warehouse = (document.getElementById('dmg-warehouse').value||'').trim();
   var sku       = (document.getElementById('dmg-sku').value||'').trim();
@@ -36145,15 +36231,14 @@ window.dmgLoadHistory = async function(){
   }).join('');
 };
 
-// restore recipient email เมื่อ switch tab
+// init เมื่อ switch tab damage
 var _origInvSWT = window.invSwitchSubTab;
 if(_origInvSWT){
   window.invSwitchSubTab = function(tab){
     _origInvSWT(tab);
     if(tab==='damage'){
-      var saved = localStorage.getItem(DMG_RECIPIENT_KEY)||'';
-      var el = document.getElementById('dmg-recipient');
-      if(el && saved) el.value = saved;
+      dmgLoadContacts();
+      dmgRenderSelectChips();
       var dateEl = document.getElementById('dmg-date');
       if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
     }
