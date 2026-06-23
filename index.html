@@ -2117,6 +2117,10 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
                 <i class="fas fa-user-tie" style="color:#475569;font-size:8px;"></i>&nbsp;SUPERVISOR
                 <span class="line"></span>
             </div>
+            <button onclick="switchView('training')" id="nav-training" class="nav-btn" data-tip="Training">
+                <span class="nav-icon"><i class="fas fa-chalkboard-teacher"></i></span> Training
+            </button>
+            <div style="height:1px;background:rgba(255,255,255,0.08);margin:6px 0;"></div>
             <button onclick="switchView('kpi-wh')" id="nav-kpi-wh" class="nav-btn" data-tip="KPI WH & LOGISTIC">
                 <span class="nav-icon"><i class="fas fa-chart-bar"></i></span> KPI WH &amp; LOGISTIC
             </button>
@@ -6991,6 +6995,56 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     <div id="ua-user-list" class="space-y-2"></div>
   </div>
 </div><!-- end view-user-accounts-content -->
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TRAINING VIEW                                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="view-training-content" class="hidden space-y-5">
+  <div class="flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <h2 class="text-xl font-black text-slate-800">Training Management</h2>
+      <p class="text-xs text-slate-400 mt-0.5">จัดการหัวข้อการอบรมและรับทราบจากคนขับ</p>
+    </div>
+    <button onclick="trShowCreate()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
+      <i class="fas fa-plus"></i> สร้างหัวข้ออบรม
+    </button>
+  </div>
+
+  <!-- Create form (hidden by default) -->
+  <div id="tr-create-card" class="hidden bg-white rounded-2xl shadow border border-slate-100 p-6 space-y-4">
+    <h3 class="font-black text-slate-700 text-base flex items-center gap-2"><i class="fas fa-chalkboard-teacher text-blue-500"></i> สร้างหัวข้ออบรมใหม่</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="md:col-span-2">
+        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">หัวข้ออบรม *</label>
+        <input id="tr-topic" type="text" placeholder="เช่น การใช้งานโปรแกรม WMS สำหรับคนขับ" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วันที่อบรม *</label>
+        <input id="tr-date" type="date" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วิทยากร / ผู้เทรน *</label>
+        <input id="tr-trainer" type="text" placeholder="ชื่อผู้เทรน" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+    </div>
+    <!-- Participant picker -->
+    <div>
+      <label class="text-xs font-black text-slate-500 uppercase mb-2 block">ผู้เข้ารับการอบรม</label>
+      <div id="tr-driver-list" class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2"></div>
+      <button onclick="trSelectAllDrivers()" class="text-xs text-blue-600 font-bold hover:underline mr-4">เลือกทั้งหมด</button>
+      <button onclick="trClearDrivers()" class="text-xs text-slate-400 font-bold hover:underline">ล้าง</button>
+    </div>
+    <div class="flex gap-3 pt-2">
+      <button onclick="trSaveSession()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-sm flex items-center gap-2 transition-all">
+        <i class="fas fa-save"></i> บันทึกหัวข้ออบรม
+      </button>
+      <button onclick="trHideCreate()" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm transition-all">ยกเลิก</button>
+    </div>
+  </div>
+
+  <!-- Session list -->
+  <div id="tr-session-list" class="space-y-3"></div>
+</div>
 
 <!-- MODAL: เพิ่ม/แก้ไข SEMI→FG Mapping -->
 <div id="map-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[75] flex items-center justify-center backdrop-blur-sm px-4">
@@ -12327,7 +12381,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -28958,6 +29012,7 @@ var WMS_VIEWS=[
   {id:'driver-monitor',label:'Driver Monitor'},
   {id:'driver-analytics',label:'Driver Analytics'},
   {id:'kpi-wh',label:'KPI WH & Logistic'},
+  {id:'training',label:'Training'},
   {id:'user-accounts',label:'ตั้งค่าบัญชีผู้ใช้'},
   {id:'audit-log',label:'Audit Log'},
 ];
@@ -33484,6 +33539,51 @@ window.viewTripResult = async function(planId) {
 <!-- Camera input -->
 <input type="file" id="drv-photo-input" accept="image/*" capture="environment" style="display:none" onchange="drvHandlePhoto(this)">
 <input type="file" id="dm-photo-input" accept="image/*" capture="environment" style="display:none" onchange="dmHandlePhoto(this)">
+<input type="file" id="tr-ack-photo-input" accept="image/*" capture="user" style="display:none" onchange="trAckHandlePhoto(this)">
+
+<!-- Training Acknowledgment Popup (แสดงบนหน้าคนรถ) -->
+<div id="tr-ack-popup" style="display:none;position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#0f172a;border-radius:24px;width:100%;max-width:400px;border:2px solid #1e40af;overflow:hidden;">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);padding:20px 20px 16px;text-align:center;">
+      <i class="fas fa-chalkboard-teacher" style="font-size:32px;color:#93c5fd;margin-bottom:8px;display:block;"></i>
+      <div style="color:#fff;font-weight:900;font-size:16px;">แจ้งเตือนการอบรม</div>
+      <div style="color:#93c5fd;font-size:12px;margin-top:4px;">กรุณารับทราบก่อนเริ่มงาน</div>
+    </div>
+    <!-- Body -->
+    <div style="padding:20px;">
+      <div style="background:#1e293b;border-radius:14px;padding:14px;margin-bottom:16px;">
+        <div style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:6px;">หัวข้ออบรม</div>
+        <div id="tr-ack-topic" style="color:#fff;font-weight:900;font-size:15px;line-height:1.4;"></div>
+        <div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;">
+          <div><span style="color:#64748b;font-size:11px;">วันที่:</span> <span id="tr-ack-date" style="color:#34d399;font-size:12px;font-weight:700;"></span></div>
+          <div><span style="color:#64748b;font-size:11px;">วิทยากร:</span> <span id="tr-ack-trainer" style="color:#93c5fd;font-size:12px;font-weight:700;"></span></div>
+        </div>
+      </div>
+
+      <!-- Selfie area -->
+      <div style="margin-bottom:16px;">
+        <div style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:8px;">ถ่ายรูปยืนยันตัวตน</div>
+        <div id="tr-ack-photo-preview" style="display:none;margin-bottom:8px;">
+          <img id="tr-ack-photo-img" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;border:2px solid #22c55e;">
+        </div>
+        <button onclick="document.getElementById('tr-ack-photo-input').click()" style="width:100%;padding:12px;background:#1e293b;border:2px dashed #334155;border-radius:12px;color:#64748b;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;" id="tr-ack-photo-btn">
+          <i class="fas fa-camera"></i> ถ่ายรูปหน้าตัวเอง
+        </button>
+      </div>
+
+      <!-- Checkbox confirm -->
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:20px;">
+        <input type="checkbox" id="tr-ack-check" style="width:18px;height:18px;margin-top:2px;accent-color:#3b82f6;flex-shrink:0;">
+        <span style="color:#cbd5e1;font-size:13px;font-weight:600;line-height:1.5;">ข้าพเจ้าได้รับทราบหัวข้อการอบรมดังกล่าวแล้ว และยินดีปฏิบัติตาม</span>
+      </label>
+
+      <button onclick="trAckSubmit()" style="width:100%;padding:14px;background:#1d4ed8;border:none;border-radius:14px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;transition:all .2s;" id="tr-ack-submit-btn">
+        <i class="fas fa-check-circle"></i> ยืนยันรับทราบ
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -35584,6 +35684,189 @@ window.drvHistLoad=async function(){
     var dateStr=l.started_at?new Date(l.started_at).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})+' '+drvFmtTime(l.started_at):'–';
     return '<div class="drv-card" style="margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div style="font-weight:900;color:#fff;font-size:14px;">'+drvEsc(l.plan_id)+'</div><span style="font-size:11px;font-weight:700;color:'+(stColor[l.status]||'#475569')+'">'+(stLabel[l.status]||l.status)+'</span></div><div style="font-size:12px;color:#64748b;">'+dateStr+(km!==null?' • '+km+' กม.':'')+(l.completed_at?' • จบ '+drvFmtTime(l.completed_at):'')+'</div></div>';
   }).join('');
+};
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// TRAINING MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+
+var _trAckPhotoBase64 = null;
+var _trPendingSession = null;
+
+window.trShowCreate = async function(){
+  document.getElementById('tr-create-card').classList.remove('hidden');
+  document.getElementById('tr-date').value = new Date().toISOString().split('T')[0];
+  var {data} = await window._sb.from('driver_users').select('username,driver_name').eq('active',true).order('driver_name');
+  var list = document.getElementById('tr-driver-list');
+  list.innerHTML = (data||[]).map(function(d){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#334155;">'
+      +'<input type="checkbox" class="tr-drv-cb" value="'+d.username+'" data-name="'+(d.driver_name||d.username)+'" style="accent-color:#3b82f6;width:15px;height:15px;">'
+      +(d.driver_name||d.username)+'</label>';
+  }).join('');
+};
+window.trHideCreate = function(){ document.getElementById('tr-create-card').classList.add('hidden'); };
+window.trSelectAllDrivers = function(){ document.querySelectorAll('.tr-drv-cb').forEach(function(cb){ cb.checked=true; }); };
+window.trClearDrivers = function(){ document.querySelectorAll('.tr-drv-cb').forEach(function(cb){ cb.checked=false; }); };
+
+window.trSaveSession = async function(){
+  var topic   = (document.getElementById('tr-topic').value||'').trim();
+  var date    = (document.getElementById('tr-date').value||'').trim();
+  var trainer = (document.getElementById('tr-trainer').value||'').trim();
+  if(!topic||!date||!trainer){ showToast('กรุณากรอกข้อมูลให้ครบ',true); return; }
+  var selected = Array.from(document.querySelectorAll('.tr-drv-cb:checked'));
+  if(!selected.length){ showToast('กรุณาเลือกผู้เข้าอบรมอย่างน้อย 1 คน',true); return; }
+  var {data:sess,error} = await window._sb.from('training_sessions').insert({topic,train_date:date,trainer,status:'draft',created_by:window._currentUser||''}).select().single();
+  if(error){ showToast('บันทึกไม่สำเร็จ: '+error.message,true); return; }
+  var parts = selected.map(function(cb){ return {session_id:sess.id,driver_username:cb.value,driver_name:cb.dataset.name}; });
+  var {error:pe} = await window._sb.from('training_participants').insert(parts);
+  if(pe){ showToast('บันทึกผู้เข้าอบรมไม่สำเร็จ: '+pe.message,true); return; }
+  showToast('บันทึกหัวข้ออบรมสำเร็จ');
+  document.getElementById('tr-topic').value='';
+  document.getElementById('tr-trainer').value='';
+  trHideCreate();
+  trLoadSessions();
+};
+
+window.trLoadSessions = async function(){
+  var container = document.getElementById('tr-session-list');
+  if(!container) return;
+  container.innerHTML = '<div class="text-center text-slate-400 py-10"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div>';
+  var {data:sessions} = await window._sb.from('training_sessions').select('*').order('train_date',{ascending:false});
+  if(!sessions||!sessions.length){ container.innerHTML='<div class="text-center text-slate-400 py-12 text-sm">ยังไม่มีหัวข้ออบรม</div>'; return; }
+  var ids = sessions.map(function(s){ return s.id; });
+  var {data:parts} = await window._sb.from('training_participants').select('*').in('session_id',ids);
+  var partsMap = {};
+  (parts||[]).forEach(function(p){ if(!partsMap[p.session_id]) partsMap[p.session_id]=[]; partsMap[p.session_id].push(p); });
+  var sColor={draft:'#f59e0b',active:'#3b82f6',done:'#22c55e'};
+  var sLabel={draft:'รอเริ่ม',active:'กำลังอบรม',done:'เสร็จสิ้น'};
+  container.innerHTML = sessions.map(function(s){
+    var ps=partsMap[s.id]||[];
+    var acked=ps.filter(function(p){return p.acknowledged;}).length;
+    var pct=ps.length?Math.round(acked/ps.length*100):0;
+    var partRows=ps.map(function(p){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;">'
+        +'<span style="font-size:13px;font-weight:600;color:#334155;">'+p.driver_name+'</span>'
+        +(p.acknowledged
+          ?'<div style="display:flex;align-items:center;gap:6px;">'+(p.photo_url?'<img src="'+p.photo_url+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid #22c55e;">':'')+'<span style="font-size:11px;font-weight:700;color:#22c55e;"><i class="fas fa-check-circle"></i> รับทราบแล้ว</span></div>'
+          :'<span style="font-size:11px;font-weight:700;color:#f59e0b;"><i class="fas fa-clock"></i> รอรับทราบ</span>')
+        +'</div>';
+    }).join('');
+    return '<div class="bg-white rounded-2xl shadow border border-slate-100 overflow-hidden mb-3">'
+      +'<div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;">'
+        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+          +'<div style="flex:1;min-width:0;">'
+            +'<div style="font-weight:900;font-size:15px;color:#1e293b;margin-bottom:4px;">'+s.topic+'</div>'
+            +'<div style="font-size:12px;color:#64748b;display:flex;gap:12px;flex-wrap:wrap;">'
+              +'<span><i class="fas fa-calendar-alt" style="color:#3b82f6;"></i> '+s.train_date+'</span>'
+              +'<span><i class="fas fa-user-tie" style="color:#8b5cf6;"></i> '+s.trainer+'</span>'
+            +'</div>'
+          +'</div>'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+            +'<span style="font-size:11px;font-weight:900;padding:4px 10px;border-radius:99px;background:'+(sColor[s.status]||'#94a3b8')+'22;color:'+(sColor[s.status]||'#94a3b8')+'">'+(sLabel[s.status]||s.status)+'</span>'
+            +(s.status==='draft'?'<button onclick="trSetActive('+s.id+')" style="padding:6px 14px;background:#1d4ed8;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;"><i class="fas fa-bell"></i> อบรมเสร็จ</button>':'')
+            +(s.status==='active'?'<button onclick="trSetDone('+s.id+')" style="padding:6px 14px;background:#059669;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;"><i class="fas fa-flag-checkered"></i> ปิดการอบรม</button>':'')
+            +'<button onclick="trDeleteSession('+s.id+')" style="padding:6px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;"><i class="fas fa-trash"></i></button>'
+          +'</div>'
+        +'</div>'
+        +'<div style="margin-top:10px;background:#f8fafc;border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:10px;">'
+          +'<div style="flex:1;height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden;"><div style="height:100%;background:#22c55e;width:'+pct+'%;transition:width .4s;border-radius:99px;"></div></div>'
+          +'<span style="font-size:12px;font-weight:700;color:#334155;white-space:nowrap;">'+acked+'/'+ps.length+' รับทราบ</span>'
+        +'</div>'
+      +'</div>'
+      +'<div style="padding:12px 20px;">'+partRows+'</div>'
+      +'</div>';
+  }).join('');
+};
+
+window.trSetActive = async function(id){
+  if(!confirm('กดนี้จะแจ้งเตือนให้คนรถรับทราบทันที\nยืนยัน?')) return;
+  var {error} = await window._sb.from('training_sessions').update({status:'active'}).eq('id',id);
+  if(error){ showToast('เกิดข้อผิดพลาด: '+error.message,true); return; }
+  showToast('ส่งแจ้งเตือนให้คนรถเรียบร้อย');
+  trLoadSessions();
+};
+window.trSetDone = async function(id){
+  var {error} = await window._sb.from('training_sessions').update({status:'done'}).eq('id',id);
+  if(error){ showToast('เกิดข้อผิดพลาด: '+error.message,true); return; }
+  showToast('ปิดการอบรมเรียบร้อย');
+  trLoadSessions();
+};
+window.trDeleteSession = async function(id){
+  if(!confirm('ลบหัวข้ออบรมนี้?')) return;
+  await window._sb.from('training_sessions').delete().eq('id',id);
+  showToast('ลบเรียบร้อย');
+  trLoadSessions();
+};
+
+// ── Driver: check pending on login ───────────────────────────────────
+window.trCheckDriverPending = async function(username){
+  var {data} = await window._sb.from('training_participants')
+    .select('*, training_sessions(*)')
+    .eq('driver_username',username)
+    .eq('acknowledged',false);
+  if(!data||!data.length) return;
+  var pending = data.filter(function(p){ return p.training_sessions&&p.training_sessions.status==='active'; });
+  if(!pending.length) return;
+  var p = pending[0];
+  _trPendingSession = p;
+  var sess = p.training_sessions;
+  document.getElementById('tr-ack-topic').textContent   = sess.topic;
+  document.getElementById('tr-ack-date').textContent    = sess.train_date;
+  document.getElementById('tr-ack-trainer').textContent = sess.trainer;
+  document.getElementById('tr-ack-check').checked = false;
+  _trAckPhotoBase64 = null;
+  document.getElementById('tr-ack-photo-preview').style.display='none';
+  document.getElementById('tr-ack-photo-btn').innerHTML='<i class="fas fa-camera"></i> ถ่ายรูปหน้าตัวเอง';
+  document.getElementById('tr-ack-submit-btn').disabled=false;
+  document.getElementById('tr-ack-submit-btn').innerHTML='<i class="fas fa-check-circle"></i> ยืนยันรับทราบ';
+  document.getElementById('tr-ack-popup').style.display='flex';
+};
+
+window.trAckHandlePhoto = function(input){
+  if(!input.files||!input.files[0]) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _trAckPhotoBase64=e.target.result;
+    document.getElementById('tr-ack-photo-img').src=_trAckPhotoBase64;
+    document.getElementById('tr-ack-photo-preview').style.display='block';
+    document.getElementById('tr-ack-photo-btn').innerHTML='<i class="fas fa-check" style="color:#22c55e;"></i> เปลี่ยนรูป';
+  };
+  reader.readAsDataURL(input.files[0]);
+};
+
+window.trAckSubmit = async function(){
+  if(!document.getElementById('tr-ack-check').checked){ alert('กรุณาติ๊กยืนยันรับทราบก่อน'); return; }
+  if(!_trAckPhotoBase64){ alert('กรุณาถ่ายรูปใบหน้าก่อนบันทึก'); return; }
+  if(!_trPendingSession) return;
+  var btn=document.getElementById('tr-ack-submit-btn');
+  btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+  var photoUrl=null;
+  try {
+    var blob=await(await fetch(_trAckPhotoBase64)).blob();
+    var fname='tr_'+_trPendingSession.session_id+'_'+(_trPendingSession.driver_username||'drv')+'_'+Date.now()+'.jpg';
+    var {error:upErr}=await window._sb.storage.from('training-photos').upload(fname,blob,{contentType:'image/jpeg',upsert:true});
+    if(!upErr){ var {data:ud}=window._sb.storage.from('training-photos').getPublicUrl(fname); photoUrl=ud.publicUrl; }
+  } catch(e){}
+  var {error}=await window._sb.from('training_participants').update({
+    acknowledged:true, photo_url:photoUrl, acknowledged_at:new Date().toISOString()
+  }).eq('id',_trPendingSession.id);
+  if(error){ btn.disabled=false; btn.innerHTML='<i class="fas fa-check-circle"></i> ยืนยันรับทราบ'; alert('บันทึกไม่สำเร็จ: '+error.message); return; }
+  document.getElementById('tr-ack-popup').style.display='none';
+  _trPendingSession=null;
+  drvShowToast('รับทราบการอบรมเรียบร้อย ✅',false,4000);
+};
+
+// ── Wire up switchView & drvInit ─────────────────────────────────────
+var _origSW2 = window.switchView;
+if(_origSW2){ window.switchView=function(v){ _origSW2(v); if(v==='training') trLoadSessions(); }; }
+
+var _origDrvInit = window.drvInit;
+window.drvInit = function(u){
+  _origDrvInit(u);
+  setTimeout(function(){ trCheckDriverPending(u.username); }, 1500);
 };
 
 })();
