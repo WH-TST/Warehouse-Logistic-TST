@@ -31080,8 +31080,8 @@ window.viewTripResult = async function(planId) {
       _scItems = skuList.map(function(s){
         // ยอดระบบ = รวมทุกคลัง (FG-BP + QC อยู่แถวเดียวกันใน Count Sheet)
         var sysQty   = cntMapAll[s.sku]||0;
-        // per-WH สำหรับบันทึกลง DB เท่านั้น (ไม่รวมคลังอื่น)
         var sysQtyWH = cntMapWH[s.sku+'|'+s.wh]||0;
+        var sysQtyQC = cntMapWH[s.sku+'|QC']||0;
         return {
           sku:         s.sku,
           name:        s.name,
@@ -31090,6 +31090,7 @@ window.viewTripResult = async function(planId) {
           ppb:         ppbMap[s.sku] || 0,
           systemQty:   sysQty,
           systemQtyWH: sysQtyWH,
+          systemQtyQC: sysQtyQC,
           bundle1:0, bundle2:0, pcs1:0, pcs2:0, holdPcs:0, note:''
         };
       });
@@ -31635,7 +31636,7 @@ window.viewTripResult = async function(planId) {
       try {
         var savedRes = await window._sb
           .from('stock_count_items')
-          .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,note,session_id,stock_count_sessions(count_date,wh)')
+          .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,session_id,stock_count_sessions(count_date,wh)')
           .order('session_id', {ascending: false});
         // dedup: เก็บเฉพาะ occurrence แรกต่อ sku|wh (= session ล่าสุด แยกคลัง)
         (savedRes.data||[]).forEach(function(r){
@@ -31643,14 +31644,15 @@ window.viewTripResult = async function(planId) {
           var key  = r.sku + '|' + (sess.wh||'');
           if(savedMap[key]) return;
           savedMap[key] = {
-            bundle1: Number(r.bundle1)||0,
-            bundle2: Number(r.bundle2)||0,
-            pcs1:    Number(r.scrap1)||0,
-            pcs2:    Number(r.scrap2)||0,
-            holdPcs: Number(r.hold_pcs)||0,
-            note:    r.note||'',
-            _date:   sess.count_date||'',
-            _sessId: r.session_id||0
+            bundle1:    Number(r.bundle1)||0,
+            bundle2:    Number(r.bundle2)||0,
+            pcs1:       Number(r.scrap1)||0,
+            pcs2:       Number(r.scrap2)||0,
+            holdPcs:    Number(r.hold_pcs)||0,
+            systemPcsQC:Number(r.system_pcs_qc)||0,
+            note:       r.note||'',
+            _date:      sess.count_date||'',
+            _sessId:    r.session_id||0
           };
         });
       } catch(e){ console.warn('[Rec] stock_count query failed:', e); }
@@ -31995,6 +31997,7 @@ window.viewTripResult = async function(planId) {
         ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
         scrap1: item.pcs1||0, scrap2: item.pcs2||0, hold_pcs: item.holdPcs||0,
         system_pcs: item.systemQtyWH||item.systemQty||0,
+        system_pcs_qc: item.systemQtyQC||0,
         note: item.note||null };
     });
     var { error: iErr } = await window._sb.from('stock_count_items').insert(itemsPayload);
@@ -32021,21 +32024,16 @@ window.viewTripResult = async function(planId) {
 
     var inner = document.getElementById(histId+'-inner');
     // ดึง sessions + items สำหรับ SKU+WH นี้ (รวม null-wh session ด้วย)
-    var baseSelect = 'session_id,bundle1,bundle2,scrap1,scrap2,hold_pcs,ppb,system_pcs,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
+    var baseSelect = 'session_id,bundle1,bundle2,scrap1,scrap2,hold_pcs,ppb,system_pcs,system_pcs_qc,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
     var items, error;
-    // QC ต้องดึง null-wh session ด้วย (hold_pcs บันทึกใน FG-BP context)
-    // และดึงยอดระบบ QC จาก counting table
-    var qcSysPcs = 0;
-    var fetchNullWh = window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30);
     if(wh){
-      var fetchExact = window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).eq('stock_count_sessions.wh',wh).order('session_id',{ascending:false}).limit(60);
-      var extraQueries = wh === 'QC'
-        ? [fetchExact, fetchNullWh, window._sb.from('counting').select('cw_onhand').eq('item_number',sku).eq('warehouse','QC')]
-        : [fetchExact, fetchNullWh];
-      var results = await Promise.all(extraQueries);
-      if(wh === 'QC'){ (results[2].data||[]).forEach(function(r){ qcSysPcs += Number(r.cw_onhand)||0; }); }
-      error = results[0].error || results[1].error;
-      items = [...(results[0].data||[]), ...(results[1].data||[])].sort(function(a,b){ return b.session_id - a.session_id; }).slice(0,60);
+      // null-wh session มี hold_pcs และ system_pcs_qc ที่บันทึกจาก Count Sheet
+      var [r1, r2] = await Promise.all([
+        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).eq('stock_count_sessions.wh',wh).order('session_id',{ascending:false}).limit(60),
+        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30)
+      ]);
+      error = r1.error || r2.error;
+      items = [...(r1.data||[]), ...(r2.data||[])].sort(function(a,b){ return b.session_id - a.session_id; }).slice(0,60);
     } else {
       var r = await window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).order('session_id',{ascending:false}).limit(60);
       error = r.error; items = r.data;
@@ -32051,8 +32049,8 @@ window.viewTripResult = async function(planId) {
       var sessWh   = sess.wh || null;
       var isNullWh = sessWh === null;
       var counted  = isQCrow ? (it.hold_pcs||0) : (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
-      // QC null-wh row: ใช้ qcSysPcs (จาก counting table) แทน system_pcs ที่เป็น FG-BP
-      var sysPcs   = (isQCrow && isNullWh) ? qcSysPcs : (it.system_pcs||0);
+      // QC null-wh row: ใช้ system_pcs_qc ที่บันทึกไว้ตอน save (ยอดระบบ QC ณ วันนับ)
+      var sysPcs   = (isQCrow && isNullWh) ? (it.system_pcs_qc||0) : (it.system_pcs||0);
       var diff     = counted - sysPcs;
       var sysHtml  = '<span style="color:#0f766e">'+sysPcs+'</span>';
       var diffHtml = diff===0 ? '<span style="color:#15803d;font-weight:700">0</span>'
