@@ -34972,18 +34972,18 @@ window.drvLoadPlan=async function(){
   // โหลดแผนวันนี้
   var q=window._sb.from('logistic_plans')
     .select('plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type')
-    .eq('plan_date',today).neq('status','success');
+    .eq('plan_date',today).neq('status','success').neq('status','failed');
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans,error}=await q;
   if(error){drvHideL();drvShowToast('❌ โหลดแผนไม่สำเร็จ',true);drvRenderPlanCards([]);return;}
   plans=plans||[];
 
   // ถ้าวันนี้ไม่มีแผนที่ active → โหลดแผนพรุ่งนี้ (โหลดค้างคืน)
-  var todayActive=plans.filter(function(p){return p.status!=='success';});
+  var todayActive=plans.filter(function(p){return p.status!=='success'&&p.status!=='failed';});
   if(!todayActive.length){
     var q2=window._sb.from('logistic_plans')
       .select('plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type')
-      .eq('plan_date',tmr).neq('status','success');
+      .eq('plan_date',tmr).neq('status','success').neq('status','failed');
     if(orParts.length) q2=q2.or(orParts.join(','));
     var {data:tmrPlans}=await q2;
     (tmrPlans||[]).forEach(function(p){ p._isOvernight=true; });
