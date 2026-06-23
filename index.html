@@ -29005,9 +29005,9 @@ async function _initUsers(callback){
   if(typeof callback==='function') callback();
 }
 var _cu=null;
-function _loadSess(){try{var s=sessionStorage.getItem('wms_sess');if(s)return JSON.parse(s);}catch(e){}return null;}
-function _saveSess(u){sessionStorage.setItem('wms_sess',JSON.stringify({username:u.username}));}
-function _clearSess(){sessionStorage.removeItem('wms_sess');}
+function _loadSess(){try{var s=localStorage.getItem('wms_sess');if(s)return JSON.parse(s);}catch(e){}return null;}
+function _saveSess(u){localStorage.setItem('wms_sess',JSON.stringify({username:u.username,type:u.type||'wms'}));}
+function _clearSess(){localStorage.removeItem('wms_sess');}
 
 window.toggleLoginPw=function(){var i=document.getElementById('login-password'),ic=document.getElementById('login-pw-icon');if(!i)return;if(i.type==='password'){i.type='text';ic.className='fas fa-eye-slash text-sm';}else{i.type='password';ic.className='fas fa-eye text-sm';}};
 
@@ -29222,8 +29222,21 @@ window.umDeleteUser = async function(un){
     }
     // 2. ตรวจ session เดิม
     var s=_loadSess();
-    if(s){var users=_loadUsers(),user=null;for(var i=0;i<users.length;i++){if(users[i].username===s.username){user=users[i];break;}}
-      if(user){_cu=user;window._currentUser=user.name||user.username;_applySession();return;}}
+    if(s){
+      // driver session
+      if(s.type==='driver'&&s.username){
+        var dRes=await window._sb.from('driver_users').select('*').eq('username',s.username).eq('active',true).maybeSingle();
+        if(dRes.data){var d=dRes.data;window.drvInit({username:d.username,name:d.driver_name||d.username,driver_id:d.driver_id||'',bypass_timer:d.bypass_timer||false});return;}
+      }
+      // wms session
+      var users=_loadUsers(),user=null;for(var i=0;i<users.length;i++){if(users[i].username===s.username){user=users[i];break;}}
+      if(user){_cu=user;window._currentUser=user.name||user.username;_applySession();return;}
+      // wms session แต่ไม่อยู่ใน cache → ดึงจาก Supabase
+      if(s.username){
+        var wRes=await window._sb.from('wms_users').select('*').eq('username',s.username).eq('active',true).maybeSingle();
+        if(wRes.data){var r=wRes.data;var u={username:r.username,pwHash:r.password,name:r.name||'',role:r.role||'',isAdmin:r.is_admin||false,perms:r.perms||[],active:true};_cu=u;window._currentUser=u.name||u.username;_applySession();return;}
+      }
+    }
     var ls=document.getElementById('login-screen');
     if(ls)ls.classList.remove('hidden');
     var lu=document.getElementById('login-username');
@@ -34593,6 +34606,7 @@ window.drvPlayNewOrder=function drvPlayNewOrder(){
 
 window.drvInit=function(wmsUser){
   _dSess={username:wmsUser.username,driver_name:wmsUser.name||wmsUser.username,driver_id:wmsUser.driver_id||''};
+  localStorage.setItem('wms_sess',JSON.stringify({username:wmsUser.username,type:'driver'}));
   DRV_TEST_MODE=DRV_TEST_USERNAMES.indexOf(wmsUser.username.toLowerCase())!==-1;
   DRV_BYPASS_TIMER=DRV_TEST_MODE||(wmsUser.bypass_timer===true);
   document.getElementById('login-screen').classList.add('hidden');
@@ -34629,6 +34643,7 @@ window.drvInit=function(wmsUser){
 window.drvLogout=function(){
   if(!confirm('ออกจากระบบ?'))return;
   _dSess=null;
+  localStorage.removeItem('wms_sess');
   document.getElementById('drv-screen').classList.remove('active');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('login-username').value='';
