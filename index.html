@@ -30435,13 +30435,19 @@ window.loRefreshOrderList = window.loRefreshHistory;
           }
           return -1;
         };
-        var iSku  = col(['item','sku']);
-        var iName = col(['product name','name','ชื่อ']);
-        var iLpb  = col(['เส้นต่อมัด','เส้น/มัด','lines_per','lpb']);
-        var iLpr  = col(['มัดต่อรอบ','lifts','lpr','มัด/รอบ']);
-        var iWmin = col(['w(min','min_w','w min','wmin']);
-        var iWmax = col(['w(max','max_w','w max','wmax']);
-        var iWstd = col(['w(std','likely','wstd','w std']);
+        var iSku    = col(['item number','item','sku']);
+        var iName   = col(['product name','name','ชื่อสินค้า','ชื่อ']);
+        var iSearch = col(['search name','search_name','ชื่อค้นหา']);
+        var iPool   = col(['production pool','production_pool','pool']);
+        var iStatus = col(['status','สถานะ']);
+        var iGroup  = col(['group','item_group','กลุ่ม']);
+        var iLpb    = col(['เส้น/มัด','เส้นต่อมัด','lines_per','lpb']);
+        var iLpr    = col(['มัด/รอบยก','มัดต่อรอบ','lifts','lpr','มัด/รอบ']);
+        var iBw     = col(['กว้าง (cm)','กว้าง','bundle_width','width','bw']);
+        var iBh     = col(['สูง (cm)','สูง','bundle_height','height','bh']);
+        var iWmin   = col(['น้ำหนัก min','w(min','min_w','w min','wmin']);
+        var iWmax   = col(['น้ำหนัก max','w(max','max_w','w max','wmax']);
+        var iWstd   = col(['น้ำหนักเป้า','w(std','likely','wstd','w std']);
 
         if (iSku < 0) throw new Error('ไม่พบ column ITem/SKU');
 
@@ -30451,23 +30457,22 @@ window.loRefreshOrderList = window.loRefreshHistory;
           var sku = String(r[iSku]||'').trim();
           if (!sku) continue;
 
-          // parse W(Min-Max) ถ้ามี format "10.0 - 10.4" ใน single column
           var wmin = iWmin >= 0 ? parseFloat(r[iWmin]) || 0 : 0;
           var wmax = iWmax >= 0 ? parseFloat(r[iWmax]) || 0 : 0;
-          if (!wmin && !wmax) {
-            // ลองหาว่า column เดียวกันมี "min - max"
-            var wRange = String(r[col(['w(min','w min'])] || '');
-            var parts = wRange.split(/\s*[-–]\s*/);
-            if (parts.length === 2) { wmin = parseFloat(parts[0])||0; wmax = parseFloat(parts[1])||0; }
-          }
 
           rows.push({
             sku: sku,
-            name: iName >= 0 ? String(r[iName]||'').trim() : '',
+            name:            iName   >= 0 ? String(r[iName]||'').trim()   : '',
+            search_name:     iSearch >= 0 ? String(r[iSearch]||'').trim() || null : null,
+            production_pool: iPool   >= 0 ? String(r[iPool]||'').trim()   || null : null,
+            status:          iStatus >= 0 ? String(r[iStatus]||'').trim() || null : null,
+            item_group:      iGroup  >= 0 ? String(r[iGroup]||'').trim()  || null : null,
             lines_per_bundle: iLpb >= 0 ? parseInt(r[iLpb])||0 : 0,
             lifts_per_round:  iLpr >= 0 ? parseInt(r[iLpr])||0 : 0,
-            min_w: wmin,
-            max_w: wmax,
+            bundle_width:     iBw  >= 0 ? parseFloat(r[iBw])||0  : 0,
+            bundle_height:    iBh  >= 0 ? parseFloat(r[iBh])||0  : 0,
+            min_w:    wmin,
+            max_w:    wmax,
             likely_w: iWstd >= 0 ? parseFloat(r[iWstd])||0 : 0,
             updated_at: new Date().toISOString()
           });
