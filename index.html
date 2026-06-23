@@ -31079,14 +31079,17 @@ window.viewTripResult = async function(planId) {
       });
       _scItems = skuList.map(function(s){
         // ยอดระบบ = รวมทุกคลัง (FG-BP + QC อยู่แถวเดียวกันใน Count Sheet)
-        var sysQty = cntMapAll[s.sku]||0;
+        var sysQty   = cntMapAll[s.sku]||0;
+        // per-WH สำหรับบันทึกลง DB เท่านั้น (ไม่รวมคลังอื่น)
+        var sysQtyWH = cntMapWH[s.sku+'|'+s.wh]||0;
         return {
-          sku:       s.sku,
-          name:      s.name,
-          printName: prodNameMap[s.sku] || s.name,
-          wh:        s.wh,
-          ppb:       ppbMap[s.sku] || 0,
-          systemQty: sysQty,
+          sku:         s.sku,
+          name:        s.name,
+          printName:   prodNameMap[s.sku] || s.name,
+          wh:          s.wh,
+          ppb:         ppbMap[s.sku] || 0,
+          systemQty:   sysQty,
+          systemQtyWH: sysQtyWH,
           bundle1:0, bundle2:0, pcs1:0, pcs2:0, holdPcs:0, note:''
         };
       });
@@ -31989,7 +31992,7 @@ window.viewTripResult = async function(planId) {
       return { session_id: sessionId, sku: item.sku, sku_name: item.name,
         ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
         scrap1: item.pcs1||0, scrap2: item.pcs2||0, hold_pcs: item.holdPcs||0,
-        system_pcs: item.systemQty||0,
+        system_pcs: item.systemQtyWH||item.systemQty||0,
         note: item.note||null };
     });
     var { error: iErr } = await window._sb.from('stock_count_items').insert(itemsPayload);
