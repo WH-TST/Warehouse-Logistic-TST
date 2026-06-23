@@ -5934,10 +5934,11 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     <!-- table -->
     <div class="overflow-x-auto rounded-xl border border-slate-200" style="max-height:600px;overflow-y:auto">
       <table class="w-full border-collapse text-sm" id="invd-table">
-        <thead id="invd-thead" class="sticky top-0 bg-slate-100 z-10"></thead>
+        <thead id="invd-thead" class="sticky top-0 z-10"></thead>
         <tbody id="invd-tbody"><tr><td class="text-center text-slate-400 py-10">กดปุ่มโหลดเพื่อแสดงข้อมูล</td></tr></tbody>
       </table>
     </div>
+    <div id="invd-col-popup" style="display:none;position:fixed;z-index:9999;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.18);border:1.5px solid #e2e8f0;min-width:200px;padding:12px;"></div>
   </div><!-- end inv-sub-viewdata -->
 
 </div><!-- end view-kpi-stock-content -->
@@ -13190,6 +13191,10 @@ let blockingChartInstance = null;
     var _invdLikelyW = {}; // sku → likely_w
     var _invdStatus  = {}; // sku → status
     var _invdGroup   = {}; // sku → item_group
+    var _invdSort    = { col: null, dir: 1 };
+    var _invdFilters = {};
+    var _invdFilterExact = {};
+    var _invdPopupCol = null;
 
     var _invdCols = {
       onhand_fg:        ['item_number','product_name','warehouse','cw_ordered','cw_physical_inventory','cw_on_order','cw_physical_reserved','cw_available_physical','cw_total_available','ordered','physical_inventory','on_order','physical_reserved','available_physical','total_available','imported_at'],
@@ -13245,28 +13250,146 @@ let blockingChartInstance = null;
         if(res.error) throw res.error;
         _invdData = res.data || [];
         _invdLoaded = true;
-        var extraCol = _invdTable === 'onhand_fg' ? '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-violet-100 text-violet-700">EST. WEIGHT (KG)</th><th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-emerald-50 text-emerald-700">STATUS</th><th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-indigo-50 text-indigo-700">GROUP</th>' : '';
-        thead.innerHTML = '<tr class="text-left text-xs text-slate-600 uppercase">'
-          + cols.map(function(c){ return '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-slate-100">'+c+'</th>'; }).join('')
-          + extraCol + '</tr>';
+        _invdSort = { col: null, dir: 1 };
+        _invdFilters = {}; _invdFilterExact = {};
         var cards = document.getElementById('invd-cards');
         if(cards) cards.classList.toggle('hidden', _invdTable !== 'onhand_fg');
         var cardsSemi = document.getElementById('invd-cards-semi');
         if(cardsSemi) cardsSemi.classList.toggle('hidden', _invdTable !== 'onhand_semi');
+        invdRenderHead();
         invdRender();
       } catch(e){
         tbody.innerHTML = '<tr><td colspan="20" class="text-center text-red-500 py-8">❌ '+e.message+'</td></tr>';
       }
     };
 
+    function invdGetAllCols() {
+      var cols = (_invdCols[_invdTable]||[]).slice();
+      if(_invdTable === 'onhand_fg') cols = cols.concat(['_est_weight','_status','_group']);
+      return cols;
+    }
+
+    function invdRenderHead() {
+      var thead = document.getElementById('invd-thead');
+      if(!thead) return;
+      var cols = _invdCols[_invdTable]||[];
+      var isFG = _invdTable === 'onhand_fg';
+      var extraCols = isFG ? [
+        {key:'_est_weight', label:'EST. WEIGHT (KG)', bg:'#f5f3ff', color:'#7c3aed'},
+        {key:'_status',     label:'STATUS',           bg:'#f0fdf4', color:'#15803d'},
+        {key:'_group',      label:'GROUP',            bg:'#eef2ff', color:'#4338ca'}
+      ] : [];
+
+      var makeThStyle = function(key, bg) {
+        var isSort = _invdSort.col === key;
+        var hasFilter = !!(_invdFilters[key]&&_invdFilters[key].length);
+        return 'cursor:pointer;user-select:none;padding:8px 12px;white-space:nowrap;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #e2e8f0;background:'+(hasFilter?'#dbeafe':(bg||'#f1f5f9'))+';color:'+(isSort?'#1d4ed8':'#475569')+';';
+      };
+      var sortIcon = function(key) {
+        if(_invdSort.col!==key) return ' <span style="opacity:.3">⇅</span>';
+        return _invdSort.dir===1 ? ' ▲' : ' ▼';
+      };
+      var dot = function(key) {
+        return (_invdFilters[key]&&_invdFilters[key].length) ? '<span style="width:6px;height:6px;background:#3b82f6;border-radius:50%;display:inline-block;margin-left:3px;vertical-align:middle;"></span>' : '';
+      };
+
+      thead.innerHTML = '<tr>'
+        + cols.map(function(c){
+            return '<th onclick="invdColClick(\''+c+'\',this)" style="'+makeThStyle(c)+'">'+c+sortIcon(c)+dot(c)+'</th>';
+          }).join('')
+        + extraCols.map(function(ec){
+            return '<th onclick="invdColClick(\''+ec.key+'\',this)" style="'+makeThStyle(ec.key,ec.bg)+';color:'+ec.color+'">'+ec.label+sortIcon(ec.key)+dot(ec.key)+'</th>';
+          }).join('')
+        + '</tr>';
+    }
+
+    window.invdColClick = function(col, thEl) {
+      if(_invdPopupCol === col){ invdClosePopup(); return; }
+      _invdPopupCol = col;
+      var popup = document.getElementById('invd-col-popup');
+      if(!popup) return;
+      var rect = thEl.getBoundingClientRect();
+      popup.style.left = Math.min(rect.left, window.innerWidth-220)+'px';
+      popup.style.top  = (rect.bottom+4)+'px';
+      popup.style.display = 'block';
+
+      var curFilter = _invdFilters[col]||'';
+      // collect unique values for this col
+      var vals = Array.from(new Set(_invdData.map(function(r){
+        if(col==='_est_weight') return '';
+        if(col==='_status') return _invdStatus[r.item_number]||'';
+        if(col==='_group')  return _invdGroup[r.item_number]||'';
+        return String(r[col]!==null&&r[col]!==undefined?r[col]:'');
+      }))).filter(Boolean).sort();
+      var isDiscrete = vals.length > 0 && vals.length <= 40;
+
+      var html = '<div style="display:flex;gap:6px;margin-bottom:10px;">'
+        +'<button onclick="invdSetSort(\''+col+'\',1)" style="flex:1;padding:5px 0;border-radius:8px;border:1.5px solid '+((_invdSort.col===col&&_invdSort.dir===1)?'#3b82f6':'#e2e8f0')+';background:'+((_invdSort.col===col&&_invdSort.dir===1)?'#eff6ff':'#f8fafc')+';font-size:11px;font-weight:800;cursor:pointer;color:'+((_invdSort.col===col&&_invdSort.dir===1)?'#1d4ed8':'#475569')+';">▲ A→Z</button>'
+        +'<button onclick="invdSetSort(\''+col+'\',-1)" style="flex:1;padding:5px 0;border-radius:8px;border:1.5px solid '+((_invdSort.col===col&&_invdSort.dir===-1)?'#3b82f6':'#e2e8f0')+';background:'+((_invdSort.col===col&&_invdSort.dir===-1)?'#eff6ff':'#f8fafc')+';font-size:11px;font-weight:800;cursor:pointer;color:'+((_invdSort.col===col&&_invdSort.dir===-1)?'#1d4ed8':'#475569')+';">▼ Z→A</button>'
+        +'</div>';
+      html += '<div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">กรอง</div>';
+      html += '<input id="invd-popup-input" type="text" value="'+curFilter.replace(/"/g,'&quot;')+'" oninput="invdSetFilter(\''+col+'\',this.value,false)" placeholder="พิมพ์เพื่อกรอง..." style="width:100%;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;outline:none;margin-bottom:8px;">';
+      if(isDiscrete){
+        html += '<div style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;">';
+        html += '<button onclick="invdSetFilter(\''+col+'\',\'\',true)" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(curFilter===''?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(curFilter===''?'#1d4ed8':'#475569')+'">(ทั้งหมด)</button>';
+        vals.forEach(function(v){
+          var active = curFilter===v;
+          html += '<button onclick="invdSetFilter(\''+col+'\',\''+v.replace(/'/g,"\\'")+'\',true)" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(active?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(active?'#1d4ed8':'#475569')+'">'+v+'</button>';
+        });
+        html += '</div>';
+      }
+      html += '<button onclick="invdClearFilter(\''+col+'\')" style="margin-top:8px;width:100%;padding:5px 0;border-radius:8px;border:1.5px solid #fca5a5;background:#fff1f2;font-size:11px;font-weight:800;cursor:pointer;color:#dc2626;">✕ ล้าง filter</button>';
+      popup.innerHTML = html;
+      setTimeout(function(){ var inp=document.getElementById('invd-popup-input'); if(inp)inp.focus(); },50);
+    };
+
+    window.invdSetSort = function(col,dir){ _invdSort={col:col,dir:dir}; invdRenderHead(); invdRender(); invdClosePopup(); };
+    window.invdSetFilter = function(col,val,exact){
+      _invdFilters[col]=val; _invdFilterExact[col]=!!exact;
+      var inp=document.getElementById('invd-popup-input'); if(inp&&inp.value!==val)inp.value=val;
+      invdRenderHead(); invdRender();
+    };
+    window.invdClearFilter = function(col){ delete _invdFilters[col]; delete _invdFilterExact[col]; invdRenderHead(); invdRender(); invdClosePopup(); };
+    window.invdClosePopup = function(){ _invdPopupCol=null; var p=document.getElementById('invd-col-popup'); if(p)p.style.display='none'; };
+    document.addEventListener('click',function(e){
+      var popup=document.getElementById('invd-col-popup');
+      if(popup&&popup.style.display!=='none'&&!popup.contains(e.target)&&!e.target.closest('#invd-thead'))invdClosePopup();
+    });
+
     window.invdRender = function(){
+      invdRenderHead();
       var q = (document.getElementById('invd-search').value||'').toLowerCase();
       var cols = _invdCols[_invdTable];
       var isFG = _invdTable === 'onhand_fg';
-      var filtered = q ? _invdData.filter(function(r){
-        return cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(q); });
-      }) : _invdData;
-      document.getElementById('invd-count').textContent = filtered.length.toLocaleString() + ' รายการ';
+      var filtered = _invdData.filter(function(r){
+        if(q && !cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(q); })) return false;
+        for(var col in _invdFilters){
+          var fv=(_invdFilters[col]||'').toLowerCase(); if(!fv) continue;
+          var cv;
+          if(col==='_status') cv=(_invdStatus[r.item_number]||'').toLowerCase();
+          else if(col==='_group') cv=(_invdGroup[r.item_number]||'').toLowerCase();
+          else if(col==='_est_weight') cv=String((Number(r.cw_physical_inventory)||0)*(Number(_invdLikelyW[r.item_number])||0));
+          else cv=String(r[col]!==null&&r[col]!==undefined?r[col]:'').toLowerCase();
+          if(_invdFilterExact[col]?cv!==fv:!cv.includes(fv)) return false;
+        }
+        return true;
+      });
+      // sort
+      if(_invdSort.col){
+        var sc=_invdSort.col, sd=_invdSort.dir;
+        filtered = filtered.slice().sort(function(a,b){
+          var av,bv;
+          if(sc==='_status'){av=_invdStatus[a.item_number]||'';bv=_invdStatus[b.item_number]||'';}
+          else if(sc==='_group'){av=_invdGroup[a.item_number]||'';bv=_invdGroup[b.item_number]||'';}
+          else if(sc==='_est_weight'){av=(Number(a.cw_physical_inventory)||0)*(Number(_invdLikelyW[a.item_number])||0);bv=(Number(b.cw_physical_inventory)||0)*(Number(_invdLikelyW[b.item_number])||0);}
+          else{av=a[sc]!=null?a[sc]:'';bv=b[sc]!=null?b[sc]:'';}
+          if(typeof av==='number'&&typeof bv==='number') return (av-bv)*sd;
+          return String(av).localeCompare(String(bv),'th')*sd;
+        });
+      }
+
+      var activeFilters=Object.keys(_invdFilters).filter(function(k){return _invdFilters[k];}).length;
+      document.getElementById('invd-count').textContent = filtered.length.toLocaleString() + ' รายการ'+(activeFilters?' (กรองอยู่ '+activeFilters+' col)':'');
 
       // คำนวณ cards สำหรับ onhand_fg
       if(isFG){
