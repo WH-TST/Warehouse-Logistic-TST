@@ -5046,6 +5046,22 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
           <p class="text-xs text-slate-500">สต็อก FG • จอง + คงเหลือ</p>
           <p class="text-xs mt-1" id="inv-import-lastdate-onhand_fg"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
         </div>
+        <!-- ON-HAND RM -->
+        <div id="inv-import-card-onhand_rm" onclick="invSelectImport('onhand_rm')"
+          class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-green-300 hover:bg-green-50 transition-all">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center text-green-600 text-base flex-shrink-0">
+              <i class="fas fa-industry"></i>
+            </div>
+            <div>
+              <p class="font-black text-slate-800 text-sm">ON-HAND RM</p>
+              <p class="text-xs text-slate-500 font-bold">Supabase</p>
+            </div>
+            <span class="ml-auto text-xs font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-lg">RM</span>
+          </div>
+          <p class="text-xs text-slate-500">สต็อก Raw Material • Batch + Serial</p>
+          <p class="text-xs mt-1" id="inv-import-lastdate-onhand_rm"><span class="text-amber-500 font-black">⚠️ ยังไม่ได้นำเข้า</span></p>
+        </div>
         <!-- ON-HAND SEMI -->
         <div id="inv-import-card-onhand_semi" onclick="invSelectImport('onhand_semi')"
           class="border-2 border-slate-200 bg-white rounded-2xl p-4 cursor-pointer hover:border-purple-300 hover:bg-purple-50 transition-all">
@@ -5881,6 +5897,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     <div class="flex gap-2 flex-wrap">
       <button id="invd-tab-btn-onhand_fg"       onclick="invdSwitch('onhand_fg')"       class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-blue-500 bg-blue-500 text-white transition-all">ON-HAND FG</button>
       <button id="invd-tab-btn-onhand_semi"     onclick="invdSwitch('onhand_semi')"     class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">ON-HAND SEMI</button>
+      <button id="invd-tab-btn-onhand_rm"       onclick="invdSwitch('onhand_rm')"       class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">ON-HAND RM</button>
       <button id="invd-tab-btn-counting"        onclick="invdSwitch('counting')"        class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">COUNTING</button>
       <button id="invd-tab-btn-transection_fg"  onclick="invdSwitch('transection_fg')"  class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">TRANSACTION FG</button>
       <button id="invd-tab-btn-transection_semi" onclick="invdSwitch('transection_semi')" class="invd-tab-btn px-4 py-2 rounded-xl text-sm font-bold border-2 border-slate-200 bg-white text-slate-500 transition-all">TRANSACTION SEMI</button>
@@ -13199,6 +13216,7 @@ let blockingChartInstance = null;
     var _invdCols = {
       onhand_fg:        ['item_number','product_name','warehouse','cw_ordered','cw_physical_inventory','cw_on_order','cw_physical_reserved','cw_available_physical','cw_total_available','ordered','physical_inventory','on_order','physical_reserved','available_physical','total_available','imported_at'],
       onhand_semi:      ['item_number','product_name','warehouse','batch_number','serial_number','physical_inventory','available_physical','total_available','imported_at'],
+      onhand_rm:        ['item_number','product_name','batch_number','serial_number','physical_inventory','available_physical','total_available','product_identification','search_name','warehouse','imported_at'],
       counting:         ['count_date','item_number','product_name','site','warehouse','batch_number','serial_number','cw_onhand','cw_counted','cw_quantity','cw_unit','onhand','counted','quantity','batch_number2','unit','batch_disposition_code','batch_disposition_status','worker','imported_at'],
       transection_fg:   ['tst_pd_date','physical_date','modified_datetime','warehouse','item_number','product_name','reference','cw_quantity','cw_unit','quantity','unit','receipt','issue','number','customer_name','serial_number','serial_description','cost_amount','site','produced_w','min_w','likely_w','max_w','w_range'],
       transection_semi: ['tst_pd_date','item_number','product_name','warehouse','receipt','issue'],
@@ -13459,6 +13477,7 @@ let blockingChartInstance = null;
         counting:           { label: 'COUNTING',         sheet: 'Counting',             color: 'teal',   icon: 'fa-database',     desc: 'ยอดสต๊อกจาก D365 • เทียบสต๊อก + Dashboard' },
         onhand_fg:          { label: 'ON-HAND FG',       sheet: 'ON-HAND FG',           color: 'blue',   icon: 'fa-boxes',        desc: 'สต๊อก FG • จอง + คงเหลือ' },
         onhand_semi:        { label: 'ON-HAND SEMI',     sheet: 'Supabase',             color: 'purple', icon: 'fa-film',         desc: 'สต๊อก SEMI • ระดับ Batch + Serial' },
+        onhand_rm:          { label: 'ON-HAND RM',       sheet: 'Sheet1',               color: 'green',  icon: 'fa-industry',     desc: 'สต๊อก Raw Material • Batch + Serial' },
         transection_fg:     { label: 'TRANSACTION FG',   sheet: 'Transection FG',       color: 'orange', icon: 'fa-exchange-alt', desc: 'การเคลื่อนไหว FG • ใช้สร้างใบตรวจนับ' },
         transection_semi:   { label: 'TRANSACTION SEMI', sheet: 'Supabase',             color: 'rose',   icon: 'fa-retweet',      desc: 'การเคลื่อนไหว SEMI • ใช้สร้างใบตรวจนับ SEMI' },
         inventory_blocking: { label: 'INV BLOCKING',     sheet: 'Overdue Reservations', color: 'red',    icon: 'fa-ban',          desc: 'รายการ Inventory Blocking จาก D365' }
@@ -13511,7 +13530,7 @@ let blockingChartInstance = null;
         const panel = document.getElementById('inv-upload-panel');
         if (panel) panel.classList.remove('hidden');
         const icon = document.getElementById('inv-upload-icon');
-        const colorBgSolid = { teal:'bg-teal-600', blue:'bg-blue-600', purple:'bg-purple-600', orange:'bg-orange-600', rose:'bg-rose-600', red:'bg-red-700' }[cfg.color] || 'bg-teal-600';
+        const colorBgSolid = { teal:'bg-teal-600', blue:'bg-blue-600', purple:'bg-purple-600', green:'bg-green-600', orange:'bg-orange-600', rose:'bg-rose-600', red:'bg-red-700' }[cfg.color] || 'bg-teal-600';
         if (icon) { icon.className = 'w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg ' + colorBgSolid; icon.innerHTML = '<i class="fas ' + cfg.icon + '"></i>'; }
         const titleEl = document.getElementById('inv-upload-title');
         const descEl  = document.getElementById('inv-upload-desc');
@@ -13546,7 +13565,7 @@ let blockingChartInstance = null;
         // Deselect all cards
         Object.keys(INV_IMPORT_CONFIG).forEach(k => {
             const card = document.getElementById('inv-import-card-' + k);
-            if (card) { card.classList.remove('border-teal-400','bg-teal-50','border-blue-400','bg-blue-50','border-purple-400','bg-purple-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50','border-red-400','bg-red-50'); card.classList.add('border-slate-200','bg-white'); }
+            if (card) { card.classList.remove('border-teal-400','bg-teal-50','border-blue-400','bg-blue-50','border-purple-400','bg-purple-50','border-green-400','bg-green-50','border-orange-400','bg-orange-50','border-rose-400','bg-rose-50','border-red-400','bg-red-50'); card.classList.add('border-slate-200','bg-white'); }
         });
     };
 
@@ -13609,9 +13628,9 @@ let blockingChartInstance = null;
         if (fileInput) fileInput.value = '';
     };
 
-    // ── Supabase import สำหรับ onhand_fg / onhand_semi ──────────────────────────
+    // ── Supabase import สำหรับ onhand_fg / onhand_semi / onhand_rm ──────────────
     async function _invImportOnhandToSupabase(rows, tableType) {
-        const tableName = tableType === 'onhand_fg' ? 'onhand_fg' : 'onhand_semi';
+        const tableName = tableType === 'onhand_fg' ? 'onhand_fg' : tableType === 'onhand_rm' ? 'onhand_rm' : 'onhand_semi';
         const header = rows[0].map(h => String(h||'').trim().toLowerCase()
             .replace(/ /g,'_').replace(/[^a-z0-9_]/g,''));
 
@@ -13646,10 +13665,24 @@ let blockingChartInstance = null;
             'total_available':'total_available'
         };
 
-        const colMap = tableType === 'onhand_fg' ? colMapFG : colMapSEMI;
+        // RM columns
+        const colMapRM = {
+            'item_number':'item_number', 'item_numbe':'item_number',
+            'product_name':'product_name',
+            'batch_number':'batch_number', 'batch_numbe':'batch_number',
+            'serial_number':'serial_number', 'serial_numbe':'serial_number',
+            'physical_inventory':'physical_inventory', 'physical_inve':'physical_inventory',
+            'available_physical':'available_physical', 'available_ph':'available_physical',
+            'total_available':'total_available',
+            'product_identification':'product_identification',
+            'search_name':'search_name',
+            'warehouse':'warehouse'
+        };
+
+        const colMap = tableType === 'onhand_fg' ? colMapFG : tableType === 'onhand_rm' ? colMapRM : colMapSEMI;
         const textCols = tableType === 'onhand_fg'
             ? ['item_number','product_name','warehouse']
-            : ['item_number','product_name','warehouse','batch_number','serial_number'];
+            : ['item_number','product_name','warehouse','batch_number','serial_number','product_identification','search_name'];
 
         const batch = [];
         const now = new Date().toISOString();
@@ -13876,11 +13909,12 @@ let blockingChartInstance = null;
             function() {
                 showToast('กำลังนำเข้าข้อมูล...');
 
-                // ── onhand_fg / onhand_semi → Supabase โดยตรง ──
-                if (invCurrentImportType === 'onhand_fg' || invCurrentImportType === 'onhand_semi') {
+                // ── onhand_fg / onhand_semi / onhand_rm → Supabase โดยตรง ──
+                if (invCurrentImportType === 'onhand_fg' || invCurrentImportType === 'onhand_semi' || invCurrentImportType === 'onhand_rm') {
                     _invImportOnhandToSupabase(rows, invCurrentImportType).then(function(count) {
                         showToast('✅ นำเข้า ' + count + ' รายการ → Supabase สำเร็จ');
-                        invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: 'Supabase:' + (invCurrentImportType === 'onhand_fg' ? 'onhand_fg' : 'onhand_semi'), message: 'นำเข้า ' + count + ' รายการสำเร็จ' });
+                        var tblName = invCurrentImportType === 'onhand_fg' ? 'onhand_fg' : invCurrentImportType === 'onhand_rm' ? 'onhand_rm' : 'onhand_semi';
+                        invImportLogs.unshift({ time: new Date().toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}), label: cfg.label, sheet: 'Supabase:' + tblName, message: 'นำเข้า ' + count + ' รายการสำเร็จ' });
                         invRenderImportLog();
                         _invSaveImportDate(invCurrentImportType);
                         window._cacheClear('onhand_' + invCurrentImportType);
