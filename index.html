@@ -7167,6 +7167,10 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
           <option value="">ทุกคัน</option>
         </select>
         <button onclick="dmLoadInspections()" style="background:rgba(255,255,255,.2);border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;"><i class="fas fa-sync-alt"></i></button>
+        <select id="dm-inspect-driver-filter" style="border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;color:#1e293b;outline:none;background:rgba(255,255,255,.9);">
+          <option value="">ทุกคนขับ</option>
+        </select>
+        <button onclick="dmDeleteInspection()" style="background:#dc2626;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;"><i class="fas fa-trash-alt"></i> ลบ</button>
       </div>
     </div>
     <!-- List -->
@@ -33215,7 +33219,15 @@ window.dmLoadInspections=async function(){
     plateSel.innerHTML='<option value="">ทุกคัน</option>'+plates.map(function(p){return'<option value="'+p+'"'+(p===plateFilter?' selected':'')+'>'+p+'</option>';}).join('');
   }
 
+  var driverFilter=(document.getElementById('dm-inspect-driver-filter')||{}).value||'';
+  var driverSel=document.getElementById('dm-inspect-driver-filter');
+  if(driverSel){
+    var driverNames=Array.from(new Set(drivers.map(function(d){return d.name;}))).filter(function(n){return n&&n!=='–';}).sort();
+    driverSel.innerHTML='<option value="">ทุกคนขับ</option>'+driverNames.map(function(n){return'<option value="'+n+'"'+(n===driverFilter?' selected':'')+'>'+n+'</option>';}).join('');
+  }
+
   if(plateFilter) drivers=drivers.filter(function(d){return d.plate===plateFilter;});
+  if(driverFilter) drivers=drivers.filter(function(d){return d.name===driverFilter;});
   if(!drivers.length){
     el.innerHTML='<span style="font-size:12px;color:#94a3b8;padding:8px 0;">ไม่มีข้อมูลวันที่นี้</span>';
     return;
@@ -33282,6 +33294,25 @@ window.dmShowInspectDetail=async function(plate,dateVal){
   }).join('');
   body.innerHTML='<div style="margin-bottom:12px;">'+overallBadge+'</div>'+itemsHtml
     +(ins.notes?'<div style="margin-top:12px;background:#f8fafc;border-radius:10px;padding:10px 12px;font-size:12px;color:#475569;"><i class="fas fa-sticky-note" style="margin-right:6px;"></i>'+dmEsc(ins.notes)+'</div>':'');
+};
+
+window.dmDeleteInspection=async function(){
+  var dateVal=(document.getElementById('dm-inspect-date-pick')||{}).value||'';
+  var driverVal=(document.getElementById('dm-inspect-driver-filter')||{}).value||'';
+  var plateVal=(document.getElementById('dm-inspect-plate-filter')||{}).value||'';
+  if(!dateVal){showToast('กรุณาเลือกวันที่ก่อน',true);return;}
+  var msg='ลบข้อมูลตรวจสภาพรถ\nวันที่: '+dateVal;
+  if(driverVal) msg+='\nคนขับ: '+driverVal;
+  if(plateVal) msg+='\nทะเบียน: '+plateVal;
+  if(!driverVal&&!plateVal) msg+='\n(ทั้งหมดของวันนี้)';
+  if(!confirm(msg+'\n\nยืนยันการลบ?')) return;
+  var q=window._sb.from('truck_inspections').delete().eq('inspect_date',dateVal);
+  if(plateVal) q=q.eq('truck_plate',plateVal);
+  if(driverVal) q=q.eq('driver_name',driverVal);
+  var {error}=await q;
+  if(error){showToast('ลบไม่สำเร็จ: '+error.message,true);return;}
+  showToast('ลบข้อมูลสำเร็จ',false);
+  dmLoadInspections();
 };
 
 // ─── Admin Driver Monitor — Trip-Screen Replication (matches Driver-App-TST) ───
