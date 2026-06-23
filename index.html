@@ -6024,9 +6024,13 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
           <label class="text-xs font-black text-slate-500 uppercase mb-1 block">คลัง</label>
           <input id="dmg-warehouse" type="text" placeholder="เช่น คลังบางปลา" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
         </div>
-        <div>
+        <div style="position:relative;">
           <label class="text-xs font-black text-slate-500 uppercase mb-1 block">รหัสสินค้า (SKU)</label>
-          <input id="dmg-sku" type="text" placeholder="เช่น 1.0RTG4001400" oninput="dmgLookupSku(this.value)" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <input id="dmg-sku" type="text" placeholder="เช่น 1.0RTG4001400" autocomplete="off"
+            oninput="dmgLookupSku(this.value)"
+            onblur="setTimeout(function(){document.getElementById('dmg-sku-drop').style.display='none'},200)"
+            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <div id="dmg-sku-drop" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;margin-top:4px;"></div>
         </div>
         <div>
           <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ชื่อสินค้า</label>
@@ -36141,10 +36145,31 @@ window.dmgSelectAction = function(btn, val){
   document.getElementById('dmg-action').value = val;
 };
 
-window.dmgLookupSku = async function(sku){
-  if(!sku || sku.length < 3) return;
-  var {data} = await window._sb.from('products').select('name').eq('sku', sku.trim()).maybeSingle();
-  if(data) document.getElementById('dmg-itemname').value = data.name || '';
+window.dmgLookupSku = async function(val){
+  var drop = document.getElementById('dmg-sku-drop');
+  if(!val || val.length < 2){ drop.style.display='none'; return; }
+  var q = val.trim().toLowerCase();
+  var {data} = await window._sb.from('products').select('sku,name')
+    .or('sku.ilike.%'+q+'%,name.ilike.%'+q+'%')
+    .limit(12);
+  if(!data||!data.length){ drop.style.display='none'; return; }
+  drop.innerHTML = data.map(function(p){
+    return '<div onclick="dmgPickSku(\''+p.sku.replace(/'/g,"\\'")+'\')" '
+      +'style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;transition:background .1s;" '
+      +'onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'#fff\'">'
+      +'<div style="font-weight:700;font-size:13px;color:#1e293b;">'+p.sku+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:1px;">'+p.name+'</div>'
+      +'</div>';
+  }).join('');
+  drop.style.display='block';
+};
+window.dmgPickSku = function(sku){
+  document.getElementById('dmg-sku').value = sku;
+  document.getElementById('dmg-sku-drop').style.display='none';
+  // ดึงชื่อสินค้า
+  window._sb.from('products').select('name').eq('sku',sku).maybeSingle().then(function(r){
+    if(r.data) document.getElementById('dmg-itemname').value = r.data.name||'';
+  });
 };
 
 window.dmgClearForm = function(){
