@@ -32024,9 +32024,9 @@ window.viewTripResult = async function(planId) {
     var baseSelect = 'session_id,bundle1,bundle2,scrap1,scrap2,hold_pcs,ppb,system_pcs,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
     var items, error;
     if(wh){
-      var includeNull = wh !== 'QC'; // QC ไม่เอา null-wh session (เป็นข้อมูล FG-BP ไม่ใช่ QC)
+      // QC ต้องดึง null-wh session ด้วยเพราะ hold_pcs บันทึกอยู่ใน FG-BP context (null-wh)
       var queries = [window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).eq('stock_count_sessions.wh',wh).order('session_id',{ascending:false}).limit(60)];
-      if(includeNull) queries.push(window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30));
+      queries.push(window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30));
       var results = await Promise.all(queries);
       error = results.find(function(r){ return r.error; });
       items = results.flatMap(function(r){ return r.data||[]; }).sort(function(a,b){ return b.session_id - a.session_id; }).slice(0,60);
@@ -32041,12 +32041,16 @@ window.viewTripResult = async function(planId) {
     }
     var rows = items.map(function(it){
       var sess = it.stock_count_sessions || {};
-      var isQCrow = wh === 'QC';
-      var counted = isQCrow ? (it.hold_pcs||0) : (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
+      var isQCrow  = wh === 'QC';
+      var sessWh   = sess.wh || null;
+      var isNullWh = sessWh === null;
+      var counted  = isQCrow ? (it.hold_pcs||0) : (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
+      // null-wh session ใน QC history: system_pcs เป็นของ FG-BP → ซ่อน ระบบ/Diff
+      var sysValid = !(isQCrow && isNullWh);
       var diff     = counted - (it.system_pcs||0);
-      var sysHtml  = '<span style="color:#0f766e">'+it.system_pcs+'</span>';
-      var diffHtml = diff===0
-        ? '<span style="color:#15803d;font-weight:700">0</span>'
+      var sysHtml  = sysValid ? '<span style="color:#0f766e">'+it.system_pcs+'</span>' : '<span style="color:#94a3b8">—</span>';
+      var diffHtml = !sysValid ? '<span style="color:#94a3b8">—</span>'
+        : diff===0 ? '<span style="color:#15803d;font-weight:700">0</span>'
         : '<span style="color:#dc2626;font-weight:700">'+(diff>0?'+':'')+diff+'</span>';
       var dateStr = sess.count_date||'—';
       var movStr  = sess.movement_date||'—';
