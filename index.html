@@ -32022,12 +32022,12 @@ window.viewTripResult = async function(planId) {
     var baseSelect = 'session_id,bundle1,bundle2,scrap1,scrap2,ppb,system_pcs,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
     var items, error;
     if(wh){
-      var [r1, r2] = await Promise.all([
-        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).eq('stock_count_sessions.wh',wh).order('session_id',{ascending:false}).limit(60),
-        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30)
-      ]);
-      error = r1.error || r2.error;
-      items = [...(r1.data||[]), ...(r2.data||[])].sort(function(a,b){ return b.session_id - a.session_id; }).slice(0,60);
+      var includeNull = wh !== 'QC'; // QC ไม่เอา null-wh session (เป็นข้อมูล FG-BP ไม่ใช่ QC)
+      var queries = [window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).eq('stock_count_sessions.wh',wh).order('session_id',{ascending:false}).limit(60)];
+      if(includeNull) queries.push(window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30));
+      var results = await Promise.all(queries);
+      error = results.find(function(r){ return r.error; });
+      items = results.flatMap(function(r){ return r.data||[]; }).sort(function(a,b){ return b.session_id - a.session_id; }).slice(0,60);
     } else {
       var r = await window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).order('session_id',{ascending:false}).limit(60);
       error = r.error; items = r.data;
