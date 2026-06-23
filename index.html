@@ -5013,6 +5013,10 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
       class="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-black text-sm transition-all text-slate-500 hover:text-slate-700">
       <i class="fas fa-table"></i> ดูข้อมูล
     </button>
+    <button id="inv-subtab-btn-damage" onclick="invSwitchSubTab('damage')"
+      class="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-black text-sm transition-all text-slate-500 hover:text-slate-700">
+      <i class="fas fa-envelope"></i> ขออนุมัติ
+    </button>
   </div>
 
   <!-- SUB-TAB: IMPORT -->
@@ -5961,6 +5965,129 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     </div>
     <div id="invd-col-popup" style="display:none;position:fixed;z-index:9999;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.18);border:1.5px solid #e2e8f0;min-width:200px;padding:12px;"></div>
   </div><!-- end inv-sub-viewdata -->
+
+  <!-- SUB-TAB: DAMAGE REQUEST -->
+  <div id="inv-sub-damage" class="hidden space-y-5">
+
+    <!-- Settings: recipient email -->
+    <div class="bg-white rounded-2xl shadow border border-slate-100 p-5">
+      <div class="flex items-center gap-3 mb-3">
+        <i class="fas fa-cog text-slate-400"></i>
+        <span class="font-black text-slate-600 text-sm uppercase">ตั้งค่าผู้รับเมล</span>
+      </div>
+      <div class="flex gap-3 items-end">
+        <div class="flex-1">
+          <label class="text-xs text-slate-400 font-bold mb-1 block">อีเมลผู้รับ (คั่นด้วย , ถ้าหลายคน)</label>
+          <input id="dmg-recipient" type="text" placeholder="example@company.com, manager@company.com"
+            class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <button onclick="dmgSaveRecipient()" class="px-5 py-2.5 bg-slate-700 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all">บันทึก</button>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <div class="bg-white rounded-2xl shadow border border-slate-100 p-6 space-y-4">
+      <h3 class="font-black text-slate-700 text-base flex items-center gap-2">
+        <i class="fas fa-exclamation-triangle text-amber-500"></i> ขออนุมัติปรับสภาพสินค้า
+      </h3>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วันที่</label>
+          <input id="dmg-date" type="date" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">คลัง</label>
+          <input id="dmg-warehouse" type="text" placeholder="เช่น คลังบางปลา" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">รหัสสินค้า (SKU)</label>
+          <input id="dmg-sku" type="text" placeholder="เช่น 1.0RTG4001400" oninput="dmgLookupSku(this.value)" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ชื่อสินค้า</label>
+          <input id="dmg-itemname" type="text" placeholder="ดึงอัตโนมัติจาก SKU หรือกรอกเอง" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">จำนวน</label>
+          <input id="dmg-qty" type="number" placeholder="0" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">หน่วย</label>
+          <select id="dmg-unit" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="เส้น">เส้น</option>
+            <option value="มัด">มัด</option>
+            <option value="แผ่น">แผ่น</option>
+            <option value="ม้วน">ม้วน</option>
+            <option value="KG">KG</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ประเภทความเสียหาย</label>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="dmgSelectType(this,'เหล็กบุบ')" class="dmg-type-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-amber-400 hover:text-amber-600 transition-all">เหล็กบุบ</button>
+            <button type="button" onclick="dmgSelectType(this,'เหล็กคด')" class="dmg-type-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-amber-400 hover:text-amber-600 transition-all">เหล็กคด</button>
+            <button type="button" onclick="dmgSelectType(this,'สนิม')" class="dmg-type-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-amber-400 hover:text-amber-600 transition-all">สนิม</button>
+            <button type="button" onclick="dmgSelectType(this,'ผิวเสียหาย')" class="dmg-type-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-amber-400 hover:text-amber-600 transition-all">ผิวเสียหาย</button>
+            <button type="button" onclick="dmgSelectType(this,'ตัดไม่ได้ขนาด')" class="dmg-type-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-amber-400 hover:text-amber-600 transition-all">ตัดไม่ได้ขนาด</button>
+            <button type="button" onclick="dmgSelectType(this,'อื่นๆ')" class="dmg-type-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-amber-400 hover:text-amber-600 transition-all">อื่นๆ</button>
+          </div>
+          <input id="dmg-type-val" type="hidden">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">รายละเอียดปัญหา</label>
+          <textarea id="dmg-desc" rows="2" placeholder="อธิบายปัญหาเพิ่มเติม..." class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ตีคืนจาก (ถ้ามี)</label>
+          <input id="dmg-returned" type="text" placeholder="เช่น ห้างหุ้นส่วนจำกัด มั่นคง สตีล เซ็นเตอร์ 1IV26-02740" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-black text-slate-500 uppercase mb-1 block">Action ที่ขออนุมัติ</label>
+          <div class="flex flex-wrap gap-2 mb-2">
+            <button type="button" onclick="dmgSelectAction(this,'QC เข้าตรวจสอบเฟริมสภาพให้เข้าเกรดบี')" class="dmg-action-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all">เกรดบี</button>
+            <button type="button" onclick="dmgSelectAction(this,'ทำลายสินค้า / Scrap')" class="dmg-action-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all">Scrap</button>
+            <button type="button" onclick="dmgSelectAction(this,'ส่งซ่อม')" class="dmg-action-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all">ส่งซ่อม</button>
+            <button type="button" onclick="dmgSelectAction(this,'คืนซัพพลายเออร์')" class="dmg-action-btn px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all">คืนซัพพลายเออร์</button>
+          </div>
+          <input id="dmg-action" type="text" placeholder="หรือพิมพ์ action เอง..." class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button onclick="dmgSendEmail()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-sm flex items-center gap-2 transition-all">
+          <i class="fas fa-paper-plane"></i> ส่งเมลขออนุมัติ
+        </button>
+        <button onclick="dmgClearForm()" class="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm transition-all">ล้างฟอร์ม</button>
+      </div>
+    </div>
+
+    <!-- History table -->
+    <div class="bg-white rounded-2xl shadow border border-slate-100 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="font-black text-slate-700 text-sm flex items-center gap-2"><i class="fas fa-history text-slate-400"></i> ประวัติการขออนุมัติ</h3>
+        <button onclick="dmgLoadHistory()" class="text-xs text-blue-600 font-bold hover:underline"><i class="fas fa-sync-alt"></i> รีเฟรช</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead><tr style="background:#f8fafc;">
+            <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">วันที่</th>
+            <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">คลัง</th>
+            <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">SKU</th>
+            <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">ชื่อสินค้า</th>
+            <th class="px-4 py-3 text-center font-black text-slate-500 text-xs uppercase">จำนวน</th>
+            <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">ประเภท</th>
+            <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">Action</th>
+            <th class="px-4 py-3 text-left font-black text-slate-500 text-xs uppercase">ผู้ส่ง</th>
+          </tr></thead>
+          <tbody id="dmg-history-tbody">
+            <tr><td colspan="8" class="text-center text-slate-400 py-8">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- end inv-sub-damage -->
 
 </div><!-- end view-kpi-stock-content -->
 
@@ -13540,7 +13667,8 @@ let blockingChartInstance = null;
 
     window.invSwitchSubTab = function(tab) {
         if(tab === 'viewdata' && !_invdLoaded) { invdLoad(); }
-        ['import','kpiaccuracy','viewdata'].forEach(function(t) {
+        if(tab === 'damage') { dmgLoadHistory(); }
+        ['import','kpiaccuracy','viewdata','damage'].forEach(function(t) {
             const panel = document.getElementById('inv-sub-' + t);
             const btn = document.getElementById('inv-subtab-btn-' + t);
             if (!panel || !btn) return;
@@ -35882,6 +36010,155 @@ window.drvInit = function(u){
   _origDrvInit(u);
   setTimeout(function(){ trCheckDriverPending(u.username); }, 1500);
 };
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// DAMAGE REQUEST — ขออนุมัติปรับสภาพสินค้า
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+
+var DMG_RECIPIENT_KEY = 'wms_dmg_recipient';
+
+// โหลดอีเมลที่บันทึกไว้เมื่อเปิดหน้า
+document.addEventListener('DOMContentLoaded', function(){
+  var saved = localStorage.getItem(DMG_RECIPIENT_KEY)||'';
+  var el = document.getElementById('dmg-recipient');
+  if(el && saved) el.value = saved;
+  var dateEl = document.getElementById('dmg-date');
+  if(dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+});
+
+window.dmgSaveRecipient = function(){
+  var v = (document.getElementById('dmg-recipient').value||'').trim();
+  localStorage.setItem(DMG_RECIPIENT_KEY, v);
+  showToast('บันทึกอีเมลผู้รับแล้ว');
+};
+
+window.dmgSelectType = function(btn, val){
+  document.querySelectorAll('.dmg-type-btn').forEach(function(b){
+    b.classList.remove('border-amber-400','text-amber-600','bg-amber-50');
+    b.classList.add('border-slate-200','text-slate-600');
+  });
+  btn.classList.add('border-amber-400','text-amber-600','bg-amber-50');
+  btn.classList.remove('border-slate-200','text-slate-600');
+  document.getElementById('dmg-type-val').value = val;
+};
+
+window.dmgSelectAction = function(btn, val){
+  document.querySelectorAll('.dmg-action-btn').forEach(function(b){
+    b.classList.remove('border-blue-400','text-blue-600','bg-blue-50');
+    b.classList.add('border-slate-200','text-slate-600');
+  });
+  btn.classList.add('border-blue-400','text-blue-600','bg-blue-50');
+  btn.classList.remove('border-slate-200','text-slate-600');
+  document.getElementById('dmg-action').value = val;
+};
+
+window.dmgLookupSku = async function(sku){
+  if(!sku || sku.length < 3) return;
+  var {data} = await window._sb.from('products').select('name').eq('sku', sku.trim()).maybeSingle();
+  if(data) document.getElementById('dmg-itemname').value = data.name || '';
+};
+
+window.dmgClearForm = function(){
+  ['dmg-sku','dmg-itemname','dmg-qty','dmg-desc','dmg-returned','dmg-action'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('dmg-type-val').value='';
+  document.querySelectorAll('.dmg-type-btn,.dmg-action-btn').forEach(function(b){
+    b.classList.remove('border-amber-400','text-amber-600','bg-amber-50','border-blue-400','text-blue-600','bg-blue-50');
+    b.classList.add('border-slate-200','text-slate-600');
+  });
+  document.getElementById('dmg-date').value = new Date().toISOString().split('T')[0];
+};
+
+window.dmgSendEmail = async function(){
+  var recipient = (document.getElementById('dmg-recipient').value||'').trim();
+  var date      = (document.getElementById('dmg-date').value||'').trim();
+  var warehouse = (document.getElementById('dmg-warehouse').value||'').trim();
+  var sku       = (document.getElementById('dmg-sku').value||'').trim();
+  var itemname  = (document.getElementById('dmg-itemname').value||'').trim();
+  var qty       = (document.getElementById('dmg-qty').value||'').trim();
+  var unit      = (document.getElementById('dmg-unit').value||'');
+  var type      = (document.getElementById('dmg-type-val').value||'').trim();
+  var desc      = (document.getElementById('dmg-desc').value||'').trim();
+  var returned  = (document.getElementById('dmg-returned').value||'').trim();
+  var action    = (document.getElementById('dmg-action').value||'').trim();
+
+  if(!recipient){ showToast('กรุณาตั้งค่าอีเมลผู้รับก่อน',true); return; }
+  if(!sku||!itemname||!qty||!type||!action){ showToast('กรุณากรอกข้อมูลให้ครบ (SKU, ชื่อสินค้า, จำนวน, ประเภท, Action)',true); return; }
+
+  // format วันที่ไทย
+  var d = new Date(date);
+  var thDate = date ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}) : date;
+
+  var subject = encodeURIComponent('ขออนุมัติปรับสภาพสินค้า '+thDate);
+  var body = 'ถึง ผู้อนุมัติ\n';
+  body += '   ขออนุมัติปรับเปลี่ยนสภาพสินค้า ตามรายการดังนี้\n';
+  if(warehouse) body += '>>' + warehouse + '\n';
+  body += sku + ' ' + itemname + '\n';
+  body += 'จำนวน ' + qty + ' ' + unit;
+  if(type) body += ' ปัญหา' + type;
+  if(desc) body += ' ' + desc;
+  if(returned) body += ' ตีคืนจาก ' + returned;
+  body += '\n\n-' + action;
+  body += '\n\nผู้แจ้ง: ' + (window._currentUser||'');
+
+  var mailto = 'mailto:'+encodeURIComponent(recipient)+'?subject='+subject+'&body='+encodeURIComponent(body);
+  window.open(mailto, '_blank');
+
+  // บันทึกลง Supabase
+  var {error} = await window._sb.from('damage_requests').insert({
+    request_date: date||new Date().toISOString().split('T')[0],
+    warehouse, item_sku: sku, item_name: itemname,
+    quantity: Number(qty)||0, unit,
+    damage_type: type, damage_desc: desc,
+    returned_from: returned, action_requested: action,
+    recipient_email: recipient,
+    created_by: window._currentUser||''
+  });
+  if(error){ showToast('เปิดเมลแล้ว แต่บันทึกไม่สำเร็จ: '+error.message,true); return; }
+  showToast('เปิดเมลและบันทึกข้อมูลสำเร็จ ✅');
+  dmgLoadHistory();
+};
+
+window.dmgLoadHistory = async function(){
+  var tbody = document.getElementById('dmg-history-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-6"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  var {data, error} = await window._sb.from('damage_requests').select('*').order('created_at',{ascending:false}).limit(100);
+  if(error||!data||!data.length){
+    tbody.innerHTML='<tr><td colspan="8" class="text-center text-slate-400 py-6 text-sm">ยังไม่มีประวัติ</td></tr>'; return;
+  }
+  tbody.innerHTML = data.map(function(r){
+    return '<tr class="border-b border-slate-50 hover:bg-slate-50 transition-all">'
+      +'<td class="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">'+r.request_date+'</td>'
+      +'<td class="px-4 py-3 text-xs text-slate-600">'+(r.warehouse||'—')+'</td>'
+      +'<td class="px-4 py-3 text-xs font-mono font-bold text-slate-700">'+r.item_sku+'</td>'
+      +'<td class="px-4 py-3 text-xs text-slate-600" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+r.item_name+'</td>'
+      +'<td class="px-4 py-3 text-xs text-center font-bold text-slate-700">'+r.quantity+' '+r.unit+'</td>'
+      +'<td class="px-4 py-3"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:#fef3c7;color:#92400e;">'+r.damage_type+'</span></td>'
+      +'<td class="px-4 py-3 text-xs text-slate-600" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+r.action_requested+'</td>'
+      +'<td class="px-4 py-3 text-xs text-slate-400">'+(r.created_by||'—')+'</td>'
+      +'</tr>';
+  }).join('');
+};
+
+// restore recipient email เมื่อ switch tab
+var _origInvSWT = window.invSwitchSubTab;
+if(_origInvSWT){
+  window.invSwitchSubTab = function(tab){
+    _origInvSWT(tab);
+    if(tab==='damage'){
+      var saved = localStorage.getItem(DMG_RECIPIENT_KEY)||'';
+      var el = document.getElementById('dmg-recipient');
+      if(el && saved) el.value = saved;
+      var dateEl = document.getElementById('dmg-date');
+      if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+    }
+  };
+}
 
 })();
 </script>
