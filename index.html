@@ -33647,11 +33647,10 @@ window.viewTripResult = async function(planId) {
     <div style="padding:16px 14px 100px;">
       <!-- Header -->
       <div style="text-align:center;margin-bottom:18px;">
-        <div style="font-size:22px;margin-bottom:4px;">🔍</div>
-        <div style="font-size:17px;font-weight:900;color:#fff;">ตรวจสภาพรถประจำวัน</div>
+        <div id="drv-inspect-title" style="font-size:17px;font-weight:900;color:#fff;margin-bottom:4px;">🔍 ตรวจสภาพรถประจำวัน</div>
         <div id="drv-inspect-subtitle" style="font-size:12px;color:#64748b;margin-top:3px;">–</div>
-        <div style="margin-top:8px;background:#1e3a8a;border-radius:10px;padding:7px 12px;font-size:11px;color:#93c5fd;font-weight:700;">
-          ⚠️ ต้องตรวจสภาพรถก่อนเริ่มงานทุกครั้ง
+        <div id="drv-inspect-desc" style="margin-top:8px;border:1px solid #059669;border-radius:10px;padding:7px 12px;font-size:11px;color:#059669;font-weight:700;">
+          ตรวจสภาพรถก่อนเริ่มงานประจำวัน
         </div>
       </div>
 
@@ -35037,43 +35036,129 @@ window.drvLoadPlan=async function(){
 };
 
 // ─── Vehicle Inspection ────────────────────────────────────────────────────
-var _DRV_INSPECT_ITEMS=[
-  'ระดับน้ำมันเครื่อง','ระดับน้ำมันเบรค','ระดับน้ำมันครัช','ระดับน้ำหม้อน้ำ',
-  'ระดับน้ำหม้อพักน้ำ','สภาพท่อน้ำบน','สภาพท่อน้ำล่าง','ระดับน้ำฉีดกระจก',
-  'ระดับน้ำกลั่น','ระดับน้ำมันเพาเวอร์','ความตึงของสายพานหน้าเครื่อง',
-  'ระบบไฟส่องสว่างทั้งคัน','สภาพกรองอากาศ','ระบบเครื่องปรับอากาศ',
-  'สภาพที่นั่งคนขับ','สภาพเบาะที่นั่งผู้โดยสาร','ความสะอาดภายใน',
-  'ความสะอาดนอกรถ','สภาพยาง และลมยางทั้งคัน','รอยตำหนิรอบตัวรถ'
-];
-var _dInspectPhotos={}; // {itemIndex: File}
+// each item: {name, req_photo} — req_photo=true = บังคับถ่ายรูป
+var _INSPECT_TYPES={
+  pre_load:{
+    label:'ตรวจก่อนโหลดสินค้า',
+    icon:'🔧',
+    color:'#3b82f6',
+    desc:'ตรวจความพร้อมรถก่อนรับสินค้าเข้าพ่วง',
+    items:[
+      {name:'ระดับน้ำมันเครื่อง',req_photo:false},
+      {name:'ระดับน้ำมันเบรค / ครัช',req_photo:false},
+      {name:'ระดับน้ำหม้อน้ำ / น้ำหม้อพัก',req_photo:false},
+      {name:'ความตึงสายพาน / สภาพสายไฟ',req_photo:false},
+      {name:'แบตเตอรี่ — ขั้วแน่น / ไม่บวม',req_photo:false},
+      {name:'เบรคเท้า / เบรคมือ — ทดสอบแล้ว',req_photo:false},
+      {name:'⭐ ยาง — ดอกยาง / แรงดันลม / น็อตล้อ',req_photo:true},
+      {name:'กั้นล้อ (wheel chock) — มีครบ / พร้อมใช้',req_photo:false},
+      {name:'⭐ สภาพผ้าใบ — ไม่ขาด / ไม่มีรู / ตะขอครบ',req_photo:true},
+      {name:'⭐ สายรัด / โซ่ยึด — ครบชุด / ไม่ชำรุด',req_photo:true},
+      {name:'พื้นพ่วง — สะอาด / ไม่มีของหลงเหลือ',req_photo:false},
+      {name:'ประตูพ่วง / กลอนล็อค',req_photo:false},
+      {name:'ไฟหน้า / ไฟท้าย / ไฟเบรค / ไฟเลี้ยว',req_photo:false},
+      {name:'ไฟฉุกเฉิน (hazard) — ทดสอบแล้ว',req_photo:false},
+    ]
+  },
+  pre_departure:{
+    label:'ตรวจก่อนออกเดินทาง',
+    icon:'🌙',
+    color:'#7c3aed',
+    desc:'ตรวจรถที่โหลดสินค้าค้างคืนก่อนออก',
+    items:[
+      {name:'⭐ ผ้าใบ — ปิดมิดชิดทุกด้าน / ตะขอครบ',req_photo:true},
+      {name:'⭐ สายรัด / โซ่ยึด — แน่นหลังค้างคืน',req_photo:true},
+      {name:'⭐ ยาง — ตรวจซ้ำหลังรับน้ำหนักค้างคืน',req_photo:true},
+      {name:'ประตูพ่วง / กลอน — ล็อคแล้ว',req_photo:false},
+      {name:'น้ำหนักบรรทุก — ไม่เกินพิกัดรถ',req_photo:false},
+      {name:'เอกสาร — ใบส่งของ / ใบขับขี่ / ทะเบียน',req_photo:false},
+      {name:'กระจกมองข้าง — ปรับแล้ว / สะอาด',req_photo:false},
+      {name:'เข็มขัดนิรภัย',req_photo:false},
+      {name:'ไฟสัญญาณรอบคัน — ทดสอบสุดท้าย',req_photo:false},
+      {name:'รอยเสียหายใหม่รอบตัวรถ (ถ้ามี)',req_photo:false},
+    ]
+  },
+  standard:{
+    label:'ตรวจสภาพรถประจำวัน',
+    icon:'🔍',
+    color:'#059669',
+    desc:'ตรวจสภาพรถก่อนเริ่มงานประจำวัน',
+    items:[
+      {name:'ระดับน้ำมันเครื่อง',req_photo:false},
+      {name:'ระดับน้ำมันเบรค / ครัช',req_photo:false},
+      {name:'ระดับน้ำหม้อน้ำ / น้ำหม้อพัก',req_photo:false},
+      {name:'ระดับน้ำกลั่น / น้ำฉีดกระจก',req_photo:false},
+      {name:'ระดับน้ำมันเพาเวอร์',req_photo:false},
+      {name:'ความตึงสายพาน / สภาพสายไฟ',req_photo:false},
+      {name:'แบตเตอรี่ — ขั้วแน่น / ไม่บวม',req_photo:false},
+      {name:'สภาพท่อน้ำบน / ล่าง',req_photo:false},
+      {name:'สภาพกรองอากาศ',req_photo:false},
+      {name:'เบรคเท้า / เบรคมือ — ทดสอบแล้ว',req_photo:false},
+      {name:'⭐ ยาง — ดอกยาง / แรงดันลม / น็อตล้อ ทุกเส้น',req_photo:true},
+      {name:'⭐ สภาพผ้าใบ — ไม่ขาด / ไม่มีรู / ตะขอครบ',req_photo:true},
+      {name:'⭐ สายรัด / โซ่ยึด — ครบชุด / ไม่ชำรุด',req_photo:true},
+      {name:'พื้นพ่วง — สะอาด / ไม่มีของหลงเหลือ',req_photo:false},
+      {name:'ประตูพ่วง / กลอนล็อค',req_photo:false},
+      {name:'ระบบไฟส่องสว่างทั้งคัน',req_photo:false},
+      {name:'ไฟฉุกเฉิน (hazard) — ทดสอบแล้ว',req_photo:false},
+      {name:'กระจกมองข้าง — ปรับแล้ว / สะอาด',req_photo:false},
+      {name:'ระบบเครื่องปรับอากาศ',req_photo:false},
+      {name:'รอยตำหนิรอบตัวรถ',req_photo:false},
+    ]
+  }
+};
+var _dInspectPhotos={};
+var _dInspectType='standard';
+
+function _drvDetectInspectType(){
+  // มีแผนโหลดค้างคืน → pre_departure
+  if(_dPlans&&_dPlans.some(function(p){return p._isOvernight;})) return 'pre_departure';
+  // เช้า (ก่อน 10 โมง) → pre_load
+  var hr=new Date().getHours();
+  if(hr<10) return 'pre_load';
+  return 'standard';
+}
 
 async function drvInspectCheck(){
   var today=new Date().toISOString().split('T')[0];
   var plate=(_dPlans[0]?.truck_plate)||'';
   var driverId=_dSess?.driver_id||'';
   if(!plate)return;
-  // เช็คต่อ driver+truck+วัน — ขับหลายคันได้ ต้องตรวจแต่ละคัน
   var q=window._sb.from('truck_inspections').select('id').eq('inspect_date',today).eq('truck_plate',plate);
   if(driverId) q=q.eq('driver_id',driverId);
   var {data}=await q.maybeSingle();
   if(data)return;
+  _dInspectType=_drvDetectInspectType();
   drvInspectShow(today,plate);
 }
 
 function drvInspectShow(date,plate){
   _dInspectPhotos={};
   var overlay=document.getElementById('drv-inspect-overlay');
-  var sub=document.getElementById('drv-inspect-subtitle');
   var list=document.getElementById('drv-inspect-list');
   var notes=document.getElementById('drv-inspect-notes');
   if(!overlay||!list)return;
-  sub.textContent=plate+' · '+date;
   notes.value='';
 
-  list.innerHTML=_DRV_INSPECT_ITEMS.map(function(name,i){
-    return '<div id="drv-inspect-item-'+i+'" style="background:#1e293b;border-radius:14px;padding:14px;">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
-      +'<div style="font-size:13px;font-weight:700;color:#e2e8f0;line-height:1.3;">'+(i+1)+'. '+name+'</div>'
+  var tp=_INSPECT_TYPES[_dInspectType]||_INSPECT_TYPES.standard;
+
+  // อัพเดต header
+  var subtitleEl=document.getElementById('drv-inspect-subtitle');
+  if(subtitleEl) subtitleEl.textContent=plate+' · '+date;
+  var titleEl=document.getElementById('drv-inspect-title');
+  if(titleEl) titleEl.innerHTML=tp.icon+' '+tp.label;
+  var descEl=document.getElementById('drv-inspect-desc');
+  if(descEl){ descEl.textContent=tp.desc; descEl.style.borderColor=tp.color; descEl.style.color=tp.color; }
+
+  var items=tp.items;
+  list.innerHTML=items.map(function(item,i){
+    var isReq=item.req_photo;
+    var nameColor=isReq?'#fcd34d':'#e2e8f0';
+    var cardBg=isReq?'linear-gradient(135deg,#1e293b 80%,#1c1306 100%)':'#1e293b';
+    var reqBadge=isReq?'<span style="font-size:9px;font-weight:900;color:#f59e0b;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle;">📷 บังคับ</span>':'';
+    return '<div id="drv-inspect-item-'+i+'" style="background:'+cardBg+';border-radius:14px;padding:14px;'+(isReq?'border:1px solid rgba(245,158,11,.25);':'')+'\">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">'
+      +'<div style="font-size:13px;font-weight:700;color:'+nameColor+';line-height:1.4;">'+(i+1)+'. '+item.name+reqBadge+'</div>'
       +'<div style="display:flex;gap:6px;flex-shrink:0;">'
       +'<button onclick="drvInspectSetStatus('+i+',\'ok\')" id="drv-ii-ok-'+i+'" style="padding:5px 12px;border-radius:20px;border:1px solid #334155;background:transparent;color:#94a3b8;font-size:11px;font-weight:900;cursor:pointer;">ปกติ</button>'
       +'<button onclick="drvInspectSetStatus('+i+',\'issue\')" id="drv-ii-iss-'+i+'" style="padding:5px 12px;border-radius:20px;border:1px solid #334155;background:transparent;color:#94a3b8;font-size:11px;font-weight:900;cursor:pointer;">พบอาการ</button>'
@@ -35082,8 +35167,8 @@ function drvInspectShow(date,plate){
       +'<input type="text" id="drv-inspect-sym-'+i+'" placeholder="ระบุอาการที่พบ..." style="width:100%;background:#0f172a;border:1px solid #ef4444;border-radius:10px;padding:8px 10px;color:#fff;font-size:12px;font-weight:600;outline:none;box-sizing:border-box;">'
       +'</div>'
       +'<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">'
-      +'<label style="display:flex;align-items:center;gap:6px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:11px;color:#94a3b8;font-weight:700;">'
-      +'<i class="fas fa-camera"></i> แนบรูป'
+      +'<label style="display:flex;align-items:center;gap:6px;background:#0f172a;border:1px solid '+(isReq?'#f59e0b':'#334155')+';border-radius:10px;padding:6px 12px;cursor:pointer;font-size:11px;color:'+(isReq?'#f59e0b':'#94a3b8')+';font-weight:700;">'
+      +'<i class="fas fa-camera"></i> '+(isReq?'ถ่ายรูป (จำเป็น)':'แนบรูป')
       +'<input type="file" accept="image/*" capture="environment" style="display:none;" onchange="drvInspectSetPhoto('+i+',this)">'
       +'</label>'
       +'<span id="drv-inspect-photo-name-'+i+'" style="font-size:11px;color:#34d399;font-weight:700;"></span>'
@@ -35122,12 +35207,18 @@ window.drvInspectSetPhoto=function(i,input){
 
 window.drvInspectSave=async function(){
   var btn=document.getElementById('drv-inspect-save-btn');
+  // validate รูปบังคับ
+  var tp=_INSPECT_TYPES[_dInspectType]||_INSPECT_TYPES.standard;
+  var missingPhotos=tp.items.map(function(it,i){return it.req_photo&&!_dInspectPhotos[i]?it.name:null;}).filter(Boolean);
+  if(missingPhotos.length){
+    drvShowToast('📷 กรุณาถ่ายรูป: '+missingPhotos.map(function(n){return n.replace('⭐ ','');}).join(', '),true,5000);
+    return;
+  }
   btn.disabled=true;btn.textContent='กำลังบันทึก...';
   var today=new Date().toISOString().split('T')[0];
   var plate=(_dPlans[0]?.truck_plate)||'';
 
-  // เก็บข้อมูลแต่ละรายการ
-  var items=await Promise.all(_DRV_INSPECT_ITEMS.map(async function(name,i){
+  var items=await Promise.all(tp.items.map(async function(itDef,i){
     var card=document.getElementById('drv-inspect-item-'+i);
     var status=card?.dataset?.status||'ok';
     var symptom=document.getElementById('drv-inspect-sym-'+i)?.value||'';
@@ -35135,7 +35226,7 @@ window.drvInspectSave=async function(){
     if(_dInspectPhotos[i]){
       try{
         var ext=_dInspectPhotos[i].name.split('.').pop()||'jpg';
-        var path='truck-inspect/'+today+'/'+plate+'/'+i+'.'+ext;
+        var path='truck-inspect/'+today+'/'+plate+'/'+_dInspectType+'_'+i+'.'+ext;
         var {data:up}=await window._sb.storage.from('delivery-photos').upload(path,_dInspectPhotos[i],{upsert:true});
         if(up){
           var {data:pu}=window._sb.storage.from('delivery-photos').getPublicUrl(path);
@@ -35143,7 +35234,7 @@ window.drvInspectSave=async function(){
         }
       }catch(e){}
     }
-    return {id:i+1,name:name,status:status,symptom:symptom,photo_url:photoUrl};
+    return {id:i+1,name:itDef.name,status:status,symptom:symptom,photo_url:photoUrl,req_photo:itDef.req_photo};
   }));
 
   var hasIssue=items.some(function(it){return it.status==='issue';});
@@ -35154,6 +35245,7 @@ window.drvInspectSave=async function(){
     truck_plate:plate,
     driver_id:_dSess?.driver_id||'',
     driver_name:_dSess?.driver_name||_dSess?.username||'',
+    inspect_type:_dInspectType,
     items:items,
     overall:hasIssue?'issue':'ok',
     notes:notes
