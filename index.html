@@ -33920,6 +33920,24 @@ window.dmInit=async function(){
     +_dmDrivers.map(function(d){return'<option value="'+d.username+'">'+d.driver_name+'</option>';}).join('');
   dmLoadApprovals();
   dmLoadInspections();
+  // Realtime: แจ้งเตือนเมื่อมีการตรวจสภาพรถ/ขออนุมัติ
+  if(window._dmInspectRt) window._sb.removeChannel(window._dmInspectRt);
+  window._dmInspectRt=window._sb.channel('dm-inspect-rt')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'truck_inspections'},function(payload){
+      var ins=payload.new;
+      if(!ins)return;
+      dmLoadInspections();
+      if(ins.approval_status==='pending') dmLoadApprovals();
+      if(ins.approval_status==='pending') showToast('🚨 คำขออนุมัติใหม่: '+ins.driver_name+' ('+ins.truck_plate+')',true,5000);
+    })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'truck_inspections'},function(payload){
+      var ins=payload.new;
+      if(!ins)return;
+      dmLoadInspections();
+      dmLoadApprovals();
+      if(ins.approval_status==='approved') showToast('✅ อนุมัติ: '+(ins.driver_name||ins.truck_plate),false,3000);
+    })
+    .subscribe();
 };
 
 window.dmLoadApprovals=async function(){
@@ -35080,28 +35098,34 @@ window.drvInit=function(wmsUser){
       if(ins.inspect_date!==today2)return;
       // คนขับ: เห็นผลอนุมัติ/ระงับ
       var myPlate=(_dPlans[0]?.truck_plate)||'';
-      if(!_dSess.is_supervisor&&ins.truck_plate===myPlate&&ins.driver_id===(_dSess.driver_id||'')){
+      var myId=_dSess?.driver_id||'';
+      if(!_dSess.is_supervisor&&ins.truck_plate===myPlate&&(ins.driver_id===myId||!myId)){
         if(ins.approval_status==='approved'){
+          window._dInspectApproval={approval_status:'approved',overall:'issue'};
           var pending=document.getElementById('drv-inspect-pending-card');
           if(pending)pending.remove();
+          drvRenderPlanCards(_dPlans);
           drvShowToast('✅ หัวหน้าอนุมัติแล้ว — ออกรถได้เลย',false,5000);
         } else if(ins.approval_status==='rejected'){
+          window._dInspectApproval={approval_status:'rejected',overall:'issue'};
           drvShowToast('🚫 หัวหน้าระงับการออกรถ'+(ins.approval_note?' — '+ins.approval_note:''),true,7000);
         }
       }
-      // หัวหน้า: มีรายการใหม่เข้ามา → อัพเดต badge
-      if(_dSess.is_supervisor&&ins.approval_status==='pending'){
+      // หัวหน้า: อัพเดตรายการรออนุมัติ
+      if(_dSess.is_supervisor){
         drvSupUpdateBadge();
-        drvShowToast('🚨 มีคำขออนุมัติใหม่: '+ins.driver_name+' ('+ins.truck_plate+')',true,5000);
+        if(ins.approval_status==='pending'){
+          drvShowToast('🚨 คำขออนุมัติใหม่: '+ins.driver_name+' ('+ins.truck_plate+')',true,5000);
+        }
         if(document.getElementById('drv-tab-supervisor').style.display!=='none') drvSupLoadPending();
       }
     })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'truck_inspections'},function(payload){
       var ins=payload.new;
-      if(!ins||!_dSess.is_supervisor)return;
-      if(ins.approval_status==='pending'){
+      if(!ins)return;
+      if(_dSess.is_supervisor&&ins.approval_status==='pending'){
         drvSupUpdateBadge();
-        drvShowToast('🚨 มีคำขออนุมัติใหม่: '+ins.driver_name+' ('+ins.truck_plate+')',true,5000);
+        drvShowToast('🚨 คำขออนุมัติใหม่: '+ins.driver_name+' ('+ins.truck_plate+')',true,5000);
         if(document.getElementById('drv-tab-supervisor').style.display!=='none') drvSupLoadPending();
       }
     })
@@ -35441,6 +35465,9 @@ window.drvInspectSave=async function(){
     drvShowToast('❌ บันทึกไม่สำเร็จ: '+error.message,true);return;
   }
   document.getElementById('drv-inspect-overlay').style.display='none';
+  // อัพเดต _dInspectApproval ทันที → re-render cards ให้ถูกต้อง
+  window._dInspectApproval={approval_status:approvalStatus,overall:hasIssue?'issue':'ok'};
+  drvRenderPlanCards(_dPlans);
   if(hasIssue){
     var issueCount=items.filter(function(it){return it.status==='issue';}).length;
     drvShowToast('⚠️ พบปัญหา '+issueCount+' รายการ — รอหัวหน้าอนุมัติก่อนออกรถ',true,6000);
