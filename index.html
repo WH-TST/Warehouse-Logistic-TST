@@ -6240,29 +6240,14 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     <!-- Table -->
     <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-500 uppercase tracking-wider">
-            <th class="px-4 py-3 text-left">SKU / Item</th>
-            <th class="px-4 py-3 text-left">ชื่อสินค้า</th>
-            <th class="px-4 py-3 text-left">ชื่อค้นหา</th>
-            <th class="px-4 py-3 text-center">Pool</th>
-            <th class="px-4 py-3 text-center">Status</th>
-            <th class="px-4 py-3 text-center">Group</th>
-            <th class="px-4 py-3 text-center">เส้น/มัด</th>
-            <th class="px-4 py-3 text-center">มัด/รอบยก</th>
-            <th class="px-4 py-3 text-center">กว้าง (cm)</th>
-            <th class="px-4 py-3 text-center">สูง (cm)</th>
-            <th class="px-4 py-3 text-center">W Min</th>
-            <th class="px-4 py-3 text-center">W Max</th>
-            <th class="px-4 py-3 text-center">W(std)</th>
-            <th class="px-4 py-3 text-center">จัดการ</th>
-          </tr>
-        </thead>
+        <thead id="prod-thead"></thead>
         <tbody id="prod-tbody">
           <tr><td colspan="14" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>
         </tbody>
       </table>
     </div>
+    <!-- Column filter popup -->
+    <div id="prod-col-popup" style="display:none;position:fixed;z-index:9999;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.18);border:1.5px solid #e2e8f0;min-width:200px;padding:12px;"></div>
   </div>
 
   <!-- ── Tab: SEMI → FG Mapping ── -->
@@ -30094,11 +30079,145 @@ window.loRefreshOrderList = window.loRefreshHistory;
     prodRender();
   }
 
+  var _prodSort = { col: 'sku', dir: 1 };
+  var _prodFilters = {};
+  var _prodPopupCol = null;
+
+  var _PROD_COLS = [
+    { key:'sku',              label:'SKU / Item',  align:'left'   },
+    { key:'name',             label:'ชื่อสินค้า',  align:'left'   },
+    { key:'search_name',      label:'ชื่อค้นหา',   align:'left'   },
+    { key:'production_pool',  label:'Pool',         align:'center' },
+    { key:'status',           label:'Status',       align:'center' },
+    { key:'item_group',       label:'Group',        align:'center' },
+    { key:'lines_per_bundle', label:'เส้น/มัด',    align:'center' },
+    { key:'lifts_per_round',  label:'มัด/รอบยก',  align:'center' },
+    { key:'bundle_width',     label:'กว้าง (cm)',  align:'center' },
+    { key:'bundle_height',    label:'สูง (cm)',    align:'center' },
+    { key:'min_w',            label:'W Min',        align:'center' },
+    { key:'max_w',            label:'W Max',        align:'center' },
+    { key:'likely_w',         label:'W(STD)',       align:'center' }
+  ];
+
+  function prodRenderHead() {
+    var thead = document.getElementById('prod-thead');
+    if (!thead) return;
+    thead.innerHTML = '<tr class="bg-slate-50 border-b border-slate-200">' +
+      _PROD_COLS.map(function(c) {
+        var hasFilter = _prodFilters[c.key] && _prodFilters[c.key].length > 0;
+        var isSort = _prodSort.col === c.key;
+        var sortIcon = isSort ? (_prodSort.dir === 1 ? ' ▲' : ' ▼') : '';
+        var filterDot = hasFilter ? '<span style="width:7px;height:7px;background:#3b82f6;border-radius:50%;display:inline-block;margin-left:4px;vertical-align:middle;"></span>' : '';
+        return '<th onclick="prodColClick(\''+c.key+'\',this)" style="cursor:pointer;white-space:nowrap;user-select:none;padding:10px 14px;text-align:'+c.align+';font-size:11px;font-weight:900;color:'+(isSort?'#1d4ed8':'#64748b')+';text-transform:uppercase;letter-spacing:.04em;background:'+(hasFilter?'#eff6ff':'')+';" title="คลิกเพื่อ sort/filter">'
+          + c.label + sortIcon + filterDot
+          + '</th>';
+      }).join('') +
+      '<th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">จัดการ</th>' +
+      '</tr>';
+  }
+
+  window.prodColClick = function(col, thEl) {
+    if (_prodPopupCol === col) { prodClosePopup(); return; }
+    _prodPopupCol = col;
+    var popup = document.getElementById('prod-col-popup');
+    if (!popup) return;
+
+    var rect = thEl.getBoundingClientRect();
+    popup.style.left = Math.min(rect.left, window.innerWidth - 220) + 'px';
+    popup.style.top  = (rect.bottom + 4) + 'px';
+    popup.style.display = 'block';
+
+    var curFilter = _prodFilters[col] || '';
+    var vals = Array.from(new Set(_prodList.map(function(p){ return String(p[col]||''); }))).filter(Boolean).sort();
+    var isDiscrete = vals.length > 0 && vals.length <= 30;
+
+    var html = '';
+    // Sort buttons
+    html += '<div style="display:flex;gap:6px;margin-bottom:10px;">'
+      + '<button onclick="prodSetSort(\''+col+'\',1)" style="flex:1;padding:5px 0;border-radius:8px;border:1.5px solid '+((_prodSort.col===col&&_prodSort.dir===1)?'#3b82f6':'#e2e8f0')+';background:'+((_prodSort.col===col&&_prodSort.dir===1)?'#eff6ff':'#f8fafc')+';font-size:11px;font-weight:800;cursor:pointer;color:'+((_prodSort.col===col&&_prodSort.dir===1)?'#1d4ed8':'#475569')+';">▲ A→Z</button>'
+      + '<button onclick="prodSetSort(\''+col+'\',-1)" style="flex:1;padding:5px 0;border-radius:8px;border:1.5px solid '+((_prodSort.col===col&&_prodSort.dir===-1)?'#3b82f6':'#e2e8f0')+';background:'+((_prodSort.col===col&&_prodSort.dir===-1)?'#eff6ff':'#f8fafc')+';font-size:11px;font-weight:800;cursor:pointer;color:'+((_prodSort.col===col&&_prodSort.dir===-1)?'#1d4ed8':'#475569')+';">▼ Z→A</button>'
+      + '</div>';
+
+    // Filter
+    html += '<div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">กรอง</div>';
+    html += '<input id="prod-popup-input" type="text" value="'+esc(curFilter)+'" oninput="prodSetFilter(\''+col+'\',this.value)" placeholder="พิมพ์เพื่อกรอง..." style="width:100%;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;outline:none;margin-bottom:8px;">';
+
+    if (isDiscrete) {
+      html += '<div style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;">';
+      html += '<button onclick="prodSetFilter(\''+col+'\',\'\')" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(curFilter===''?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(curFilter===''?'#1d4ed8':'#475569')+'">(ทั้งหมด)</button>';
+      vals.forEach(function(v) {
+        var active = curFilter === v;
+        html += '<button onclick="prodSetFilter(\''+col+'\',\''+v.replace(/'/g,"\\'")+'\')" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(active?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(active?'#1d4ed8':'#475569')+'">'+esc(v)+'</button>';
+      });
+      html += '</div>';
+    }
+
+    html += '<button onclick="prodClearFilter(\''+col+'\')" style="margin-top:8px;width:100%;padding:5px 0;border-radius:8px;border:1.5px solid #fca5a5;background:#fff1f2;font-size:11px;font-weight:800;cursor:pointer;color:#dc2626;">✕ ล้าง filter</button>';
+
+    popup.innerHTML = html;
+    setTimeout(function(){ var inp = document.getElementById('prod-popup-input'); if(inp) inp.focus(); }, 50);
+  };
+
+  window.prodSetSort = function(col, dir) {
+    _prodSort = { col: col, dir: dir };
+    prodRenderHead();
+    prodRender();
+    prodClosePopup();
+  };
+
+  window.prodSetFilter = function(col, val) {
+    _prodFilters[col] = val;
+    var inp = document.getElementById('prod-popup-input');
+    if (inp && inp.value !== val) inp.value = val;
+    prodRenderHead();
+    prodRender();
+  };
+
+  window.prodClearFilter = function(col) {
+    delete _prodFilters[col];
+    prodRenderHead();
+    prodRender();
+    prodClosePopup();
+  };
+
+  window.prodClosePopup = function() {
+    _prodPopupCol = null;
+    var p = document.getElementById('prod-col-popup');
+    if (p) p.style.display = 'none';
+  };
+
+  document.addEventListener('click', function(e) {
+    var popup = document.getElementById('prod-col-popup');
+    if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && !e.target.closest('#prod-thead')) {
+      prodClosePopup();
+    }
+  });
+
   window.prodRender = function() {
+    prodRenderHead();
     var q = (document.getElementById('prod-search')?.value || '').toLowerCase();
-    var list = q ? _prodList.filter(p => (p.sku||'').toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q)) : _prodList;
+    var list = _prodList.filter(function(p) {
+      if (q && !(p.sku||'').toLowerCase().includes(q) && !(p.name||'').toLowerCase().includes(q) && !(p.search_name||'').toLowerCase().includes(q)) return false;
+      for (var col in _prodFilters) {
+        var fv = (_prodFilters[col]||'').toLowerCase();
+        if (!fv) continue;
+        if (!String(p[col]||'').toLowerCase().includes(fv)) return false;
+      }
+      return true;
+    });
+    // sort
+    var sc = _prodSort.col, sd = _prodSort.dir;
+    list = list.slice().sort(function(a, b) {
+      var av = a[sc], bv = b[sc];
+      if (av == null) av = ''; if (bv == null) bv = '';
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sd;
+      return String(av).localeCompare(String(bv), 'th') * sd;
+    });
+
+    var activeFilters = Object.keys(_prodFilters).filter(function(k){ return _prodFilters[k]; }).length;
     var countEl = document.getElementById('prod-count');
-    if (countEl) countEl.textContent = list.length + ' รายการ';
+    if (countEl) countEl.textContent = list.length + ' รายการ' + (activeFilters ? ' (กรองอยู่ '+activeFilters+' col)' : '');
+
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
     if (list.length === 0) {
