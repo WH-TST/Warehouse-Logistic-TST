@@ -32037,9 +32037,13 @@ window.viewTripResult = async function(planId) {
     var rows = items.map(function(it){
       var sess = it.stock_count_sessions || {};
       var counted = (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
-      var diff    = counted - (it.system_pcs||0);
-      var diffHtml = diff===0
-        ? '<span style="color:#15803d;font-weight:700">0</span>'
+      // null-wh session มี system_pcs รวมทุกคลัง → ไม่แสดงระบบและ Diff
+      var sessWh = sess.wh || null;
+      var sysValid = !wh || sessWh === wh;
+      var sysHtml  = sysValid ? '<span style="color:#0f766e">'+it.system_pcs+'</span>' : '<span style="color:#94a3b8">—</span>';
+      var diff     = counted - (it.system_pcs||0);
+      var diffHtml = !sysValid ? '<span style="color:#94a3b8">—</span>'
+        : diff===0 ? '<span style="color:#15803d;font-weight:700">0</span>'
         : '<span style="color:#dc2626;font-weight:700">'+(diff>0?'+':'')+diff+'</span>';
       var dateStr = sess.count_date||'—';
       var movStr  = sess.movement_date||'—';
@@ -32053,7 +32057,7 @@ window.viewTripResult = async function(planId) {
         + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+it.scrap1+'</td>'
         + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+it.scrap2+'</td>'
         + '<td style="padding:4px 8px;font-size:11px;text-align:center;font-weight:700">'+counted+'</td>'
-        + '<td style="padding:4px 8px;font-size:11px;text-align:center;color:#0f766e">'+it.system_pcs+'</td>'
+        + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+sysHtml+'</td>'
         + '<td style="padding:4px 8px;font-size:11px;text-align:center">'+diffHtml+'</td>'
         + '<td style="padding:4px 8px;font-size:11px;color:#64748b;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(it.note||'')+'</td>'
         + '</tr>';
