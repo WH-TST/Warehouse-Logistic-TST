@@ -13189,6 +13189,7 @@ let blockingChartInstance = null;
     var _invdLoaded = false;
     var _invdLikelyW = {}; // sku → likely_w
     var _invdStatus  = {}; // sku → status
+    var _invdGroup   = {}; // sku → item_group
 
     var _invdCols = {
       onhand_fg:        ['item_number','product_name','warehouse','cw_ordered','cw_physical_inventory','cw_on_order','cw_physical_reserved','cw_available_physical','cw_total_available','ordered','physical_inventory','on_order','physical_reserved','available_physical','total_available','imported_at'],
@@ -13221,11 +13222,12 @@ let blockingChartInstance = null;
       try {
         // fetch likely_w for onhand_fg and onhand_semi
         if(_invdTable === 'onhand_fg' || _invdTable === 'onhand_semi'){
-          var pwRes = await window._sb.from('products').select('sku,likely_w,status');
-          _invdLikelyW = {}; _invdStatus = {};
+          var pwRes = await window._sb.from('products').select('sku,likely_w,status,item_group');
+          _invdLikelyW = {}; _invdStatus = {}; _invdGroup = {};
           (pwRes.data||[]).forEach(function(p){
             _invdLikelyW[p.sku] = Number(p.likely_w)||0;
             _invdStatus[p.sku]  = p.status||'';
+            _invdGroup[p.sku]   = p.item_group||'';
           });
         }
         var cols = _invdCols[_invdTable];
@@ -13243,7 +13245,7 @@ let blockingChartInstance = null;
         if(res.error) throw res.error;
         _invdData = res.data || [];
         _invdLoaded = true;
-        var extraCol = _invdTable === 'onhand_fg' ? '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-violet-100 text-violet-700">EST. WEIGHT (KG)</th><th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-emerald-50 text-emerald-700">STATUS</th>' : '';
+        var extraCol = _invdTable === 'onhand_fg' ? '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-violet-100 text-violet-700">EST. WEIGHT (KG)</th><th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-emerald-50 text-emerald-700">STATUS</th><th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-indigo-50 text-indigo-700">GROUP</th>' : '';
         thead.innerHTML = '<tr class="text-left text-xs text-slate-600 uppercase">'
           + cols.map(function(c){ return '<th class="px-3 py-2 font-bold whitespace-nowrap border-b border-slate-200 bg-slate-100">'+c+'</th>'; }).join('')
           + extraCol + '</tr>';
@@ -13321,6 +13323,7 @@ let blockingChartInstance = null;
               var s = stStyle[st]||'';
               return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="background:#f0fdf4">'+(st?'<span style="'+s+'font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;">'+st+'</span>':'<span style="color:#cbd5e1">—</span>')+'</td>';
             })() : '')
+          + (isFG ? '<td class="px-3 py-1.5 text-xs whitespace-nowrap text-center font-bold text-indigo-700" style="background:#eef2ff">'+(_invdGroup[r.item_number]||'<span style="color:#cbd5e1">—</span>')+'</td>' : '')
           + '</tr>';
       }).join('') : '<tr><td colspan="20" class="text-center text-slate-400 py-8">ไม่พบข้อมูล</td></tr>';
     };
