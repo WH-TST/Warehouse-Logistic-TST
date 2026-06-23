@@ -6082,6 +6082,23 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
         </div>
       </div>
 
+      <!-- Photo upload -->
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase mb-2 block">แนบรูปภาพ</label>
+        <input type="file" id="dmg-photo-input" accept="image/*" multiple style="display:none" onchange="dmgHandlePhotos(this)">
+        <div id="dmg-photo-zone"
+          onclick="document.getElementById('dmg-photo-input').click()"
+          ondragover="event.preventDefault();this.style.borderColor='#3b82f6'"
+          ondragleave="this.style.borderColor='#e2e8f0'"
+          ondrop="event.preventDefault();this.style.borderColor='#e2e8f0';dmgHandlePhotos({files:event.dataTransfer.files})"
+          style="border:2px dashed #e2e8f0;border-radius:14px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:#f8fafc;">
+          <i class="fas fa-camera" style="font-size:22px;color:#94a3b8;margin-bottom:6px;display:block;"></i>
+          <div style="font-size:13px;font-weight:700;color:#64748b;">คลิกหรือลากรูปมาวางที่นี่</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px;">รองรับหลายรูป · JPG, PNG</div>
+        </div>
+        <div id="dmg-photo-previews" class="flex flex-wrap gap-2 mt-3"></div>
+      </div>
+
       <div class="flex gap-3 pt-2">
         <button onclick="dmgSendEmail()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-sm flex items-center gap-2 transition-all">
           <i class="fas fa-paper-plane"></i> ส่งเมลขออนุมัติ
@@ -36125,6 +36142,56 @@ window.dmgRemoveContact = function(i){
   dmgRenderCtList();
 };
 
+var _dmgPhotos = []; // [{file, previewUrl}]
+
+window.dmgHandlePhotos = function(input){
+  var files = Array.from(input.files||[]);
+  if(!files.length) return;
+  files.forEach(function(f){
+    if(_dmgPhotos.length >= 5){ showToast('แนบรูปได้สูงสุด 5 รูป',true); return; }
+    var url = URL.createObjectURL(f);
+    _dmgPhotos.push({file:f, previewUrl:url});
+  });
+  dmgRenderPhotoPreviews();
+  // reset input
+  document.getElementById('dmg-photo-input').value='';
+};
+
+function dmgRenderPhotoPreviews(){
+  var wrap = document.getElementById('dmg-photo-previews');
+  if(!wrap) return;
+  wrap.innerHTML = _dmgPhotos.map(function(p,i){
+    return '<div style="position:relative;width:80px;height:80px;border-radius:10px;overflow:hidden;border:2px solid #e2e8f0;flex-shrink:0;">'
+      +'<img src="'+p.previewUrl+'" style="width:100%;height:100%;object-fit:cover;">'
+      +'<button onclick="dmgRemovePhoto('+i+')" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,0.6);border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;">'
+      +'<i class="fas fa-times"></i></button></div>';
+  }).join('');
+  // update zone hint
+  var zone = document.getElementById('dmg-photo-zone');
+  if(zone) zone.style.borderColor = _dmgPhotos.length ? '#22c55e' : '#e2e8f0';
+}
+
+window.dmgRemovePhoto = function(i){
+  URL.revokeObjectURL(_dmgPhotos[i].previewUrl);
+  _dmgPhotos.splice(i,1);
+  dmgRenderPhotoPreviews();
+};
+
+async function dmgUploadPhotos(prefix){
+  var urls = [];
+  for(var i=0;i<_dmgPhotos.length;i++){
+    var f = _dmgPhotos[i].file;
+    var ext = f.name.split('.').pop()||'jpg';
+    var fname = 'damage/'+prefix+'_'+i+'.'+ext;
+    var {error} = await window._sb.storage.from('damage-photos').upload(fname,f,{contentType:f.type,upsert:true});
+    if(!error){
+      var {data:ud} = window._sb.storage.from('damage-photos').getPublicUrl(fname);
+      urls.push(ud.publicUrl);
+    }
+  }
+  return urls;
+}
+
 window.dmgSelectType = function(btn, val){
   document.querySelectorAll('.dmg-type-btn').forEach(function(b){
     b.classList.remove('border-amber-400','text-amber-600','bg-amber-50');
@@ -36182,6 +36249,10 @@ window.dmgClearForm = function(){
     b.classList.add('border-slate-200','text-slate-600');
   });
   document.getElementById('dmg-date').value = new Date().toISOString().split('T')[0];
+  // clear photos
+  _dmgPhotos.forEach(function(p){ URL.revokeObjectURL(p.previewUrl); });
+  _dmgPhotos = [];
+  dmgRenderPhotoPreviews();
 };
 
 window.dmgSendEmail = async function(){
@@ -36215,6 +36286,15 @@ window.dmgSendEmail = async function(){
   if(returned) body += ' ตีคืนจาก ' + returned;
   body += '\n\n-' + action;
   body += '\n\nผู้แจ้ง: ' + (window._currentUser||'');
+
+  // upload รูปก่อน
+  var photoUrls = [];
+  if(_dmgPhotos.length){
+    showToast('กำลังอัพโหลดรูป...');
+    var prefix = 'dmg_'+(date||'').replace(/-/g,'')+'_'+sku.replace(/[^a-z0-9]/gi,'');
+    photoUrls = await dmgUploadPhotos(prefix);
+    if(photoUrls.length) body += '\n\n📎 รูปภาพประกอบ:\n'+photoUrls.join('\n');
+  }
 
   var mailto = 'mailto:'+encodeURIComponent(recipient)+'?subject='+subject+'&body='+encodeURIComponent(body);
   window.open(mailto, '_blank');
