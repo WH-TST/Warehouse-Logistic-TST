@@ -30398,8 +30398,15 @@ window.loRefreshOrderList = window.loRefreshHistory;
         };
 
         function findCol(keys) {
+          // exact match ก่อน (ป้องกัน 'name' จับ 'search name' แทน 'product name')
           for (var k = 0; k < keys.length; k++) {
-            var idx = headers.findIndex(function(h) { return h.includes(keys[k]); });
+            var idx = headers.indexOf(keys[k].toLowerCase());
+            if (idx >= 0) return idx;
+          }
+          // fallback: includes
+          for (var k = 0; k < keys.length; k++) {
+            var kk = keys[k];
+            var idx = headers.findIndex(function(h) { return h.includes(kk); });
             if (idx >= 0) return idx;
           }
           return -1;
@@ -30562,8 +30569,15 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
         // map column index
         var col = function(keys) {
+          // exact match ก่อน
           for (var i = 0; i < keys.length; i++) {
-            var idx = headers.findIndex(function(h) { return h.includes(keys[i]); });
+            var idx = headers.indexOf(keys[i].toLowerCase());
+            if (idx >= 0) return idx;
+          }
+          // fallback: includes
+          for (var i = 0; i < keys.length; i++) {
+            var ki = keys[i];
+            var idx = headers.findIndex(function(h) { return h.includes(ki); });
             if (idx >= 0) return idx;
           }
           return -1;
