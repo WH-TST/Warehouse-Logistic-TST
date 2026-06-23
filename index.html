@@ -34752,6 +34752,20 @@ window.drvInit=function(wmsUser){
       // delay เล็กน้อยให้ DB replicate ก่อน query
       setTimeout(function(){drvLoadPlan();},1500);
     })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'training_sessions'},function(payload){
+      var s=payload.new;
+      if(!s||s.status!=='active') return;
+      // เช็คว่าคนรถนี้อยู่ในรายชื่อและยังไม่ได้ acknowledge
+      window._sb.from('training_participants')
+        .select('id')
+        .eq('session_id',s.id)
+        .eq('driver_username',_dSess.username)
+        .eq('acknowledged',false)
+        .maybeSingle()
+        .then(function(res){
+          if(res.data) window.trCheckDriverPending(_dSess.username);
+        });
+    })
     .subscribe();
 };
 
