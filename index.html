@@ -32019,7 +32019,7 @@ window.viewTripResult = async function(planId) {
 
     var inner = document.getElementById(histId+'-inner');
     // ดึง sessions + items สำหรับ SKU+WH นี้ (รวม null-wh session ด้วย)
-    var baseSelect = 'session_id,bundle1,bundle2,scrap1,scrap2,ppb,system_pcs,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
+    var baseSelect = 'session_id,bundle1,bundle2,scrap1,scrap2,hold_pcs,ppb,system_pcs,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
     var items, error;
     if(wh){
       var includeNull = wh !== 'QC'; // QC ไม่เอา null-wh session (เป็นข้อมูล FG-BP ไม่ใช่ QC)
@@ -32039,7 +32039,8 @@ window.viewTripResult = async function(planId) {
     }
     var rows = items.map(function(it){
       var sess = it.stock_count_sessions || {};
-      var counted = (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
+      var isQCrow = wh === 'QC';
+      var counted = isQCrow ? (it.hold_pcs||0) : (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
       var diff     = counted - (it.system_pcs||0);
       var sysHtml  = '<span style="color:#0f766e">'+it.system_pcs+'</span>';
       var diffHtml = diff===0
