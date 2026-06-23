@@ -32166,10 +32166,11 @@ window.viewTripResult = async function(planId) {
   window.scSelectProduct = async function(sku){
     var prod = (_scProductCache||[]).find(function(p){ return p.sku===sku; });
     if(!prod) return;
-    // ดึง system qty จาก counting.cw_onhand (เหมือน Count Sheet + Reconcile)
-    var cntRes = await window._sb.from('counting').select('cw_onhand').eq('item_number', sku);
-    var sysQty = (cntRes.data||[]).reduce(function(s,r){ return s + (Number(r.cw_onhand)||0); }, 0);
-    _scAddSelected = { sku: sku, name: prod.name||'', ppb: Number(prod.lines_per_bundle)||0, systemQty: sysQty };
+    // ดึง system qty จาก counting แยก WH เพื่อคำนวณ WH+QC ตอน confirm
+    var cntRes = await window._sb.from('counting').select('warehouse,cw_onhand').eq('item_number', sku);
+    var cntByWH = {};
+    (cntRes.data||[]).forEach(function(r){ cntByWH[r.warehouse||''] = (cntByWH[r.warehouse||'']||0) + (Number(r.cw_onhand)||0); });
+    _scAddSelected = { sku: sku, name: prod.name||'', ppb: Number(prod.lines_per_bundle)||0, cntByWH: cntByWH };
     document.getElementById('sc-add-selected-name').textContent = prod.name||'';
     document.getElementById('sc-add-selected-sku').textContent  = sku;
     document.getElementById('sc-add-selected').classList.remove('hidden');
@@ -32186,11 +32187,17 @@ window.viewTripResult = async function(planId) {
     // ตรวจซ้ำ
     var dup = _scItems.some(function(it){ return it.sku===_scAddSelected.sku && it.wh===wh; });
     if(dup){ showToast('SKU นี้อยู่ในรายการแล้ว ('+wh+')', true); return; }
+    var cntByWH  = _scAddSelected.cntByWH || {};
+    var sysQtyWH = cntByWH[wh]||0;
+    var sysQtyQC = cntByWH['QC']||0;
     _scItems.push({
       sku: _scAddSelected.sku, name: _scAddSelected.name,
-      wh: wh, ppb: _scAddSelected.ppb, systemQty: _scAddSelected.systemQty,
+      wh: wh, ppb: _scAddSelected.ppb,
+      systemQty:   sysQtyWH + sysQtyQC,
+      systemQtyWH: sysQtyWH,
+      systemQtyQC: sysQtyQC,
       bundle1:0, bundle2:0, pcs1:0, pcs2:0, holdPcs:0, note:'',
-      isManual: true  // flag ว่าเพิ่มเอง
+      isManual: true
     });
     _scRenderSheet();
     // อัพเดต info bar
