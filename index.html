@@ -30091,6 +30091,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
   var _prodSort = { col: 'sku', dir: 1 };
   var _prodFilters = {};
+  var _prodFilterExact = {}; // col → true = exact match (จากปุ่ม), false = includes (จากพิมพ์)
   var _prodPopupCol = null;
 
   var _PROD_COLS = [
@@ -30154,10 +30155,10 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
     if (isDiscrete) {
       html += '<div style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;">';
-      html += '<button onclick="prodSetFilter(\''+col+'\',\'\')" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(curFilter===''?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(curFilter===''?'#1d4ed8':'#475569')+'">(ทั้งหมด)</button>';
+      html += '<button onclick="prodSetFilter(\''+col+'\',\'\',true)" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(curFilter===''?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(curFilter===''?'#1d4ed8':'#475569')+'">(ทั้งหมด)</button>';
       vals.forEach(function(v) {
         var active = curFilter === v;
-        html += '<button onclick="prodSetFilter(\''+col+'\',\''+v.replace(/'/g,"\\'")+'\')" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(active?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(active?'#1d4ed8':'#475569')+'">'+esc(v)+'</button>';
+        html += '<button onclick="prodSetFilter(\''+col+'\',\''+v.replace(/'/g,"\\'")+'\',true)" style="text-align:left;padding:4px 8px;border-radius:6px;border:none;background:'+(active?'#dbeafe':'#f1f5f9')+';font-size:11px;font-weight:700;cursor:pointer;color:'+(active?'#1d4ed8':'#475569')+'">'+esc(v)+'</button>';
       });
       html += '</div>';
     }
@@ -30175,8 +30176,9 @@ window.loRefreshOrderList = window.loRefreshHistory;
     prodClosePopup();
   };
 
-  window.prodSetFilter = function(col, val) {
+  window.prodSetFilter = function(col, val, exact) {
     _prodFilters[col] = val;
+    _prodFilterExact[col] = !!exact;
     var inp = document.getElementById('prod-popup-input');
     if (inp && inp.value !== val) inp.value = val;
     prodRenderHead();
@@ -30185,6 +30187,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
 
   window.prodClearFilter = function(col) {
     delete _prodFilters[col];
+    delete _prodFilterExact[col];
     prodRenderHead();
     prodRender();
     prodClosePopup();
@@ -30211,7 +30214,8 @@ window.loRefreshOrderList = window.loRefreshHistory;
       for (var col in _prodFilters) {
         var fv = (_prodFilters[col]||'').toLowerCase();
         if (!fv) continue;
-        if (!String(p[col]||'').toLowerCase().includes(fv)) return false;
+        var cv = String(p[col]||'').toLowerCase();
+        if (_prodFilterExact[col] ? cv !== fv : !cv.includes(fv)) return false;
       }
       return true;
     });
