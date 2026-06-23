@@ -32040,13 +32040,10 @@ window.viewTripResult = async function(planId) {
     var rows = items.map(function(it){
       var sess = it.stock_count_sessions || {};
       var counted = (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
-      // null-wh session มี system_pcs รวมทุกคลัง → ไม่แสดงระบบและ Diff
-      var sessWh = sess.wh || null;
-      var sysValid = !wh || sessWh === wh;
-      var sysHtml  = sysValid ? '<span style="color:#0f766e">'+it.system_pcs+'</span>' : '<span style="color:#94a3b8">—</span>';
       var diff     = counted - (it.system_pcs||0);
-      var diffHtml = !sysValid ? '<span style="color:#94a3b8">—</span>'
-        : diff===0 ? '<span style="color:#15803d;font-weight:700">0</span>'
+      var sysHtml  = '<span style="color:#0f766e">'+it.system_pcs+'</span>';
+      var diffHtml = diff===0
+        ? '<span style="color:#15803d;font-weight:700">0</span>'
         : '<span style="color:#dc2626;font-weight:700">'+(diff>0?'+':'')+diff+'</span>';
       var dateStr = sess.count_date||'—';
       var movStr  = sess.movement_date||'—';
