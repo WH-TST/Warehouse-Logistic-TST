@@ -31079,9 +31079,10 @@ window.viewTripResult = async function(planId) {
       });
       _scItems = skuList.map(function(s){
         // ยอดระบบ = รวมทุกคลัง (FG-BP + QC อยู่แถวเดียวกันใน Count Sheet)
-        var sysQty   = cntMapAll[s.sku]||0;
         var sysQtyWH = cntMapWH[s.sku+'|'+s.wh]||0;
         var sysQtyQC = cntMapWH[s.sku+'|QC']||0;
+        // ระบบใน Count Sheet = คลังที่นับ + QC (ไม่รวมคลังอื่น)
+        var sysQty   = sysQtyWH + sysQtyQC;
         return {
           sku:         s.sku,
           name:        s.name,
