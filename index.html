@@ -31685,8 +31685,10 @@ window.viewTripResult = async function(planId) {
         // holdPcs: แสดงเฉพาะแถว QC เท่านั้น — WH อื่นเป็น 0
         var holdPcsFinal = 0;
         if (isQCwh) {
-          holdPcsFinal = holdPcsVal ||
-            (savedMap[s.sku+'|FG-BP']||savedMap[s.sku+'|FG-BB']||savedMap[s.sku+'|']||{}).holdPcs||0;
+          // เลือก session ที่ใหม่ที่สุด (session_id สูงสุด) จาก FG-BP / FG-BB / null-wh
+          var holdCandidates = [savedMap[s.sku+'|FG-BP'], savedMap[s.sku+'|FG-BB'], savedMap[s.sku+'|']].filter(Boolean);
+          var holdSaved = holdCandidates.reduce(function(best, cur){ return (!best || cur._sessId > best._sessId) ? cur : best; }, null) || {};
+          holdPcsFinal = holdPcsVal || holdSaved.holdPcs || 0;
         }
         return {
           sku:       s.sku,
