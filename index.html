@@ -29277,7 +29277,7 @@ window.doLogin = async function(){
     var dRes = await window._sb.from('driver_users').select('*').eq('username',uname).eq('active',true).maybeSingle();
     if(dRes.data && dRes.data.password === pw){
       var d = dRes.data;
-      window.drvInit({username:d.username, name:d.driver_name||d.username, driver_id:d.driver_id||'', bypass_timer:d.bypass_timer||false});
+      window.drvInit({username:d.username, name:d.driver_name||d.username, driver_id:d.driver_id||'', bypass_timer:d.bypass_timer||false, is_supervisor:d.is_supervisor||false});
       return;
     }
     err.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';err.classList.remove('hidden');document.getElementById('login-password').value='';return;
@@ -29469,7 +29469,7 @@ window.umDeleteUser = async function(un){
       // driver session
       if(s.type==='driver'&&s.username){
         var dRes=await window._sb.from('driver_users').select('*').eq('username',s.username).eq('active',true).maybeSingle();
-        if(dRes.data){var d=dRes.data;window.drvInit({username:d.username,name:d.driver_name||d.username,driver_id:d.driver_id||'',bypass_timer:d.bypass_timer||false});return;}
+        if(dRes.data){var d=dRes.data;window.drvInit({username:d.username,name:d.driver_name||d.username,driver_id:d.driver_id||'',bypass_timer:d.bypass_timer||false,is_supervisor:d.is_supervisor||false});return;}
       }
       // wms session
       var users=_loadUsers(),user=null;for(var i=0;i<users.length;i++){if(users[i].username===s.username){user=users[i];break;}}
@@ -30379,6 +30379,7 @@ window.loRefreshOrderList = window.loRefreshHistory;
         ? ((_duDrivers.find(function(d){return d.id===u.driver_id;})||{}).name||u.driver_id)
         : '–';
       var timerOn = u.bypass_timer !== true;
+      var isSup = u.is_supervisor === true;
       return '<tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">'
         +'<td class="px-4 py-3 font-black text-slate-700">'+escDU(u.username)+'</td>'
         +'<td class="px-4 py-3 font-semibold text-slate-600">'+escDU(u.driver_name||'–')+'</td>'
@@ -30392,6 +30393,11 @@ window.loRefreshOrderList = window.loRefreshHistory;
           +'<button onclick="duToggleTimer('+u.id+','+u.bypass_timer+')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border transition-all cursor-pointer '
           +(timerOn?'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100':'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200')+'">'
           +(timerOn?'<i class="fas fa-lock"></i> ติดเงื่อนไข':'<i class="fas fa-unlock"></i> ไม่มีเงื่อนไข')+'</button>'
+        +'</td>'
+        +'<td class="px-4 py-3 text-center">'
+          +'<button onclick="duToggleSupervisor('+u.id+','+isSup+')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border transition-all cursor-pointer '
+          +(isSup?'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100':'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200')+'">'
+          +(isSup?'<i class="fas fa-user-shield"></i> หัวหน้า':'<i class="fas fa-user"></i> คนขับ')+'</button>'
         +'</td>'
         +'<td class="px-4 py-3 text-center">'
           +'<button onclick="duOpenForm('+u.id+')" class="px-3 py-1.5 rounded-lg text-xs font-black bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100 mr-1"><i class="fas fa-edit mr-1"></i>แก้ไข</button>'
@@ -30468,6 +30474,13 @@ window.loRefreshOrderList = window.loRefreshHistory;
     var res = await window._sb.from('driver_users').update({bypass_timer: newBypass}).eq('id', id);
     if (res.error) { showWMSToast('❌ '+res.error.message, true); return; }
     showWMSToast(newBypass ? '🔓 ไม่มีเงื่อนไขแล้ว' : '🔒 ติดเงื่อนไขแล้ว');
+    await duLoadList();
+  };
+
+  window.duToggleSupervisor = async function(id, current) {
+    var res = await window._sb.from('driver_users').update({is_supervisor: !current}).eq('id', id);
+    if (res.error) { showWMSToast('❌ '+res.error.message, true); return; }
+    showWMSToast(!current ? '👑 ตั้งเป็นหัวหน้าแล้ว' : '👤 เปลี่ยนเป็นคนขับทั่วไปแล้ว');
     await duLoadList();
   };
 
@@ -33611,6 +33624,22 @@ window.viewTripResult = async function(planId) {
           <i class="fas fa-sync-alt"></i> รีเฟรช
         </button>
       </div>
+      <!-- หัวหน้าคนขับ: คำขออนุมัติ -->
+      <div id="drv-tab-supervisor" style="display:none;padding:14px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:#ef44441a;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="fas fa-user-shield" style="color:#ef4444;font-size:16px;"></i>
+          </div>
+          <div>
+            <div style="font-size:14px;font-weight:900;color:#fff;">คำขออนุมัติออกรถ</div>
+            <div style="font-size:11px;color:#64748b;">รายการที่คนขับตรวจพบปัญหา รอการอนุมัติ</div>
+          </div>
+          <button onclick="drvSupLoadPending()" style="margin-left:auto;width:36px;height:36px;background:#1e293b;border:none;border-radius:10px;color:#64748b;cursor:pointer;">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+        <div id="drv-sup-pending-wrap"></div>
+      </div>
       <!-- ประวัติ -->
       <div id="drv-tab-history" style="display:none;padding:14px;">
         <div style="display:flex;gap:8px;margin-bottom:12px;">
@@ -33634,6 +33663,11 @@ window.viewTripResult = async function(planId) {
       <button id="drv-nav-plan" onclick="drvGoTab('plan')" style="flex:1;border:none;background:none;color:#34d399;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;">
         <i class="fas fa-clipboard-list" style="font-size:22px;"></i>
         <span style="font-size:12px;font-weight:900;">แผนวันนี้</span>
+      </button>
+      <button id="drv-nav-supervisor" onclick="drvGoTab('supervisor')" style="display:none;flex:1;border:none;background:none;color:#64748b;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;position:relative;">
+        <i class="fas fa-user-shield" style="font-size:22px;"></i>
+        <span style="font-size:12px;font-weight:900;">อนุมัติ</span>
+        <span id="drv-sup-badge" style="display:none;position:absolute;top:6px;right:calc(50% - 18px);background:#ef4444;color:#fff;font-size:9px;font-weight:900;border-radius:20px;padding:1px 5px;min-width:16px;text-align:center;"></span>
       </button>
       <button id="drv-nav-history" onclick="drvGoTab('history')" style="flex:1;border:none;background:none;color:#64748b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;">
         <i class="fas fa-history" style="font-size:22px;"></i>
@@ -34892,7 +34926,7 @@ window.drvPlayNewOrder=function drvPlayNewOrder(){
 }
 
 window.drvInit=function(wmsUser){
-  _dSess={username:wmsUser.username,driver_name:wmsUser.name||wmsUser.username,driver_id:wmsUser.driver_id||''};
+  _dSess={username:wmsUser.username,driver_name:wmsUser.name||wmsUser.username,driver_id:wmsUser.driver_id||'',is_supervisor:wmsUser.is_supervisor||false};
   localStorage.setItem('wms_sess',JSON.stringify({username:wmsUser.username,type:'driver'}));
   DRV_TEST_MODE=DRV_TEST_USERNAMES.indexOf(wmsUser.username.toLowerCase())!==-1;
   DRV_BYPASS_TIMER=DRV_TEST_MODE||(wmsUser.bypass_timer===true);
@@ -34905,6 +34939,14 @@ window.drvInit=function(wmsUser){
   document.getElementById('drv-hf').value=w.toISOString().split('T')[0];
   document.getElementById('drv-ht2').value=today;
   setInterval(drvTick,1000);drvTick();
+
+  // แสดงปุ่มหัวหน้าถ้าเป็น supervisor
+  var supNav=document.getElementById('drv-nav-supervisor');
+  if(supNav){
+    if(_dSess.is_supervisor){supNav.style.display='flex';}
+    else{supNav.style.display='none';}
+  }
+
   drvGoTab('plan');drvLoadPlan();
 
   // Realtime: แจ้งเตือนเมื่อมีแผนใหม่
@@ -34914,21 +34956,50 @@ window.drvInit=function(wmsUser){
       var p=payload.new;
       if(!p)return;
       var today2=new Date().toISOString().split('T')[0];
-      // ตรวจว่าเป็นแผนของคนขับคนนี้
       var mine=(_dSess.driver_id&&p.driver_id&&p.driver_id===_dSess.driver_id)||
                (_dSess.driver_name&&p.driver_transport&&p.driver_transport===_dSess.driver_name);
       if(!mine)return;
       if(p.plan_date===today2){
-        // แผนวันนี้เพิ่มเข้ามา → ซ่อนแผนค้างคืน + reload
         drvPlayNewOrder();
         drvShowToast('🔔 ออเดอร์มาแล้ว! แผน '+p.plan_id,false,5000);
       }
       setTimeout(function(){drvLoadPlan();},1500);
     })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'truck_inspections'},function(payload){
+      var ins=payload.new;
+      if(!ins)return;
+      var today2=new Date().toISOString().split('T')[0];
+      if(ins.inspect_date!==today2)return;
+      // คนขับ: เห็นผลอนุมัติ/ระงับ
+      var myPlate=(_dPlans[0]?.truck_plate)||'';
+      if(!_dSess.is_supervisor&&ins.truck_plate===myPlate&&ins.driver_id===(_dSess.driver_id||'')){
+        if(ins.approval_status==='approved'){
+          var pending=document.getElementById('drv-inspect-pending-card');
+          if(pending)pending.remove();
+          drvShowToast('✅ หัวหน้าอนุมัติแล้ว — ออกรถได้เลย',false,5000);
+        } else if(ins.approval_status==='rejected'){
+          drvShowToast('🚫 หัวหน้าระงับการออกรถ'+(ins.approval_note?' — '+ins.approval_note:''),true,7000);
+        }
+      }
+      // หัวหน้า: มีรายการใหม่เข้ามา → อัพเดต badge
+      if(_dSess.is_supervisor&&ins.approval_status==='pending'){
+        drvSupUpdateBadge();
+        drvShowToast('🚨 มีคำขออนุมัติใหม่: '+ins.driver_name+' ('+ins.truck_plate+')',true,5000);
+        if(document.getElementById('drv-tab-supervisor').style.display!=='none') drvSupLoadPending();
+      }
+    })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'truck_inspections'},function(payload){
+      var ins=payload.new;
+      if(!ins||!_dSess.is_supervisor)return;
+      if(ins.approval_status==='pending'){
+        drvSupUpdateBadge();
+        drvShowToast('🚨 มีคำขออนุมัติใหม่: '+ins.driver_name+' ('+ins.truck_plate+')',true,5000);
+        if(document.getElementById('drv-tab-supervisor').style.display!=='none') drvSupLoadPending();
+      }
+    })
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'training_sessions'},function(payload){
       var s=payload.new;
       if(!s||s.status!=='active') return;
-      // เช็คว่าคนรถนี้อยู่ในรายชื่อและยังไม่ได้ acknowledge
       window._sb.from('training_participants')
         .select('id')
         .eq('session_id',s.id)
@@ -34940,6 +35011,19 @@ window.drvInit=function(wmsUser){
         });
     })
     .subscribe();
+
+  // โหลด badge จำนวนรออนุมัติถ้าเป็นหัวหน้า
+  if(_dSess.is_supervisor) drvSupUpdateBadge();
+};
+
+async function drvSupUpdateBadge(){
+  var today=new Date().toISOString().split('T')[0];
+  var {data}=await window._sb.from('truck_inspections').select('id').eq('inspect_date',today).eq('approval_status','pending');
+  var badge=document.getElementById('drv-sup-badge');
+  if(!badge)return;
+  var count=(data||[]).length;
+  if(count>0){badge.textContent=count;badge.style.display='block';}
+  else{badge.style.display='none';}
 };
 
 window.drvLogout=function(){
@@ -34955,8 +35039,13 @@ window.drvLogout=function(){
 window.drvGoTab=function(t){
   document.getElementById('drv-tab-plan').style.display=t==='plan'?'block':'none';
   document.getElementById('drv-tab-history').style.display=t==='history'?'block':'none';
+  var supTab=document.getElementById('drv-tab-supervisor');
+  if(supTab) supTab.style.display=t==='supervisor'?'block':'none';
   document.getElementById('drv-nav-plan').style.color=t==='plan'?'#34d399':'#64748b';
   document.getElementById('drv-nav-history').style.color=t==='history'?'#34d399':'#64748b';
+  var supNav=document.getElementById('drv-nav-supervisor');
+  if(supNav) supNav.style.color=t==='supervisor'?'#ef4444':'#64748b';
+  if(t==='supervisor') drvSupLoadPending();
 };
 
 window.drvLoadPlan=async function(){
@@ -35029,6 +35118,20 @@ window.drvLoadPlan=async function(){
     document.getElementById('drv-ht').textContent=trucks?'🚛 '+trucks:'–';
   }else{
     document.getElementById('drv-ht').textContent='– ไม่มีแผนวันนี้ –';
+  }
+  // โหลดสถานะ inspection ของวันนี้
+  var plate2=(_dPlans[0]?.truck_plate)||'';
+  window._dInspectApproval=null;
+  if(plate2){
+    var {data:insRow}=await window._sb.from('truck_inspections')
+      .select('approval_status,approval_note,approved_by,overall')
+      .eq('inspect_date',today).eq('truck_plate',plate2).maybeSingle();
+    window._dInspectApproval=insRow||null;
+    // ถ้ายังรออนุมัติ → แสดง pending card
+    if(insRow&&insRow.approval_status==='pending'&&insRow.overall==='issue'){
+      var issueItems=[];
+      drvShowInspectPending(plate2,today,issueItems);
+    }
   }
   drvHideL();drvRenderPlanCards(_dPlans);
   // ตรวจสอบว่าต้องแสดง popup ตรวจสภาพรถไหม (เฉพาะเมื่อมีแผนวันนี้)
@@ -35209,6 +35312,7 @@ window.drvInspectSave=async function(){
   var hasIssue=items.some(function(it){return it.status==='issue';});
   var notes=document.getElementById('drv-inspect-notes')?.value||'';
 
+  var approvalStatus=hasIssue?'pending':'approved';
   var {error}=await window._sb.from('truck_inspections').upsert({
     inspect_date:today,
     truck_plate:plate,
@@ -35217,7 +35321,8 @@ window.drvInspectSave=async function(){
     inspect_type:_dInspectType,
     items:items,
     overall:hasIssue?'issue':'ok',
-    notes:notes
+    notes:notes,
+    approval_status:approvalStatus
   },{onConflict:'inspect_date,truck_plate,driver_id'});
 
   if(error){
@@ -35225,7 +35330,83 @@ window.drvInspectSave=async function(){
     drvShowToast('❌ บันทึกไม่สำเร็จ: '+error.message,true);return;
   }
   document.getElementById('drv-inspect-overlay').style.display='none';
-  drvShowToast(hasIssue?'⚠️ บันทึกแล้ว — พบปัญหา '+items.filter(function(it){return it.status==='issue';}).length+' รายการ':'✅ ตรวจสภาพรถเรียบร้อย',false,4000);
+  if(hasIssue){
+    var issueCount=items.filter(function(it){return it.status==='issue';}).length;
+    drvShowToast('⚠️ พบปัญหา '+issueCount+' รายการ — รอหัวหน้าอนุมัติก่อนออกรถ',true,6000);
+    drvShowInspectPending(plate,today,items.filter(function(it){return it.status==='issue';}));
+  } else {
+    drvShowToast('✅ ตรวจสภาพรถเรียบร้อย — ออกรถได้เลย',false,4000);
+  }
+};
+
+// แสดง banner รอการอนุมัติ
+window._dInspectPendingPlate='';
+function drvShowInspectPending(plate,date,issueItems){
+  _dInspectPendingPlate=plate;
+  var wrap=document.getElementById('drv-plan-cards');
+  var issueHtml=issueItems.map(function(it){
+    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid rgba(239,68,68,.15);">'
+      +'<i class="fas fa-exclamation-circle" style="color:#ef4444;margin-top:2px;flex-shrink:0;"></i>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#fca5a5;">'+drvEsc(it.name.replace('⭐ ',''))+'</div>'
+      +(it.symptom?'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">'+drvEsc(it.symptom)+'</div>':'')
+      +'</div></div>';
+  }).join('');
+  var pendingCard='<div id="drv-inspect-pending-card" style="background:linear-gradient(135deg,#1e293b,#1a0a0a);border:2px solid #ef4444;border-radius:16px;padding:18px;margin-bottom:14px;">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'
+    +'<div style="width:40px;height:40px;border-radius:50%;background:#ef44441a;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+    +'<i class="fas fa-exclamation-triangle" style="color:#ef4444;font-size:18px;"></i></div>'
+    +'<div><div style="font-size:15px;font-weight:900;color:#fca5a5;">รอการอนุมัติจากหัวหน้า</div>'
+    +'<div style="font-size:11px;color:#64748b;margin-top:2px;">'+plate+' · '+date+'</div></div></div>'
+    +'<div style="margin-bottom:12px;">'+issueHtml+'</div>'
+    +'<div style="background:#0f172a;border-radius:10px;padding:10px 12px;font-size:12px;color:#64748b;text-align:center;">'
+    +'<i class="fas fa-clock" style="margin-right:6px;"></i>กำลังรอหัวหน้าตรวจสอบ... ห้ามออกรถก่อนได้รับอนุมัติ</div></div>';
+  wrap.innerHTML=pendingCard+(wrap.innerHTML||'');
+}
+
+// หัวหน้าคนขับ: โหลดรายการรออนุมัติ
+window.drvSupLoadPending=async function(){
+  if(!_dSess.is_supervisor)return;
+  var today=new Date().toISOString().split('T')[0];
+  var {data}=await window._sb.from('truck_inspections')
+    .select('*').eq('inspect_date',today).eq('approval_status','pending');
+  var wrap=document.getElementById('drv-sup-pending-wrap');
+  if(!wrap)return;
+  if(!(data&&data.length)){
+    wrap.innerHTML='<div style="text-align:center;padding:20px 0;font-size:13px;color:#475569;"><i class="fas fa-check-circle" style="font-size:24px;display:block;margin-bottom:8px;color:#059669;"></i>ไม่มีรายการรออนุมัติ</div>';
+    return;
+  }
+  wrap.innerHTML=data.map(function(ins){
+    var issueItems=(ins.items||[]).filter(function(it){return it.status==='issue';});
+    return '<div style="background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border-left:3px solid #ef4444;">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
+      +'<div><div style="font-size:14px;font-weight:900;color:#fca5a5;">'+drvEsc(ins.driver_name||ins.driver_id||'–')+'</div>'
+      +'<div style="font-size:11px;color:#64748b;">'+drvEsc(ins.truck_plate||'–')+'</div></div>'
+      +'<span style="font-size:10px;background:#ef44441a;color:#ef4444;border:1px solid #ef4444;border-radius:20px;padding:3px 10px;font-weight:900;">พบปัญหา '+issueItems.length+' รายการ</span></div>'
+      +issueItems.map(function(it){
+        return '<div style="font-size:12px;color:#94a3b8;padding:4px 0;border-bottom:1px solid #1e293b;">'
+          +'<i class="fas fa-exclamation-circle" style="color:#ef4444;margin-right:6px;"></i>'
+          +drvEsc(it.name.replace('⭐ ',''))+(it.symptom?' — '+drvEsc(it.symptom):'')+'</div>';
+      }).join('')
+      +'<div style="margin-top:10px;">'
+      +'<input type="text" id="sup-note-'+ins.id+'" placeholder="หมายเหตุ (ถ้ามี)" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#fff;font-size:12px;box-sizing:border-box;margin-bottom:8px;">'
+      +'<div style="display:flex;gap:8px;">'
+      +'<button onclick="drvSupApprove('+ins.id+',\'approved\')" style="flex:1;background:#059669;border:none;border-radius:10px;padding:10px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-check" style="margin-right:5px;"></i>อนุมัติออกรถ</button>'
+      +'<button onclick="drvSupApprove('+ins.id+',\'rejected\')" style="flex:1;background:#ef4444;border:none;border-radius:10px;padding:10px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-ban" style="margin-right:5px;"></i>ระงับ</button>'
+      +'</div></div></div>';
+  }).join('');
+};
+
+window.drvSupApprove=async function(insId,decision){
+  var note=document.getElementById('sup-note-'+insId)?.value||'';
+  var {error}=await window._sb.from('truck_inspections').update({
+    approval_status:decision,
+    approved_by:_dSess.driver_name||_dSess.username,
+    approval_note:note,
+    approved_at:new Date().toISOString()
+  }).eq('id',insId);
+  if(error){drvShowToast('❌ '+error.message,true);return;}
+  drvShowToast(decision==='approved'?'✅ อนุมัติแล้ว':'🚫 ระงับแล้ว',false,3000);
+  drvSupLoadPending();
 };
 
 function drvRenderPlanCards(plans){
@@ -35305,7 +35486,9 @@ function drvRenderPlanCards(plans){
       +contextLine
       +'<div style="font-size:14px;color:#64748b;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:5px;opacity:.6;"></i>'+routeText+'</div>'
       +'<div style="font-size:14px;color:#94a3b8;margin-bottom:12px;"><i class="fas fa-truck" style="margin-right:5px;"></i>'+drvEsc(p.truck_plate||'–')+'</div>'
-      +'<button onclick="drvOpenTrip(\''+drvEsc(p.plan_id)+'\')" style="width:100%;background:'+m.btnBg+';border:none;border-radius:12px;padding:16px;color:#fff;font-weight:900;font-size:17px;cursor:pointer;">'+m.btnLabel+'</button>'
+      +(window._dInspectApproval&&window._dInspectApproval.approval_status==='pending'&&st==='idle'
+        ?'<button disabled style="width:100%;background:#374151;border:none;border-radius:12px;padding:16px;color:#6b7280;font-weight:900;font-size:15px;cursor:not-allowed;"><i class="fas fa-lock" style="margin-right:8px;"></i>รอหัวหน้าอนุมัติก่อนออกรถ</button>'
+        :'<button onclick="drvOpenTrip(\''+drvEsc(p.plan_id)+'\')" style="width:100%;background:'+m.btnBg+';border:none;border-radius:12px;padding:16px;color:#fff;font-weight:900;font-size:17px;cursor:pointer;">'+m.btnLabel+'</button>')
       +'</div>';
   }).join('');
 }
