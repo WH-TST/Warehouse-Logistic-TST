@@ -31361,13 +31361,17 @@ window.doLogin = async function(){
     for(var i=0;i<cached.length;i++){if(cached[i].username===uname&&cached[i].pwHash===hash){user=cached[i];break;}}
   }
   if(!user){
-    // ลองเช็ค logi_wh_staff — match ด้วย username หรือ id (staff กรอก employee ID เป็น username ได้)
-    var whRes = await window._sb.from('logi_wh_staff').select('*')
-      .or('username.eq.'+uname+',id.eq.'+uname).maybeSingle();
-    if(whRes.data && whRes.data.password === pw){
-      var wh = whRes.data;
-      var whLogin = wh.username || String(wh.id);
-      user = {username:whLogin, pwHash:'', name:wh.name||whLogin, role:'WH Staff', isAdmin:false, perms:['loading'], active:true, _whStaffId:wh.id, _whTeam:wh.team||''};
+    // ลองเช็ค logi_wh_staff — match ด้วย username ก่อน แล้ว fallback ด้วย id
+    var whRow = null;
+    var r1 = await window._sb.from('logi_wh_staff').select('*').eq('username', uname).maybeSingle();
+    if(r1.data) { whRow = r1.data; }
+    if(!whRow) {
+      var r2 = await window._sb.from('logi_wh_staff').select('*').eq('id', uname).maybeSingle();
+      if(r2.data) { whRow = r2.data; }
+    }
+    if(whRow && whRow.password === pw){
+      var whLogin = whRow.username || String(whRow.id);
+      user = {username:whLogin, pwHash:'', name:whRow.name||whLogin, role:'WH Staff', isAdmin:false, perms:['loading'], active:true, _whStaffId:whRow.id, _whTeam:whRow.team||''};
     }
   }
   if(!user){
