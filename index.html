@@ -24023,16 +24023,20 @@ function _ldShowOrderNotif(order) {
     var items = order.items||[];
     var totalQty = items.reduce(function(a,i){ return a+(Number(i.qty)||0); }, 0);
     var totalWt  = items.reduce(function(a,i){ return a+(Number(i.target_weight||i.weight)||0); }, 0);
-    var itemsPreview = items.slice(0,3).map(function(i){
+    var itemsPreview = items.map(function(i, idx){
         var n = (i.product_name||i.sku||'').replace(/[฀-๿]+/g,'').trim();
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.07);">'
-            +'<span style="font-size:11px;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+n+'</span>'
-            +'<span style="font-size:11px;font-weight:900;color:#38bdf8;margin-left:8px;flex-shrink:0;">'+Number(i.qty||0)+' PCS</span>'
+        var wt = Number(i.target_weight||i.weight||0);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);">'
+            +'<div style="display:flex;align-items:center;gap:7px;min-width:0;">'
+                +'<span style="font-size:9px;font-weight:900;color:#475569;flex-shrink:0;width:16px;text-align:right;">'+(idx+1)+'</span>'
+                +'<span style="font-size:11px;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_ldEsc(n||i.sku||'—')+'</span>'
+            +'</div>'
+            +'<div style="display:flex;gap:8px;flex-shrink:0;margin-left:8px;">'
+                +'<span style="font-size:11px;font-weight:900;color:#38bdf8;">'+Number(i.qty||0).toLocaleString()+' PCS</span>'
+                +(wt?'<span style="font-size:11px;font-weight:700;color:#34d399;">'+wt.toLocaleString()+' KG</span>':'')
+            +'</div>'
         +'</div>';
     }).join('');
-    if (items.length > 3) {
-        itemsPreview += '<div style="font-size:10px;color:#475569;padding-top:4px;">+ อีก '+(items.length-3)+' รายการ...</div>';
-    }
 
     var card = document.createElement('div');
     card.id = 'ld-order-notif';
