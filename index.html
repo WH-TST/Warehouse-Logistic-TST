@@ -8552,18 +8552,12 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
         <!-- รายการร้านค้า loop -->
         <div id="logi-shops-container" class="space-y-6"></div>
 
-        <!-- TRAILER PLANNER (แสดงเมื่อ full_trailer) -->
-        <div id="logi-trailer-planner" class="hidden mt-5 bg-purple-50 border-2 border-purple-200 rounded-2xl p-5 space-y-4">
-          <h4 class="font-black text-purple-700 text-sm uppercase tracking-wider flex items-center gap-2">
-            <i class="fas fa-project-diagram text-purple-500"></i> Trailer Planner — จัดลำดับร้าน &amp; กำหนดรถ
-          </h4>
-          <!-- Consolidated Table -->
-          <div id="logi-trailer-table" class="space-y-2"></div>
-          <!-- Weight Gauges -->
-          <div class="grid grid-cols-2 gap-4 pt-2">
-            <div class="bg-white rounded-xl p-4 border border-sky-200">
+        <!-- TRAILER WEIGHT SUMMARY (แสดงเมื่อ full_trailer) -->
+        <div id="logi-trailer-planner" class="hidden mt-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-sky-50 border-2 border-sky-200 rounded-xl p-4">
               <div class="flex justify-between items-center mb-2">
-                <span class="text-xs font-black text-sky-700 uppercase">🚛 รถแม่</span>
+                <span class="text-xs font-black text-sky-700 uppercase tracking-wider">🚛 รถแม่</span>
                 <span id="logi-trailer-mother-wt" class="text-sm font-black text-sky-800 font-mono">0 กก.</span>
               </div>
               <div class="w-full bg-sky-100 rounded-full h-3">
@@ -8571,9 +8565,9 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
               </div>
               <div class="text-[10px] text-sky-500 font-bold mt-1 text-right">Cap: <span id="logi-trailer-mother-cap">—</span></div>
             </div>
-            <div class="bg-white rounded-xl p-4 border border-purple-200">
+            <div class="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
               <div class="flex justify-between items-center mb-2">
-                <span class="text-xs font-black text-purple-700 uppercase">⬆ รถลูก</span>
+                <span class="text-xs font-black text-purple-700 uppercase tracking-wider">⬆ รถลูก</span>
                 <span id="logi-trailer-child-wt" class="text-sm font-black text-purple-800 font-mono">0 กก.</span>
               </div>
               <div class="w-full bg-purple-100 rounded-full h-3">
@@ -8582,11 +8576,12 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
               <div class="text-[10px] text-purple-500 font-bold mt-1 text-right">Cap: <span id="logi-trailer-child-cap">—</span></div>
             </div>
           </div>
-          <div id="logi-trailer-overload-warn" class="hidden bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-rose-700 font-black text-sm">
+          <div id="logi-trailer-overload-warn" class="hidden mt-2 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-rose-700 font-black text-sm">
             <i class="fas fa-exclamation-triangle text-rose-500"></i>
             <span id="logi-trailer-overload-msg">น้ำหนักเกิน capacity</span>
           </div>
         </div>
+        <div id="logi-trailer-table" class="hidden"></div>
       </div>
 
       <!-- ระยะทางขากลับ (แสดงหลังคำนวณอัตโนมัติ หรือกรอกเอง) -->
@@ -16110,12 +16105,58 @@ window.onLogiTrailerModeChange = function onLogiTrailerModeChange() {
     var plannerEl = document.getElementById('logi-trailer-planner');
     if (logiTrailerMode === 'full_trailer') {
         if (plannerEl) plannerEl.classList.remove('hidden');
-        renderTrailerTable();
+        _syncTrailerAssignBars();
         updateTrailerWeightGauges();
     } else {
         if (plannerEl) plannerEl.classList.add('hidden');
+        _syncTrailerAssignBars();
     }
 };
+
+// ── sync truck-assign bars บนทุกการ์ดร้านตาม mode + จำนวนร้าน ──
+function _syncTrailerAssignBars() {
+    var container = document.getElementById('logi-shops-container');
+    if (!container) return;
+    var cards = Array.from(container.querySelectorAll(':scope > div[id^="logi-shop-card-"]'));
+    var isFullTrailer = logiTrailerMode === 'full_trailer';
+    var isMulti = cards.length > 1;
+    cards.forEach(function(card) {
+        var idx = parseInt(card.id.replace('logi-shop-card-', ''));
+        var assignEl = document.getElementById('logi-shop-truck-assign-' + idx);
+        var noteEl   = document.getElementById('logi-shop-autosplit-note-' + idx);
+        if (assignEl) { assignEl.style.display = (isFullTrailer && isMulti) ? 'flex' : 'none'; }
+        if (noteEl)   { noteEl.style.display   = (isFullTrailer && !isMulti) ? 'flex' : 'none'; }
+        _updateShopCardAccent(idx, isFullTrailer, isMulti);
+        // refresh button state to match current assignment
+        if (isFullTrailer && isMulti) {
+            var isChild = !!(logiChildAssignments[idx]);
+            _updateTruckAssignButtons(idx, isChild);
+        }
+    });
+    if (isFullTrailer && !isMulti && cards.length === 1) {
+        var sIdx = parseInt(cards[0].id.replace('logi-shop-card-', ''));
+        autoAssignTrailerItems(sIdx);
+    }
+}
+
+// ── ปรับ border + accent สีการ์ดตามการ assign ──
+function _updateShopCardAccent(idx, isFullTrailer, isMulti) {
+    var card = document.getElementById('logi-shop-card-' + idx);
+    if (!card) return;
+    if (!isFullTrailer || !isMulti) { card.style.borderColor = ''; return; }
+    var isChild = !!(logiChildAssignments[idx]);
+    card.style.borderColor = isChild ? '#7c3aed' : '#0ea5e9';
+}
+
+// ── อัปเดต button state ของ truck-assign bar ──
+function _updateTruckAssignButtons(idx, isChild) {
+    var btnM = document.getElementById('logi-btn-mother-' + idx);
+    var btnC = document.getElementById('logi-btn-child-' + idx);
+    if (btnM) btnM.className = 'flex-1 py-2.5 rounded-xl text-sm font-black border-2 transition-all '
+        + (!isChild ? 'border-sky-500 bg-sky-100 text-sky-700' : 'border-slate-200 bg-white text-slate-400 hover:border-sky-300 hover:text-sky-600');
+    if (btnC) btnC.className = 'flex-1 py-2.5 rounded-xl text-sm font-black border-2 transition-all '
+        + (isChild ? 'border-purple-500 bg-purple-100 text-purple-700' : 'border-slate-200 bg-white text-slate-400 hover:border-purple-300 hover:text-purple-600');
+}
 
 // ── Auto-assign items แม่/ลูก สำหรับ single-shop full_trailer ──
 window.autoAssignTrailerItems = function autoAssignTrailerItems(shopIdx) {
@@ -16199,62 +16240,8 @@ window.autoAssignTrailerItems = function autoAssignTrailerItems(shopIdx) {
 };
 
 // ── render Trailer Planner consolidated table ──
-function renderTrailerTable() {
-    var tableEl = document.getElementById('logi-trailer-table');
-    if (!tableEl) return;
-    var container = document.getElementById('logi-shops-container');
-    var cards = Array.from(container.querySelectorAll(':scope > div[id^="logi-shop-card-"]'));
-    if (cards.length === 0) {
-        tableEl.innerHTML = '<div class="text-center py-6 text-slate-300 text-sm font-bold"><i class="fas fa-store-slash text-2xl mb-2 block"></i> ยังไม่มีร้านค้า — กด "เพิ่มร้านค้า" ด้านบน</div>';
-        return;
-    }
-    var isSingleShop = (cards.length === 1);
-    var rows = cards.map(function(card, pos) {
-        var idx = parseInt(card.id.replace('logi-shop-card-', ''));
-        var inputEl = document.getElementById('logi-shop-input-' + idx);
-        var shopName = (inputEl && inputEl.value) ? inputEl.value : '(ยังไม่เลือกร้าน)';
-        var shopSelEl = document.getElementById('logi-shop-sel-' + idx);
-        var shopId = shopSelEl ? shopSelEl.value : '';
-        var shopMeta = shopId ? (LOGI_MASTER_CACHE.shops || []).find(function(s) { return s.id === shopId; }) : null;
-        var noTrailer = shopMeta ? shopMeta.noTrailer : false;
-        if (noTrailer) logiChildAssignments[idx] = false; // auto-lock to mother
-        var isChild = !noTrailer && !!(logiChildAssignments[idx]);
-        var noTrailerBadge = noTrailer
-            ? '<span class="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 px-2 py-0.5 rounded-full font-black ml-2 whitespace-nowrap">⚠️ พ่วงเข้าไม่ได้</span>'
-            : '';
-        var btnMCls = !isChild
-            ? 'border-sky-500 bg-sky-100 text-sky-700'
-            : 'border-slate-200 bg-white text-slate-500 hover:bg-sky-50';
-        var btnCCls = isChild
-            ? 'border-purple-500 bg-purple-100 text-purple-700'
-            : 'border-slate-200 bg-white text-slate-500 hover:bg-purple-50';
-        var btnCDisabled = noTrailer ? 'disabled class="opacity-40 cursor-not-allowed ' : 'class="';
-        return '<div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-purple-100">'
-            + '<div class="flex flex-col items-center gap-0.5 flex-shrink-0">'
-            +   '<button type="button" onclick="moveTrailerShop(' + pos + ',-1)"' + (pos === 0 ? ' disabled' : '') + ' class="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-30 text-xs font-black transition-all"><i class="fas fa-chevron-up"></i></button>'
-            +   '<span class="text-xs font-black text-purple-600 w-5 text-center">' + (pos + 1) + '</span>'
-            +   '<button type="button" onclick="moveTrailerShop(' + pos + ',1)"' + (pos === cards.length - 1 ? ' disabled' : '') + ' class="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-30 text-xs font-black transition-all"><i class="fas fa-chevron-down"></i></button>'
-            + '</div>'
-            + '<div class="flex-1 min-w-0">'
-            +   '<div class="text-sm font-black text-slate-700 truncate">' + shopName + '</div>'
-            +   noTrailerBadge
-            + '</div>'
-            + (isSingleShop ? '' :
-              '<div class="flex gap-1.5 flex-shrink-0">'
-            +   '<button type="button" onclick="setTrailerShopAssign(' + idx + ',false)" class="px-4 py-2 rounded-xl text-sm font-black border-2 transition-all ' + btnMCls + '">รถแม่</button>'
-            +   '<button type="button" onclick="setTrailerShopAssign(' + idx + ',true)"' + (noTrailer ? ' disabled' : '') + ' class="px-4 py-2 rounded-xl text-sm font-black border-2 transition-all ' + btnCCls + (noTrailer ? ' opacity-40 cursor-not-allowed' : '') + '">รถลูก</button>'
-            + '</div>')
-            + '</div>';
-    });
-    var html = rows.join('');
-    // single-shop: แสดง note ว่าระบบจัดให้อัตโนมัติ (ไม่มีปุ่ม)
-    if (isSingleShop) {
-        html += '<div class="mt-2 pt-2 border-t border-purple-100">'
-            + '<p class="text-[11px] text-purple-500 font-bold text-center">⚡ ร้านเดียว — ระบบแบ่งน้ำหนักแม่/ลูกให้อัตโนมัติตาม capacity</p>'
-            + '</div>';
-    }
-    tableEl.innerHTML = html;
-}
+// renderTrailerTable — kept for backward compat, delegates to _syncTrailerAssignBars
+function renderTrailerTable() { _syncTrailerAssignBars(); }
 
 // ── ย้ายร้านใน Trailer Planner ──
 window.moveTrailerShop = function moveTrailerShop(pos, dir) {
@@ -16265,7 +16252,7 @@ window.moveTrailerShop = function moveTrailerShop(pos, dir) {
     if (dir === 1) { container.insertBefore(cards[newPos], cards[pos]); }
     else           { container.insertBefore(cards[pos],    cards[newPos]); }
     updateLogiShopNumbers();
-    renderTrailerTable();
+    _syncTrailerAssignBars();
     updateTrailerWeightGauges();
 };
 
@@ -16276,9 +16263,11 @@ window.setTrailerShopAssign = function setTrailerShopAssign(idx, isChild) {
     var shopMeta = shopId ? (LOGI_MASTER_CACHE.shops || []).find(function(s) { return s.id === shopId; }) : null;
     if (shopMeta && shopMeta.noTrailer && isChild) return;
     logiChildAssignments[idx] = isChild;
-    // sync per-item label ด้วย
     setLogiShopTruck(idx, isChild ? 'child' : 'mother');
-    renderTrailerTable();
+    _updateTruckAssignButtons(idx, isChild);
+    var container = document.getElementById('logi-shops-container');
+    var cards = Array.from(container.querySelectorAll(':scope > div[id^="logi-shop-card-"]'));
+    _updateShopCardAccent(idx, true, cards.length > 1);
     updateTrailerWeightGauges();
 };
 
@@ -16361,10 +16350,9 @@ window.addLogiShop = function addLogiShop() {
     div.innerHTML  = buildLogiShopCardHTML(idx);
     container.appendChild(div);
     updateLogiShopNumbers();
-    // ถ้าอยู่ใน full_trailer mode → re-render planner
     if (logiTrailerMode === 'full_trailer') {
-        logiChildAssignments[idx] = false; // default → รถแม่
-        renderTrailerTable();
+        logiChildAssignments[idx] = false;
+        _syncTrailerAssignBars();
         updateTrailerWeightGauges();
     }
     autoCalcFreeStop();
@@ -16385,6 +16373,32 @@ function buildLogiShopCardHTML(idx) {
         <button onclick="removeLogiShop(${idx})" class="text-rose-400 hover:text-rose-600 font-black text-sm flex items-center gap-1 transition-all">
             <i class="fas fa-trash-alt"></i> ลบร้านนี้
         </button>
+    </div>
+
+    <!-- TRUCK ASSIGN BAR — แสดงเมื่อ full_trailer + หลายร้าน -->
+    <div id="logi-shop-truck-assign-${idx}" class="hidden flex-col gap-1.5">
+      <div class="text-[10px] font-black text-slate-500 uppercase tracking-wider">สินค้าร้านนี้โหลดขึ้นรถ:</div>
+      <div class="flex gap-2">
+        <button type="button" onclick="setTrailerShopAssign(${idx},false)"
+                id="logi-btn-mother-${idx}"
+                class="flex-1 py-2.5 rounded-xl text-sm font-black border-2 transition-all border-sky-500 bg-sky-100 text-sky-700">
+          🚛 รถแม่
+        </button>
+        <button type="button" onclick="setTrailerShopAssign(${idx},true)"
+                id="logi-btn-child-${idx}"
+                class="flex-1 py-2.5 rounded-xl text-sm font-black border-2 transition-all border-slate-200 bg-white text-slate-400 hover:border-purple-300 hover:text-purple-600">
+          ⬆ รถลูก
+        </button>
+      </div>
+      <div id="logi-shop-notrailer-inline-${idx}" class="hidden text-xs bg-amber-50 border border-amber-200 text-amber-700 font-black px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <i class="fas fa-exclamation-triangle"></i> ร้านนี้รถพ่วงเข้าไม่ได้ — ใส่รถแม่อัตโนมัติ
+      </div>
+    </div>
+
+    <!-- SINGLE-SHOP AUTO-SPLIT NOTE — แสดงเมื่อ full_trailer + ร้านเดียว -->
+    <div id="logi-shop-autosplit-note-${idx}" class="hidden items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-50 to-purple-50 border border-purple-200 text-xs font-bold text-slate-600">
+      <i class="fas fa-magic text-purple-400"></i>
+      <span>วิ่งทั้งพ่วง — ระบบแบ่งน้ำหนักแม่/ลูกให้อัตโนมัติตาม Cap รถ</span>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -16503,25 +16517,29 @@ window.onLogiShopSelect = function onLogiShopSelect(idx) {
         distEl.value = opt.dataset.dist;
     }
 
-    // noTrailer badge
+    // noTrailer badge (old section + inline bar)
     const shopId = opt.value;
     const shopMeta = LOGI_MASTER_CACHE.shops.find(s => s.id === shopId);
     const noTrailerBadge = document.getElementById(`logi-shop-notrailer-badge-${idx}`);
-    if (noTrailerBadge) {
-        if (shopMeta?.noTrailer) {
-            noTrailerBadge.classList.remove('hidden');
-            // auto-lock: ถ้าอยู่ใน full_trailer mode → force mother
-            if (logiTrailerMode === 'full_trailer') {
-                logiChildAssignments[idx] = false;
-            }
-        } else {
-            noTrailerBadge.classList.add('hidden');
+    const noTrailerInline = document.getElementById(`logi-shop-notrailer-inline-${idx}`);
+    const btnChild = document.getElementById(`logi-btn-child-${idx}`);
+    if (shopMeta?.noTrailer) {
+        if (noTrailerBadge) noTrailerBadge.classList.remove('hidden');
+        if (noTrailerInline) noTrailerInline.classList.remove('hidden');
+        if (btnChild) { btnChild.disabled = true; btnChild.classList.add('opacity-30','cursor-not-allowed'); }
+        if (logiTrailerMode === 'full_trailer') {
+            logiChildAssignments[idx] = false;
+            _updateTruckAssignButtons(idx, false);
         }
+    } else {
+        if (noTrailerBadge) noTrailerBadge.classList.add('hidden');
+        if (noTrailerInline) noTrailerInline.classList.add('hidden');
+        if (btnChild) { btnChild.disabled = false; btnChild.classList.remove('opacity-30','cursor-not-allowed'); }
     }
 
     // re-render trailer planner ถ้าอยู่ใน full_trailer mode
     if (logiTrailerMode === 'full_trailer') {
-        renderTrailerTable();
+        _syncTrailerAssignBars();
         updateTrailerWeightGauges();
     }
 
@@ -16706,7 +16724,7 @@ window.removeLogiShop = function removeLogiShop(idx) {
             delete logiChildAssignments[idx];
             updateLogiShopNumbers();
             updateLogiTotalWeight();
-            if (logiTrailerMode === 'full_trailer') { renderTrailerTable(); updateTrailerWeightGauges(); }
+            if (logiTrailerMode === 'full_trailer') { _syncTrailerAssignBars(); updateTrailerWeightGauges(); }
             autoCalcFreeStop();
         },
         { type: 'warning', okText: 'ลบออก' }
@@ -22885,9 +22903,9 @@ window.editLogiPlan = function editLogiPlan(planId) {
                     if (retEl) retEl.value = (p.returnDistance > 0) ? p.returnDistance : '';
                     updateLogiDistSummary();
                     _triggerAutoRouteCalc(true);
-                    // restore Trailer Planner ถ้าอยู่ใน full_trailer mode
+                    // restore Trailer assign bars ถ้าอยู่ใน full_trailer mode
                     if (logiTrailerMode === 'full_trailer') {
-                        renderTrailerTable();
+                        _syncTrailerAssignBars();
                         updateTrailerWeightGauges();
                     }
                     if (saveBtn) { saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i> บันทึกการแก้ไข'; saveBtn.disabled = false; }
