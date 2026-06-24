@@ -24255,27 +24255,140 @@ function _ldSubscribeRealtime() {
 window.ldMonLoad = async function() {
     var dateVal = document.getElementById('ld-mon-date')?.value;
     if (!dateVal) return;
-    var tbody = document.getElementById('ld-mon-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
+    var wrap = document.getElementById('ld-mon-table-wrap');
+    if (wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
-        var {data, error} = await window._sb.from('loading_sessions').select('*').eq('plan_date', dateVal).order('created_at');
-        if (error) throw error;
-        var rows = data || [];
-        _ldRenderMonitorTable(rows);
+        var [{data:orders},{data:sessions}] = await Promise.all([
+            window._sb.from('loading_orders').select('*').eq('order_date', dateVal),
+            window._sb.from('loading_sessions').select('*').eq('plan_date', dateVal)
+        ]);
+        var rows = sessions||[];
+        var ords = orders||[];
+        _ldRenderMonitorTable(rows, ords);
         _ldRenderMonKpi(rows);
-        // realtime badge
         var badge = document.getElementById('ld-mon-realtime-badge');
         if (badge) badge.classList.remove('hidden');
-        // subscribe for monitor refresh
         if (_ldMonSub) { try { _ldMonSub.unsubscribe(); } catch(e) {} }
         _ldMonSub = window._sb.channel('loading-mon-'+dateVal)
-            .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions'}, function(){
-                ldMonLoad();
-            }).subscribe();
+            .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions'}, function(){ ldMonLoad(); })
+            .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'},   function(){ ldMonLoad(); })
+            .subscribe();
     } catch(e) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-rose-400 font-bold">เกิดข้อผิดพลาด: '+(e?.message||String(e))+'</td></tr>';
+        if (wrap) wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">เกิดข้อผิดพลาด: '+(e?.message||String(e))+'</div>';
     }
 };
+
+function _ldRenderMonitorTable(sessions, orders) {
+    var wrap = document.getElementById('ld-mon-table-wrap');
+    if (!wrap) return;
+    if (!orders.length) { wrap.innerHTML='<div class="text-center py-16 text-slate-400 font-bold">ไม่มี Loading Order วันนี้</div>'; return; }
+
+    // index sessions by order_id+sku (latest wins)
+    var sessMap = {}; // {order_id: {sku: {draft:row, done:row}}}
+    sessions.forEach(function(s) {
+        var k = s.order_id;
+        if (!sessMap[k]) sessMap[k] = {};
+        var sk = s.sku||('__'+s.id);
+        if (!sessMap[k][sk]) sessMap[k][sk] = {};
+        if (s.record_type==='draft') sessMap[k][sk].draft = s;
+        else sessMap[k][sk].done = s;
+    });
+
+    var html = orders.map(function(o) {
+        var items = o.items||[];
+        var sm = sessMap[o.id]||{};
+        var staffName = '—';
+        var startTime = '—', endTime = '—';
+        // find first session for this order
+        var firstSess = sessions.find(function(s){ return s.order_id===o.id; });
+        if (firstSess) {
+            staffName = firstSess.staff_name||'—';
+            startTime = firstSess.start_time ? firstSess.start_time.slice(11,16) : '—';
+        }
+        var allDone = items.length>0 && items.every(function(it){
+            var s = sm[it.sku]||{};
+            return s.done && (parseFloat(s.done.qty)||0)>0;
+        });
+        var anyLoading = items.some(function(it){
+            var s = sm[it.sku]||{};
+            return s.draft && (parseFloat(s.draft.qty)||0)>0;
+        });
+        var statusBadge = allDone
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-300">✓ เสร็จแล้ว</span>'
+            : anyLoading
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse block"></span>กำลังโหลด</span>'
+            : o.status==='pending'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">รอโหลด</span>'
+            : '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-500 border border-slate-200">'+_ldEsc(o.status||'—')+'</span>';
+
+        var itemRows = items.map(function(it, idx) {
+            var s = sm[it.sku]||{};
+            var draftRow = s.draft, doneRow = s.done;
+            var activeRow = doneRow || draftRow;
+            var actualQty = activeRow ? (parseFloat(activeRow.qty)||0) : 0;
+            var actualWt  = activeRow ? (parseFloat(activeRow.weight)||0) : 0;
+            var isDone    = !!doneRow && actualQty>0;
+            var isLoading = !isDone && !!draftRow && actualQty>0;
+            var pName = (it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+            var kgPcs = actualQty>0&&actualWt>0 ? (actualWt/actualQty).toFixed(2) : '—';
+            var rowBg = isDone ? '#f0fdf4' : isLoading ? '#fff1f2' : '#fff';
+            var statusIcon = isDone ? '<span style="color:#16a34a;font-size:14px;">✓</span>'
+                : isLoading ? '<span style="color:#f43f5e;font-size:10px;animation:pulse 1s infinite;">●</span>'
+                : '<span style="color:#cbd5e1;font-size:14px;">○</span>';
+            return '<tr style="background:'+rowBg+';border-bottom:1px solid #f1f5f9;">'
+                +'<td style="padding:8px 12px;font-size:11px;color:#94a3b8;width:24px;">'+(idx+1)+'</td>'
+                +'<td style="padding:8px 12px;font-size:12px;font-weight:700;color:#1e293b;">'
+                    +_ldEsc(pName)
+                    +'<div style="font-size:9px;color:#94a3b8;">'+_ldEsc(it.sku||'')+'</div>'
+                +'</td>'
+                +'<td style="padding:8px 12px;text-align:center;font-size:13px;font-weight:900;color:#0369a1;">'+(it.qty||0)+'</td>'
+                +'<td style="padding:8px 12px;text-align:center;font-size:13px;font-weight:900;color:'+(isDone?'#16a34a':isLoading?'#f43f5e':'#cbd5e1')+';">'
+                    +(actualQty>0 ? actualQty.toLocaleString() : '—')
+                +'</td>'
+                +'<td style="padding:8px 12px;text-align:center;font-size:12px;font-weight:900;color:'+(isDone?'#16a34a':isLoading?'#f43f5e':'#cbd5e1')+';">'
+                    +(actualWt>0 ? actualWt.toLocaleString(undefined,{maximumFractionDigits:1}) : '—')
+                +'</td>'
+                +'<td style="padding:8px 12px;text-align:center;font-size:11px;color:#7c3aed;font-weight:700;">'+kgPcs+'</td>'
+                +'<td style="padding:8px 12px;text-align:center;">'+statusIcon+'</td>'
+            +'</tr>';
+        }).join('');
+
+        return '<div style="background:#fff;border-radius:16px;border:2px solid '+(anyLoading?'#fda4af':allDone?'#86efac':'#e2e8f0')+';overflow:hidden;margin-bottom:12px;">'
+            // truck header
+            +'<div style="background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+                +'<div style="display:flex;align-items:center;gap:10px;">'
+                    +'<div style="width:36px;height:36px;background:#334155;border-radius:10px;display:flex;align-items:center;justify-content:center;">'
+                        +'<i class="fas fa-truck" style="color:#94a3b8;font-size:14px;"></i>'
+                    +'</div>'
+                    +'<div>'
+                        +'<div style="font-size:18px;font-weight:900;color:#fff;font-family:monospace;">'+_ldEsc(o.truck_plate||'—')+'</div>'
+                        +'<div style="font-size:11px;color:#64748b;">'+_ldEsc(staffName)+' · เริ่ม '+startTime+'</div>'
+                    +'</div>'
+                +'</div>'
+                +'<div style="display:flex;align-items:center;gap:8px;">'
+                    +statusBadge
+                +'</div>'
+            +'</div>'
+            // item table
+            +'<div style="overflow-x:auto;">'
+            +'<table style="width:100%;border-collapse:collapse;min-width:400px;">'
+                +'<thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">'
+                    +'<th style="padding:8px 12px;font-size:9px;font-weight:900;color:#94a3b8;text-align:left;width:24px;">#</th>'
+                    +'<th style="padding:8px 12px;font-size:9px;font-weight:900;color:#94a3b8;text-align:left;">PRODUCT</th>'
+                    +'<th style="padding:8px 12px;font-size:9px;font-weight:900;color:#0369a1;text-align:center;">TARGET PCS</th>'
+                    +'<th style="padding:8px 12px;font-size:9px;font-weight:900;color:#0ea5e9;text-align:center;">ACTUAL PCS</th>'
+                    +'<th style="padding:8px 12px;font-size:9px;font-weight:900;color:#10b981;text-align:center;">ACTUAL KG</th>'
+                    +'<th style="padding:8px 12px;font-size:9px;font-weight:900;color:#7c3aed;text-align:center;">KG/PCS</th>'
+                    +'<th style="padding:8px 12px;font-size:9px;font-weight:900;color:#94a3b8;text-align:center;">STATUS</th>'
+                +'</tr></thead>'
+                +'<tbody>'+itemRows+'</tbody>'
+            +'</table>'
+            +'</div>'
+        +'</div>';
+    }).join('');
+
+    wrap.innerHTML = html || '<div class="text-center py-12 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
+}
 
 function _ldRenderMonKpi(rows) {
     var el = document.getElementById('ld-mon-kpi');
