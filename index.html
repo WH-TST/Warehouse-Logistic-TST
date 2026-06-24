@@ -7508,35 +7508,26 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     <button id="ld-tab-btn-monitor" onclick="ldSwitchTab('monitor')" class="ld-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-slate-200 bg-white text-slate-500 transition-all"><i class="fas fa-desktop mr-1.5"></i>WMS Monitor</button>
   </div>
 
-  <!-- ── TAB: บันทึกการโหลด (mobile form) ── -->
+  <!-- ── TAB: งานโหลด (card-based mobile) ── -->
   <div id="ld-tab-form" class="space-y-4">
 
-    <!-- Pending Orders from Loading Order tab -->
-    <div id="ld-pending-orders" class="space-y-2"></div>
+    <!-- hidden inputs for legacy JS compat -->
+    <input type="hidden" id="ld-date">
+    <select id="ld-plan-sel" class="hidden"><option value=""></option></select>
 
-    <!-- Header: plan selector + date -->
+    <!-- Top bar: วันนี้ + stats -->
+    <div class="flex items-center justify-between">
+      <div class="font-black text-slate-700 text-sm flex items-center gap-2">
+        <i class="fas fa-calendar-day text-emerald-500"></i>
+        <span id="ld-today-display">—</span>
+      </div>
+      <div id="ld-live-badge" class="px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5">
+        <span class="w-2 h-2 bg-emerald-500 rounded-full block animate-pulse"></span>Live
+      </div>
+    </div>
+
+    <!-- Global stats (วันนี้) -->
     <div class="grid grid-cols-2 gap-3">
-      <div>
-        <label class="block text-xs font-black text-slate-500 mb-1">วันที่</label>
-        <input type="date" id="ld-date" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" onchange="ldLoadPlans()">
-      </div>
-      <div>
-        <label class="block text-xs font-black text-slate-500 mb-1">แผนการส่ง</label>
-        <select id="ld-plan-sel" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" onchange="ldOnPlanChange()">
-          <option value="">-- เลือกแผน --</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Truck info bar -->
-    <div id="ld-truck-bar" class="hidden bg-slate-800 text-white rounded-2xl px-4 py-3 flex items-center gap-4 flex-wrap">
-      <div class="flex items-center gap-2 font-black text-lg"><i class="fas fa-truck text-emerald-400"></i><span id="ld-truck-plate">—</span></div>
-      <div class="text-slate-400 text-sm flex-1 min-w-0 truncate" id="ld-truck-shops">—</div>
-      <div class="text-xs font-bold text-emerald-300">เป้า <span id="ld-truck-target-wt">—</span> กก.</div>
-    </div>
-
-    <!-- Summary stats row -->
-    <div id="ld-stats-bar" class="hidden grid grid-cols-2 gap-3 sm:grid-cols-4">
       <div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-3 text-center">
         <div class="text-[10px] font-black text-emerald-500 uppercase tracking-wider mb-1">โหลดแล้ว (กก.)</div>
         <div id="ld-stat-total-wt" class="text-2xl font-black text-emerald-700 font-mono">0</div>
@@ -7545,92 +7536,13 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
         <div class="text-[10px] font-black text-sky-500 uppercase tracking-wider mb-1">โหลดแล้ว (เส้น)</div>
         <div id="ld-stat-total-pcs" class="text-2xl font-black text-sky-700 font-mono">0</div>
       </div>
-      <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3 text-center">
-        <div class="text-[10px] font-black text-amber-500 uppercase tracking-wider mb-1">รายการนี้ (กก.)</div>
-        <div id="ld-stat-cur-wt" class="text-2xl font-black text-amber-700 font-mono">0</div>
-      </div>
-      <div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3 text-center">
-        <div class="text-[10px] font-black text-purple-500 uppercase tracking-wider mb-1">เฉลี่ย/เส้น (กก.)</div>
-        <div id="ld-stat-avg-wt" class="text-2xl font-black text-purple-700 font-mono">—</div>
-      </div>
     </div>
 
-    <!-- Form card -->
-    <div id="ld-form-card" class="hidden bg-white rounded-2xl border-2 border-slate-200 shadow-sm overflow-hidden">
-      <div class="bg-slate-800 text-white px-4 py-3 flex items-center gap-2">
-        <i class="fas fa-clipboard-check text-emerald-400"></i>
-        <span class="font-black text-sm">บันทึกการโหลดสินค้า</span>
-      </div>
-      <div class="p-4 space-y-4">
-
-        <!-- Product selector -->
-        <div>
-          <label class="block text-xs font-black text-slate-500 mb-1">สินค้าที่โหลด</label>
-          <select id="ld-sku-sel" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" onchange="ldOnSkuChange()">
-            <option value="">-- เลือกสินค้า --</option>
-          </select>
-          <div id="ld-sku-info" class="hidden mt-2 text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2 font-mono"></div>
-        </div>
-
-        <!-- Staff list -->
-        <div>
-          <label class="block text-xs font-black text-slate-500 mb-1">รหัสพนักงาน (คั่นด้วยจุลภาค)</label>
-          <input type="text" id="ld-staff-ids" placeholder="เช่น 60037, 60059, 66017" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" oninput="ldLookupStaff()">
-          <div id="ld-staff-names" class="mt-1 text-xs text-slate-400 min-h-[20px]"></div>
-        </div>
-
-        <!-- Lifts grid -->
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-xs font-black text-slate-500">บันทึกต่อครั้ง (Lift)</label>
-            <button onclick="ldAddLift()" class="text-xs font-black px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition flex items-center gap-1"><i class="fas fa-plus"></i> เพิ่มครั้ง</button>
-          </div>
-          <div id="ld-lifts-container" class="space-y-2"></div>
-        </div>
-
-        <!-- Time -->
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-black text-slate-500 mb-1">เวลาเริ่ม</label>
-            <input type="time" id="ld-start-time" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-xs font-black text-slate-500 mb-1">เวลาเสร็จ</label>
-            <input type="time" id="ld-end-time" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none">
-          </div>
-        </div>
-
-        <!-- Photo -->
-        <div>
-          <label class="block text-xs font-black text-slate-500 mb-1">รูปถ่าย (ถ้ามี)</label>
-          <input type="file" id="ld-photo-input" accept="image/*" capture="environment" multiple class="hidden" onchange="ldHandlePhotos(this)">
-          <div onclick="document.getElementById('ld-photo-input').click()" class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition">
-            <i class="fas fa-camera text-2xl text-slate-400 mb-1 block"></i>
-            <span class="text-xs font-bold text-slate-400">แตะเพื่อถ่ายรูป / เลือกรูป</span>
-          </div>
-          <div id="ld-photo-previews" class="flex flex-wrap gap-2 mt-2"></div>
-        </div>
-
-        <!-- Note -->
-        <div>
-          <label class="block text-xs font-black text-slate-500 mb-1">หมายเหตุ</label>
-          <textarea id="ld-note" rows="2" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none resize-none" placeholder="(ถ้ามี)"></textarea>
-        </div>
-
-        <button onclick="ldSaveSession()" class="w-full py-3.5 bg-emerald-600 text-white font-black text-base rounded-2xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-lg">
-          <i class="fas fa-save"></i> บันทึกการโหลด
-        </button>
-      </div>
+    <!-- Order cards (realtime) -->
+    <div id="ld-order-cards" class="space-y-3">
+      <div class="text-center py-10 text-slate-400"><i class="fas fa-spinner fa-spin text-3xl mb-3 block"></i>กำลังโหลด...</div>
     </div>
 
-    <!-- Session history for this plan -->
-    <div id="ld-session-list" class="hidden space-y-2">
-      <div class="flex items-center justify-between">
-        <h3 class="text-sm font-black text-slate-700"><i class="fas fa-history text-slate-400 mr-1.5"></i>รายการที่บันทึกแล้ว</h3>
-        <button onclick="ldPrintSummary()" class="text-xs font-bold px-3 py-1.5 border border-slate-300 rounded-lg text-slate-500 hover:bg-slate-100 transition"><i class="fas fa-print mr-1"></i>พิมพ์</button>
-      </div>
-      <div id="ld-session-rows"></div>
-    </div>
   </div>
 
   <!-- ── TAB: WMS Monitor ── -->
@@ -23432,90 +23344,365 @@ var _ldSessions    = [];    // sessions loaded for current plan
 var _ldMonSub      = null;  // realtime subscription
 var _ldLiftCount   = 0;
 
+// _ldActiveOrderId: order ที่กำลัง expand อยู่
+var _ldActiveOrderId = null;
+var _ldOrderSub = null;
+
 window.ldInit = function() {
+    var today = new Date().toISOString().slice(0,10);
     var d = document.getElementById('ld-date');
     var dm = document.getElementById('ld-mon-date');
-    var today = new Date().toISOString().slice(0,10);
-    if (d && !d.value) { d.value = today; ldLoadPlans(); }
-    if (dm && !dm.value) { dm.value = today; }
+    if (d) d.value = today;
+    if (dm && !dm.value) dm.value = today;
+    // แสดงวันที่ในรูปแบบไทย
+    var dispEl = document.getElementById('ld-today-display');
+    if (dispEl) dispEl.textContent = new Date().toLocaleDateString('th-TH', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
     _ldLoadStaffMaster();
-    if (!document.getElementById('ld-lifts-container').children.length) ldAddLift();
-    // โหลด pending orders + subscribe realtime
-    _ldLoadPendingOrders();
+    _ldLoadOrderCards(today);
     _ldSubOrders();
+    _ldRefreshGlobalStats(today);
 };
 
-async function _ldLoadPendingOrders() {
-    var dateVal = document.getElementById('ld-date')?.value || new Date().toISOString().slice(0,10);
-    var wrap = document.getElementById('ld-pending-orders');
+// ── โหลด+แสดง Order Cards ──
+async function _ldLoadOrderCards(dateVal) {
+    var wrap = document.getElementById('ld-order-cards');
     if (!wrap) return;
     try {
         var {data} = await window._sb.from('loading_orders').select('*')
-            .eq('order_date', dateVal).in('status', ['pending','in_progress']).order('created_at');
-        var orders = data || [];
-        if (!orders.length) { wrap.innerHTML = ''; return; }
-        var html = '<div class="bg-indigo-50 border-2 border-indigo-200 rounded-2xl overflow-hidden">'
-            + '<div class="bg-indigo-700 text-white px-4 py-2 flex items-center gap-2 text-sm font-black">'
-            + '<span class="w-2 h-2 bg-amber-400 rounded-full block animate-pulse"></span>'
-            + 'Loading Orders รอดำเนินการ ('+orders.length+')'
-            + '</div>';
-        orders.forEach(function(o) {
-            var items = o.items || [];
-            var totalWt = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
-            var stBadge = o.status==='in_progress'
-                ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-700 border border-sky-300">กำลังโหลด</span>'
-                : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">รอโหลด</span>';
-            html += '<div class="px-4 py-3 border-t border-indigo-100 cursor-pointer hover:bg-indigo-100 transition" onclick="ldFillFromOrder(\''+o.id+'\')">'
-                + '<div class="flex items-center justify-between flex-wrap gap-1">'
-                + '<div class="font-black text-sm text-slate-800"><i class="fas fa-truck text-indigo-400 mr-1.5"></i>'+(o.truck_plate||'—')+'</div>'
-                + '<div class="flex items-center gap-2">'+stBadge+'<span class="text-xs text-slate-400 font-mono">'+items.length+' รายการ / '+totalWt.toLocaleString()+' กก.</span></div>'
-                + '</div>'
-                + '<div class="mt-1 text-xs text-slate-500">'
-                + items.map(function(it){ return '<span class="inline-block mr-2 font-bold text-slate-600">'+it.sku+'</span><span class="text-slate-400">'+it.qty+' เส้น</span>'; }).join(' · ')
-                + '</div>'
-                + '<div class="mt-1.5 text-[10px] text-indigo-500 font-bold"><i class="fas fa-hand-pointer mr-1"></i>แตะเพื่อเลือกแผนนี้</div>'
-                + '</div>';
-        });
-        html += '</div>';
-        wrap.innerHTML = html;
-    } catch(e) { wrap.innerHTML = ''; }
+            .eq('order_date', dateVal).in('status',['pending','in_progress']).order('created_at');
+        _ldRenderCards(data||[]);
+    } catch(e) {
+        wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">โหลดไม่สำเร็จ: '+(e?.message||'')+'</div>';
+    }
 }
 
-var _ldOrderSub = null;
-function _ldSubOrders() {
-    if (_ldOrderSub) { try { _ldOrderSub.unsubscribe(); } catch(e) {} }
-    _ldOrderSub = window._sb.channel('ld-orders-watch')
-        .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'}, function(){
-            _ldLoadPendingOrders();
-        }).subscribe();
+function _ldRenderCards(orders) {
+    var wrap = document.getElementById('ld-order-cards');
+    if (!wrap) return;
+    if (!orders.length) {
+        wrap.innerHTML = '<div class="text-center py-16 text-slate-300"><i class="fas fa-inbox text-5xl mb-3 block"></i><p class="font-bold text-slate-400 text-sm">ไม่มีงานโหลดสำหรับวันนี้</p><p class="text-xs text-slate-300 mt-1">รอ Loading Order จากเจ้าหน้าที่จัดส่ง</p></div>';
+        return;
+    }
+    wrap.innerHTML = orders.map(function(o) {
+        var items = o.items||[];
+        var totalWt  = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
+        var totalQty = items.reduce(function(a,i){ return a+(parseFloat(i.qty)||0); },0);
+        var isActive = _ldActiveOrderId === o.id;
+        var stColor  = o.status==='in_progress' ? 'border-sky-400' : 'border-amber-400';
+        var stBadge  = o.status==='in_progress'
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-700 border border-sky-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse block"></span>กำลังโหลด</span>'
+            : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">รอโหลด</span>';
+        var itemList = items.map(function(it,idx){
+            return '<tr class="border-t border-slate-100">'
+                +'<td class="px-3 py-2 text-xs font-black text-slate-500">'+(idx+1)+'</td>'
+                +'<td class="px-3 py-2 text-xs font-mono font-bold text-slate-700">'+_ldEsc(it.sku||'')+'</td>'
+                +'<td class="px-3 py-2 text-xs text-slate-600">'+_ldEsc(it.product_name||'')+'</td>'
+                +'<td class="px-3 py-2 text-xs text-right font-black text-sky-700">'+Number(it.qty||0).toLocaleString()+'</td>'
+                +'<td class="px-3 py-2 text-xs text-right font-black text-emerald-700">'+Number(it.target_weight||0).toLocaleString()+'</td>'
+                +'<td class="px-3 py-2 text-xs text-right text-slate-400">'+(it.qty&&it.target_weight?(it.target_weight/it.qty).toFixed(2):'—')+'</td>'
+            +'</tr>';
+        }).join('');
+
+        var formHtml = isActive ? _ldBuildForm(o) : '';
+
+        return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 '+stColor+' shadow-sm overflow-hidden transition-all">'
+            // Card header — กดเพื่อ expand
+            +'<div onclick="ldToggleCard(\''+o.id+'\')" class="px-4 py-3 flex items-center justify-between cursor-pointer select-none active:bg-slate-50">'
+                +'<div class="flex items-center gap-3">'
+                    +'<div class="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
+                    +'<div>'
+                        +'<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'</div>'
+                        +'<div class="text-xs text-slate-400">'+totalQty.toLocaleString()+' เส้น / '+totalWt.toLocaleString()+' กก.</div>'
+                    +'</div>'
+                +'</div>'
+                +'<div class="flex items-center gap-2">'+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
+            +'</div>'
+            // Product table
+            +'<div class="px-4 pb-3 overflow-x-auto">'
+                +'<table class="w-full text-xs">'
+                    +'<thead><tr class="text-[10px] font-black text-slate-400 uppercase">'
+                        +'<th class="px-3 py-1 text-left w-7">#</th>'
+                        +'<th class="px-3 py-1 text-left">SKU</th>'
+                        +'<th class="px-3 py-1 text-left">สินค้า</th>'
+                        +'<th class="px-3 py-1 text-right">จำนวน</th>'
+                        +'<th class="px-3 py-1 text-right">เป้า กก.</th>'
+                        +'<th class="px-3 py-1 text-right">กก./เส้น</th>'
+                    +'</tr></thead>'
+                    +'<tbody>'+itemList+'</tbody>'
+                +'</table>'
+            +'</div>'
+            // Form section (show when active)
+            +'<div id="ld-form-'+o.id+'" class="'+(isActive?'':'hidden')+' border-t-2 border-dashed border-emerald-200">'
+                +formHtml
+            +'</div>'
+        +'</div>';
+    }).join('');
 }
 
-window.ldFillFromOrder = async function(orderId) {
-    var {data} = await window._sb.from('loading_orders').select('*').eq('id', orderId).maybeSingle();
-    if (!data) return;
-    // ตั้งวันที่
-    var dateEl = document.getElementById('ld-date');
-    if (dateEl && data.order_date) { dateEl.value = data.order_date; await ldLoadPlans(); }
-    // หาแผนที่ตรงกับ plan_id หรือ truck_plate แล้ว select
-    var planSel = document.getElementById('ld-plan-sel');
-    if (planSel && data.plan_id) {
-        Array.from(planSel.options).forEach(function(opt){ if (opt.value===data.plan_id) planSel.value=data.plan_id; });
-        ldOnPlanChange();
+function _ldBuildForm(order) {
+    var items = order.items||[];
+    var oid = order.id;
+    // lift table rows per item
+    var itemInputRows = items.map(function(it,idx){
+        return '<tr class="border-t border-slate-100">'
+            +'<td class="px-3 py-2.5 text-xs font-mono font-bold text-slate-700">'+_ldEsc(it.sku||'')+'</td>'
+            +'<td class="px-3 py-2.5 text-xs text-slate-500">'+_ldEsc(it.product_name||'')+'</td>'
+            +'<td class="px-3 py-2.5 text-xs text-right text-slate-400">'+(it.qty||0)+'</td>'
+            +'<td class="px-3 py-2.5"><input type="number" id="ldf-qty-'+oid+'-'+idx+'" min="0" step="1" placeholder="0" class="w-20 border-2 border-sky-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-sky-500" oninput="ldCardStats(\''+oid+'\')"></td>'
+            +'<td class="px-3 py-2.5"><input type="number" id="ldf-wt-'+oid+'-'+idx+'" min="0" step="0.01" placeholder="0.00" class="w-24 border-2 border-emerald-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-emerald-500" oninput="ldCardStats(\''+oid+'\')"></td>'
+            +'<td class="px-3 py-2.5 text-xs text-right font-black text-purple-600" id="ldf-avg-'+oid+'-'+idx+'">—</td>'
+        +'</tr>';
+    }).join('');
+
+    return '<div class="p-4 space-y-4 bg-emerald-50">'
+        // live stats
+        +'<div class="grid grid-cols-3 gap-2">'
+            +'<div class="bg-white rounded-xl p-2.5 text-center border border-emerald-200">'
+                +'<div class="text-[10px] font-black text-emerald-500 mb-1">น.น.รวม (กก.)</div>'
+                +'<div id="ldf-total-wt-'+oid+'" class="text-xl font-black text-emerald-700 font-mono">0</div>'
+            +'</div>'
+            +'<div class="bg-white rounded-xl p-2.5 text-center border border-sky-200">'
+                +'<div class="text-[10px] font-black text-sky-500 mb-1">จำนวน (เส้น)</div>'
+                +'<div id="ldf-total-qty-'+oid+'" class="text-xl font-black text-sky-700 font-mono">0</div>'
+            +'</div>'
+            +'<div class="bg-white rounded-xl p-2.5 text-center border border-purple-200">'
+                +'<div class="text-[10px] font-black text-purple-500 mb-1">เฉลี่ย กก./เส้น</div>'
+                +'<div id="ldf-avg-all-'+oid+'" class="text-xl font-black text-purple-700 font-mono">—</div>'
+            +'</div>'
+        +'</div>'
+        // item input table
+        +'<div class="bg-white rounded-xl overflow-hidden border border-slate-200">'
+            +'<table class="w-full text-xs">'
+                +'<thead><tr class="bg-slate-100 text-[10px] font-black text-slate-500 uppercase">'
+                    +'<th class="px-3 py-2 text-left">SKU</th>'
+                    +'<th class="px-3 py-2 text-left">สินค้า</th>'
+                    +'<th class="px-3 py-2 text-right">เป้า</th>'
+                    +'<th class="px-3 py-2 text-right text-sky-600">จำนวนจริง</th>'
+                    +'<th class="px-3 py-2 text-right text-emerald-600">น.น.จริง กก.</th>'
+                    +'<th class="px-3 py-2 text-right text-purple-600">กก./เส้น</th>'
+                +'</tr></thead>'
+                +'<tbody>'+itemInputRows+'</tbody>'
+            +'</table>'
+        +'</div>'
+        // staff + time
+        +'<div>'
+            +'<label class="block text-xs font-black text-slate-500 mb-1">รหัสพนักงาน (คั่นด้วยจุลภาค)</label>'
+            +'<input type="text" id="ldf-staff-'+oid+'" placeholder="เช่น 60037, 60059" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-emerald-400 focus:outline-none" oninput="ldCardLookupStaff(\''+oid+'\')">'
+            +'<div id="ldf-staff-names-'+oid+'" class="mt-1 text-xs text-slate-400 min-h-[16px]"></div>'
+        +'</div>'
+        +'<div class="grid grid-cols-2 gap-3">'
+            +'<div><label class="block text-xs font-black text-slate-500 mb-1">เวลาเริ่ม</label>'
+            +'<input type="time" id="ldf-start-'+oid+'" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-emerald-400"></div>'
+            +'<div><label class="block text-xs font-black text-slate-500 mb-1">เวลาเสร็จ</label>'
+            +'<input type="time" id="ldf-end-'+oid+'" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-emerald-400"></div>'
+        +'</div>'
+        // photo
+        +'<div>'
+            +'<label class="block text-xs font-black text-slate-500 mb-1">รูปถ่าย</label>'
+            +'<input type="file" id="ldf-photo-input-'+oid+'" accept="image/*" capture="environment" multiple class="hidden" onchange="ldCardHandlePhotos(this,\''+oid+'\')">'
+            +'<div onclick="document.getElementById(\'ldf-photo-input-'+oid+'\').click()" class="border-2 border-dashed border-slate-300 rounded-xl p-3 text-center cursor-pointer hover:border-emerald-400 hover:bg-white transition">'
+                +'<i class="fas fa-camera text-xl text-slate-400 mb-1 block"></i>'
+                +'<span class="text-xs font-bold text-slate-400">แตะเพื่อถ่ายรูป</span>'
+            +'</div>'
+            +'<div id="ldf-photo-prev-'+oid+'" class="flex flex-wrap gap-2 mt-2"></div>'
+        +'</div>'
+        // note + save
+        +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="หมายเหตุ (ถ้ามี)" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-emerald-400 resize-none"></textarea>'
+        +'<button onclick="ldCardSave(\''+oid+'\')" class="w-full py-3.5 bg-emerald-600 text-white font-black text-base rounded-2xl hover:bg-emerald-700 active:bg-emerald-800 transition flex items-center justify-center gap-2 shadow-lg">'
+            +'<i class="fas fa-save"></i> บันทึกการโหลด'
+        +'</button>'
+    +'</div>';
+}
+
+window.ldToggleCard = function(orderId) {
+    var isOpen = _ldActiveOrderId === orderId;
+    _ldActiveOrderId = isOpen ? null : orderId;
+    var today = new Date().toISOString().slice(0,10);
+    _ldLoadOrderCards(today);
+    if (!isOpen) {
+        // mark in_progress
+        window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
+        // pre-fill เวลาเริ่ม
+        setTimeout(function(){
+            var t = new Date().toTimeString().slice(0,5);
+            var el = document.getElementById('ldf-start-'+orderId);
+            if (el && !el.value) el.value = t;
+        }, 200);
     }
-    // populate sku จาก order items ถ้า sku selector ว่าง
-    if (data.items && data.items.length) {
-        var skuSel = document.getElementById('ld-sku-sel');
-        if (skuSel && (!skuSel.value) && data.items[0]?.sku) {
-            Array.from(skuSel.options).forEach(function(opt){ if (opt.value===data.items[0].sku) skuSel.value=data.items[0].sku; });
-            ldOnSkuChange();
-        }
-    }
-    // mark in_progress
-    if (data.status==='pending') {
-        await window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id', orderId);
-    }
-    showToast('📋 โหลด Order: '+( data.truck_plate||'')+' เรียบร้อย');
 };
+
+window.ldCardStats = function(oid) {
+    var order = null;
+    // find order from DOM
+    var card = document.getElementById('ld-card-'+oid);
+    if (!card) return;
+    var totalQty = 0, totalWt = 0, idx = 0;
+    while (true) {
+        var qEl = document.getElementById('ldf-qty-'+oid+'-'+idx);
+        var wEl = document.getElementById('ldf-wt-'+oid+'-'+idx);
+        if (!qEl) break;
+        var q = parseFloat(qEl.value)||0;
+        var w = parseFloat(wEl.value)||0;
+        totalQty += q; totalWt += w;
+        var avgEl = document.getElementById('ldf-avg-'+oid+'-'+idx);
+        if (avgEl) avgEl.textContent = (q>0 ? (w/q).toFixed(2) : '—');
+        idx++;
+    }
+    var setEl = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+    setEl('ldf-total-wt-'+oid, totalWt.toLocaleString(undefined,{maximumFractionDigits:2}));
+    setEl('ldf-total-qty-'+oid, totalQty.toLocaleString());
+    setEl('ldf-avg-all-'+oid, totalQty>0 ? (totalWt/totalQty).toFixed(2) : '—');
+};
+
+window.ldCardLookupStaff = function(oid) {
+    var raw = document.getElementById('ldf-staff-'+oid)?.value||'';
+    var ids = raw.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    var names = ids.map(function(id){
+        var s = _ldStaffMaster.find(function(x){ return x.id===id||x.name===id; });
+        return s ? '<span class="text-emerald-600 font-black">'+s.name+'</span> ['+s.team+']' : '<span class="text-rose-400">'+id+' (?)</span>';
+    });
+    var el = document.getElementById('ldf-staff-names-'+oid);
+    if (el) el.innerHTML = names.join(' · ');
+};
+
+var _ldCardPhotos = {};  // {orderId: [File, ...]}
+window.ldCardHandlePhotos = function(inp, oid) {
+    if (!_ldCardPhotos[oid]) _ldCardPhotos[oid] = [];
+    _ldCardPhotos[oid] = _ldCardPhotos[oid].concat(Array.from(inp.files||[]));
+    var prev = document.getElementById('ldf-photo-prev-'+oid);
+    if (!prev) return;
+    prev.innerHTML = '';
+    _ldCardPhotos[oid].forEach(function(f, i){
+        var url = URL.createObjectURL(f);
+        var div = document.createElement('div');
+        div.className = 'relative w-16 h-16';
+        div.innerHTML = '<img src="'+url+'" class="w-16 h-16 object-cover rounded-xl border-2 border-slate-200">'
+            +'<button onclick="ldCardRemovePhoto(\''+oid+'\','+i+')" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center"><i class="fas fa-times"></i></button>';
+        prev.appendChild(div);
+    });
+};
+
+window.ldCardRemovePhoto = function(oid, i) {
+    if (_ldCardPhotos[oid]) _ldCardPhotos[oid].splice(i,1);
+    var prev = document.getElementById('ldf-photo-prev-'+oid);
+    if (!prev) return;
+    prev.innerHTML = '';
+    (_ldCardPhotos[oid]||[]).forEach(function(f,idx){
+        var url = URL.createObjectURL(f);
+        var div = document.createElement('div');
+        div.className = 'relative w-16 h-16';
+        div.innerHTML = '<img src="'+url+'" class="w-16 h-16 object-cover rounded-xl border-2 border-slate-200">'
+            +'<button onclick="ldCardRemovePhoto(\''+oid+'\','+idx+')" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center"><i class="fas fa-times"></i></button>';
+        prev.appendChild(div);
+    });
+};
+
+window.ldCardSave = async function(oid) {
+    var today = new Date().toISOString().slice(0,10);
+    // collect items
+    var items = [];
+    var idx2 = 0;
+    while (true) {
+        var qEl = document.getElementById('ldf-qty-'+oid+'-'+idx2);
+        var wEl = document.getElementById('ldf-wt-'+oid+'-'+idx2);
+        if (!qEl) break;
+        items.push({qty: parseFloat(qEl.value)||0, weight: parseFloat(wEl.value)||0});
+        idx2++;
+    }
+    var hasData = items.some(function(it){ return it.qty>0||it.weight>0; });
+    if (!hasData) { showToast('กรุณากรอกข้อมูลอย่างน้อย 1 รายการ', true); return; }
+
+    // get order for sku/product_name
+    var {data: orderData} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
+    var orderItems = orderData?.items||[];
+    var planId     = orderData?.plan_id||'';
+    var planDate   = orderData?.order_date||today;
+    var truckPlate = orderData?.truck_plate||'';
+
+    // staff
+    var raw = document.getElementById('ldf-staff-'+oid)?.value||'';
+    var staffIds = raw.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    var staffList = staffIds.length>0 ? staffIds.map(function(id){
+        var s = _ldStaffMaster.find(function(x){ return x.id===id||x.name===id; });
+        return s||{id:id, name:id, team:''};
+    }) : [{id:'',name:'',team:''}];
+
+    var startRaw = document.getElementById('ldf-start-'+oid)?.value||'';
+    var endRaw   = document.getElementById('ldf-end-'+oid)?.value||'';
+    var note     = document.getElementById('ldf-note-'+oid)?.value||'';
+
+    // upload photos
+    var photoUrls = [];
+    for (var pi=0; pi<(_ldCardPhotos[oid]||[]).length; pi++) {
+        try {
+            var f = _ldCardPhotos[oid][pi];
+            var ext = (f.name||'photo.jpg').split('.').pop()||'jpg';
+            var path = 'loading/'+oid+'/'+Date.now()+'_'+pi+'.'+ext;
+            var {error:ue} = await window._sb.storage.from('delivery-photos').upload(path,f,{contentType:f.type||'image/jpeg',upsert:true});
+            if (!ue) { var {data:ud}=window._sb.storage.from('delivery-photos').getPublicUrl(path); photoUrls.push(ud.publicUrl); }
+        } catch(pe){}
+    }
+
+    // build rows: one per staff, one per item with data
+    var rows = [];
+    items.forEach(function(it, iIdx){
+        if (!it.qty && !it.weight) return;
+        var oi = orderItems[iIdx]||{};
+        staffList.forEach(function(s){
+            rows.push({
+                order_id: oid, plan_id: planId, plan_date: planDate,
+                record_type: 'บันทึกการโหลด',
+                staff_id: s.id, staff_name: s.name, team: s.team,
+                sku: oi.sku||'', product_name: oi.product_name||'',
+                qty: it.qty, weight: it.weight,
+                lift_count: 1, lifts: [{lift_no:1, qty:it.qty, weight:it.weight}],
+                start_time: startRaw ? planDate+'T'+startRaw+':00' : null,
+                end_time:   endRaw   ? planDate+'T'+endRaw+':00'   : null,
+                note: note, photo_urls: photoUrls,
+            });
+        });
+    });
+
+    try {
+        var {error} = await window._sb.from('loading_sessions').insert(rows);
+        if (error) throw error;
+        // mark order done if all items have data
+        var allFilled = items.every(function(it){ return it.qty>0||it.weight>0; });
+        if (allFilled) {
+            await window._sb.from('loading_orders').update({status:'done', updated_at:new Date().toISOString()}).eq('id',oid);
+        }
+        showToast('✅ บันทึกการโหลดสำเร็จ');
+        _ldActiveOrderId = null;
+        delete _ldCardPhotos[oid];
+        _ldLoadOrderCards(today);
+        _ldRefreshGlobalStats(today);
+    } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
+};
+
+async function _ldRefreshGlobalStats(dateVal) {
+    try {
+        var {data} = await window._sb.from('loading_sessions').select('qty,weight').eq('plan_date', dateVal);
+        var totalWt=0, totalPcs=0;
+        (data||[]).forEach(function(r){ totalWt+=(parseFloat(r.weight)||0); totalPcs+=(parseFloat(r.qty)||0); });
+        var setEl=function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+        setEl('ld-stat-total-wt', totalWt.toLocaleString(undefined,{maximumFractionDigits:0}));
+        setEl('ld-stat-total-pcs', totalPcs.toLocaleString());
+    } catch(e){}
+}
+
+function _ldSubOrders() {
+    if (_ldOrderSub) { try { _ldOrderSub.unsubscribe(); } catch(e){} }
+    _ldOrderSub = window._sb.channel('ld-orders-watch-v2')
+        .on('postgres_changes',{event:'*',schema:'public',table:'loading_orders'}, function(){
+            var today = new Date().toISOString().slice(0,10);
+            _ldLoadOrderCards(today);
+        })
+        .on('postgres_changes',{event:'*',schema:'public',table:'loading_sessions'}, function(){
+            var today = new Date().toISOString().slice(0,10);
+            _ldRefreshGlobalStats(today);
+        })
+        .subscribe();
+}
 
 window.ldSwitchTab = function(tab) {
     ['form','monitor'].forEach(function(t){
@@ -23984,8 +24171,8 @@ var _loPlansCache= [];     // แผนของวันนั้น (cache ไ
 window.loInit = function() {
     var d = document.getElementById('lo-date');
     var today = new Date().toISOString().slice(0,10);
-    if (d && !d.value) d.value = today;
-    loRefresh();
+    if (d) d.value = today;          // เซ็ตวันนี้เสมอ
+    _loLoadOrders(today);             // โหลดตรง ไม่รอ loRefresh
     _loSubscribe();
 };
 
