@@ -24002,15 +24002,12 @@ function _ldRequestNotifPermission() {
 }
 
 function _ldNotifyNewOrder(order) {
-    // In-app toast always
-    _ldShowToast('🚛 งานโหลดใหม่! ' + (order.truck_plate||'') + ' — กรุณาตรวจสอบ');
-
-    // Browser push if permitted and page is background/hidden
+    _ldShowOrderNotif(order);
     if (Notification.permission === 'granted') {
         try {
-            var n = new Notification('WMS — งานโหลดใหม่', {
-                body: 'รถ ' + (order.truck_plate||'—') + ' รอการโหลด',
-                icon: '/favicon.ico',
+            var items = order.items||[];
+            var n = new Notification('🚛 งานโหลดใหม่เข้ามา!', {
+                body: 'รถ ' + (order.truck_plate||'—') + '  ·  ' + items.length + ' รายการสินค้า',
                 tag: 'ld-order-' + order.id,
                 renotify: true
             });
@@ -24019,12 +24016,111 @@ function _ldNotifyNewOrder(order) {
     }
 }
 
+function _ldShowOrderNotif(order) {
+    var existing = document.getElementById('ld-order-notif');
+    if (existing) existing.remove();
+
+    var items = order.items||[];
+    var totalQty = items.reduce(function(a,i){ return a+(Number(i.qty)||0); }, 0);
+    var totalWt  = items.reduce(function(a,i){ return a+(Number(i.target_weight||i.weight)||0); }, 0);
+    var itemsPreview = items.slice(0,3).map(function(i){
+        var n = (i.product_name||i.sku||'').replace(/[฀-๿]+/g,'').trim();
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.07);">'
+            +'<span style="font-size:11px;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+n+'</span>'
+            +'<span style="font-size:11px;font-weight:900;color:#38bdf8;margin-left:8px;flex-shrink:0;">'+Number(i.qty||0)+' PCS</span>'
+        +'</div>';
+    }).join('');
+    if (items.length > 3) {
+        itemsPreview += '<div style="font-size:10px;color:#475569;padding-top:4px;">+ อีก '+(items.length-3)+' รายการ...</div>';
+    }
+
+    var card = document.createElement('div');
+    card.id = 'ld-order-notif';
+    card.style.cssText = [
+        'position:fixed;top:20px;right:20px;z-index:99999;width:320px;max-width:calc(100vw - 40px);',
+        'background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);',
+        'border-radius:20px;border:1px solid rgba(99,102,241,.4);',
+        'box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(99,102,241,.15);',
+        'overflow:hidden;transform:translateX(calc(100% + 30px));opacity:0;',
+        'transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .4s ease;',
+    ].join('');
+
+    card.innerHTML = [
+        // ── pulse bar top ──
+        '<div style="height:3px;background:linear-gradient(90deg,#6366f1,#8b5cf6,#06b6d4);background-size:200%;animation:ldNotifBar 2s linear infinite;"></div>',
+        // ── header ──
+        '<div style="padding:14px 16px 10px;display:flex;align-items:flex-start;gap:12px;">',
+            '<div style="width:44px;height:44px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(99,102,241,.4);">',
+                '<i class="fas fa-truck" style="color:#fff;font-size:18px;"></i>',
+            '</div>',
+            '<div style="flex:1;min-width:0;">',
+                '<div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">งานโหลดใหม่เข้ามา</div>',
+                '<div style="font-size:22px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;line-height:1;">'+_ldEsc(order.truck_plate||'—')+'</div>',
+                '<div style="font-size:11px;color:#64748b;margin-top:3px;">'+items.length+' รายการ &nbsp;·&nbsp; '+totalQty.toLocaleString()+' PCS &nbsp;·&nbsp; '+totalWt.toLocaleString()+' KG</div>',
+            '</div>',
+            '<button onclick="document.getElementById(\'ld-order-notif\').remove()" style="background:none;border:none;color:#475569;font-size:16px;cursor:pointer;padding:2px;line-height:1;flex-shrink:0;">✕</button>',
+        '</div>',
+        // ── items preview ──
+        items.length ? '<div style="padding:0 16px 10px;">'+itemsPreview+'</div>' : '',
+        // ── action bar ──
+        '<div style="padding:10px 16px 14px;display:flex;gap:8px;">',
+            '<button onclick="_ldDismissNotif()" style="flex:1;padding:9px;border-radius:10px;border:1px solid #334155;background:transparent;color:#64748b;font-size:12px;font-weight:700;cursor:pointer;">ปิด</button>',
+            '<button onclick="_ldGoToLoading();_ldDismissNotif();" style="flex:2;padding:9px;border-radius:10px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.4);">',
+                '<i class="fas fa-arrow-right" style="margin-right:5px;"></i>ดูงานโหลด',
+            '</button>',
+        '</div>',
+        // ── countdown bar ──
+        '<div id="ld-notif-bar" style="height:3px;background:#6366f1;transform-origin:left;transition:transform 8s linear;"></div>',
+    ].join('');
+
+    document.body.appendChild(card);
+
+    // slide in
+    requestAnimationFrame(function(){
+        requestAnimationFrame(function(){
+            card.style.transform = 'translateX(0)';
+            card.style.opacity = '1';
+            var bar = document.getElementById('ld-notif-bar');
+            if (bar) { requestAnimationFrame(function(){ bar.style.transform = 'scaleX(0)'; }); }
+        });
+    });
+
+    // auto dismiss after 8s
+    card._timer = setTimeout(function(){ _ldDismissNotif(); }, 8000);
+
+    // inject keyframe once
+    if (!document.getElementById('ld-notif-style')) {
+        var st = document.createElement('style');
+        st.id = 'ld-notif-style';
+        st.textContent = '@keyframes ldNotifBar{0%{background-position:0%}100%{background-position:200%}}';
+        document.head.appendChild(st);
+    }
+}
+
+window._ldDismissNotif = function() {
+    var card = document.getElementById('ld-order-notif');
+    if (!card) return;
+    clearTimeout(card._timer);
+    card.style.transform = 'translateX(calc(100% + 30px))';
+    card.style.opacity = '0';
+    setTimeout(function(){ if (card.parentNode) card.remove(); }, 400);
+};
+
+window._ldGoToLoading = function() {
+    // navigate to Loading tab
+    if (typeof window.switchView === 'function') window.switchView('loading');
+    else if (window._whMode) {
+        var wrap = document.getElementById('wh-order-cards');
+        if (wrap) wrap.scrollIntoView({behavior:'smooth'});
+    }
+};
+
 function _ldShowToast(msg) {
     var t = document.getElementById('ld-toast');
     if (!t) {
         t = document.createElement('div');
         t.id = 'ld-toast';
-        t.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);background:#0f172a;color:#fff;padding:14px 22px;border-radius:16px;font-size:14px;font-weight:700;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.4);opacity:0;transition:all 0.3s ease;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;border-left:4px solid #10b981;';
+        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#0f172a;color:#fff;padding:12px 20px;border-radius:14px;font-size:13px;font-weight:700;z-index:9998;box-shadow:0 8px 32px rgba(0,0,0,.4);opacity:0;transition:all 0.3s ease;pointer-events:none;border-left:4px solid #10b981;';
         document.body.appendChild(t);
     }
     t.textContent = msg;
@@ -24033,8 +24129,8 @@ function _ldShowToast(msg) {
     clearTimeout(t._timer);
     t._timer = setTimeout(function(){
         t.style.opacity = '0';
-        t.style.transform = 'translateX(-50%) translateY(-20px)';
-    }, 4000);
+        t.style.transform = 'translateX(-50%) translateY(20px)';
+    }, 3500);
 }
 
 var _ldPollTimer = null;
