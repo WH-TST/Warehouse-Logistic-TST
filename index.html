@@ -23456,6 +23456,10 @@ function _ldRenderCards(orders) {
             +(isActive ? '<div class="border-t-2 border-dashed border-emerald-200">'+formHtml+'</div>' : '')
         +'</div>';
     }).join('');
+    // After re-render (realtime refresh), restore form values for the active card
+    if (_ldActiveOrderId) {
+        setTimeout(function(){ _ldDraftLoad(_ldActiveOrderId); }, 80);
+    }
 }
 
 var _LFT_COLS = 7; // lift columns per row
@@ -23586,6 +23590,7 @@ var _ldCardStartTimes = {};
 var _ldDraftTimers    = {};   // debounce timers per order
 var _ldDraftRowIds    = {};   // {oid: {itemIdx: uuid}} — draft row IDs in DB
 var _ldDraftOrderCache= {};   // {oid: orderData} — cached order for draft upsert
+var _ldDraftDBCache   = {};   // {oid: {iIdx: lifts[]}} — lifts from Supabase for cross-device restore
 
 // ── called on every input; debounce 1.5s then upsert to DB ──
 window.ldDraftSave = function(oid) {
@@ -23695,22 +23700,39 @@ async function _ldUpsertDraft(oid) {
 }
 
 function _ldDraftLoad(oid) {
+    var usedLocal = false;
     try {
         var raw = localStorage.getItem('ld_draft_'+oid);
-        if (!raw) return;
-        var draft = JSON.parse(raw);
-        (draft.lifts||[]).forEach(function(itemLifts, iIdx) {
-            itemLifts.forEach(function(cell, c) {
+        if (raw) {
+            var draft = JSON.parse(raw);
+            (draft.lifts||[]).forEach(function(itemLifts, iIdx) {
+                itemLifts.forEach(function(cell, c) {
+                    var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
+                    var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                    if (wEl && cell.w) wEl.value = cell.w;
+                    if (qEl && cell.q) qEl.value = cell.q;
+                });
+            });
+            var noteEl = document.getElementById('ldf-note-'+oid);
+            if (noteEl && draft.note) noteEl.value = draft.note;
+            usedLocal = true;
+        }
+    } catch(e){}
+    // Cross-device fallback: restore from Supabase lifts when localStorage is empty
+    if (!usedLocal && _ldDraftDBCache[oid]) {
+        Object.keys(_ldDraftDBCache[oid]).forEach(function(iIdxStr) {
+            var iIdx = parseInt(iIdxStr, 10);
+            var lifts = _ldDraftDBCache[oid][iIdxStr] || [];
+            lifts.forEach(function(cell) {
+                var c = (cell.lift_no || 1) - 1;
                 var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
                 var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
-                if (wEl && cell.w) wEl.value = cell.w;
-                if (qEl && cell.q) qEl.value = cell.q;
+                if (wEl && cell.weight) wEl.value = cell.weight;
+                if (qEl && cell.qty) qEl.value = cell.qty;
             });
         });
-        var noteEl = document.getElementById('ldf-note-'+oid);
-        if (noteEl && draft.note) noteEl.value = draft.note;
-        ldCardStats(oid);
-    } catch(e){}
+    }
+    ldCardStats(oid);
 }
 
 function _ldDraftClear(oid) {
@@ -23745,9 +23767,9 @@ async function _ldRestoreDraftIds(oid) {
         if (!od) return;
         var orderItems = od.items||[];
 
-        // Fetch all draft rows for this order
+        // Fetch all draft rows for this order (include lifts for cross-device restore)
         var {data:drafts} = await window._sb.from('loading_sessions')
-            .select('id,sku')
+            .select('id,sku,lifts')
             .eq('order_id', oid)
             .eq('record_type', 'draft');
         if (!drafts || !drafts.length) return;
@@ -23765,13 +23787,16 @@ async function _ldRestoreDraftIds(oid) {
             await window._sb.from('loading_sessions').delete().in('id', deleteIds);
         }
 
-        // Map sku → id, then match to orderItems index
-        var skuToId = {};
-        keepIds.forEach(function(kId){ var d=drafts.find(function(r){return r.id===kId;}); if(d) skuToId[d.sku]=kId; });
+        // Map sku → id+lifts, then match to orderItems index
+        var skuToRow = {};
+        keepIds.forEach(function(kId){ var d=drafts.find(function(r){return r.id===kId;}); if(d) skuToRow[d.sku]=d; });
         if (!_ldDraftRowIds[oid]) _ldDraftRowIds[oid] = {};
+        if (!_ldDraftDBCache[oid]) _ldDraftDBCache[oid] = {};
         orderItems.forEach(function(oi, iIdx){
-            if (oi.sku && skuToId[oi.sku]) {
-                _ldDraftRowIds[oid][iIdx] = skuToId[oi.sku];
+            if (oi.sku && skuToRow[oi.sku]) {
+                _ldDraftRowIds[oid][iIdx] = skuToRow[oi.sku].id;
+                if (skuToRow[oi.sku].lifts && skuToRow[oi.sku].lifts.length)
+                    _ldDraftDBCache[oid][iIdx] = skuToRow[oi.sku].lifts;
             }
         });
     } catch(e){}
