@@ -25273,6 +25273,43 @@ window.loImportFromPlan = function() {
     _loUpdateTotal();
 };
 
+window._loProductCache = null;
+window._loFetchProducts = async function() {
+    if (window._loProductCache) return window._loProductCache;
+    var {data} = await window._sb.from('products').select('sku,name').order('sku');
+    window._loProductCache = data || [];
+    return window._loProductCache;
+};
+window._loSkuSuggest = async function(n, val) {
+    var drop = document.getElementById('lo-sku-drop-'+n);
+    if (!drop) return;
+    var q = val.trim().toLowerCase();
+    if (!q) { drop.style.display='none'; return; }
+    var prods = await window._loFetchProducts();
+    var hits = prods.filter(function(p){
+        return p.sku.toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q);
+    }).slice(0,8);
+    if (!hits.length) { drop.style.display='none'; return; }
+    drop.innerHTML = hits.map(function(p){
+        return '<div onclick="window._loPickSku('+n+',\''+p.sku.replace(/'/g,"\\'")+'\',' +
+            '\''+((p.name||'').replace(/'/g,"\\'"))+'\')" '+
+            'style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:11px;" '+
+            'onmouseenter="this.style.background=\'#eff6ff\'" onmouseleave="this.style.background=\'\'">' +
+            '<span style="font-weight:900;font-family:monospace;color:#4f46e5;">'+p.sku+'</span>' +
+            '<span style="color:#64748b;margin-left:6px;">'+((p.name||'')).substring(0,40)+'</span>' +
+        '</div>';
+    }).join('');
+    drop.style.display='block';
+};
+window._loPickSku = function(n, sku, name) {
+    var skuEl = document.getElementById('lo-item-sku-'+n);
+    var nameEl = document.getElementById('lo-item-name-'+n);
+    if (skuEl) skuEl.value = sku;
+    if (nameEl) nameEl.value = name;
+    var drop = document.getElementById('lo-sku-drop-'+n);
+    if (drop) drop.style.display='none';
+};
+
 window.loAddItem = function(prefill) {
     _loItemCount++;
     var n = _loItemCount;
@@ -25281,8 +25318,9 @@ window.loAddItem = function(prefill) {
     tr.id = 'lo-item-row-'+n;
     tr.className = 'border-t border-slate-100';
     tr.innerHTML =
-        '<td class="px-2 py-1.5">'+
-            '<input type="text" id="lo-item-sku-'+n+'" placeholder="SKU" value="'+(prefill?.sku||'')+'" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none focus:border-indigo-400">'+
+        '<td class="px-2 py-1.5" style="position:relative;">'+
+            '<input type="text" id="lo-item-sku-'+n+'" placeholder="SKU หรือชื่อสินค้า" value="'+(prefill?.sku||'')+'" autocomplete="off" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none focus:border-indigo-400" oninput="window._loSkuSuggest('+n+',this.value)" onblur="setTimeout(function(){var d=document.getElementById(\'lo-sku-drop-'+n+'\');if(d)d.style.display=\'none\';},200)">'+
+            '<div id="lo-sku-drop-'+n+'" style="display:none;position:absolute;left:8px;right:8px;top:100%;background:#fff;border:1.5px solid #c7d2fe;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:999;max-height:220px;overflow-y:auto;"></div>'+
             '<input type="text" id="lo-item-name-'+n+'" placeholder="ชื่อสินค้า" value="'+(prefill?.product_name||'')+'" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs mt-0.5 focus:outline-none focus:border-indigo-400">'+
         '</td>'+
         '<td class="px-2 py-1.5 w-24"><input type="number" id="lo-item-qty-'+n+'" min="0" step="1" value="'+(prefill?.qty||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loItemChanged()"></td>'+
