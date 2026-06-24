@@ -1859,6 +1859,12 @@ thead.sticky {
 .wms-app-hidden { display: none !important; }
 </style>
 <style>
+/* ═══ WH STAFF APP ═══ */
+#wh-screen{display:none;position:fixed;inset:0;z-index:10000;background:#f1f5f9;flex-direction:column;overflow:hidden;}
+#wh-screen.active{display:flex;}
+#wh-screen-header{background:#0f172a;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+#wh-screen-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;}
+
 /* ═══ DRIVER APP ═══ */
 #drv-screen{display:none;position:fixed;inset:0;z-index:10000;background:#0f172a;flex-direction:column;align-items:center;justify-content:center;}
 #drv-screen.active{display:flex;}
@@ -23384,9 +23390,15 @@ window.ldInit = function() {
     _ldRefreshGlobalStats(today);
 };
 
+var _whMode = false;   // true when logged in as WH Staff
+
+function _ldGetCardsWrap() {
+    return document.getElementById(_whMode ? 'wh-order-cards' : 'ld-order-cards');
+}
+
 // ── โหลด+แสดง Order Cards ──
 async function _ldLoadOrderCards(dateVal) {
-    var wrap = document.getElementById('ld-order-cards');
+    var wrap = _ldGetCardsWrap();
     if (!wrap) return;
     try {
         var {data} = await window._sb.from('loading_orders').select('*')
@@ -23398,7 +23410,7 @@ async function _ldLoadOrderCards(dateVal) {
 }
 
 function _ldRenderCards(orders) {
-    var wrap = document.getElementById('ld-order-cards');
+    var wrap = _ldGetCardsWrap();
     if (!wrap) return;
     if (!orders.length) {
         wrap.innerHTML = '<div class="text-center py-16 text-slate-300"><i class="fas fa-inbox text-5xl mb-3 block"></i><p class="font-bold text-slate-400 text-sm">ไม่มีงานโหลดสำหรับวันนี้</p><p class="text-xs text-slate-300 mt-1">รอ Loading Order จากเจ้าหน้าที่จัดส่ง</p></div>';
@@ -31386,14 +31398,7 @@ window.doLogout=function(){
 };
 
 async function _applySession(){
-  document.getElementById('login-screen').classList.add('hidden');
-  document.getElementById('app-main').classList.remove('wms-app-hidden');
-  var n=document.getElementById('sidebar-user-name'),r=document.getElementById('sidebar-user-role');
-  if(n)n.textContent=_cu.name||_cu.username;if(r)r.textContent=_cu.role||'';
-  var b=document.getElementById('btn-user-mgmt');
-  if(b){if(_cu.isAdmin)b.classList.remove('hidden');else b.classList.add('hidden');}
-
-  // Check if logged-in user is a WH Staff worker (by role set at login, or fallback DB check)
+  // Check if logged-in user is a WH Staff worker
   var isWhStaff = (_cu.role === 'WH Staff');
   var whTeam = _cu._whTeam || '';
   if(!isWhStaff) {
@@ -31403,29 +31408,23 @@ async function _applySession(){
     } catch(e){}
   }
 
+  if(isWhStaff){
+    // WH Staff → full-screen dedicated view, no sidebar/tabs at all
+    window.whInit(_cu, whTeam);
+    return;
+  }
+
+  // Normal WMS user
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-main').classList.remove('wms-app-hidden');
+  var n=document.getElementById('sidebar-user-name'),r=document.getElementById('sidebar-user-role');
+  if(n)n.textContent=_cu.name||_cu.username;if(r)r.textContent=_cu.role||'';
+  var b=document.getElementById('btn-user-mgmt');
+  if(b){if(_cu.isAdmin)b.classList.remove('hidden');else b.classList.add('hidden');}
+
   var sidebar = document.getElementById('app-sidebar');
   var appMain = document.getElementById('app-main');
-  if(isWhStaff){
-    // WH Staff: hide sidebar, remove sidebar margin, show only Loading tab
-    sidebar.classList.add('wms-app-hidden');
-    appMain.style.marginLeft = '0';
-    // Swap headers
-    var mh = document.getElementById('main-header');
-    var wh = document.getElementById('wh-staff-header');
-    if(mh) mh.classList.add('hidden');
-    if(wh){
-      wh.classList.remove('hidden');
-      var hn = document.getElementById('wh-staff-header-name');
-      var ht = document.getElementById('wh-staff-header-team');
-      if(hn) hn.textContent = _cu.name||_cu.username;
-      if(ht) ht.textContent = whTeam ? 'Team '+whTeam : 'Loading';
-    }
-    // Hide all nav buttons
-    WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(btn)btn.style.display='none';});
-    if(typeof switchView==='function') switchView('loading');
-    // Request browser notification permission
-    if(typeof _ldRequestNotifPermission==='function') _ldRequestNotifPermission();
-  } else {
+  {
     sidebar.classList.remove('wms-app-hidden');
     appMain.style.marginLeft = '';
     var mh2 = document.getElementById('main-header');
@@ -35871,6 +35870,36 @@ window.viewTripResult = async function(planId) {
 </div><!-- /drv-phone-wrap -->
 </div><!-- /drv-screen -->
 
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- WH STAFF SCREEN                                               -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div id="wh-screen">
+  <!-- Header -->
+  <div id="wh-screen-header">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:36px;height:36px;background:#10b981;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+        <i class="fas fa-warehouse" style="color:#fff;font-size:15px;"></i>
+      </div>
+      <div>
+        <div id="wh-hd-name" style="color:#fff;font-weight:900;font-size:15px;line-height:1.2;">—</div>
+        <div id="wh-hd-team" style="color:#10b981;font-size:11px;font-weight:700;">Loading</div>
+      </div>
+    </div>
+    <button onclick="whLogout()" style="background:#1e293b;border:none;color:#94a3b8;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
+      <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+    </button>
+  </div>
+  <!-- Body: loading order cards injected here -->
+  <div id="wh-screen-body">
+    <div id="wh-order-cards" class="space-y-3">
+      <div style="text-align:center;padding:60px 0;color:#94a3b8;">
+        <i class="fas fa-spinner fa-spin" style="font-size:32px;display:block;margin-bottom:12px;"></i>
+        กำลังโหลด...
+      </div>
+    </div>
+  </div>
+</div><!-- /wh-screen -->
+
 <!-- Camera input -->
 <input type="file" id="drv-photo-input" accept="image/*" capture="environment" style="display:none" onchange="drvHandlePhoto(this)">
 <input type="file" id="dm-photo-input" accept="image/*" capture="environment" style="display:none" onchange="dmHandlePhoto(this)">
@@ -37188,6 +37217,39 @@ window.drvPlayNewOrder=function drvPlayNewOrder(){
     else window.speechSynthesis.onvoiceschanged=function(){doSpeak();window.speechSynthesis.onvoiceschanged=null;};
   }catch(e){}
 }
+
+// ── WH Staff full-screen init (like drvInit) ──────────────────────
+window.whInit = function(user, team) {
+  _whMode = true;
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-main').classList.add('wms-app-hidden');
+  document.getElementById('app-sidebar').classList.add('wms-app-hidden');
+  var scr = document.getElementById('wh-screen');
+  if (scr) scr.classList.add('active');
+  var nm = document.getElementById('wh-hd-name');
+  var tm = document.getElementById('wh-hd-team');
+  if (nm) nm.textContent = user.name || user.username;
+  if (tm) tm.textContent = team ? 'Team ' + team : 'Loading';
+  // Boot loading module
+  _ldLoadStaffMaster();
+  _ldLoadProductMap();
+  var today = new Date().toISOString().slice(0,10);
+  _ldLoadOrderCards(today);
+  _ldSubOrders();
+  if (typeof _ldRequestNotifPermission === 'function') _ldRequestNotifPermission();
+};
+
+window.whLogout = function() {
+  if (!confirm('ต้องการออกจากระบบใช่ไหมครับ?')) return;
+  _cu = null; _whMode = false;
+  localStorage.removeItem('wms_sess');
+  var scr = document.getElementById('wh-screen');
+  if (scr) scr.classList.remove('active');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').classList.add('hidden');
+};
 
 window.drvInit=function(wmsUser){
   _dSess={username:wmsUser.username,driver_name:wmsUser.name||wmsUser.username,driver_id:wmsUser.driver_id||'',is_supervisor:wmsUser.is_supervisor||false};
