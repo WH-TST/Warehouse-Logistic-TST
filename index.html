@@ -24154,10 +24154,26 @@ function _ldSubOrders() {
         .on('postgres_changes',{event:'UPDATE',schema:'public',table:'loading_orders'}, function(){
             var today = new Date().toISOString().slice(0,10);
             _ldLoadOrderCards(today);
+            if (typeof window.ldMonLoad === 'function') {
+                var monTab = document.getElementById('ld-tab-monitor');
+                if (monTab && !monTab.classList.contains('hidden')) window.ldMonLoad();
+            }
+        })
+        .on('postgres_changes',{event:'DELETE',schema:'public',table:'loading_orders'}, function(){
+            var today = new Date().toISOString().slice(0,10);
+            _ldLoadOrderCards(today);
+            if (typeof window.ldMonLoad === 'function') {
+                var monTab = document.getElementById('ld-tab-monitor');
+                if (monTab && !monTab.classList.contains('hidden')) window.ldMonLoad();
+            }
         })
         .on('postgres_changes',{event:'*',schema:'public',table:'loading_sessions'}, function(){
             var today = new Date().toISOString().slice(0,10);
             _ldRefreshGlobalStats(today);
+            if (typeof window.ldMonLoad === 'function') {
+                var monTab = document.getElementById('ld-tab-monitor');
+                if (monTab && !monTab.classList.contains('hidden')) window.ldMonLoad();
+            }
         })
         .subscribe(function(status){
             console.log('[WMS-LD] realtime status:', status);
