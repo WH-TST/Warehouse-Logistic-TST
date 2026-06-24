@@ -31224,17 +31224,39 @@ window.doLogout=function(){
   document.getElementById('app-main').classList.add('wms-app-hidden');
 };
 
-function _applySession(){
+async function _applySession(){
   document.getElementById('login-screen').classList.add('hidden');
-  document.getElementById('app-sidebar').classList.remove('wms-app-hidden');
   document.getElementById('app-main').classList.remove('wms-app-hidden');
   var n=document.getElementById('sidebar-user-name'),r=document.getElementById('sidebar-user-role');
   if(n)n.textContent=_cu.name||_cu.username;if(r)r.textContent=_cu.role||'';
   var b=document.getElementById('btn-user-mgmt');
   if(b){if(_cu.isAdmin)b.classList.remove('hidden');else b.classList.add('hidden');}
-  WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(!btn)return;btn.style.display=(_cu.isAdmin||(_cu.perms||[]).indexOf(v.id)>=0)?'':'none';});
-  var fv=_cu.isAdmin?'input':((_cu.perms||[])[0]||'input');
-  if(typeof switchView==='function')switchView(fv);
+
+  // Check if logged-in user is a WH Staff worker
+  var isWhStaff = false;
+  try {
+    var whRes = await window._sb.from('logi_wh_staff').select('id,name,username').eq('username', _cu.username).maybeSingle();
+    if(whRes.data) isWhStaff = true;
+  } catch(e){}
+
+  var sidebar = document.getElementById('app-sidebar');
+  var appMain = document.getElementById('app-main');
+  if(isWhStaff){
+    // WH Staff: hide sidebar, remove sidebar margin, show only Loading tab
+    sidebar.classList.add('wms-app-hidden');
+    appMain.style.marginLeft = '0';
+    appMain.style.paddingLeft = '1rem';
+    // Hide all nav buttons
+    WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(btn)btn.style.display='none';});
+    if(typeof switchView==='function') switchView('loading');
+  } else {
+    sidebar.classList.remove('wms-app-hidden');
+    appMain.style.marginLeft = '';
+    appMain.style.paddingLeft = '';
+    WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(!btn)return;btn.style.display=(_cu.isAdmin||(_cu.perms||[]).indexOf(v.id)>=0)?'':'none';});
+    var fv=_cu.isAdmin?'input':((_cu.perms||[])[0]||'input');
+    if(typeof switchView==='function')switchView(fv);
+  }
 }
 
 window.openUserMgmt=function(){if(!_cu||!_cu.isAdmin)return;switchView('user-accounts');uaSwitchTab('wms');};
