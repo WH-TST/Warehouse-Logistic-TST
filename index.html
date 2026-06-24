@@ -25322,7 +25322,7 @@ window.loImportFromPlan = function() {
 window._loProductCache = null;
 window._loFetchProducts = async function() {
     if (window._loProductCache) return window._loProductCache;
-    var {data} = await window._sb.from('products').select('sku,name').order('sku');
+    var {data} = await window._sb.from('products').select('sku,name,min_w,max_w').order('sku');
     window._loProductCache = data || [];
     return window._loProductCache;
 };
@@ -25340,10 +25340,18 @@ window._loFetchProducts = async function() {
                 if (!item) return;
                 e.preventDefault();
                 var sku = item.dataset.sku, name = item.dataset.name;
+                var minW = parseFloat(item.dataset.minw)||0, maxW = parseFloat(item.dataset.maxw)||0;
                 var skuEl = document.getElementById('lo-item-sku-'+_loDropN);
                 var nameEl = document.getElementById('lo-item-name-'+_loDropN);
-                if (skuEl) skuEl.value = sku;
+                if (skuEl) { skuEl.value = sku; skuEl.dataset.minw = minW; skuEl.dataset.maxw = maxW; }
                 if (nameEl) nameEl.value = name;
+                // auto-calc weight
+                var qtyEl = document.getElementById('lo-item-qty-'+_loDropN);
+                var wtEl  = document.getElementById('lo-item-wt-'+_loDropN);
+                if (wtEl && qtyEl && minW > 0 && maxW > 0) {
+                    var qty = parseFloat(qtyEl.value)||0;
+                    if (qty > 0) { wtEl.value = Math.round(qty * (minW + maxW) / 2); loItemChanged(); }
+                }
                 _loDrop.style.display = 'none';
             });
             document.body.appendChild(_loDrop);
@@ -25367,7 +25375,7 @@ window._loFetchProducts = async function() {
         _loDropN = n;
         drop.innerHTML = hits.map(function(p){
             var esc = function(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); };
-            return '<div data-sku="'+esc(p.sku)+'" data-name="'+esc(p.name||'')+'" '+
+            return '<div data-sku="'+esc(p.sku)+'" data-name="'+esc(p.name||'')+'" data-minw="'+(p.min_w||0)+'" data-maxw="'+(p.max_w||0)+'" '+
                 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;display:flex;align-items:center;gap:8px;" '+
                 'onmouseenter="this.style.background=\'#eff6ff\'" onmouseleave="this.style.background=\'\'">' +
                 '<span style="font-weight:900;font-family:monospace;color:#4f46e5;flex-shrink:0;">'+esc(p.sku)+'</span>' +
@@ -25382,6 +25390,17 @@ window._loFetchProducts = async function() {
     };
 })();
 
+window.loAutoWt = function(n) {
+    var skuEl = document.getElementById('lo-item-sku-'+n);
+    var qtyEl = document.getElementById('lo-item-qty-'+n);
+    var wtEl  = document.getElementById('lo-item-wt-'+n);
+    if (!skuEl || !qtyEl || !wtEl) return;
+    var minW = parseFloat(skuEl.dataset.minw)||0;
+    var maxW = parseFloat(skuEl.dataset.maxw)||0;
+    var qty  = parseFloat(qtyEl.value)||0;
+    if (minW > 0 && maxW > 0 && qty > 0) wtEl.value = Math.round(qty * (minW + maxW) / 2);
+};
+
 window.loAddItem = function(prefill) {
     _loItemCount++;
     var n = _loItemCount;
@@ -25394,7 +25413,7 @@ window.loAddItem = function(prefill) {
             '<input type="text" id="lo-item-sku-'+n+'" placeholder="SKU หรือชื่อสินค้า" value="'+(prefill?.sku||'')+'" autocomplete="off" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none focus:border-indigo-400" oninput="window._loSkuSuggest('+n+',this.value)">'+
             '<input type="text" id="lo-item-name-'+n+'" placeholder="ชื่อสินค้า" value="'+(prefill?.product_name||'')+'" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs mt-0.5 focus:outline-none focus:border-indigo-400">'+
         '</td>'+
-        '<td class="px-2 py-1.5 w-24"><input type="number" id="lo-item-qty-'+n+'" min="0" step="1" value="'+(prefill?.qty||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loItemChanged()"></td>'+
+        '<td class="px-2 py-1.5 w-24"><input type="number" id="lo-item-qty-'+n+'" min="0" step="1" value="'+(prefill?.qty||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loAutoWt('+n+');loItemChanged()"></td>'+
         '<td class="px-2 py-1.5 w-28"><input type="number" id="lo-item-wt-'+n+'" min="0" step="0.01" value="'+(prefill?.target_weight||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loItemChanged()"></td>'+
         '<td class="px-2 py-1.5 text-center"><button onclick="loRemoveItem('+n+')" class="w-6 h-6 bg-rose-100 text-rose-500 rounded-lg text-[10px] hover:bg-rose-200 transition"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);
