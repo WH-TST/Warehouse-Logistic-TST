@@ -24765,23 +24765,50 @@ function _ldRenderMonitorTable(rows, orders) {
                 var r = sessMap[it.sku] || {};
                 var actualQty = parseFloat(r.qty)||0;
                 var actualWt  = parseFloat(r.weight)||0;
-                var avgWt = actualQty>0 ? (actualWt/actualQty).toFixed(2) : '—';
-                var prod = _ldProductMap[it.sku]||{};
-                var minW = prod.min_w!=null ? prod.min_w : '—';
-                var maxW = prod.max_w!=null ? prod.max_w : '—';
+                var avgWtNum  = actualQty>0 ? actualWt/actualQty : null;
+                var avgWtStr  = avgWtNum!=null ? avgWtNum.toFixed(2) : '—';
+                var prod  = _ldProductMap[it.sku]||{};
+                var minW  = prod.min_w!=null ? prod.min_w : null;
+                var maxW  = prod.max_w!=null ? prod.max_w : null;
                 var pName = (it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+                var targetQty = Number(it.qty||0);
                 var bg = idx%2===0 ? '#fff' : '#f8fafc';
-                var okColor = actualQty>0 ? '#16a34a' : '#cbd5e1';
+
+                // ── เฉลี่ย/เส้น: แดงถ้าออกนอก range
+                var avgOutOfRange = avgWtNum!=null && minW!=null && maxW!=null && (avgWtNum < minW || avgWtNum > maxW);
+                var avgColor = avgOutOfRange ? '#dc2626' : '#7c3aed';
+                var avgCell  = avgWtNum!=null
+                    ? '<span style="color:'+avgColor+';font-weight:900;">'
+                        +avgWtStr
+                        +(avgOutOfRange ? ' <i class="fas fa-exclamation-triangle" style="font-size:10px;"></i>' : '')
+                      +'</span>'
+                    : '<span style="color:#cbd5e1;">—</span>';
+
+                // ── โหลดจริง: สัญลักษณ์เมื่อต่างจาก order
+                var qtyDiff = targetQty>0 ? actualQty - targetQty : 0;
+                var qtyColor = actualQty>0 ? '#16a34a' : '#cbd5e1';
+                var qtyBadge = '';
+                if (targetQty>0 && actualQty>0 && qtyDiff!==0) {
+                    var over = qtyDiff>0;
+                    qtyColor  = over ? '#d97706' : '#dc2626';
+                    qtyBadge  = ' <span style="font-size:10px;font-weight:900;padding:1px 5px;border-radius:4px;background:'+(over?'#fef3c7':'#fee2e2')+';color:'+(over?'#92400e':'#991b1b')+'">'
+                        +(over?'▲ +':' ▼ ')+Math.abs(qtyDiff)
+                      +'</span>';
+                }
+                var wtColor = actualWt>0 ? '#16a34a' : '#cbd5e1';
+
                 return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
                     +'<td style="padding:7px 10px;font-size:11px;color:#94a3b8;text-align:center;width:28px;">'+(idx+1)+'</td>'
                     +'<td style="padding:7px 10px;font-size:10px;color:#64748b;font-family:monospace;font-weight:700;">'+_ldEsc(it.sku||'')+'</td>'
                     +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#1e293b;min-width:120px;">'+_ldEsc(pName)+'</td>'
-                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+(Number(it.qty||0)).toLocaleString()+'</td>'
-                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+minW+'</td>'
-                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+maxW+'</td>'
-                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+okColor+';text-align:right;">'+(actualQty>0?actualQty.toLocaleString():'—')+'</td>'
-                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+okColor+';text-align:right;">'+(actualWt>0?actualWt.toLocaleString(undefined,{maximumFractionDigits:1}):'—')+'</td>'
-                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#7c3aed;text-align:right;">'+avgWt+'</td>'
+                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+targetQty.toLocaleString()+'</td>'
+                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(minW!=null?minW:'—')+'</td>'
+                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(maxW!=null?maxW:'—')+'</td>'
+                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+qtyColor+';text-align:right;">'
+                        +(actualQty>0?actualQty.toLocaleString():'—')+qtyBadge
+                    +'</td>'
+                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+wtColor+';text-align:right;">'+(actualWt>0?actualWt.toLocaleString(undefined,{maximumFractionDigits:1}):'—')+'</td>'
+                    +'<td style="padding:7px 10px;font-size:11px;text-align:right;">'+avgCell+'</td>'
                 +'</tr>';
             }).join('');
 
