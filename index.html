@@ -38690,15 +38690,15 @@ function drvRenderAtShop(){
   if (isLast) {
     var arrivedMs = visit.arrived_at ? new Date(visit.arrived_at).getTime() : 0;
     var elapsedSec = arrivedMs ? Math.floor((Date.now() - arrivedMs) / 1000) : 999;
-    var BLOCK_SEC = 5 * 60;
+    var BLOCK_SEC = 10 * 60;
     var remainSec = BLOCK_SEC - elapsedSec;
     if (remainSec > 0) {
       var mm = Math.floor(remainSec / 60), ss = remainSec % 60;
       var countdownStr = mm + ':' + (ss < 10 ? '0' : '') + ss;
       nextBtn = '<div style="text-align:center;padding:14px 0;">'
-        + '<div style="font-size:13px;color:#94a3b8;margin-bottom:8px;"><i class="fas fa-lock" style="margin-right:5px;color:#f59e0b;"></i>รอครบ 5 นาทีก่อนกลับบริษัท</div>'
+        + '<div style="font-size:13px;color:#94a3b8;margin-bottom:8px;"><i class="fas fa-hourglass-half" style="margin-right:5px;color:#f59e0b;"></i>กรุณารอลงสินค้าตามคิว</div>'
         + '<div id="drv-return-block-timer" style="font-size:36px;font-weight:900;color:#f59e0b;font-family:monospace;letter-spacing:2px;">'+countdownStr+'</div>'
-        + '<div style="font-size:11px;color:#64748b;margin-top:6px;">นับจากเวลาถึงร้าน</div>'
+        + '<div style="font-size:11px;color:#64748b;margin-top:6px;">ปุ่มกลับบริษัทจะปรากฏเมื่อครบ 10 นาที</div>'
         + '</div>';
       if (!window._drvBlockTimer) {
         window._drvBlockTimer = setInterval(function(){
@@ -38718,7 +38718,7 @@ function drvRenderAtShop(){
     nextBtn = '<button class="drv-btn-main" style="background:#059669;" onclick="drvDoDepartShop()"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป ('+remaining.length+' ร้านเหลือ)</button>';
   }
   var photoSection=visit.photo_url?'<div style="margin-bottom:10px;"><img src="'+visit.photo_url+'" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;"><div style="font-size:11px;color:#34d399;text-align:center;margin-top:6px;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>รูปหลักฐานบันทึกแล้ว</div></div>':'';
-  return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #059669;text-align:center;"><div style="font-size:36px;margin-bottom:8px;">📦</div><div style="font-size:18px;font-weight:900;color:#34d399;margin-bottom:6px;">ส่งของที่ร้านเรียบร้อย</div><div style="font-size:22px;font-weight:900;color:#fff;">'+drvEsc(shop.shopName||shop.shopId||'–')+'</div>'+(visit.arrived_at?'<div style="font-size:14px;color:#64748b;margin-top:6px;">ถึงเวลา '+drvFmtTime(visit.arrived_at)+'</div>':'')+'</div>'+(photoSection?'<div class="drv-card">'+photoSection+'</div>':'')+'<div class="drv-card">'+nextBtn+'</div></div>';
+  return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #0ea5e9;text-align:center;"><div style="font-size:36px;margin-bottom:8px;">📍</div><div style="font-size:15px;font-weight:700;color:#38bdf8;margin-bottom:4px;">คุณถึงแล้ว</div><div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:4px;">'+drvEsc(shop.shopName||shop.shopId||'–')+'</div>'+(visit.arrived_at?'<div style="font-size:13px;color:#64748b;margin-bottom:6px;">ถึงเวลา '+drvFmtTime(visit.arrived_at)+'</div>':'')+'<div style="font-size:13px;color:#fbbf24;font-weight:700;"><i class="fas fa-people-carry" style="margin-right:5px;"></i>กรุณารอลงสินค้าตามคิว</div></div>'+(photoSection?'<div class="drv-card">'+photoSection+'</div>':'')+'<div class="drv-card">'+nextBtn+'</div></div>';
 }
 
 function drvRenderReturning(){
