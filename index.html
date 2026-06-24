@@ -38686,9 +38686,37 @@ function drvRenderAtShop(){
   var shops=_dTripPlan.shops||[];var shop=shops[seq]||{};var visit=_dShopVisits[seq]||{};
   var remaining=shops.filter(function(sh,i){return i!==seq&&!(_dShopVisits[i]&&_dShopVisits[i].departed_at);});
   var isLast=remaining.length===0;
-  var nextBtn=isLast
-    ?'<button class="drv-btn-main" style="background:#7c3aed;" onclick="drvDoDepartShop()"><i class="fas fa-industry"></i> กลับบริษัท</button>'
-    :'<button class="drv-btn-main" style="background:#059669;" onclick="drvDoDepartShop()"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป ('+remaining.length+' ร้านเหลือ)</button>';
+  var nextBtn;
+  if (isLast) {
+    var arrivedMs = visit.arrived_at ? new Date(visit.arrived_at).getTime() : 0;
+    var elapsedSec = arrivedMs ? Math.floor((Date.now() - arrivedMs) / 1000) : 999;
+    var BLOCK_SEC = 5 * 60;
+    var remainSec = BLOCK_SEC - elapsedSec;
+    if (remainSec > 0) {
+      var mm = Math.floor(remainSec / 60), ss = remainSec % 60;
+      var countdownStr = mm + ':' + (ss < 10 ? '0' : '') + ss;
+      nextBtn = '<div style="text-align:center;padding:14px 0;">'
+        + '<div style="font-size:13px;color:#94a3b8;margin-bottom:8px;"><i class="fas fa-lock" style="margin-right:5px;color:#f59e0b;"></i>รอครบ 5 นาทีก่อนกลับบริษัท</div>'
+        + '<div id="drv-return-block-timer" style="font-size:36px;font-weight:900;color:#f59e0b;font-family:monospace;letter-spacing:2px;">'+countdownStr+'</div>'
+        + '<div style="font-size:11px;color:#64748b;margin-top:6px;">นับจากเวลาถึงร้าน</div>'
+        + '</div>';
+      if (!window._drvBlockTimer) {
+        window._drvBlockTimer = setInterval(function(){
+          var el=document.getElementById('drv-return-block-timer');
+          if (!el) { clearInterval(window._drvBlockTimer); window._drvBlockTimer=null; return; }
+          var left = BLOCK_SEC - Math.floor((Date.now()-arrivedMs)/1000);
+          if (left <= 0) { clearInterval(window._drvBlockTimer); window._drvBlockTimer=null; drvRender(); return; }
+          var m=Math.floor(left/60), s=left%60;
+          el.textContent = m+':'+(s<10?'0':'')+s;
+        }, 1000);
+      }
+    } else {
+      if (window._drvBlockTimer) { clearInterval(window._drvBlockTimer); window._drvBlockTimer=null; }
+      nextBtn = '<button class="drv-btn-main" style="background:#7c3aed;" onclick="drvDoDepartShop()"><i class="fas fa-industry"></i> กลับบริษัท</button>';
+    }
+  } else {
+    nextBtn = '<button class="drv-btn-main" style="background:#059669;" onclick="drvDoDepartShop()"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป ('+remaining.length+' ร้านเหลือ)</button>';
+  }
   var photoSection=visit.photo_url?'<div style="margin-bottom:10px;"><img src="'+visit.photo_url+'" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px;"><div style="font-size:11px;color:#34d399;text-align:center;margin-top:6px;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>รูปหลักฐานบันทึกแล้ว</div></div>':'';
   return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #059669;text-align:center;"><div style="font-size:36px;margin-bottom:8px;">📦</div><div style="font-size:18px;font-weight:900;color:#34d399;margin-bottom:6px;">ส่งของที่ร้านเรียบร้อย</div><div style="font-size:22px;font-weight:900;color:#fff;">'+drvEsc(shop.shopName||shop.shopId||'–')+'</div>'+(visit.arrived_at?'<div style="font-size:14px;color:#64748b;margin-top:6px;">ถึงเวลา '+drvFmtTime(visit.arrived_at)+'</div>':'')+'</div>'+(photoSection?'<div class="drv-card">'+photoSection+'</div>':'')+'<div class="drv-card">'+nextBtn+'</div></div>';
 }
