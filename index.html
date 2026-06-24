@@ -24693,6 +24693,18 @@ window.ldPrintSummary = function() {
     w.print();
 };
 
+  // Expose loading functions globally so whInit (outside this IIFE) can call them
+  window._ldLoadOrderCards     = _ldLoadOrderCards;
+  window._ldSubOrders          = _ldSubOrders;
+  window._ldLoadStaffMaster    = _ldLoadStaffMaster;
+  window._ldLoadProductMap     = _ldLoadProductMap;
+
+  // If WH Staff logged in before this IIFE ran, boot now
+  if (window._whMode && !window._whInitDone) {
+    window._whInitDone = true;
+    window.ldInit();
+  }
+
 })();
 
 // ═══════════════════════════════════════════════════════════════════
@@ -29421,19 +29433,6 @@ function applyInventoryFilters() {
         else { tr.classList.remove('hidden'); }
     });
 }
-
-    // Expose loading functions to global scope so whInit can call them
-    window._ldLoadOrderCards  = _ldLoadOrderCards;
-    window._ldSubOrders       = _ldSubOrders;
-    window._ldLoadStaffMaster = _ldLoadStaffMaster;
-    window._ldLoadProductMap  = _ldLoadProductMap;
-    window._ldRefreshGlobalStats = _ldRefreshGlobalStats;
-
-    // If WH Staff logged in before DOMContentLoaded fired, boot now
-    if (window._whMode && !window._whInitDone) {
-        window._whInitDone = true;
-        window.ldInit();
-    }
 
     }); // End of DOMContentLoaded
 
