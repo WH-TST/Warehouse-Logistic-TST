@@ -24551,8 +24551,11 @@ function _ldRenderMonitorTable(sessions, orders) {
                         +'<div style="font-size:11px;color:#64748b;">'+_ldEsc(staffName)+' · เริ่ม '+startTime+'</div>'
                     +'</div>'
                 +'</div>'
-                +'<div style="display:flex;align-items:center;gap:8px;">'
+                +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
                     +statusBadge
+                    +(_cu&&_cu.isAdmin
+                        ? '<button onclick="ldMonResetOrder(\''+o.id+'\',\''+_ldEsc(o.truck_plate||'')+'\')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #f87171;background:#7f1d1d;color:#fca5a5;font-size:11px;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:5px;" title="ลบข้อมูลการโหลดทั้งหมดของคันนี้"><i class="fas fa-undo-alt"></i> รีเซท</button>'
+                        : '')
                 +'</div>'
             +'</div>'
             // item table
@@ -24717,6 +24720,28 @@ window.ldPrintSummary = function() {
     w.document.write('<html><head><title>Loading Summary</title><style>body{font-family:sans-serif;font-size:12px;padding:20px} .bg-white{background:#fff} .border{border:1px solid #e2e8f0} img{max-width:60px}</style></head><body>'+content+'</body></html>');
     w.document.close();
     w.print();
+};
+
+window.ldMonResetOrder = async function(orderId, truckPlate) {
+    if (!(_cu && _cu.isAdmin)) return;
+    if (!confirm('รีเซทข้อมูลการโหลดของรถ ' + (truckPlate||orderId) + ' ?\n\nจะลบข้อมูล draft และ confirmed ทั้งหมด และคืนสถานะเป็น "รอโหลด"')) return;
+    try {
+        await window._sb.from('loading_sessions').delete().eq('order_id', orderId);
+        await window._sb.from('loading_orders').update({status:'pending', updated_at:new Date().toISOString()}).eq('id', orderId);
+        // clear local caches
+        try { localStorage.removeItem('ld_draft_'+orderId); } catch(e){}
+        delete _ldDraftRowIds[orderId];
+        delete _ldDraftOrderCache[orderId];
+        delete _ldDraftDBCache[orderId];
+        delete _ldCardStartTimes[orderId];
+        if (_ldActiveOrderId === orderId) _ldActiveOrderId = null;
+        _ldShowToast('รีเซทเรียบร้อย — ' + (truckPlate||''));
+        var today = new Date().toISOString().slice(0,10);
+        _ldLoadOrderCards(today);
+        if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
+    } catch(e) {
+        alert('เกิดข้อผิดพลาด: ' + (e?.message||String(e)));
+    }
 };
 
   // Expose loading functions globally so whInit (outside this IIFE) can call them
