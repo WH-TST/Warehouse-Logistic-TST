@@ -31348,7 +31348,15 @@ window.doLogin = async function(){
     for(var i=0;i<cached.length;i++){if(cached[i].username===uname&&cached[i].pwHash===hash){user=cached[i];break;}}
   }
   if(!user){
-    // ไม่เจอใน wms_users → ลองเช็ค driver_users (plain text password)
+    // ลองเช็ค logi_wh_staff (plain text password)
+    var whRes = await window._sb.from('logi_wh_staff').select('*').eq('username',uname).maybeSingle();
+    if(whRes.data && whRes.data.password === pw){
+      var wh = whRes.data;
+      user = {username:wh.username, pwHash:'', name:wh.name||wh.username, role:'WH Staff', isAdmin:false, perms:['loading'], active:true, _whStaffId:wh.id, _whTeam:wh.team||''};
+    }
+  }
+  if(!user){
+    // ไม่เจอใน wms_users / logi_wh_staff → ลองเช็ค driver_users (plain text password)
     var dRes = await window._sb.from('driver_users').select('*').eq('username',uname).eq('active',true).maybeSingle();
     if(dRes.data && dRes.data.password === pw){
       var d = dRes.data;
@@ -31385,12 +31393,15 @@ async function _applySession(){
   var b=document.getElementById('btn-user-mgmt');
   if(b){if(_cu.isAdmin)b.classList.remove('hidden');else b.classList.add('hidden');}
 
-  // Check if logged-in user is a WH Staff worker
-  var isWhStaff = false;
-  try {
-    var whRes = await window._sb.from('logi_wh_staff').select('id,name,username').eq('username', _cu.username).maybeSingle();
-    if(whRes.data) isWhStaff = true;
-  } catch(e){}
+  // Check if logged-in user is a WH Staff worker (by role set at login, or fallback DB check)
+  var isWhStaff = (_cu.role === 'WH Staff');
+  var whTeam = _cu._whTeam || '';
+  if(!isWhStaff) {
+    try {
+      var whChk = await window._sb.from('logi_wh_staff').select('id,team').eq('username', _cu.username).maybeSingle();
+      if(whChk.data){ isWhStaff = true; whTeam = whChk.data.team||''; }
+    } catch(e){}
+  }
 
   var sidebar = document.getElementById('app-sidebar');
   var appMain = document.getElementById('app-main');
@@ -31407,7 +31418,7 @@ async function _applySession(){
       var hn = document.getElementById('wh-staff-header-name');
       var ht = document.getElementById('wh-staff-header-team');
       if(hn) hn.textContent = _cu.name||_cu.username;
-      if(ht) ht.textContent = (whRes.data&&whRes.data.team) ? 'Team '+whRes.data.team : 'Loading';
+      if(ht) ht.textContent = whTeam ? 'Team '+whTeam : 'Loading';
     }
     // Hide all nav buttons
     WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(btn)btn.style.display='none';});
