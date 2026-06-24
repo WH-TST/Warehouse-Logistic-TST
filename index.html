@@ -23430,59 +23430,8 @@ function _ldBuildForm(order) {
     var items = order.items||[];
     var oid = order.id;
 
-    var TH_BASE = 'padding:6px 4px;text-align:center;font-size:9px;font-weight:900;color:#fff;background:#1e293b;white-space:nowrap;border-right:1px solid #334155;';
-    var TH_SML  = TH_BASE+'width:62px;';
-    var TD_DESC = 'padding:6px 8px;font-size:10px;font-weight:700;vertical-align:middle;border-right:1px solid #e2e8f0;white-space:nowrap;';
-    var TD_TGT  = 'padding:6px 8px;font-size:10px;font-weight:900;text-align:center;vertical-align:middle;background:#f8fafc;border-right:1px solid #e2e8f0;';
-    var TD_LIFT = 'padding:2px;width:62px;vertical-align:top;border-right:1px solid #e2e8f0;';
-    var TD_ACT  = 'padding:6px 8px;font-size:11px;font-weight:900;text-align:center;vertical-align:middle;background:#f0fdf4;color:#15803d;min-width:60px;';
-    var INP_Q   = 'width:100%;border:none;border-bottom:1px dashed #93c5fd;background:transparent;text-align:center;font-size:9px;font-weight:700;padding:3px 2px;outline:none;color:#1d4ed8;';
-    var INP_W   = 'width:100%;border:none;background:transparent;text-align:center;font-size:9px;font-weight:700;padding:3px 2px;outline:none;color:#15803d;';
-
-    // build lift-column headers (1..7)
-    var liftHeaders = '';
-    for (var c=1; c<=_LFT_COLS; c++) {
-        liftHeaders += '<th style="'+TH_SML+'">'+c+'</th>';
-    }
-
-    // build item rows
-    var itemRows = items.map(function(it, idx) {
-        // lift input cells
-        var liftCells = '';
-        for (var c=0; c<_LFT_COLS; c++) {
-            liftCells += '<td style="'+TD_LIFT+'">'
-                +'<div style="height:50%;min-height:22px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;">'
-                    +'<input type="number" min="0" step="0.01" placeholder="—" style="'+INP_W+'" id="ldf-lw-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\')">'
-                +'</div>'
-                +'<div style="height:50%;min-height:22px;display:flex;align-items:center;">'
-                    +'<input type="number" min="0" step="1" placeholder="—" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\')">'
-                +'</div>'
-            +'</td>';
-        }
-        var planWt = it.weight ? it.weight.toLocaleString(undefined,{maximumFractionDigits:1})+' Kg' : '';
-        return '<tr style="border-bottom:1px solid #e2e8f0;">'
-            +'<td style="'+TD_DESC+'width:20px;text-align:center;color:#64748b;">'+( idx+1)+'</td>'
-            +'<td style="'+TD_DESC+'">'
-                +'<div style="font-weight:900;font-size:10px;">'+_ldEsc((it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim())+'</div>'
-                +(it.sku?'<div style="font-size:9px;color:#94a3b8;">'+_ldEsc(it.sku)+'</div>':'')
-            +'</td>'
-            +'<td style="'+TD_TGT+'">'
-                +'<div style="font-weight:900;font-size:12px;">'+(it.qty||0)+'</div>'
-                +'<div style="font-size:9px;color:#64748b;">('+planWt+')</div>'
-            +'</td>'
-            +liftCells
-            +'<td style="'+TD_ACT+'" id="ldf-actual-'+oid+'-'+idx+'">—</td>'
-        +'</tr>';
-    }).join('');
-
-    // lift subheader (QTY top / KG bottom label)
-    var liftSubHeaders = '';
-    for (var c2=0; c2<_LFT_COLS; c2++) {
-        liftSubHeaders += '<td style="padding:2px 4px;background:#0f172a;border-right:1px solid #334155;text-align:center;">'
-            +'<div style="font-size:7px;color:#6ee7b7;font-weight:900;">KG</div>'
-            +'<div style="font-size:7px;color:#93c5fd;font-weight:900;">PCS</div>'
-        +'</td>';
-    }
+    var INP_W = 'width:100%;border:none;border-bottom:2px solid #bbf7d0;background:transparent;text-align:center;font-size:14px;font-weight:900;padding:6px 2px;outline:none;color:#15803d;';
+    var INP_Q = 'width:100%;border:none;background:transparent;text-align:center;font-size:13px;font-weight:700;padding:4px 2px;outline:none;color:#1d4ed8;';
 
     // user badge
     var cu = window._cu||{};
@@ -23490,59 +23439,82 @@ function _ldBuildForm(order) {
     var staffRec = (_ldStaffMaster||[]).find(function(x){ return x.name===cu.name||x.id===cu.username; });
     var teamTxt = staffRec ? ' · '+staffRec.team : '';
 
+    // build per-item cards
+    var itemCards = items.map(function(it, idx) {
+        var pName = (it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+        var planWt = it.weight ? it.weight.toLocaleString(undefined,{maximumFractionDigits:1}) : '0';
+        // lift grid: 4 per row on mobile
+        var liftCells = '';
+        for (var c=0; c<_LFT_COLS; c++) {
+            liftCells += '<div style="background:#f8fafc;border-radius:10px;border:1.5px solid #e2e8f0;padding:4px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;">'
+                +'<div style="font-size:9px;font-weight:900;color:#94a3b8;letter-spacing:0.5px;">LIFT '+(c+1)+'</div>'
+                +'<input type="number" min="0" step="0.01" placeholder="—" style="'+INP_W+'" id="ldf-lw-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\')">'
+                +'<div style="font-size:8px;font-weight:700;color:#10b981;">KG</div>'
+                +'<input type="number" min="0" step="1" placeholder="—" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\')">'
+                +'<div style="font-size:8px;font-weight:700;color:#3b82f6;">PCS</div>'
+            +'</div>';
+        }
+        return '<div style="background:#fff;border-radius:14px;border:1.5px solid #e2e8f0;overflow:hidden;">'
+            // item header
+            +'<div style="background:#1e293b;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">'
+                +'<div>'
+                    +'<span style="font-size:11px;font-weight:900;color:#94a3b8;margin-right:6px;">'+(idx+1)+'</span>'
+                    +'<span style="font-size:13px;font-weight:900;color:#fff;">'+_ldEsc(pName)+'</span>'
+                    +(it.sku?'<div style="font-size:10px;color:#64748b;margin-top:2px;">'+_ldEsc(it.sku)+'</div>':'')
+                +'</div>'
+                +'<div style="text-align:right;">'
+                    +'<div style="font-size:18px;font-weight:900;color:#38bdf8;font-family:monospace;">'+(it.qty||0)+' <span style="font-size:10px;">PCS</span></div>'
+                    +'<div style="font-size:10px;color:#64748b;">'+planWt+' KG</div>'
+                +'</div>'
+            +'</div>'
+            // lift grid
+            +'<div style="padding:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">'
+                +liftCells
+            +'</div>'
+            // actual footer
+            +'<div style="background:#f0fdf4;border-top:1.5px solid #d1fae5;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;">'
+                +'<span style="font-size:11px;font-weight:900;color:#64748b;">ACTUAL (KG)</span>'
+                +'<span id="ldf-actual-'+oid+'-'+idx+'" style="font-size:20px;font-weight:900;color:#15803d;font-family:monospace;">—</span>'
+            +'</div>'
+        +'</div>';
+    }).join('');
+
     return '<div style="padding:12px;background:#f0fdf4;display:flex;flex-direction:column;gap:12px;">'
         // user badge
-        +'<div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:8px 12px;border:1px solid #d1fae5;">'
-            +'<i class="fas fa-user-circle" style="color:#10b981;"></i>'
-            +'<span style="font-size:13px;font-weight:900;color:#1e293b;">'+_ldEsc(uName)+_ldEsc(teamTxt)+'</span>'
+        +'<div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px 14px;border:1px solid #d1fae5;">'
+            +'<i class="fas fa-user-circle" style="color:#10b981;font-size:18px;"></i>'
+            +'<span style="font-size:14px;font-weight:900;color:#1e293b;">'+_ldEsc(uName)+_ldEsc(teamTxt)+'</span>'
         +'</div>'
         // live stats
         +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'
-            +'<div style="background:#fff;border-radius:12px;padding:10px;text-align:center;border:1px solid #d1fae5;">'
-                +'<div style="font-size:9px;font-weight:900;color:#10b981;margin-bottom:4px;">TOTAL WEIGHT (KG)</div>'
-                +'<div id="ldf-total-wt-'+oid+'" style="font-size:22px;font-weight:900;color:#047857;font-family:monospace;">0</div>'
+            +'<div style="background:#fff;border-radius:12px;padding:12px;text-align:center;border:2px solid #d1fae5;">'
+                +'<div style="font-size:10px;font-weight:900;color:#10b981;margin-bottom:4px;">TOTAL WEIGHT</div>'
+                +'<div id="ldf-total-wt-'+oid+'" style="font-size:26px;font-weight:900;color:#047857;font-family:monospace;">0</div>'
+                +'<div style="font-size:10px;color:#64748b;">KG</div>'
             +'</div>'
-            +'<div style="background:#fff;border-radius:12px;padding:10px;text-align:center;border:1px solid #bae6fd;">'
-                +'<div style="font-size:9px;font-weight:900;color:#0ea5e9;margin-bottom:4px;">TOTAL QTY (PCS)</div>'
-                +'<div id="ldf-total-qty-'+oid+'" style="font-size:22px;font-weight:900;color:#0369a1;font-family:monospace;">0</div>'
-            +'</div>'
-        +'</div>'
-        // main lift table (horizontal scroll)
-        +'<div style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">'
-            +'<div style="overflow-x:auto;">'
-                +'<table style="width:100%;border-collapse:collapse;min-width:600px;">'
-                    +'<thead>'
-                        +'<tr>'
-                            +'<th style="'+TH_BASE+'width:24px;">#</th>'
-                            +'<th style="'+TH_BASE+'text-align:left;padding:8px;">PRODUCT</th>'
-                            +'<th style="'+TH_BASE+'width:70px;">TARGET / WT.</th>'
-                            +'<th colspan="'+_LFT_COLS+'" style="'+TH_BASE+'text-align:center;letter-spacing:1px;">WEIGHT (KG) &amp; QTY (PCS) PER LIFT</th>'
-                            +'<th style="'+TH_BASE+'width:60px;background:#14532d;">ACTUAL (KG)</th>'
-                        +'</tr>'
-                        +'<tr style="background:#0f172a;">'
-                            +'<td colspan="3" style="padding:0;"></td>'
-                            +liftSubHeaders
-                            +'<td style="background:#14532d;"></td>'
-                        +'</tr>'
-                    +'</thead>'
-                    +'<tbody>'+itemRows+'</tbody>'
-                +'</table>'
+            +'<div style="background:#fff;border-radius:12px;padding:12px;text-align:center;border:2px solid #bae6fd;">'
+                +'<div style="font-size:10px;font-weight:900;color:#0ea5e9;margin-bottom:4px;">TOTAL QTY</div>'
+                +'<div id="ldf-total-qty-'+oid+'" style="font-size:26px;font-weight:900;color:#0369a1;font-family:monospace;">0</div>'
+                +'<div style="font-size:10px;color:#64748b;">PCS</div>'
             +'</div>'
         +'</div>'
+        // item cards
+        +itemCards
         // photo
-        +'<div>'
-            +'<div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:4px;">รูปถ่าย</div>'
+        +'<div style="background:#fff;border-radius:14px;border:1.5px solid #e2e8f0;padding:12px;">'
+            +'<div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:8px;letter-spacing:0.5px;">PHOTO</div>'
             +'<input type="file" id="ldf-photo-input-'+oid+'" accept="image/*" capture="environment" multiple style="display:none;" onchange="ldCardHandlePhotos(this,\''+oid+'\')">'
-            +'<div onclick="document.getElementById(\'ldf-photo-input-'+oid+'\').click()" style="border:2px dashed #cbd5e1;border-radius:12px;padding:14px;text-align:center;cursor:pointer;">'
-                +'<i class="fas fa-camera" style="font-size:20px;color:#94a3b8;display:block;margin-bottom:4px;"></i>'
-                +'<span style="font-size:11px;font-weight:700;color:#94a3b8;">แตะเพื่อถ่ายรูป</span>'
+            +'<div onclick="document.getElementById(\'ldf-photo-input-'+oid+'\').click()" style="border:2px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;cursor:pointer;">'
+                +'<i class="fas fa-camera" style="font-size:24px;color:#94a3b8;display:block;margin-bottom:6px;"></i>'
+                +'<span style="font-size:12px;font-weight:700;color:#94a3b8;">Tap to take photo</span>'
             +'</div>'
             +'<div id="ldf-photo-prev-'+oid+'" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>'
         +'</div>'
-        // note + save
-        +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="หมายเหตุ (ถ้ามี)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;outline:none;resize:none;box-sizing:border-box;"></textarea>'
-        +'<button onclick="ldCardSave(\''+oid+'\')" style="width:100%;padding:14px;background:#16a34a;color:#fff;font-weight:900;font-size:15px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 12px rgba(22,163,74,.35);">'
-            +'<i class="fas fa-save"></i> บันทึกการโหลด'
+        // note
+        +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="Note (optional)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;outline:none;resize:none;box-sizing:border-box;background:#fff;"></textarea>'
+        // save
+        +'<button onclick="ldCardSave(\''+oid+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);letter-spacing:0.5px;">'
+            +'<i class="fas fa-save"></i> SAVE LOADING RECORD'
         +'</button>'
     +'</div>';
 }
