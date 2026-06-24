@@ -37243,18 +37243,13 @@ window.whInit = async function(user, team) {
   var tm = document.getElementById('wh-hd-team');
   if (nm) nm.textContent = user.name || user.username;
   if (tm) tm.textContent = team ? 'Team ' + team : 'Loading';
-  // Boot loading module
-  try {
-    await Promise.all([_ldLoadStaffMaster(), _ldLoadProductMap()]);
-  } catch(e){}
-  var today = new Date().toISOString().slice(0,10);
-  try {
-    await _ldLoadOrderCards(today);
-  } catch(e) {
-    var wrap = document.getElementById('wh-order-cards');
-    if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#ef4444;font-weight:700;">โหลดไม่สำเร็จ กรุณารีเฟรช<br><small>'+String(e)+'</small></div>';
+  // Boot loading module via ldInit (which has access to all loading functions in its closure)
+  if (typeof window.ldInit === 'function') {
+    try { window.ldInit(); } catch(e) {
+      var wrap = document.getElementById('wh-order-cards');
+      if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#ef4444;font-weight:700;">โหลดไม่สำเร็จ กรุณารีเฟรช<br><small>'+String(e)+'</small></div>';
+    }
   }
-  _ldSubOrders();
   if (typeof _ldRequestNotifPermission === 'function') _ldRequestNotifPermission();
 };
 
