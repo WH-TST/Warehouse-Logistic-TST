@@ -24037,13 +24037,16 @@ function _ldShowToast(msg) {
     }, 4000);
 }
 
+var _ldPollTimer = null;
+
 function _ldSubOrders() {
     if (_ldOrderSub) { try { _ldOrderSub.unsubscribe(); } catch(e){} }
-    _ldOrderSub = window._sb.channel('ld-orders-watch-v2')
+    var _ldLastKnownIds = new Set();
+
+    _ldOrderSub = window._sb.channel('ld-orders-watch-v3')
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'loading_orders'}, function(payload){
             var today = new Date().toISOString().slice(0,10);
             _ldLoadOrderCards(today);
-            // notify if WH Staff mode
             if (payload && payload.new && payload.new.order_date === today) {
                 _ldNotifyNewOrder(payload.new);
             }
@@ -24056,7 +24059,33 @@ function _ldSubOrders() {
             var today = new Date().toISOString().slice(0,10);
             _ldRefreshGlobalStats(today);
         })
-        .subscribe();
+        .subscribe(function(status){
+            console.log('[WMS-LD] realtime status:', status);
+        });
+
+    // Polling fallback for WH Staff — re-fetch every 30s in case realtime misses
+    if (_ldPollTimer) clearInterval(_ldPollTimer);
+    _ldPollTimer = setInterval(function() {
+        if (!window._whMode) return;
+        var today = new Date().toISOString().slice(0,10);
+        window._sb.from('loading_orders').select('id,truck_plate,order_date')
+            .eq('order_date', today).in('status',['pending','in_progress'])
+            .then(function(res) {
+                var ids = (res.data||[]).map(function(o){ return o.id; });
+                var hasNew = ids.some(function(id){ return !_ldLastKnownIds.has(id); });
+                ids.forEach(function(id){ _ldLastKnownIds.add(id); });
+                if (hasNew) {
+                    _ldLoadOrderCards(today);
+                    // find new orders and notify
+                    (res.data||[]).forEach(function(o){
+                        if (!_ldLastKnownIds.has(o.id+'_notified')) {
+                            _ldLastKnownIds.add(o.id+'_notified');
+                            _ldNotifyNewOrder(o);
+                        }
+                    });
+                }
+            });
+    }, 30000);
 }
 
 window.ldSwitchTab = function(tab) {
