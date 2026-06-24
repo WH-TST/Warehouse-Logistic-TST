@@ -17362,7 +17362,8 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                             : it.truckLabel === 'child'
                     );
                     if (!s.truckLabel && filteredItems.length === 0) return null;
-                    return { ...s, items: filteredItems };
+                    // ตั้ง shop-level truckLabel เพื่อให้ _filterTrailerShops ทำงานถูกตอน load
+                    return { ...s, truckLabel: s.truckLabel || role, items: filteredItems };
                 }).filter(Boolean);
 
             const buildRow = (pid, isMother, isChild, plate) => ({
@@ -17833,7 +17834,29 @@ window.renderLogisticList = function renderLogisticList() {
 
         // ── SALE ORDER / TRANSFER ──────────────────────────────────────────
         const isTransferJob = (p.jobType === 'transfer_fg' || p.jobType === 'transfer_semi');
-        const shops = p.shops || [];
+
+        // สำหรับรถพ่วง: กรอง items ตาม truck role
+        // กรณี -C plan ที่ shops ว่าง (old data) → ดึง child items จาก -M plan
+        var _rawShops0 = p.shops || [];
+        if (p.isChild && _rawShops0.length === 0) {
+            var _mPlan0 = list.find(function(q){ return q.id === ((p.pairId||p.id.replace(/-C$/,''))+'-M'); });
+            if (_mPlan0) {
+                _rawShops0 = (_mPlan0.shops||[]).map(function(s){
+                    var ci=(s.items||[]).filter(function(it){return it.truckLabel==='child';});
+                    return ci.length>0 ? Object.assign({},s,{items:ci}) : null;
+                }).filter(Boolean);
+            }
+        }
+        const shops = _rawShops0.map(function(s){
+            if (!p.isMother && !p.isChild) return s;
+            var allIt=s.items||[];
+            var hasLbls=allIt.some(function(it){return it.truckLabel;});
+            if (!hasLbls) return s;
+            var kept=allIt.filter(function(it){
+                return p.isMother ? (!it.truckLabel||it.truckLabel==='mother') : it.truckLabel==='child';
+            });
+            return Object.assign({},s,{items:kept});
+        }).filter(function(s){ return !p.isChild||(s.items||[]).length>0; });
         // งานย้าย: รวมทุก items จาก shops[0] มาแสดงตรงๆ (ไม่มีชั้น shop)
         const transferItems = isTransferJob ? (shops.flatMap(s => s.items || [])) : [];
         const totalRows = isTransferJob
@@ -18044,9 +18067,10 @@ window.renderLogisticList = function renderLogisticList() {
                 ? (_motherPlan.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ')
                 : '';
 
+            // -C แสดง "mother_only" เฉพาะเมื่อแม่มีสินค้าและลูกไม่มี (ถอดพ่วง)
             const _emptyMsg = (_isChildPlan && _motherShopCount > 0)
-                ? `<span class="text-purple-400 font-semibold">สินค้าอยู่ที่รถแม่ทั้งหมด</span><span class="text-slate-400 ml-1">(${_shopNamesFromMother})</span>`
-                : `ไม่มีรายการร้านค้า`;
+                ? `<span class="text-purple-400 font-semibold text-xs"><i class="fas fa-info-circle mr-1"></i>ถอดพ่วง — สินค้าอยู่รถแม่ทั้งหมด</span><span class="text-slate-400 ml-1 text-xs">(${_shopNamesFromMother})</span>`
+                : `<span class="text-slate-300 text-xs italic">ไม่มีรายการร้านค้า</span>`;
 
             rows.push(`<tr style="background:${rowBgColor}">
                 ${leftCells(1)}
@@ -22453,16 +22477,31 @@ window.viewLogiPlan = function viewLogiPlan(planId) {
     const p = allPlans.find(x => x.id === planId);
     if (!p) return;
 
-    // รวม shops จาก -C plan ด้วย (ถ้าเป็น -M plan)
+    // รวม shops จาก -C plan ด้วย (ถ้าเป็น -M plan) แยก section แม่/ลูก
     const childPlanId = p.isMother ? (p.pairId + '-C') : null;
     const cp = childPlanId ? allPlans.find(x => x.id === childPlanId) : null;
-    const motherShops = (p.shops || []).map(s => ({ ...s, _truckRole: 'mother' }));
-    const childShops  = cp ? (cp.shops || []).map(s => ({ ...s, _truckRole: 'child' })) : [];
-    const allShops    = [...motherShops, ...childShops];
+    const isFullTrailer = !!(p.isMother && cp);
 
-    const shopsHtml = allShops.map((s, si) => {
+    // helper: filter items by truckLabel within a shop
+    const filterShopItems = (s, role) => {
+        const allIt = s.items || [];
+        const hasLabels = allIt.some(it => it.truckLabel);
+        if (!hasLabels) return s;
+        return { ...s, items: allIt.filter(it => role === 'mother' ? (!it.truckLabel || it.truckLabel === 'mother') : it.truckLabel === 'child') };
+    };
+
+    const motherShops = (p.shops || []).map(s => filterShopItems(s, 'mother')).filter(s => (s.items||[]).length > 0 || !isFullTrailer);
+    const childShops  = cp ? (cp.shops || []).map(s => filterShopItems(s, 'child')).filter(s => (s.items||[]).length > 0) : [];
+
+    // fallback: child shops ว่าง (old data) → ดึง child items จาก mother shops
+    const childShopsDisplay = childShops.length > 0 ? childShops
+        : (cp && motherShops.length > 0 ? motherShops.map(s => {
+            const ci = (s.items||[]).filter(it => it.truckLabel === 'child');
+            return ci.length > 0 ? { ...s, items: ci } : null;
+        }).filter(Boolean) : []);
+
+    const _renderShopBlock = (s, si, role) => {
         const itemsHtml = (s.items || []).map(it => {
-            // ใช้ productName ที่บันทึกไว้ก่อน ถ้าไม่มีค่อย fallback ไป LOGI_PRODUCTS_MASTER
             const pName = it.productName
                        || (LOGI_PRODUCTS_MASTER || []).find(pp => pp.sku === it.sku)?.name
                        || '—';
@@ -22478,9 +22517,10 @@ window.viewLogiPlan = function viewLogiPlan(planId) {
 
         const shopTotalQty = (s.items||[]).reduce((sum,it)=>sum+(it.qty||0),0);
         const shopTotalWt  = (s.items||[]).reduce((sum,it)=>sum+(it.weight||0),0);
+        const headerBg = role === 'child' ? '#312e81' : '#1e293b';
 
         return `<div class="border border-slate-200 rounded-xl overflow-hidden mb-3 last:mb-0">
-            <div class="bg-slate-800 px-4 py-2.5 flex justify-between items-center">
+            <div style="background:${headerBg}" class="px-4 py-2.5 flex justify-between items-center">
                 <div class="flex items-center gap-2">
                     <span class="w-5 h-5 bg-emerald-500 text-white rounded-full text-[10px] font-black flex items-center justify-center">${si+1}</span>
                     <span class="font-black text-sm text-white">${s.shopName}</span>
@@ -22510,7 +22550,35 @@ window.viewLogiPlan = function viewLogiPlan(planId) {
                 </tfoot>` : ''}
             </table>
         </div>`;
-    }).join('') || '<p class="text-sm text-slate-400 italic">ไม่มีข้อมูลร้านค้า</p>';
+    };
+
+    // สร้าง HTML แยก section แม่/ลูก
+    let shopsHtml = '';
+    if (isFullTrailer) {
+        const mWt = motherShops.reduce((s,sh)=>s+(sh.items||[]).reduce((ss,it)=>ss+(it.weight||0),0),0);
+        const cWt = childShopsDisplay.reduce((s,sh)=>s+(sh.items||[]).reduce((ss,it)=>ss+(it.weight||0),0),0);
+        const motherHtml = motherShops.map((s,si)=>_renderShopBlock(s,si,'mother')).join('') || '<p class="text-xs text-slate-400 italic">ไม่มีรายการ</p>';
+        const childHtml  = childShopsDisplay.map((s,si)=>_renderShopBlock(s,si,'child')).join('') || '<p class="text-xs text-slate-400 italic">ไม่มีรายการ</p>';
+        shopsHtml = `
+            <div class="rounded-xl border-2 border-slate-300 overflow-hidden mb-3">
+                <div class="flex items-center gap-2 px-4 py-2 bg-slate-100 border-b border-slate-200">
+                    <span class="text-sm">🚛</span>
+                    <span class="font-black text-sm text-slate-700">รถแม่ — ${p.truckPlate||'—'}</span>
+                    <span class="ml-auto text-xs font-black text-emerald-700">${mWt.toLocaleString(undefined,{minimumFractionDigits:2})} กก.</span>
+                </div>
+                <div class="p-3">${motherHtml}</div>
+            </div>
+            <div class="rounded-xl border-2 border-indigo-300 overflow-hidden">
+                <div class="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-200">
+                    <span class="text-sm">⬆</span>
+                    <span class="font-black text-sm text-indigo-700">รถลูก — ${cp.truckPlate||'—'}</span>
+                    <span class="ml-auto text-xs font-black text-emerald-700">${cWt.toLocaleString(undefined,{minimumFractionDigits:2})} กก.</span>
+                </div>
+                <div class="p-3">${childHtml}</div>
+            </div>`;
+    } else {
+        shopsHtml = motherShops.map((s,si)=>_renderShopBlock(s,si,'mother')).join('') || '<p class="text-sm text-slate-400 italic">ไม่มีข้อมูลร้านค้า</p>';
+    }
 
     const pmHtml = p.jobType === 'maintenance_pm' ? `
         <div class="grid grid-cols-2 gap-3 text-sm">
