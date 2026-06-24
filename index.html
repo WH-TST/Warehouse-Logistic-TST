@@ -23601,12 +23601,17 @@ function _ldLocalSave(oid) {
     try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(draft)); } catch(e){}
 }
 
+var _ldUpsertLock = {};   // prevent concurrent upserts per order
+
 async function _ldUpsertDraft(oid) {
+    // Skip if already running for this order (debounce race guard)
+    if (_ldUpsertLock[oid]) return;
+    _ldUpsertLock[oid] = true;
     try {
         // ensure we have order metadata
         if (!_ldDraftOrderCache[oid]) {
             var {data:od} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
-            if (!od) return;
+            if (!od) { _ldUpsertLock[oid]=false; return; }
             _ldDraftOrderCache[oid] = od;
         }
         var od = _ldDraftOrderCache[oid];
@@ -23615,6 +23620,29 @@ async function _ldUpsertDraft(oid) {
         var staffRec = (_ldStaffMaster||[]).find(function(x){ return x.name===cu.name||x.id===cu.username; });
         var staff = { id: staffRec?staffRec.id:(cu.username||''), name: staffRec?staffRec.name:(cu.name||cu.username||''), team: staffRec?staffRec.team:'' };
         if (!_ldDraftRowIds[oid]) _ldDraftRowIds[oid] = {};
+
+        // Sync: fetch existing draft rows from DB to avoid any duplicate inserts
+        // This is the safety net — covers cases where memory was cleared
+        var {data:existingDrafts} = await window._sb.from('loading_sessions')
+            .select('id,sku').eq('order_id',oid).eq('record_type','draft');
+        if (existingDrafts && existingDrafts.length) {
+            // Deduplicate: if multiple rows exist per sku, delete extras and keep one
+            var skuSeen = {};
+            var toDelete = [];
+            existingDrafts.forEach(function(r){
+                if (skuSeen[r.sku]) { toDelete.push(r.id); }
+                else { skuSeen[r.sku] = r.id; }
+            });
+            if (toDelete.length) {
+                await window._sb.from('loading_sessions').delete().in('id', toDelete);
+            }
+            // Restore IDs into memory map
+            orderItems.forEach(function(oi, iIdx){
+                if (oi.sku && skuSeen[oi.sku] && !_ldDraftRowIds[oid][iIdx]) {
+                    _ldDraftRowIds[oid][iIdx] = skuSeen[oi.sku];
+                }
+            });
+        }
 
         var iIdx = 0;
         while (true) {
@@ -23649,6 +23677,7 @@ async function _ldUpsertDraft(oid) {
             iIdx++;
         }
     } catch(e){}
+    _ldUpsertLock[oid] = false;
 }
 
 function _ldDraftLoad(oid) {
@@ -23684,9 +23713,55 @@ window.ldToggleCard = function(orderId) {
     if (!isOpen) {
         if (!_ldCardStartTimes[orderId]) _ldCardStartTimes[orderId] = new Date().toISOString();
         window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
-        setTimeout(function(){ _ldDraftLoad(orderId); }, 100);
+        // Restore existing draft row IDs from DB first, then load form values
+        _ldRestoreDraftIds(orderId).then(function(){
+            setTimeout(function(){ _ldDraftLoad(orderId); }, 100);
+        });
     }
 };
+
+// Fetch draft rows already in DB and restore _ldDraftRowIds so we never INSERT duplicates
+async function _ldRestoreDraftIds(oid) {
+    try {
+        if (!_ldDraftOrderCache[oid]) {
+            var {data:od} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
+            if (od) _ldDraftOrderCache[oid] = od;
+        }
+        var od = _ldDraftOrderCache[oid];
+        if (!od) return;
+        var orderItems = od.items||[];
+
+        // Fetch all draft rows for this order
+        var {data:drafts} = await window._sb.from('loading_sessions')
+            .select('id,sku')
+            .eq('order_id', oid)
+            .eq('record_type', 'draft');
+        if (!drafts || !drafts.length) return;
+
+        // Delete orphan duplicates — keep only the latest row per sku
+        var skuMap = {};
+        drafts.forEach(function(r){ if(!skuMap[r.sku]) skuMap[r.sku]=[]; skuMap[r.sku].push(r.id); });
+        var keepIds = [], deleteIds = [];
+        Object.keys(skuMap).forEach(function(sku){
+            var ids = skuMap[sku];
+            keepIds.push(ids[ids.length-1]);          // keep last
+            for(var i=0;i<ids.length-1;i++) deleteIds.push(ids[i]);  // delete earlier dupes
+        });
+        if (deleteIds.length) {
+            await window._sb.from('loading_sessions').delete().in('id', deleteIds);
+        }
+
+        // Map sku → id, then match to orderItems index
+        var skuToId = {};
+        keepIds.forEach(function(kId){ var d=drafts.find(function(r){return r.id===kId;}); if(d) skuToId[d.sku]=kId; });
+        if (!_ldDraftRowIds[oid]) _ldDraftRowIds[oid] = {};
+        orderItems.forEach(function(oi, iIdx){
+            if (oi.sku && skuToId[oi.sku]) {
+                _ldDraftRowIds[oid][iIdx] = skuToId[oi.sku];
+            }
+        });
+    } catch(e){}
+}
 
 window.ldCardStats = function(oid) {
     var totalQty = 0, totalWt = 0, iIdx = 0;
