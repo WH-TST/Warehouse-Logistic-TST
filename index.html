@@ -24335,14 +24335,22 @@ function _ldRenderMonitorTable(rows) {
                         +'</div>'
                     +'</div>'
                     +'<div class="space-y-1">'
-                    +g.items.filter(function(r){ return r.qty>0||r.weight>0; }).map(function(r){
-                        var pct = r.qty>0&&r.weight>0 ? (parseFloat(r.weight)/parseFloat(r.qty)).toFixed(2)+' kg/pcs' : '';
-                        return '<div class="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-rose-100">'
-                            +'<div class="text-xs font-bold text-slate-700">'+_ldEsc((r.product_name||r.sku||'').replace(/[฀-๿]+/g,'').trim())+'</div>'
+                    +g.items.map(function(r){
+                        var qty = parseFloat(r.qty||0), wt = parseFloat(r.weight||0);
+                        var pName = (r.product_name||r.sku||'').replace(/[฀-๿]+/g,'').trim();
+                        var kgPcs = qty>0&&wt>0 ? (wt/qty).toFixed(2)+' kg/pcs' : '';
+                        var hasData = qty>0||wt>0;
+                        return '<div class="flex items-center justify-between rounded-xl px-3 py-2 border '+(hasData?'bg-white border-rose-100':'bg-rose-50/50 border-rose-100/50')+'">'
+                            +'<div>'
+                                +'<div class="text-xs font-bold '+(hasData?'text-slate-800':'text-slate-400')+'">'+_ldEsc(pName||r.sku||'—')+'</div>'
+                                +(r.sku?'<div class="text-[10px] text-slate-400">'+_ldEsc(r.sku)+'</div>':'')
+                            +'</div>'
                             +'<div class="flex gap-3 text-xs font-black">'
-                                +'<span class="text-sky-600">'+parseFloat(r.qty||0).toLocaleString()+' PCS</span>'
-                                +'<span class="text-emerald-600">'+parseFloat(r.weight||0).toLocaleString(undefined,{maximumFractionDigits:1})+' KG</span>'
-                                +(pct?'<span class="text-purple-500">'+pct+'</span>':'')
+                                +(hasData
+                                    ? '<span class="text-sky-600">'+qty.toLocaleString()+' PCS</span>'
+                                      +'<span class="text-emerald-600">'+wt.toLocaleString(undefined,{maximumFractionDigits:1})+' KG</span>'
+                                      +(kgPcs?'<span class="text-purple-500">'+kgPcs+'</span>':'')
+                                    : '<span class="text-slate-300">กำลังรอ...</span>')
                             +'</div>'
                         +'</div>';
                     }).join('')
