@@ -31611,6 +31611,9 @@ window.umDeleteUser = async function(un){
       if(s.username){
         var wRes=await window._sb.from('wms_users').select('*').eq('username',s.username).eq('active',true).maybeSingle();
         if(wRes.data){var r=wRes.data;var u={username:r.username,pwHash:r.password,name:r.name||'',role:r.role||'',isAdmin:r.is_admin||false,perms:r.perms||[],active:true};_cu=u;window._currentUser=u.name||u.username;_applySession();return;}
+        // ลองเช็ค logi_wh_staff (WH Staff session restore)
+        var whR=await window._sb.from('logi_wh_staff').select('*').eq('username',s.username).maybeSingle();
+        if(whR.data){var wh=whR.data;var wu={username:wh.username,name:wh.name||wh.username,role:'WH Staff',isAdmin:false,perms:['loading'],active:true,_whTeam:wh.team||''};_cu=wu;window._currentUser=wu.name;window.whInit(wu,wh.team||'');return;}
       }
     }
     var ls=document.getElementById('login-screen');
@@ -37226,8 +37229,9 @@ window.drvPlayNewOrder=function drvPlayNewOrder(){
 }
 
 // ── WH Staff full-screen init (like drvInit) ──────────────────────
-window.whInit = function(user, team) {
+window.whInit = async function(user, team) {
   _whMode = true;
+  _ldActiveOrderId = null;
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-main').classList.add('wms-app-hidden');
   document.getElementById('app-sidebar').classList.add('wms-app-hidden');
@@ -37238,10 +37242,16 @@ window.whInit = function(user, team) {
   if (nm) nm.textContent = user.name || user.username;
   if (tm) tm.textContent = team ? 'Team ' + team : 'Loading';
   // Boot loading module
-  _ldLoadStaffMaster();
-  _ldLoadProductMap();
+  try {
+    await Promise.all([_ldLoadStaffMaster(), _ldLoadProductMap()]);
+  } catch(e){}
   var today = new Date().toISOString().slice(0,10);
-  _ldLoadOrderCards(today);
+  try {
+    await _ldLoadOrderCards(today);
+  } catch(e) {
+    var wrap = document.getElementById('wh-order-cards');
+    if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#ef4444;font-weight:700;">โหลดไม่สำเร็จ กรุณารีเฟรช<br><small>'+String(e)+'</small></div>';
+  }
   _ldSubOrders();
   if (typeof _ldRequestNotifPermission === 'function') _ldRequestNotifPermission();
 };
