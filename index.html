@@ -24733,14 +24733,18 @@ function _ldRenderMonitorTable(rows, orders) {
                 if (r.staff_name) staffSet[r.staff_name] = 1;
                 if (r.team) teamSet[r.team] = 1;
             });
-            // totals + times from confirmed (done) sessions only
+            // totals + times + photos from confirmed (done) sessions only
             var minStart = null, maxEnd = null;
             var totalQty = 0, totalWt = 0;
+            var allPhotos = [];
             sessions.forEach(function(r){
                 if (r.start_time) { if (!minStart||r.start_time<minStart) minStart=r.start_time; }
                 if (r.end_time)   { if (!maxEnd  ||r.end_time>maxEnd)     maxEnd=r.end_time;   }
                 totalQty += parseFloat(r.qty)||0;
                 totalWt  += parseFloat(r.weight)||0;
+                if (r.photo_urls && r.photo_urls.length) {
+                    r.photo_urls.forEach(function(u){ if (u && allPhotos.indexOf(u)<0) allPhotos.push(u); });
+                }
             });
             var staffNames = Object.keys(staffSet).join(', ') || '—';
             var teamName   = Object.keys(teamSet).join(', ')  || '—';
@@ -24795,8 +24799,15 @@ function _ldRenderMonitorTable(rows, orders) {
                                 +'<div style="font-size:11px;color:#64748b;margin-top:2px;"><span style="color:#94a3b8;">ทีม</span> '+_ldEsc(teamName)+' &nbsp;·&nbsp; '+_ldEsc(staffNames)+'</div>'
                             +'</div>'
                         +'</div>'
-                        // Right: status badge
-                        +'<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>'
+                        // Right: status + photo button
+                        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+                            +'<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>'
+                            +(allPhotos.length
+                                ? '<button onclick="ldShowPhotos(\''+_ldEsc(JSON.stringify(allPhotos).replace(/'/g,"\\'"))+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#7c3aed;color:#fff;border:none;cursor:pointer;">'
+                                    +'<i class="fas fa-images"></i> รูปภาพ ('+allPhotos.length+')'
+                                  +'</button>'
+                                : '<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;background:#1e293b;color:#475569;border:1px solid #334155;"><i class="fas fa-image" style="margin-right:4px;"></i>ไม่มีรูป</span>')
+                        +'</div>'
                     +'</div>'
                     // ── Time + summary row ──
                     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">'
@@ -24849,6 +24860,33 @@ function _ldRenderMonitorTable(rows, orders) {
 }
 
 function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Photo lightbox ──────────────────────────────────────────────────
+window.ldShowPhotos = function(jsonStr) {
+    var urls = [];
+    try { urls = JSON.parse(jsonStr); } catch(e){}
+    if (!urls.length) return;
+    var modal = document.getElementById('ld-photo-modal');
+    if (!modal) return;
+    var idx = 0;
+    function render() {
+        document.getElementById('ld-photo-img').src = urls[idx];
+        document.getElementById('ld-photo-counter').textContent = (idx+1) + ' / ' + urls.length;
+        document.getElementById('ld-photo-prev-btn').style.opacity = idx===0 ? '0.3' : '1';
+        document.getElementById('ld-photo-next-btn').style.opacity = idx===urls.length-1 ? '0.3' : '1';
+    }
+    window._ldPhotoGo = function(dir) {
+        idx = Math.max(0, Math.min(urls.length-1, idx+dir));
+        render();
+    };
+    render();
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+};
+window.ldClosePhotos = function() {
+    var modal = document.getElementById('ld-photo-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
 
 window.ldPrintSummary = function() {
     // simple print of session rows
@@ -36083,6 +36121,24 @@ window.viewTripResult = async function(planId) {
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- WH STAFF SCREEN                                               -->
 <!-- ══════════════════════════════════════════════════════════════ -->
+<!-- ── Photo Lightbox Modal ── -->
+<div id="ld-photo-modal" class="hidden fixed inset-0 z-[9000] items-center justify-center" style="background:rgba(0,0,0,0.92);" onclick="if(event.target===this)ldClosePhotos()">
+  <div style="position:relative;max-width:96vw;max-height:96vh;display:flex;flex-direction:column;align-items:center;gap:12px;">
+    <!-- close -->
+    <button onclick="ldClosePhotos()" style="position:absolute;top:-44px;right:0;background:#334155;border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;">✕</button>
+    <!-- counter -->
+    <div id="ld-photo-counter" style="color:#94a3b8;font-size:13px;font-weight:700;font-family:monospace;"></div>
+    <!-- image -->
+    <div style="position:relative;display:flex;align-items:center;gap:10px;">
+      <button id="ld-photo-prev-btn" onclick="window._ldPhotoGo(-1)" style="background:#1e293b;border:none;color:#fff;width:44px;height:44px;border-radius:50%;font-size:20px;cursor:pointer;flex-shrink:0;">‹</button>
+      <img id="ld-photo-img" src="" style="max-width:80vw;max-height:80vh;border-radius:12px;object-fit:contain;box-shadow:0 4px 40px #0008;" />
+      <button id="ld-photo-next-btn" onclick="window._ldPhotoGo(1)" style="background:#1e293b;border:none;color:#fff;width:44px;height:44px;border-radius:50%;font-size:20px;cursor:pointer;flex-shrink:0;">›</button>
+    </div>
+    <!-- open full -->
+    <a id="ld-photo-link" onclick="document.getElementById('ld-photo-link').href=document.getElementById('ld-photo-img').src" href="#" target="_blank" style="color:#60a5fa;font-size:12px;font-weight:700;text-decoration:underline;"><i class="fas fa-external-link-alt"></i> เปิดรูปเต็ม</a>
+  </div>
+</div>
+
 <div id="wh-screen">
 <div id="wh-phone-wrap">
   <!-- Header -->
