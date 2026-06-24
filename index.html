@@ -24280,54 +24280,125 @@ window.ldMonLoad = async function() {
 function _ldRenderMonKpi(rows) {
     var el = document.getElementById('ld-mon-kpi');
     if (!el) return;
-    var totalWt  = rows.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
-    var totalPcs = rows.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
-    var staffSet = new Set(rows.map(function(r){ return r.staff_id||''; }).filter(Boolean));
-    var planSet  = new Set(rows.map(function(r){ return r.plan_id||''; }).filter(Boolean));
+    var done  = rows.filter(function(r){ return r.record_type!=='draft'; });
+    var live  = rows.filter(function(r){ return r.record_type==='draft'; });
+    var totalWt  = done.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
+    var totalPcs = done.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
+    var liveOrders = new Set(live.map(function(r){ return r.order_id||''; }).filter(Boolean));
     el.innerHTML =
-        '<div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-emerald-500 uppercase mb-1">น.น.รวม (กก.)</div><div class="text-2xl font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+'</div></div>'+
-        '<div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-sky-500 uppercase mb-1">จำนวน (เส้น)</div><div class="text-2xl font-black text-sky-700 font-mono">'+totalPcs.toLocaleString()+'</div></div>'+
-        '<div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-amber-500 uppercase mb-1">พนักงาน</div><div class="text-2xl font-black text-amber-700 font-mono">'+staffSet.size+'</div></div>'+
-        '<div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-purple-500 uppercase mb-1">แผน</div><div class="text-2xl font-black text-purple-700 font-mono">'+planSet.size+'</div></div>';
+        '<div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-emerald-500 uppercase mb-1">โหลดแล้ว (KG)</div><div class="text-2xl font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+'</div></div>'+
+        '<div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-sky-500 uppercase mb-1">โหลดแล้ว (PCS)</div><div class="text-2xl font-black text-sky-700 font-mono">'+totalPcs.toLocaleString()+'</div></div>'+
+        '<div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-rose-500 uppercase mb-1 flex items-center justify-center gap-1"><span class="w-1.5 h-1.5 bg-rose-500 rounded-full inline-block animate-pulse"></span>กำลังโหลด</div><div class="text-2xl font-black text-rose-600 font-mono">'+liveOrders.size+'</div><div class="text-[10px] text-rose-400">คัน</div></div>'+
+        '<div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-amber-500 uppercase mb-1">รายการ draft</div><div class="text-2xl font-black text-amber-600 font-mono">'+live.length+'</div></div>';
 }
 
 function _ldRenderMonitorTable(rows) {
-    var tbody = document.getElementById('ld-mon-tbody');
-    if (!tbody) return;
-    if (!rows.length) { tbody.innerHTML='<tr><td colspan="14" class="text-center py-12 text-slate-400 font-bold">ไม่พบข้อมูล</td></tr>'; return; }
-    var rowNo = 0;
-    var html = rows.map(function(r){
-        rowNo++;
-        var tStart = r.start_time ? r.start_time.slice(11,16) : '—';
-        var tEnd   = r.end_time   ? r.end_time.slice(11,16)   : '—';
-        var dur = 0;
-        if (r.start_time && r.end_time) { dur = Math.round((new Date(r.end_time)-new Date(r.start_time))/60000); }
-        var qty = parseFloat(r.qty)||0, wt = parseFloat(r.weight)||0;
-        var minPerItem = qty>0 && dur>0 ? (dur/qty).toFixed(2) : '—';
-        var wtPerUnit  = qty>0 ? (wt/qty).toFixed(3) : '—';
-        var photos = (r.photo_urls||[]);
-        var photoCell = photos.length>0
-            ? '<a href="'+photos[0]+'" target="_blank"><img src="'+photos[0]+'" class="w-8 h-8 object-cover rounded-lg border border-slate-200 mx-auto"></a>'
-            : '—';
-        var bg = rowNo%2===0 ? 'background:#f8fafc' : '';
-        return '<tr style="'+bg+'">'+
-            '<td class="px-3 py-2 text-center text-slate-400">'+rowNo+'</td>'+
-            '<td class="px-3 py-2 text-slate-600">'+_ldEsc(r.record_type||'บันทึกการโหลด')+'</td>'+
-            '<td class="px-3 py-2 text-slate-500">'+_ldEsc(r.plan_date||'')+'</td>'+
-            '<td class="px-3 py-2 font-mono font-bold text-slate-700">'+_ldEsc(r.staff_id||'—')+'</td>'+
-            '<td class="px-3 py-2 font-bold text-slate-800">'+_ldEsc(r.staff_name||'—')+'</td>'+
-            '<td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-black '+(r.team==='A'?'bg-blue-100 text-blue-700':'bg-emerald-100 text-emerald-700')+'">'+_ldEsc(r.team||'—')+'</span></td>'+
-            '<td class="px-3 py-2 text-center font-mono font-bold text-sky-600">'+tStart+'</td>'+
-            '<td class="px-3 py-2 text-center font-mono font-bold text-sky-600">'+tEnd+'</td>'+
-            '<td class="px-3 py-2 text-right font-black text-slate-700">'+(dur||'—')+'</td>'+
-            '<td class="px-3 py-2 text-right font-black text-sky-700">'+qty.toLocaleString()+'</td>'+
-            '<td class="px-3 py-2 text-right font-black text-emerald-700">'+wt.toLocaleString(undefined,{maximumFractionDigits:2})+'</td>'+
-            '<td class="px-3 py-2 text-right text-slate-500">'+minPerItem+'</td>'+
-            '<td class="px-3 py-2 text-right text-slate-500">'+wtPerUnit+'</td>'+
-            '<td class="px-3 py-2 text-center">'+photoCell+'</td>'+
-        '</tr>';
-    }).join('');
-    tbody.innerHTML = html;
+    var wrap = document.getElementById('ld-mon-table-wrap');
+    if (!wrap) return;
+    if (!rows.length) {
+        wrap.innerHTML = '<div class="text-center py-16 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
+        return;
+    }
+
+    var live = rows.filter(function(r){ return r.record_type==='draft'; });
+    var done = rows.filter(function(r){ return r.record_type!=='draft'; });
+
+    // ── LIVE SECTION ──
+    var liveHtml = '';
+    if (live.length) {
+        // group by order_id
+        var liveByOrder = {};
+        live.forEach(function(r){
+            var k = r.order_id||'?';
+            if (!liveByOrder[k]) liveByOrder[k] = {staff_name:r.staff_name, plan_id:r.plan_id, items:[]};
+            liveByOrder[k].items.push(r);
+        });
+        liveHtml = '<div class="mb-4">'
+            +'<div class="flex items-center gap-2 mb-2">'
+                +'<span class="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse block"></span>'
+                +'<span class="text-sm font-black text-rose-600 uppercase tracking-wider">กำลังโหลดอยู่ตอนนี้</span>'
+            +'</div>'
+            +Object.keys(liveByOrder).map(function(orderId){
+                var g = liveByOrder[orderId];
+                var totalWt  = g.items.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
+                var totalPcs = g.items.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
+                var tStart = g.items[0]&&g.items[0].start_time ? g.items[0].start_time.slice(11,16) : '—';
+                return '<div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 mb-2">'
+                    +'<div class="flex items-center justify-between mb-3">'
+                        +'<div>'
+                            +'<div class="font-black text-slate-800 text-base">'+_ldEsc(g.plan_id||orderId.slice(0,8))+'</div>'
+                            +'<div class="text-xs text-slate-500">'+_ldEsc(g.staff_name||'—')+' · เริ่ม '+tStart+'</div>'
+                        +'</div>'
+                        +'<div class="text-right">'
+                            +'<div class="text-lg font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:1})+' KG</div>'
+                            +'<div class="text-sm font-black text-sky-700 font-mono">'+totalPcs.toLocaleString()+' PCS</div>'
+                        +'</div>'
+                    +'</div>'
+                    +'<div class="space-y-1">'
+                    +g.items.filter(function(r){ return r.qty>0||r.weight>0; }).map(function(r){
+                        var pct = r.qty>0&&r.weight>0 ? (parseFloat(r.weight)/parseFloat(r.qty)).toFixed(2)+' kg/pcs' : '';
+                        return '<div class="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-rose-100">'
+                            +'<div class="text-xs font-bold text-slate-700">'+_ldEsc((r.product_name||r.sku||'').replace(/[฀-๿]+/g,'').trim())+'</div>'
+                            +'<div class="flex gap-3 text-xs font-black">'
+                                +'<span class="text-sky-600">'+parseFloat(r.qty||0).toLocaleString()+' PCS</span>'
+                                +'<span class="text-emerald-600">'+parseFloat(r.weight||0).toLocaleString(undefined,{maximumFractionDigits:1})+' KG</span>'
+                                +(pct?'<span class="text-purple-500">'+pct+'</span>':'')
+                            +'</div>'
+                        +'</div>';
+                    }).join('')
+                    +'</div>'
+                +'</div>';
+            }).join('')
+        +'</div>';
+    }
+
+    // ── DONE SECTION ──
+    var doneHtml = '';
+    if (done.length) {
+        var rowNo = 0;
+        var tableRows = done.map(function(r){
+            rowNo++;
+            var tStart = r.start_time ? r.start_time.slice(11,16) : '—';
+            var tEnd   = r.end_time   ? r.end_time.slice(11,16)   : '—';
+            var dur = (r.start_time&&r.end_time) ? Math.round((new Date(r.end_time)-new Date(r.start_time))/60000) : 0;
+            var qty = parseFloat(r.qty)||0, wt = parseFloat(r.weight)||0;
+            var wtPerUnit = qty>0 ? (wt/qty).toFixed(2) : '—';
+            var pName = (r.product_name||r.sku||'').replace(/[฀-๿]+/g,'').trim();
+            var bg = rowNo%2===0 ? '#f8fafc' : '#fff';
+            return '<tr style="background:'+bg+';border-bottom:1px solid #e2e8f0;">'
+                +'<td class="px-3 py-2.5 text-center text-xs text-slate-400">'+rowNo+'</td>'
+                +'<td class="px-3 py-2.5 text-xs font-bold text-slate-700">'+_ldEsc(pName)+'<div class="text-[10px] text-slate-400">'+_ldEsc(r.sku||'')+'</div></td>'
+                +'<td class="px-3 py-2.5 text-xs font-bold text-slate-600">'+_ldEsc(r.staff_name||'—')+'</td>'
+                +'<td class="px-3 py-2.5 text-xs text-center font-mono text-sky-600">'+tStart+'</td>'
+                +'<td class="px-3 py-2.5 text-xs text-center font-mono text-sky-600">'+tEnd+'</td>'
+                +'<td class="px-3 py-2.5 text-xs text-right font-black text-slate-600">'+(dur||'—')+'</td>'
+                +'<td class="px-3 py-2.5 text-xs text-right font-black text-sky-700">'+qty.toLocaleString()+'</td>'
+                +'<td class="px-3 py-2.5 text-xs text-right font-black text-emerald-700">'+wt.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
+                +'<td class="px-3 py-2.5 text-xs text-right text-purple-600 font-bold">'+wtPerUnit+'</td>'
+            +'</tr>';
+        }).join('');
+        doneHtml = '<div class="text-sm font-black text-slate-600 uppercase tracking-wider mb-2">โหลดเสร็จแล้ว ('+done.length+' รายการ)</div>'
+            +'<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">'
+                +'<div class="overflow-x-auto">'
+                +'<table style="width:100%;border-collapse:collapse;">'
+                    +'<thead><tr style="background:#1e293b;">'
+                        +'<th class="px-3 py-2.5 text-center text-[10px] font-black text-white">#</th>'
+                        +'<th class="px-3 py-2.5 text-left text-[10px] font-black text-white">PRODUCT</th>'
+                        +'<th class="px-3 py-2.5 text-left text-[10px] font-black text-white">STAFF</th>'
+                        +'<th class="px-3 py-2.5 text-center text-[10px] font-black text-white">START</th>'
+                        +'<th class="px-3 py-2.5 text-center text-[10px] font-black text-white">END</th>'
+                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-white">MIN</th>'
+                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-sky-300">PCS</th>'
+                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-emerald-300">KG</th>'
+                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-purple-300">KG/PCS</th>'
+                    +'</tr></thead>'
+                    +'<tbody>'+tableRows+'</tbody>'
+                +'</table>'
+                +'</div>'
+            +'</div>';
+    }
+
+    wrap.innerHTML = liveHtml + doneHtml || '<div class="text-center py-12 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
 }
 
 function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
