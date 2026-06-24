@@ -23475,7 +23475,8 @@ function _ldCalcItemCols(it) {
     if (lpb > 0 && lpr > 0 && qty > 0) {
         var bundles = Math.ceil(qty / lpb);
         var lifts = Math.ceil(bundles / lpr);
-        return Math.max(lifts, _LFT_COLS);
+        if (lifts <= _LFT_COLS) return _LFT_COLS;
+        return Math.ceil(lifts / _LFT_COLS) * _LFT_COLS;
     }
     return _LFT_COLS;
 }
@@ -23547,18 +23548,13 @@ function _ldBuildForm(order) {
 
         var rows = '';
         for (var rg=0; rg<numRowGroups; rg++) {
-            var colsInRow = Math.min(_LFT_COLS, itemCols - rg * _LFT_COLS);
             var liftCells = '';
-            for (var c=0; c<colsInRow; c++) {
+            for (var c=0; c<_LFT_COLS; c++) {
                 var colIdx = rg * _LFT_COLS + c;
                 liftCells += '<td style="padding:6px 4px;vertical-align:middle;border-right:1px solid #f1f5f9;background:#fff;">'
                     +'<input type="number" min="0" step="0.01" placeholder="kg" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
                     +'<input type="number" min="0" step="1" placeholder="pcs" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
                 +'</td>';
-            }
-            // pad remaining cells if last row is short
-            for (var p=colsInRow; p<_LFT_COLS; p++) {
-                liftCells += '<td style="background:#f8fafc;border-right:1px solid #f1f5f9;"></td>';
             }
             var borderStyle = (rg === numRowGroups-1) ? 'border-bottom:2px solid #e2e8f0;' : 'border-bottom:1px dashed #cbd5e1;';
             if (rg === 0) {
