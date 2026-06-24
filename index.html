@@ -23551,8 +23551,20 @@ function _ldBuildForm(order) {
 }
 
 var _ldCardStartTimes = {};
+var _ldDraftTimers    = {};   // debounce timers per order
+var _ldDraftRowIds    = {};   // {oid: {itemIdx: uuid}} — draft row IDs in DB
+var _ldDraftOrderCache= {};   // {oid: orderData} — cached order for draft upsert
 
+// ── called on every input; debounce 1.5s then upsert to DB ──
 window.ldDraftSave = function(oid) {
+    // save to localStorage immediately (for fast restore)
+    _ldLocalSave(oid);
+    // debounce DB upsert
+    clearTimeout(_ldDraftTimers[oid]);
+    _ldDraftTimers[oid] = setTimeout(function(){ _ldUpsertDraft(oid); }, 1500);
+};
+
+function _ldLocalSave(oid) {
     var draft = {lifts: [], note: ''};
     var iIdx = 0;
     while (true) {
@@ -23569,7 +23581,57 @@ window.ldDraftSave = function(oid) {
     var noteEl = document.getElementById('ldf-note-'+oid);
     if (noteEl) draft.note = noteEl.value;
     try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(draft)); } catch(e){}
-};
+}
+
+async function _ldUpsertDraft(oid) {
+    try {
+        // ensure we have order metadata
+        if (!_ldDraftOrderCache[oid]) {
+            var {data:od} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
+            if (!od) return;
+            _ldDraftOrderCache[oid] = od;
+        }
+        var od = _ldDraftOrderCache[oid];
+        var orderItems = od.items||[];
+        var cu = window._cu||{};
+        var staffRec = (_ldStaffMaster||[]).find(function(x){ return x.name===cu.name||x.id===cu.username; });
+        var staff = { id: staffRec?staffRec.id:(cu.username||''), name: staffRec?staffRec.name:(cu.name||cu.username||''), team: staffRec?staffRec.team:'' };
+        if (!_ldDraftRowIds[oid]) _ldDraftRowIds[oid] = {};
+
+        var iIdx = 0;
+        while (true) {
+            if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
+            var lifts=[], totalQty=0, totalWt=0;
+            for (var c=0; c<_LFT_COLS; c++) {
+                var wEl=document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
+                var qEl=document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                var w=parseFloat((wEl&&wEl.value)||0)||0;
+                var q=parseFloat((qEl&&qEl.value)||0)||0;
+                if (w>0||q>0) { lifts.push({lift_no:c+1,qty:q,weight:w}); totalQty+=q; totalWt+=w; }
+            }
+            var oi = orderItems[iIdx]||{};
+            var row = {
+                order_id: oid, plan_id: od.plan_id||'', plan_date: od.order_date||'',
+                record_type: 'draft',
+                staff_id: staff.id, staff_name: staff.name, team: staff.team,
+                sku: oi.sku||'', product_name: oi.product_name||'',
+                qty: totalQty, weight: totalWt,
+                lift_count: lifts.length, lifts: lifts,
+                start_time: _ldCardStartTimes[oid]||null,
+                end_time: null,
+                updated_at: new Date().toISOString()
+            };
+            var existingId = _ldDraftRowIds[oid][iIdx];
+            if (existingId) {
+                await window._sb.from('loading_sessions').update(row).eq('id', existingId);
+            } else {
+                var {data:inserted} = await window._sb.from('loading_sessions').insert(row).select('id').single();
+                if (inserted) _ldDraftRowIds[oid][iIdx] = inserted.id;
+            }
+            iIdx++;
+        }
+    } catch(e){}
+}
 
 function _ldDraftLoad(oid) {
     try {
@@ -23592,6 +23654,9 @@ function _ldDraftLoad(oid) {
 
 function _ldDraftClear(oid) {
     try { localStorage.removeItem('ld_draft_'+oid); } catch(e){}
+    clearTimeout(_ldDraftTimers[oid]);
+    delete _ldDraftTimers[oid];
+    delete _ldDraftOrderCache[oid];
 }
 window.ldToggleCard = function(orderId) {
     var isOpen = _ldActiveOrderId === orderId;
@@ -23742,29 +23807,33 @@ window.ldCardSave = async function(oid) {
         } catch(pe){}
     }
 
-    // build rows: one per staff, one per item with data
-    var rows = [];
-    items.forEach(function(it, iIdx){
-        if (!it.qty && !it.weight) return;
-        var oi = orderItems[iIdx]||{};
-        staffList.forEach(function(s){
-            rows.push({
+    // confirm draft rows → update to final, or insert if no draft exists
+    var draftIds = _ldDraftRowIds[oid]||{};
+    try {
+        for (var iIdx2=0; iIdx2<items.length; iIdx2++) {
+            var it = items[iIdx2];
+            if (!it.qty && !it.weight) continue;
+            var oi = orderItems[iIdx2]||{};
+            var s = staffList[0];
+            var finalRow = {
                 order_id: oid, plan_id: planId, plan_date: planDate,
                 record_type: 'บันทึกการโหลด',
                 staff_id: s.id, staff_name: s.name, team: s.team,
                 sku: oi.sku||'', product_name: oi.product_name||'',
                 qty: it.qty, weight: it.weight,
                 lift_count: it.lifts.length, lifts: it.lifts,
-                start_time: startIso,
-                end_time:   endIso,
+                start_time: startIso, end_time: endIso,
                 note: note, photo_urls: photoUrls,
-            });
-        });
-    });
-
-    try {
-        var {error} = await window._sb.from('loading_sessions').insert(rows);
-        if (error) throw error;
+                updated_at: endIso
+            };
+            if (draftIds[iIdx2]) {
+                await window._sb.from('loading_sessions').update(finalRow).eq('id', draftIds[iIdx2]);
+            } else {
+                await window._sb.from('loading_sessions').insert(finalRow);
+            }
+        }
+        delete _ldDraftRowIds[oid];
+        var error = null;
         // mark order done if all items have data
         var allFilled = items.every(function(it){ return it.qty>0||it.weight>0; });
         if (allFilled) {
