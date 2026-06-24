@@ -24278,9 +24278,9 @@ async function _ldLoadStaffMaster() {
 
 async function _ldLoadProductMap() {
     try {
-        var {data} = await window._sb.from('products').select('sku,min_w,max_w,lines_per_bundle,lifts_per_round');
+        var {data} = await window._sb.from('products').select('sku,name,min_w,max_w,lines_per_bundle,lifts_per_round');
         _ldProductMap = {};
-        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {min_w:p.min_w, max_w:p.max_w, lpb:p.lines_per_bundle||0, lpr:p.lifts_per_round||0}; });
+        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {name:p.name||'', min_w:p.min_w, max_w:p.max_w, lpb:p.lines_per_bundle||0, lpr:p.lifts_per_round||0}; });
     } catch(e) {}
 }
 
@@ -24707,7 +24707,7 @@ function _ldRenderMonitorTable(sessions, orders) {
             var actualWt  = activeRow ? (parseFloat(activeRow.weight)||0) : 0;
             var isDone    = !!doneRow && actualQty>0;
             var isLoading = !isDone && !!draftRow && actualQty>0;
-            var pName = (it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+            var pName = (_ldProductMap[it.sku]&&_ldProductMap[it.sku].name) || it.product_name || it.sku || '';
             var kgPcs = actualQty>0&&actualWt>0 ? (actualWt/actualQty).toFixed(2) : '—';
             var rowBg = isDone ? '#f0fdf4' : isLoading ? '#fff1f2' : '#fff';
             var statusIcon = isDone ? '<span style="color:#16a34a;font-size:14px;">✓</span>'
