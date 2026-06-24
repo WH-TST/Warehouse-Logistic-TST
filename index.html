@@ -23462,11 +23462,32 @@ function _ldRenderCards(orders) {
     }
 }
 
-var _LFT_COLS = 7; // lift columns per row
+var _LFT_COLS = 7; // lift columns per row (default / minimum)
+var _ldOrderCols = {}; // per-order dynamic column count
+
+function _ldCalcCols(order) {
+    var items = order.items||[];
+    var maxLifts = 0;
+    items.forEach(function(it) {
+        var prod = _ldProductMap[it.sku]||{};
+        var lpb = prod.lpb || 0;
+        var lpr = prod.lpr || 0;
+        var qty = parseFloat(it.qty)||0;
+        if (lpb > 0 && lpr > 0 && qty > 0) {
+            var bundles = Math.ceil(qty / lpb);
+            var lifts = Math.ceil(bundles / lpr);
+            if (lifts > maxLifts) maxLifts = lifts;
+        }
+    });
+    if (maxLifts <= _LFT_COLS) return _LFT_COLS;
+    return Math.ceil(maxLifts / _LFT_COLS) * _LFT_COLS; // round up to next multiple of 7
+}
 
 function _ldBuildForm(order) {
     var items = order.items||[];
     var oid = order.id;
+    var numCols = _ldCalcCols(order);
+    _ldOrderCols[oid] = numCols;
 
     var INP_BASE = 'width:100%;box-sizing:border-box;border:2px solid #e2e8f0;border-radius:8px;background:#fff;text-align:center;font-size:18px;font-weight:700;padding:8px 2px;outline:none;caret-color:#7c3aed;color:#1e293b;-webkit-appearance:none;display:block;';
     var INP_W = INP_BASE+'border-color:#bbf7d0;color:#15803d;';
@@ -23480,7 +23501,7 @@ function _ldBuildForm(order) {
 
     // build compact lift-number header row
     var liftHeaderCells = '';
-    for (var h=0; h<_LFT_COLS; h++) {
+    for (var h=0; h<numCols; h++) {
         liftHeaderCells += '<th style="padding:6px 4px;text-align:center;font-size:11px;font-weight:900;color:#fff;background:#334155;width:80px;border-right:1px solid #475569;">'+( h+1)+'</th>';
     }
 
@@ -23489,7 +23510,7 @@ function _ldBuildForm(order) {
         var pName = (it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
         var planWt = it.weight ? it.weight.toLocaleString(undefined,{maximumFractionDigits:1}) : '0';
         var liftCells = '';
-        for (var c=0; c<_LFT_COLS; c++) {
+        for (var c=0; c<numCols; c++) {
             liftCells += '<td style="padding:6px 4px;vertical-align:middle;border-right:1px solid #f1f5f9;background:#fff;">'
                 +'<input type="number" min="0" step="0.01" placeholder="0" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
                 +'<input type="number" min="0" step="1" placeholder="0" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
@@ -23559,7 +23580,7 @@ function _ldBuildForm(order) {
                         +'</tr>'
                         +'<tr style="background:#0f172a;">'
                             +'<td style="position:sticky;left:0;background:#0f172a;z-index:3;"></td>'
-                            +Array.from({length:_LFT_COLS}, function(){ return '<td style="padding:3px 4px;text-align:center;border-right:1px solid #1e293b;"><div style="font-size:9px;font-weight:900;color:#6ee7b7;">KG</div><div style="font-size:9px;font-weight:900;color:#93c5fd;">PCS</div></td>'; }).join('')
+                            +Array.from({length:numCols}, function(){ return '<td style="padding:3px 4px;text-align:center;border-right:1px solid #1e293b;"><div style="font-size:9px;font-weight:900;color:#6ee7b7;">KG</div><div style="font-size:9px;font-weight:900;color:#93c5fd;">PCS</div></td>'; }).join('')
                             +'<td style="background:#14532d;position:sticky;right:0;z-index:3;"></td>'
                         +'</tr>'
                     +'</thead>'
@@ -23607,7 +23628,8 @@ function _ldLocalSave(oid) {
     while (true) {
         if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
         var itemLifts = [];
-        for (var c=0; c<_LFT_COLS; c++) {
+        var _lcols = _ldOrderCols[oid]||_LFT_COLS;
+        for (var c=0; c<_lcols; c++) {
             var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
             var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
             itemLifts.push({w: wEl?wEl.value:'', q: qEl?qEl.value:''});
@@ -23667,7 +23689,8 @@ async function _ldUpsertDraft(oid) {
         while (true) {
             if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
             var lifts=[], totalQty=0, totalWt=0;
-            for (var c=0; c<_LFT_COLS; c++) {
+            var _ucols = _ldOrderCols[oid]||_LFT_COLS;
+            for (var c=0; c<_ucols; c++) {
                 var wEl=document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
                 var qEl=document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
                 var w=parseFloat((wEl&&wEl.value)||0)||0;
@@ -23809,7 +23832,8 @@ window.ldCardStats = function(oid) {
         var firstCell = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-0');
         if (!firstCell) break;
         var itemQty = 0, itemWt = 0;
-        for (var c=0; c<_LFT_COLS; c++) {
+        var _scols = _ldOrderCols[oid]||_LFT_COLS;
+        for (var c=0; c<_scols; c++) {
             var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
             var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
             itemQty += parseFloat((qEl&&qEl.value)||0)||0;
@@ -24235,9 +24259,9 @@ async function _ldLoadStaffMaster() {
 
 async function _ldLoadProductMap() {
     try {
-        var {data} = await window._sb.from('products').select('sku,min_w,max_w');
+        var {data} = await window._sb.from('products').select('sku,min_w,max_w,lines_per_bundle,lifts_per_round');
         _ldProductMap = {};
-        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {min_w: p.min_w, max_w: p.max_w}; });
+        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {min_w:p.min_w, max_w:p.max_w, lpb:p.lines_per_bundle||0, lpr:p.lifts_per_round||0}; });
     } catch(e) {}
 }
 
