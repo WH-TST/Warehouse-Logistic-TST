@@ -2165,7 +2165,25 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
     </aside>
 
     <div id="app-main" class="lg:ml-72 min-h-screen flex flex-col" style="transition:margin-left 0.25s ease;">
-    <header class="bg-white px-6 py-4 border-b flex justify-between items-center sticky top-0 z-40">
+
+    <!-- WH Staff mobile header (hidden by default, shown for WH Staff) -->
+    <header id="wh-staff-header" class="hidden bg-slate-900 px-4 py-3 flex justify-between items-center sticky top-0 z-40">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center">
+                <i class="fas fa-warehouse text-white text-sm"></i>
+            </div>
+            <div>
+                <div class="text-white font-black text-base leading-tight" id="wh-staff-header-name">—</div>
+                <div class="text-emerald-400 text-xs font-bold" id="wh-staff-header-team">Loading</div>
+            </div>
+        </div>
+        <button onclick="doLogout()" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-300 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+            <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+        </button>
+    </header>
+
+    <!-- Normal header (hidden for WH Staff) -->
+    <header id="main-header" class="bg-white px-6 py-4 border-b flex justify-between items-center sticky top-0 z-40">
         <div class="flex items-center gap-3">
             <!-- Hamburger สำหรับ mobile -->
             <button id="mobile-hamburger" onclick="openMobileSidebar()" title="เมนู" class="w-9 h-9 rounded-xl flex items-center justify-center transition-all shadow-sm lg:hidden" style="background:#1a2535;color:#e2e8f0;">
@@ -31222,6 +31240,12 @@ window.doLogout=function(){
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app-sidebar').classList.add('wms-app-hidden');
   document.getElementById('app-main').classList.add('wms-app-hidden');
+  // Reset header state
+  var mh=document.getElementById('main-header'),wh=document.getElementById('wh-staff-header');
+  if(mh)mh.classList.remove('hidden');
+  if(wh)wh.classList.add('hidden');
+  var am=document.getElementById('app-main');
+  if(am){am.style.marginLeft='';am.style.paddingLeft='';}
 };
 
 async function _applySession(){
@@ -31245,14 +31269,27 @@ async function _applySession(){
     // WH Staff: hide sidebar, remove sidebar margin, show only Loading tab
     sidebar.classList.add('wms-app-hidden');
     appMain.style.marginLeft = '0';
-    appMain.style.paddingLeft = '1rem';
+    // Swap headers
+    var mh = document.getElementById('main-header');
+    var wh = document.getElementById('wh-staff-header');
+    if(mh) mh.classList.add('hidden');
+    if(wh){
+      wh.classList.remove('hidden');
+      var hn = document.getElementById('wh-staff-header-name');
+      var ht = document.getElementById('wh-staff-header-team');
+      if(hn) hn.textContent = _cu.name||_cu.username;
+      if(ht) ht.textContent = (whRes.data&&whRes.data.team) ? 'Team '+whRes.data.team : 'Loading';
+    }
     // Hide all nav buttons
     WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(btn)btn.style.display='none';});
     if(typeof switchView==='function') switchView('loading');
   } else {
     sidebar.classList.remove('wms-app-hidden');
     appMain.style.marginLeft = '';
-    appMain.style.paddingLeft = '';
+    var mh2 = document.getElementById('main-header');
+    var wh2 = document.getElementById('wh-staff-header');
+    if(mh2) mh2.classList.remove('hidden');
+    if(wh2) wh2.classList.add('hidden');
     WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(!btn)return;btn.style.display=(_cu.isAdmin||(_cu.perms||[]).indexOf(v.id)>=0)?'':'none';});
     var fv=_cu.isAdmin?'input':((_cu.perms||[])[0]||'input');
     if(typeof switchView==='function')switchView(fv);
