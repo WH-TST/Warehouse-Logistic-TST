@@ -23479,10 +23479,15 @@ function _ldBuildForm(order) {
                 +'</td>';
             })()
             +liftCells
-            +'<td style="padding:10px 12px;vertical-align:middle;background:#f0fdf4;text-align:center;position:sticky;right:0;z-index:2;min-width:70px;">'
-                +'<div style="font-size:9px;font-weight:900;color:#64748b;margin-bottom:2px;">ACTUAL</div>'
+            +'<td style="padding:10px 12px;vertical-align:middle;background:#f0fdf4;text-align:center;position:sticky;right:0;z-index:2;min-width:90px;border-left:2px solid #d1fae5;">'
+                +'<div style="font-size:9px;font-weight:900;color:#64748b;margin-bottom:2px;">ACTUAL KG</div>'
                 +'<div id="ldf-actual-'+oid+'-'+idx+'" style="font-size:20px;font-weight:900;color:#15803d;font-family:monospace;">—</div>'
-                +'<div style="font-size:9px;color:#64748b;">KG</div>'
+                +'<div style="height:1px;background:#d1fae5;margin:4px 0;"></div>'
+                +'<div style="font-size:9px;font-weight:900;color:#0369a1;margin-bottom:1px;">PCS</div>'
+                +'<div id="ldf-actual-qty-'+oid+'-'+idx+'" style="font-size:16px;font-weight:900;color:#0369a1;font-family:monospace;">—</div>'
+                +'<div style="height:1px;background:#d1fae5;margin:4px 0;"></div>'
+                +'<div style="font-size:9px;font-weight:900;color:#7c3aed;margin-bottom:1px;">KG/PCS</div>'
+                +'<div id="ldf-actual-avg-'+oid+'-'+idx+'" style="font-size:14px;font-weight:900;color:#7c3aed;font-family:monospace;">—</div>'
             +'</td>'
         +'</tr>';
     }).join('');
@@ -23573,6 +23578,11 @@ window.ldCardStats = function(oid) {
         totalQty += itemQty; totalWt += itemWt;
         var actEl = document.getElementById('ldf-actual-'+oid+'-'+iIdx);
         if (actEl) actEl.textContent = itemWt>0 ? itemWt.toLocaleString(undefined,{maximumFractionDigits:2}) : '—';
+        var actQtyEl = document.getElementById('ldf-actual-qty-'+oid+'-'+iIdx);
+        if (actQtyEl) actQtyEl.textContent = itemQty>0 ? itemQty.toLocaleString() : '—';
+        var actAvgEl = document.getElementById('ldf-actual-avg-'+oid+'-'+iIdx);
+        var avg = itemQty>0 ? (itemWt/itemQty) : null;
+        if (actAvgEl) actAvgEl.textContent = avg!=null ? avg.toFixed(2) : '—';
         // validate avg vs min/max
         var rangeEl = document.getElementById('ldf-range-'+oid+'-'+iIdx);
         if (rangeEl && itemQty>0) {
