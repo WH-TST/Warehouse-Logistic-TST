@@ -23877,10 +23877,64 @@ async function _ldRefreshGlobalStats(dateVal) {
     } catch(e){}
 }
 
+// ── Notification helpers ─────────────────────────────────────────
+var _ldKnownOrderIds = null;   // null = first load, Set after first load
+
+function _ldRequestNotifPermission() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+function _ldNotifyNewOrder(order) {
+    // In-app toast always
+    _ldShowToast('🚛 งานโหลดใหม่! ' + (order.truck_plate||'') + ' — กรุณาตรวจสอบ');
+
+    // Browser push if permitted and page is background/hidden
+    if (Notification.permission === 'granted') {
+        try {
+            var n = new Notification('WMS — งานโหลดใหม่', {
+                body: 'รถ ' + (order.truck_plate||'—') + ' รอการโหลด',
+                icon: '/favicon.ico',
+                tag: 'ld-order-' + order.id,
+                renotify: true
+            });
+            n.onclick = function(){ window.focus(); n.close(); };
+        } catch(e){}
+    }
+}
+
+function _ldShowToast(msg) {
+    var t = document.getElementById('ld-toast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'ld-toast';
+        t.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);background:#0f172a;color:#fff;padding:14px 22px;border-radius:16px;font-size:14px;font-weight:700;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.4);opacity:0;transition:all 0.3s ease;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;border-left:4px solid #10b981;';
+        document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function(){
+        t.style.opacity = '0';
+        t.style.transform = 'translateX(-50%) translateY(-20px)';
+    }, 4000);
+}
+
 function _ldSubOrders() {
     if (_ldOrderSub) { try { _ldOrderSub.unsubscribe(); } catch(e){} }
     _ldOrderSub = window._sb.channel('ld-orders-watch-v2')
-        .on('postgres_changes',{event:'*',schema:'public',table:'loading_orders'}, function(){
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'loading_orders'}, function(payload){
+            var today = new Date().toISOString().slice(0,10);
+            _ldLoadOrderCards(today);
+            // notify if WH Staff mode
+            if (payload && payload.new && payload.new.order_date === today) {
+                _ldNotifyNewOrder(payload.new);
+            }
+        })
+        .on('postgres_changes',{event:'UPDATE',schema:'public',table:'loading_orders'}, function(){
             var today = new Date().toISOString().slice(0,10);
             _ldLoadOrderCards(today);
         })
@@ -31283,6 +31337,8 @@ async function _applySession(){
     // Hide all nav buttons
     WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(btn)btn.style.display='none';});
     if(typeof switchView==='function') switchView('loading');
+    // Request browser notification permission
+    if(typeof _ldRequestNotifPermission==='function') _ldRequestNotifPermission();
   } else {
     sidebar.classList.remove('wms-app-hidden');
     appMain.style.marginLeft = '';
