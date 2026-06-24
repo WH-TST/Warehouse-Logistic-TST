@@ -24444,6 +24444,7 @@ window.ldMonLoad = async function() {
     var wrap = document.getElementById('ld-mon-table-wrap');
     if (wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
+        if (!Object.keys(_ldProductMap).length) await _ldLoadProductMap();
         var [{data:orders},{data:sessions}] = await Promise.all([
             window._sb.from('loading_orders').select('*').eq('order_date', dateVal),
             window._sb.from('loading_sessions').select('*').eq('plan_date', dateVal)
@@ -24684,18 +24685,29 @@ function _ldRenderMonitorTable(rows, orders) {
         var orderIdx = {};
         (orders||[]).forEach(function(o){ orderIdx[o.id] = o; });
 
+        // index ALL sessions (draft + done) by order for complete staff list
+        var allSessionsByOrder = {};
+        rows.forEach(function(r){
+            var k = r.order_id||'?';
+            if (!allSessionsByOrder[k]) allSessionsByOrder[k] = [];
+            allSessionsByOrder[k].push(r);
+        });
+
         var orderCards = Object.keys(doneByOrder).map(function(orderId){
             var sessions = doneByOrder[orderId];
             var order = orderIdx[orderId] || {};
             var orderItems = order.items||[];
 
-            // aggregate header data
+            // collect staff/team from ALL sessions (draft+done) for complete team list
             var staffSet = {}, teamSet = {};
+            (allSessionsByOrder[orderId]||sessions).forEach(function(r){
+                if (r.staff_name) staffSet[r.staff_name] = 1;
+                if (r.team) teamSet[r.team] = 1;
+            });
+            // totals + times from confirmed (done) sessions only
             var minStart = null, maxEnd = null;
             var totalQty = 0, totalWt = 0;
             sessions.forEach(function(r){
-                if (r.staff_name) staffSet[r.staff_name] = 1;
-                if (r.team) teamSet[r.team] = 1;
                 if (r.start_time) { if (!minStart||r.start_time<minStart) minStart=r.start_time; }
                 if (r.end_time)   { if (!maxEnd  ||r.end_time>maxEnd)     maxEnd=r.end_time;   }
                 totalQty += parseFloat(r.qty)||0;
