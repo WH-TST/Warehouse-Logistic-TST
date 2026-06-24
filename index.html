@@ -25283,35 +25283,61 @@ window._loFetchProducts = async function() {
     window._loProductCache = data || [];
     return window._loProductCache;
 };
-window._loSkuSuggest = async function(n, val) {
-    var drop = document.getElementById('lo-sku-drop-'+n);
-    if (!drop) return;
-    var q = val.trim().toLowerCase();
-    if (!q) { drop.style.display='none'; return; }
-    var prods = await window._loFetchProducts();
-    var hits = prods.filter(function(p){
-        return p.sku.toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q);
-    }).slice(0,8);
-    if (!hits.length) { drop.style.display='none'; return; }
-    drop.innerHTML = hits.map(function(p){
-        return '<div onclick="window._loPickSku('+n+',\''+p.sku.replace(/'/g,"\\'")+'\',' +
-            '\''+((p.name||'').replace(/'/g,"\\'"))+'\')" '+
-            'style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:11px;" '+
-            'onmouseenter="this.style.background=\'#eff6ff\'" onmouseleave="this.style.background=\'\'">' +
-            '<span style="font-weight:900;font-family:monospace;color:#4f46e5;">'+p.sku+'</span>' +
-            '<span style="color:#64748b;margin-left:6px;">'+((p.name||'')).substring(0,40)+'</span>' +
-        '</div>';
-    }).join('');
-    drop.style.display='block';
-};
-window._loPickSku = function(n, sku, name) {
-    var skuEl = document.getElementById('lo-item-sku-'+n);
-    var nameEl = document.getElementById('lo-item-name-'+n);
-    if (skuEl) skuEl.value = sku;
-    if (nameEl) nameEl.value = name;
-    var drop = document.getElementById('lo-sku-drop-'+n);
-    if (drop) drop.style.display='none';
-};
+// Shared floating dropdown appended to body (avoids table overflow clipping)
+(function(){
+    var _loDrop = null;
+    var _loDropN = null;
+    function _ensureDrop() {
+        if (!_loDrop) {
+            _loDrop = document.createElement('div');
+            _loDrop.id = 'lo-sku-global-drop';
+            _loDrop.style.cssText = 'display:none;position:fixed;background:#fff;border:1.5px solid #c7d2fe;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99999;max-height:240px;overflow-y:auto;min-width:260px;';
+            _loDrop.addEventListener('mousedown', function(e){
+                var item = e.target.closest('[data-sku]');
+                if (!item) return;
+                e.preventDefault();
+                var sku = item.dataset.sku, name = item.dataset.name;
+                var skuEl = document.getElementById('lo-item-sku-'+_loDropN);
+                var nameEl = document.getElementById('lo-item-name-'+_loDropN);
+                if (skuEl) skuEl.value = sku;
+                if (nameEl) nameEl.value = name;
+                _loDrop.style.display = 'none';
+            });
+            document.body.appendChild(_loDrop);
+        }
+        return _loDrop;
+    }
+    document.addEventListener('click', function(e){
+        if (_loDrop && !_loDrop.contains(e.target)) _loDrop.style.display='none';
+    });
+    window._loSkuSuggest = async function(n, val) {
+        var inp = document.getElementById('lo-item-sku-'+n);
+        if (!inp) return;
+        var q = val.trim().toLowerCase();
+        var drop = _ensureDrop();
+        if (!q) { drop.style.display='none'; return; }
+        var prods = await window._loFetchProducts();
+        var hits = prods.filter(function(p){
+            return p.sku.toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q);
+        }).slice(0,8);
+        if (!hits.length) { drop.style.display='none'; return; }
+        _loDropN = n;
+        drop.innerHTML = hits.map(function(p){
+            var esc = function(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); };
+            return '<div data-sku="'+esc(p.sku)+'" data-name="'+esc(p.name||'')+'" '+
+                'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;display:flex;align-items:center;gap:8px;" '+
+                'onmouseenter="this.style.background=\'#eff6ff\'" onmouseleave="this.style.background=\'\'">' +
+                '<span style="font-weight:900;font-family:monospace;color:#4f46e5;flex-shrink:0;">'+esc(p.sku)+'</span>' +
+                '<span style="color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc((p.name||'').substring(0,50))+'</span>' +
+            '</div>';
+        }).join('');
+        var rect = inp.getBoundingClientRect();
+        drop.style.left = rect.left + 'px';
+        drop.style.top  = (rect.bottom + 4) + 'px';
+        drop.style.width = Math.max(rect.width, 280) + 'px';
+        drop.style.display = 'block';
+    };
+})();
 
 window.loAddItem = function(prefill) {
     _loItemCount++;
@@ -25321,9 +25347,8 @@ window.loAddItem = function(prefill) {
     tr.id = 'lo-item-row-'+n;
     tr.className = 'border-t border-slate-100';
     tr.innerHTML =
-        '<td class="px-2 py-1.5" style="position:relative;">'+
-            '<input type="text" id="lo-item-sku-'+n+'" placeholder="SKU หรือชื่อสินค้า" value="'+(prefill?.sku||'')+'" autocomplete="off" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none focus:border-indigo-400" oninput="window._loSkuSuggest('+n+',this.value)" onblur="setTimeout(function(){var d=document.getElementById(\'lo-sku-drop-'+n+'\');if(d)d.style.display=\'none\';},200)">'+
-            '<div id="lo-sku-drop-'+n+'" style="display:none;position:absolute;left:8px;right:8px;top:100%;background:#fff;border:1.5px solid #c7d2fe;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:999;max-height:220px;overflow-y:auto;"></div>'+
+        '<td class="px-2 py-1.5">'+
+            '<input type="text" id="lo-item-sku-'+n+'" placeholder="SKU หรือชื่อสินค้า" value="'+(prefill?.sku||'')+'" autocomplete="off" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none focus:border-indigo-400" oninput="window._loSkuSuggest('+n+',this.value)">'+
             '<input type="text" id="lo-item-name-'+n+'" placeholder="ชื่อสินค้า" value="'+(prefill?.product_name||'')+'" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs mt-0.5 focus:outline-none focus:border-indigo-400">'+
         '</td>'+
         '<td class="px-2 py-1.5 w-24"><input type="number" id="lo-item-qty-'+n+'" min="0" step="1" value="'+(prefill?.qty||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loItemChanged()"></td>'+
