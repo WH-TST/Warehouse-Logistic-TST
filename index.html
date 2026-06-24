@@ -34064,8 +34064,8 @@ window.dmLoadInspections=async function(){
     var time=ins&&ins.created_at?' · '+new Date(ins.created_at).toLocaleTimeString('th',{hour:'2-digit',minute:'2-digit'}):'';
     var isLast=idx===drivers.length-1;
     var border=isLast?'none':'border-bottom:1px solid #f1f5f9';
-    var clickAttr=(!isPending&&checked)?'onclick="dmShowInspectDetail(\''+d.plate+'\',\''+dateVal+'\')"':'';
-    var hoverStyle=(!isPending&&checked)?'cursor:pointer;':'';
+    var clickAttr=(!isPending&&!isRejected&&checked)?'onclick="dmShowInspectDetail(\''+d.plate+'\',\''+dateVal+'\')"':'';
+    var hoverStyle=(!isPending&&!isRejected&&checked)?'cursor:pointer;':'';
 
     // ส่วนขยาย pending — รายการปัญหา + รูป + ปุ่มอนุมัติ
     var pendingExpand='';
@@ -34093,6 +34093,33 @@ window.dmLoadInspections=async function(){
         +'</div></div>';
     }
 
+    // ส่วนขยาย rejected — รายการปัญหา + รูป + ปุ่มปลดระงับ
+    var rejectedExpand='';
+    if(isRejected){
+      var rIssueItems=(ins.items||[]).filter(function(it){return it.status==='issue';});
+      var rIssueRows=rIssueItems.map(function(it){
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #e9d5ff;">'
+          +'<div style="flex:1;">'
+          +'<div style="font-size:12px;font-weight:700;color:#1e293b;">'+dmEsc(it.name.replace('⭐ ',''))+'</div>'
+          +(it.symptom?'<div style="font-size:11px;color:#7c3aed;margin-top:2px;">'+dmEsc(it.symptom)+'</div>':'')
+          +'</div>'
+          +(it.photo_url
+            ?'<a href="'+it.photo_url+'" target="_blank" onclick="event.stopPropagation();">'
+              +'<img src="'+it.photo_url+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #c4b5fd;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+              +'</a>'
+            :'<div style="width:64px;height:64px;border-radius:8px;border:1px dashed #c4b5fd;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-image" style="color:#c4b5fd;font-size:20px;"></i></div>')
+          +'</div>';
+      }).join('');
+      var rNote=ins.approval_note?'<div style="font-size:11px;color:#6d28d9;margin-bottom:8px;padding:6px 10px;background:#ede9fe;border-radius:6px;"><i class="fas fa-comment-alt" style="margin-right:5px;"></i>'+dmEsc(ins.approval_note)+'</div>':'';
+      rejectedExpand='<div onclick="event.stopPropagation();" style="border-top:1px solid #e9d5ff;padding:12px 20px 12px 56px;background:#faf5ff;">'
+        +rNote
+        +'<div style="margin-bottom:10px;">'+rIssueRows+'</div>'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+        +'<input type="text" id="dm-apv-note-'+ins.id+'" placeholder="หมายเหตุปลดระงับ (ถ้ามี)" onclick="event.stopPropagation();" style="flex:1;min-width:120px;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:12px;outline:none;color:#1e293b;">'
+        +'<button onclick="dmApprove('+ins.id+',\'approved\')" style="background:#7c3aed;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap;"><i class="fas fa-lock-open" style="margin-right:5px;"></i>ปลดระงับ — ออกรถได้</button>'
+        +'</div></div>';
+    }
+
     return '<div style="'+(isLast?'':'border-bottom:1px solid #f1f5f9')+'">'
       +'<div '+clickAttr+' style="display:flex;align-items:center;gap:12px;padding:12px 20px;'+hoverStyle+'transition:background .15s;" '
       +((!isPending&&checked)?'onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'transparent\'"':'')+'>'
@@ -34106,6 +34133,7 @@ window.dmLoadInspections=async function(){
       +(!isPending&&checked?'<i class="fas fa-chevron-right" style="font-size:11px;color:#cbd5e1;flex-shrink:0;margin-left:6px;"></i>':'')
       +'</div>'
       +pendingExpand
+      +rejectedExpand
       +'</div>';
   }).join('');
 };
@@ -35150,7 +35178,7 @@ window.drvInit=function(wmsUser){
 
 async function drvSupUpdateBadge(){
   var today=new Date().toISOString().split('T')[0];
-  var {data}=await window._sb.from('truck_inspections').select('id').eq('inspect_date',today).eq('approval_status','pending');
+  var {data}=await window._sb.from('truck_inspections').select('id').eq('inspect_date',today).in('approval_status',['pending','rejected']);
   var badge=document.getElementById('drv-sup-badge');
   if(!badge)return;
   var count=(data||[]).length;
@@ -35506,7 +35534,7 @@ window.drvSupLoadPending=async function(){
   if(!_dSess.is_supervisor)return;
   var today=new Date().toISOString().split('T')[0];
   var {data}=await window._sb.from('truck_inspections')
-    .select('*').eq('inspect_date',today).eq('approval_status','pending');
+    .select('*').eq('inspect_date',today).in('approval_status',['pending','rejected']).order('id');
   var wrap=document.getElementById('drv-sup-pending-wrap');
   if(!wrap)return;
   if(!(data&&data.length)){
@@ -35514,23 +35542,36 @@ window.drvSupLoadPending=async function(){
     return;
   }
   wrap.innerHTML=data.map(function(ins){
+    var isRej=ins.approval_status==='rejected';
     var issueItems=(ins.items||[]).filter(function(it){return it.status==='issue';});
-    return '<div style="background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border-left:3px solid #ef4444;">'
+    var borderColor=isRej?'#7c3aed':'#ef4444';
+    var badgeColor=isRej?'#7c3aed':'#ef4444';
+    var badgeBg=isRej?'#7c3aed1a':'#ef44441a';
+    var nameColor=isRej?'#c4b5fd':'#fca5a5';
+    var badgeLabel=isRej?'ระงับแล้ว':'พบปัญหา '+issueItems.length+' รายการ';
+    var rejNoteHtml=isRej&&ins.approval_note
+      ?'<div style="font-size:11px;color:#a78bfa;margin-bottom:8px;padding:6px 10px;background:#2e1065;border-radius:6px;"><i class="fas fa-comment-alt" style="margin-right:5px;"></i>'+drvEsc(ins.approval_note)+'</div>'
+      :'';
+    var actionBtns=isRej
+      ?'<input type="text" id="sup-note-'+ins.id+'" placeholder="หมายเหตุปลดระงับ (ถ้ามี)" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#fff;font-size:12px;box-sizing:border-box;margin-bottom:8px;">'
+        +'<button onclick="drvSupApprove('+ins.id+',\'approved\')" style="width:100%;background:#7c3aed;border:none;border-radius:10px;padding:10px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-lock-open" style="margin-right:5px;"></i>ปลดระงับ — ออกรถได้</button>'
+      :'<input type="text" id="sup-note-'+ins.id+'" placeholder="หมายเหตุ (ถ้ามี)" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#fff;font-size:12px;box-sizing:border-box;margin-bottom:8px;">'
+        +'<div style="display:flex;gap:8px;">'
+        +'<button onclick="drvSupApprove('+ins.id+',\'approved\')" style="flex:1;background:#059669;border:none;border-radius:10px;padding:10px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-check" style="margin-right:5px;"></i>อนุมัติออกรถ</button>'
+        +'<button onclick="drvSupApprove('+ins.id+',\'rejected\')" style="flex:1;background:#ef4444;border:none;border-radius:10px;padding:10px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-ban" style="margin-right:5px;"></i>ระงับ</button>'
+        +'</div>';
+    return '<div style="background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border-left:3px solid '+borderColor+';">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
-      +'<div><div style="font-size:14px;font-weight:900;color:#fca5a5;">'+drvEsc(ins.driver_name||ins.driver_id||'–')+'</div>'
+      +'<div><div style="font-size:14px;font-weight:900;color:'+nameColor+';">'+drvEsc(ins.driver_name||ins.driver_id||'–')+'</div>'
       +'<div style="font-size:11px;color:#64748b;">'+drvEsc(ins.truck_plate||'–')+'</div></div>'
-      +'<span style="font-size:10px;background:#ef44441a;color:#ef4444;border:1px solid #ef4444;border-radius:20px;padding:3px 10px;font-weight:900;">พบปัญหา '+issueItems.length+' รายการ</span></div>'
+      +'<span style="font-size:10px;background:'+badgeBg+';color:'+badgeColor+';border:1px solid '+badgeColor+';border-radius:20px;padding:3px 10px;font-weight:900;">'+badgeLabel+'</span></div>'
+      +rejNoteHtml
       +issueItems.map(function(it){
-        return '<div style="font-size:12px;color:#94a3b8;padding:4px 0;border-bottom:1px solid #1e293b;">'
-          +'<i class="fas fa-exclamation-circle" style="color:#ef4444;margin-right:6px;"></i>'
+        return '<div style="font-size:12px;color:#94a3b8;padding:4px 0;border-bottom:1px solid #0f172a;">'
+          +'<i class="fas fa-exclamation-circle" style="color:'+badgeColor+';margin-right:6px;"></i>'
           +drvEsc(it.name.replace('⭐ ',''))+(it.symptom?' — '+drvEsc(it.symptom):'')+'</div>';
       }).join('')
-      +'<div style="margin-top:10px;">'
-      +'<input type="text" id="sup-note-'+ins.id+'" placeholder="หมายเหตุ (ถ้ามี)" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#fff;font-size:12px;box-sizing:border-box;margin-bottom:8px;">'
-      +'<div style="display:flex;gap:8px;">'
-      +'<button onclick="drvSupApprove('+ins.id+',\'approved\')" style="flex:1;background:#059669;border:none;border-radius:10px;padding:10px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-check" style="margin-right:5px;"></i>อนุมัติออกรถ</button>'
-      +'<button onclick="drvSupApprove('+ins.id+',\'rejected\')" style="flex:1;background:#ef4444;border:none;border-radius:10px;padding:10px;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-ban" style="margin-right:5px;"></i>ระงับ</button>'
-      +'</div></div></div>';
+      +'<div style="margin-top:10px;">'+actionBtns+'</div></div>';
   }).join('');
 };
 
