@@ -2103,6 +2103,10 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
             <button onclick="switchView('logistic-plan')" id="nav-logistic-plan" class="nav-btn" data-tip="Delivery Plan">
                 <span class="nav-icon"><i class="fas fa-route"></i></span> Delivery Plan
             </button>
+            <button onclick="switchView('loading-order')" id="nav-loading-order" class="nav-btn" data-tip="Loading Order">
+                <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span>
+                <span>Loading Order</span>
+            </button>
             <button onclick="switchView('loading')" id="nav-loading" class="nav-btn" data-tip="Loading">
                 <span class="nav-icon"><i class="fas fa-boxes"></i></span>
                 <span>Loading</span>
@@ -7399,6 +7403,102 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════
+     LOADING ORDER (เจ้าหน้าที่จัดส่ง สร้างคำสั่งโหลด)
+══════════════════════════════════════════════════════════════════ -->
+<div id="view-loading-order-content" class="hidden space-y-4">
+
+  <!-- Header bar -->
+  <div class="flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs font-black text-slate-500 mb-1">วันที่</label>
+      <input type="date" id="lo-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none" onchange="loLoadPlansForDate()">
+    </div>
+    <button onclick="loNewOrder()" class="px-5 py-2.5 bg-indigo-600 text-white font-black text-sm rounded-xl hover:bg-indigo-700 transition flex items-center gap-2 shadow">
+      <i class="fas fa-plus"></i> สร้าง Loading Order ใหม่
+    </button>
+    <button onclick="loRefresh()" class="px-4 py-2.5 border-2 border-slate-200 bg-white text-slate-500 font-black text-sm rounded-xl hover:bg-slate-50 transition flex items-center gap-2">
+      <i class="fas fa-sync-alt"></i> รีเฟรช
+    </button>
+    <div id="lo-realtime-badge" class="hidden px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5"><span class="w-2 h-2 bg-emerald-500 rounded-full block animate-pulse"></span>Live</div>
+  </div>
+
+  <!-- Order list -->
+  <div id="lo-order-list" class="space-y-3">
+    <div class="text-center py-16 text-slate-400"><i class="fas fa-spinner fa-spin text-3xl mb-3 block"></i>กำลังโหลด...</div>
+  </div>
+
+</div>
+
+<!-- Modal: สร้าง / แก้ไข Loading Order -->
+<div id="lo-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-6 px-3">
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl">
+    <!-- Modal header -->
+    <div class="bg-indigo-700 text-white px-6 py-4 rounded-t-3xl flex items-center justify-between">
+      <div class="font-black text-lg flex items-center gap-2"><i class="fas fa-clipboard-list"></i><span id="lo-modal-title">สร้าง Loading Order</span></div>
+      <button onclick="loCloseModal()" class="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 text-white flex items-center justify-center"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="p-5 space-y-5">
+      <!-- Date + plan -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">วันที่โหลด</label>
+          <input type="date" id="lo-m-date" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none" onchange="loModalLoadPlans()">
+        </div>
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">โหลดจากแผน (ถ้ามี)</label>
+          <select id="lo-m-plan" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none" onchange="loImportFromPlan()">
+            <option value="">-- เลือกแผน หรือ กรอกเอง --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Truck info (auto-fill from plan) -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">ทะเบียนรถ</label>
+          <input type="text" id="lo-m-truck" placeholder="เช่น 84-5099" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">หมายเหตุ</label>
+          <input type="text" id="lo-m-note" placeholder="(ถ้ามี)" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Items -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-black text-slate-600">รายการสินค้า</label>
+          <button onclick="loAddItem()" class="text-xs font-black px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition flex items-center gap-1"><i class="fas fa-plus"></i> เพิ่มรายการ</button>
+        </div>
+        <div class="rounded-xl border border-slate-200 overflow-hidden">
+          <table class="w-full text-xs">
+            <thead class="bg-slate-100">
+              <tr>
+                <th class="px-3 py-2 text-left font-black text-slate-600">SKU / สินค้า</th>
+                <th class="px-3 py-2 text-right font-black text-slate-600 w-24">จำนวน (เส้น)</th>
+                <th class="px-3 py-2 text-right font-black text-slate-600 w-28">เป้าน.น. (กก.)</th>
+                <th class="w-10"></th>
+              </tr>
+            </thead>
+            <tbody id="lo-m-items-tbody"></tbody>
+          </table>
+        </div>
+        <div id="lo-m-total" class="mt-2 text-right text-xs font-black text-emerald-700"></div>
+      </div>
+
+      <!-- Submit -->
+      <div class="flex gap-3">
+        <button onclick="loCloseModal()" class="flex-1 py-3 border-2 border-slate-200 text-slate-500 font-black rounded-2xl hover:bg-slate-50 transition">ยกเลิก</button>
+        <button onclick="loSaveOrder()" class="flex-2 px-8 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg">
+          <i class="fas fa-paper-plane"></i> ส่ง Loading Order
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
      LOADING CONTROL
 ══════════════════════════════════════════════════════════════════ -->
 <div id="view-loading-content" class="hidden space-y-4">
@@ -7410,6 +7510,10 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 
   <!-- ── TAB: บันทึกการโหลด (mobile form) ── -->
   <div id="ld-tab-form" class="space-y-4">
+
+    <!-- Pending Orders from Loading Order tab -->
+    <div id="ld-pending-orders" class="space-y-2"></div>
+
     <!-- Header: plan selector + date -->
     <div class="grid grid-cols-2 gap-3">
       <div>
@@ -12749,7 +12853,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -12763,6 +12867,7 @@ window.switchView = function switchView(view) {
     if (activeContent) activeContent.classList.remove('hidden');
     if (activeNav) activeNav.classList.add('active');
 
+    if (view === 'loading-order' && window.loInit) window.loInit();
     if (view === 'loading' && window.ldInit) window.ldInit();
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
     if (view === 'driver-analytics' && window.daInit) window.daInit();
@@ -12780,6 +12885,7 @@ window.switchView = function switchView(view) {
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
 
+            'loading-order': 'Loading Order — สร้างคำสั่งโหลดสินค้า',
             'loading': 'Loading Control — บันทึกการโหลดสินค้า',
             'driver-monitor': 'Driver Monitor — ติดตามคนขับ',
             'driver-analytics': 'Driver Analytics — สถิติคนขับ',
@@ -23332,10 +23438,83 @@ window.ldInit = function() {
     var today = new Date().toISOString().slice(0,10);
     if (d && !d.value) { d.value = today; ldLoadPlans(); }
     if (dm && !dm.value) { dm.value = today; }
-    // load wh staff master
     _ldLoadStaffMaster();
-    // init first lift row
     if (!document.getElementById('ld-lifts-container').children.length) ldAddLift();
+    // โหลด pending orders + subscribe realtime
+    _ldLoadPendingOrders();
+    _ldSubOrders();
+};
+
+async function _ldLoadPendingOrders() {
+    var dateVal = document.getElementById('ld-date')?.value || new Date().toISOString().slice(0,10);
+    var wrap = document.getElementById('ld-pending-orders');
+    if (!wrap) return;
+    try {
+        var {data} = await window._sb.from('loading_orders').select('*')
+            .eq('order_date', dateVal).in('status', ['pending','in_progress']).order('created_at');
+        var orders = data || [];
+        if (!orders.length) { wrap.innerHTML = ''; return; }
+        var html = '<div class="bg-indigo-50 border-2 border-indigo-200 rounded-2xl overflow-hidden">'
+            + '<div class="bg-indigo-700 text-white px-4 py-2 flex items-center gap-2 text-sm font-black">'
+            + '<span class="w-2 h-2 bg-amber-400 rounded-full block animate-pulse"></span>'
+            + 'Loading Orders รอดำเนินการ ('+orders.length+')'
+            + '</div>';
+        orders.forEach(function(o) {
+            var items = o.items || [];
+            var totalWt = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
+            var stBadge = o.status==='in_progress'
+                ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-700 border border-sky-300">กำลังโหลด</span>'
+                : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">รอโหลด</span>';
+            html += '<div class="px-4 py-3 border-t border-indigo-100 cursor-pointer hover:bg-indigo-100 transition" onclick="ldFillFromOrder(\''+o.id+'\')">'
+                + '<div class="flex items-center justify-between flex-wrap gap-1">'
+                + '<div class="font-black text-sm text-slate-800"><i class="fas fa-truck text-indigo-400 mr-1.5"></i>'+(o.truck_plate||'—')+'</div>'
+                + '<div class="flex items-center gap-2">'+stBadge+'<span class="text-xs text-slate-400 font-mono">'+items.length+' รายการ / '+totalWt.toLocaleString()+' กก.</span></div>'
+                + '</div>'
+                + '<div class="mt-1 text-xs text-slate-500">'
+                + items.map(function(it){ return '<span class="inline-block mr-2 font-bold text-slate-600">'+it.sku+'</span><span class="text-slate-400">'+it.qty+' เส้น</span>'; }).join(' · ')
+                + '</div>'
+                + '<div class="mt-1.5 text-[10px] text-indigo-500 font-bold"><i class="fas fa-hand-pointer mr-1"></i>แตะเพื่อเลือกแผนนี้</div>'
+                + '</div>';
+        });
+        html += '</div>';
+        wrap.innerHTML = html;
+    } catch(e) { wrap.innerHTML = ''; }
+}
+
+var _ldOrderSub = null;
+function _ldSubOrders() {
+    if (_ldOrderSub) { try { _ldOrderSub.unsubscribe(); } catch(e) {} }
+    _ldOrderSub = window._sb.channel('ld-orders-watch')
+        .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'}, function(){
+            _ldLoadPendingOrders();
+        }).subscribe();
+}
+
+window.ldFillFromOrder = async function(orderId) {
+    var {data} = await window._sb.from('loading_orders').select('*').eq('id', orderId).maybeSingle();
+    if (!data) return;
+    // ตั้งวันที่
+    var dateEl = document.getElementById('ld-date');
+    if (dateEl && data.order_date) { dateEl.value = data.order_date; await ldLoadPlans(); }
+    // หาแผนที่ตรงกับ plan_id หรือ truck_plate แล้ว select
+    var planSel = document.getElementById('ld-plan-sel');
+    if (planSel && data.plan_id) {
+        Array.from(planSel.options).forEach(function(opt){ if (opt.value===data.plan_id) planSel.value=data.plan_id; });
+        ldOnPlanChange();
+    }
+    // populate sku จาก order items ถ้า sku selector ว่าง
+    if (data.items && data.items.length) {
+        var skuSel = document.getElementById('ld-sku-sel');
+        if (skuSel && (!skuSel.value) && data.items[0]?.sku) {
+            Array.from(skuSel.options).forEach(function(opt){ if (opt.value===data.items[0].sku) skuSel.value=data.items[0].sku; });
+            ldOnSkuChange();
+        }
+    }
+    // mark in_progress
+    if (data.status==='pending') {
+        await window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id', orderId);
+    }
+    showToast('📋 โหลด Order: '+( data.truck_plate||'')+' เรียบร้อย');
 };
 
 window.ldSwitchTab = function(tab) {
@@ -23790,6 +23969,320 @@ window.ldPrintSummary = function() {
     w.document.close();
     w.print();
 };
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// LOADING ORDER — เจ้าหน้าที่จัดส่งสร้างคำสั่งโหลด
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+var _loSub       = null;
+var _loEditId    = null;   // uuid ของ order ที่กำลัง edit (null = create)
+var _loItemCount = 0;
+var _loPlansCache= [];     // แผนของวันนั้น (cache ไม่ต้อง fetch ซ้ำ)
+
+window.loInit = function() {
+    var d = document.getElementById('lo-date');
+    var today = new Date().toISOString().slice(0,10);
+    if (d && !d.value) d.value = today;
+    loRefresh();
+    _loSubscribe();
+};
+
+window.loRefresh = function() {
+    var dateVal = document.getElementById('lo-date')?.value;
+    if (!dateVal) return;
+    _loLoadOrders(dateVal);
+};
+
+window.loLoadPlansForDate = function() { loRefresh(); };
+
+async function _loLoadOrders(dateVal) {
+    var list = document.getElementById('lo-order-list');
+    if (list) list.innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>กำลังโหลด...</div>';
+    try {
+        var {data, error} = await window._sb.from('loading_orders').select('*').eq('order_date', dateVal).order('created_at');
+        if (error) throw error;
+        _loRender(data || []);
+    } catch(e) {
+        if (list) list.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">เกิดข้อผิดพลาด: '+(e?.message||String(e))+'</div>';
+    }
+}
+
+function _loRender(orders) {
+    var list = document.getElementById('lo-order-list');
+    if (!list) return;
+    if (!orders.length) {
+        list.innerHTML = '<div class="text-center py-16 text-slate-300"><i class="fas fa-clipboard text-5xl mb-3 block"></i><p class="font-bold text-slate-400">ยังไม่มี Loading Order สำหรับวันนี้</p><p class="text-xs mt-1">กดปุ่ม "สร้าง Loading Order ใหม่" เพื่อเริ่มต้น</p></div>';
+        return;
+    }
+    var statusMap = {
+        pending:     {label:'รอโหลด',       bg:'bg-amber-50',   border:'border-amber-300',  text:'text-amber-700',  dot:'bg-amber-400'},
+        in_progress: {label:'กำลังโหลด',    bg:'bg-sky-50',     border:'border-sky-300',    text:'text-sky-700',    dot:'bg-sky-500'},
+        done:        {label:'โหลดเสร็จ',    bg:'bg-emerald-50', border:'border-emerald-300', text:'text-emerald-700',dot:'bg-emerald-500'},
+    };
+    list.innerHTML = orders.map(function(o) {
+        var st = statusMap[o.status] || statusMap.pending;
+        var items = o.items || [];
+        var totalQty = items.reduce(function(a,i){ return a+(parseFloat(i.qty)||0); },0);
+        var totalWt  = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
+        var itemRows = items.map(function(it, idx) {
+            return '<tr class="border-t border-slate-100">'+
+                '<td class="px-3 py-1.5 text-xs font-mono font-bold text-slate-700">'+(idx+1)+'</td>'+
+                '<td class="px-3 py-1.5 text-xs font-bold text-slate-700">'+_loEsc(it.sku||'')+'</td>'+
+                '<td class="px-3 py-1.5 text-xs text-slate-500">'+_loEsc(it.product_name||'')+'</td>'+
+                '<td class="px-3 py-1.5 text-xs text-right font-black text-sky-700">'+Number(it.qty||0).toLocaleString()+'</td>'+
+                '<td class="px-3 py-1.5 text-xs text-right font-black text-emerald-700">'+Number(it.target_weight||0).toLocaleString()+'</td>'+
+            '</tr>';
+        }).join('');
+
+        var statusBtns = '';
+        if (o.status === 'pending')     statusBtns = '<button onclick="loSetStatus(\''+o.id+'\',\'in_progress\')" class="text-xs font-black px-3 py-1.5 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition">เริ่มโหลด</button>';
+        if (o.status === 'in_progress') statusBtns = '<button onclick="loSetStatus(\''+o.id+'\',\'done\')" class="text-xs font-black px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition"><i class="fas fa-check mr-1"></i>โหลดเสร็จ</button>';
+
+        return '<div class="bg-white rounded-2xl border-2 '+st.border+' shadow-sm overflow-hidden">'+
+            '<div class="'+st.bg+' px-4 py-3 flex items-center justify-between flex-wrap gap-2">'+
+                '<div class="flex items-center gap-3">'+
+                    '<span class="w-2.5 h-2.5 rounded-full '+st.dot+' block"></span>'+
+                    '<span class="font-black text-sm text-slate-800"><i class="fas fa-truck text-slate-400 mr-1.5"></i>'+_loEsc(o.truck_plate||'—')+'</span>'+
+                    '<span class="px-2 py-0.5 rounded-full text-[10px] font-black border '+st.border+' '+st.text+'">'+st.label+'</span>'+
+                    (o.plan_id?'<span class="text-[10px] text-slate-400 font-mono">'+_loEsc(o.plan_id)+'</span>':'')+''+
+                '</div>'+
+                '<div class="flex items-center gap-2">'+
+                    statusBtns+
+                    '<button onclick="loEditOrder(\''+o.id+'\')" class="text-xs font-black px-3 py-1.5 border border-slate-200 bg-white text-slate-500 rounded-lg hover:bg-slate-50 transition"><i class="fas fa-edit"></i></button>'+
+                    '<button onclick="loDeleteOrder(\''+o.id+'\')" class="text-xs font-black px-3 py-1.5 border border-rose-200 bg-white text-rose-400 rounded-lg hover:bg-rose-50 transition"><i class="fas fa-trash-alt"></i></button>'+
+                '</div>'+
+            '</div>'+
+            '<div class="px-4 py-2 border-t border-slate-100 overflow-x-auto">'+
+                '<table class="w-full">'+
+                    '<thead><tr class="text-[10px] font-black text-slate-400 uppercase">'+
+                        '<th class="px-3 py-1 text-left w-8">#</th>'+
+                        '<th class="px-3 py-1 text-left">SKU</th>'+
+                        '<th class="px-3 py-1 text-left">สินค้า</th>'+
+                        '<th class="px-3 py-1 text-right">จำนวน (เส้น)</th>'+
+                        '<th class="px-3 py-1 text-right">เป้าน.น. (กก.)</th>'+
+                    '</tr></thead>'+
+                    '<tbody>'+itemRows+'</tbody>'+
+                    '<tfoot><tr class="border-t-2 border-slate-200">'+
+                        '<td colspan="3" class="px-3 py-1.5 text-xs font-black text-slate-500">รวม '+items.length+' รายการ</td>'+
+                        '<td class="px-3 py-1.5 text-xs text-right font-black text-sky-700">'+totalQty.toLocaleString()+' เส้น</td>'+
+                        '<td class="px-3 py-1.5 text-xs text-right font-black text-emerald-700">'+totalWt.toLocaleString()+' กก.</td>'+
+                    '</tr></tfoot>'+
+                '</table>'+
+            '</div>'+
+            (o.note?'<div class="px-4 py-2 text-xs text-slate-400 border-t border-slate-100"><i class="fas fa-sticky-note mr-1"></i>'+_loEsc(o.note)+'</div>':'')+
+            '<div class="px-4 py-2 text-[10px] text-slate-300 border-t border-slate-100">สร้างโดย: '+_loEsc(o.created_by||'—')+' | '+_loEsc((o.created_at||'').slice(0,16).replace('T',' '))+'</div>'+
+        '</div>';
+    }).join('');
+}
+
+window.loNewOrder = function() {
+    _loEditId = null;
+    document.getElementById('lo-modal-title').textContent = 'สร้าง Loading Order';
+    // reset form
+    var today = document.getElementById('lo-date')?.value || new Date().toISOString().slice(0,10);
+    document.getElementById('lo-m-date').value  = today;
+    document.getElementById('lo-m-truck').value = '';
+    document.getElementById('lo-m-note').value  = '';
+    document.getElementById('lo-m-items-tbody').innerHTML = '';
+    document.getElementById('lo-m-total').textContent = '';
+    _loItemCount = 0;
+    loModalLoadPlans();
+    loAddItem();
+    document.getElementById('lo-modal').classList.remove('hidden');
+};
+
+window.loEditOrder = async function(id) {
+    var {data} = await window._sb.from('loading_orders').select('*').eq('id', id).maybeSingle();
+    if (!data) { showToast('ไม่พบ Order', true); return; }
+    _loEditId = id;
+    document.getElementById('lo-modal-title').textContent = 'แก้ไข Loading Order';
+    document.getElementById('lo-m-date').value  = data.order_date  || '';
+    document.getElementById('lo-m-truck').value = data.truck_plate || '';
+    document.getElementById('lo-m-note').value  = data.note        || '';
+    document.getElementById('lo-m-items-tbody').innerHTML = '';
+    _loItemCount = 0;
+    await loModalLoadPlans();
+    document.getElementById('lo-m-plan').value = data.plan_id || '';
+    (data.items||[]).forEach(function(it){ loAddItem(it); });
+    document.getElementById('lo-modal').classList.remove('hidden');
+};
+
+window.loCloseModal = function() {
+    document.getElementById('lo-modal').classList.add('hidden');
+};
+
+window.loModalLoadPlans = async function() {
+    var dateVal = document.getElementById('lo-m-date')?.value;
+    var sel = document.getElementById('lo-m-plan');
+    if (!dateVal || !sel) return;
+    sel.innerHTML = '<option value="">-- เลือกแผน หรือ กรอกเอง --</option>';
+    try {
+        var {data} = await window._sb.from('logistic_plans').select('plan_id,truck_plate,shops,total_weight').eq('plan_date', dateVal).eq('is_child', false).order('plan_id');
+        _loPlansCache = data || [];
+        _loPlansCache.forEach(function(p){
+            var opt = document.createElement('option');
+            opt.value = p.plan_id;
+            var shops = (p.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
+            opt.textContent = p.plan_id+' | '+( p.truck_plate||'—')+' | '+shops.slice(0,35);
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+};
+
+window.loImportFromPlan = function() {
+    var planId = document.getElementById('lo-m-plan')?.value;
+    if (!planId) return;
+    var plan = _loPlansCache.find(function(p){ return p.plan_id === planId; });
+    if (!plan) return;
+    // ใส่ทะเบียนรถ
+    document.getElementById('lo-m-truck').value = plan.truck_plate || '';
+    // import items จาก shops
+    document.getElementById('lo-m-items-tbody').innerHTML = '';
+    _loItemCount = 0;
+    var seen = {};
+    (plan.shops||[]).forEach(function(shop){
+        (shop.items||[]).forEach(function(it){
+            var sku = it.sku || it.productCode || '';
+            var qty = parseFloat(it.qty)||0;
+            var wt  = parseFloat(it.weight)||0;
+            if (!sku) return;
+            if (seen[sku]) {
+                // รวมกัน
+                seen[sku].qty += qty;
+                seen[sku].wt  += wt;
+            } else {
+                seen[sku] = {sku: sku, name: it.productName||it.name||'', qty: qty, wt: wt};
+            }
+        });
+    });
+    Object.values(seen).forEach(function(it){
+        loAddItem({sku: it.sku, product_name: it.name, qty: it.qty, target_weight: it.wt});
+    });
+    _loUpdateTotal();
+};
+
+window.loAddItem = function(prefill) {
+    _loItemCount++;
+    var n = _loItemCount;
+    var tbody = document.getElementById('lo-m-items-tbody');
+    var tr = document.createElement('tr');
+    tr.id = 'lo-item-row-'+n;
+    tr.className = 'border-t border-slate-100';
+    tr.innerHTML =
+        '<td class="px-2 py-1.5">'+
+            '<input type="text" id="lo-item-sku-'+n+'" placeholder="SKU" value="'+(prefill?.sku||'')+'" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none focus:border-indigo-400">'+
+            '<input type="text" id="lo-item-name-'+n+'" placeholder="ชื่อสินค้า" value="'+(prefill?.product_name||'')+'" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs mt-0.5 focus:outline-none focus:border-indigo-400">'+
+        '</td>'+
+        '<td class="px-2 py-1.5 w-24"><input type="number" id="lo-item-qty-'+n+'" min="0" step="1" value="'+(prefill?.qty||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loItemChanged()"></td>'+
+        '<td class="px-2 py-1.5 w-28"><input type="number" id="lo-item-wt-'+n+'" min="0" step="0.01" value="'+(prefill?.target_weight||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loItemChanged()"></td>'+
+        '<td class="px-2 py-1.5 text-center"><button onclick="loRemoveItem('+n+')" class="w-6 h-6 bg-rose-100 text-rose-500 rounded-lg text-[10px] hover:bg-rose-200 transition"><i class="fas fa-times"></i></button></td>';
+    tbody.appendChild(tr);
+    _loUpdateTotal();
+};
+
+window.loRemoveItem = function(n) {
+    var el = document.getElementById('lo-item-row-'+n);
+    if (el) el.remove();
+    _loUpdateTotal();
+};
+
+window.loItemChanged = function() { _loUpdateTotal(); };
+
+function _loUpdateTotal() {
+    var tbody = document.getElementById('lo-m-items-tbody');
+    if (!tbody) return;
+    var totalQty = 0, totalWt = 0;
+    Array.from(tbody.children).forEach(function(tr){
+        var nStr = tr.id.replace('lo-item-row-','');
+        totalQty += parseFloat(document.getElementById('lo-item-qty-'+nStr)?.value||0)||0;
+        totalWt  += parseFloat(document.getElementById('lo-item-wt-'+nStr)?.value||0)||0;
+    });
+    var el = document.getElementById('lo-m-total');
+    if (el) el.textContent = 'รวม: '+totalQty.toLocaleString()+' เส้น / '+totalWt.toLocaleString()+' กก.';
+}
+
+window.loSaveOrder = async function() {
+    var dateVal  = document.getElementById('lo-m-date')?.value;
+    var truck    = document.getElementById('lo-m-truck')?.value.trim();
+    var note     = document.getElementById('lo-m-note')?.value.trim();
+    var planId   = document.getElementById('lo-m-plan')?.value || null;
+    if (!dateVal) { showToast('กรุณาเลือกวันที่', true); return; }
+
+    // collect items
+    var tbody = document.getElementById('lo-m-items-tbody');
+    var items = [];
+    Array.from(tbody.children).forEach(function(tr){
+        var nStr = tr.id.replace('lo-item-row-','');
+        var sku  = document.getElementById('lo-item-sku-'+nStr)?.value.trim().toUpperCase();
+        var name = document.getElementById('lo-item-name-'+nStr)?.value.trim();
+        var qty  = parseFloat(document.getElementById('lo-item-qty-'+nStr)?.value||0)||0;
+        var wt   = parseFloat(document.getElementById('lo-item-wt-'+nStr)?.value||0)||0;
+        if (sku || qty || wt) items.push({sku:sku, product_name:name, qty:qty, target_weight:wt});
+    });
+    if (!items.length) { showToast('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', true); return; }
+
+    var payload = {
+        plan_id:     planId,
+        order_date:  dateVal,
+        truck_plate: truck,
+        items:       items,
+        note:        note,
+        status:      _loEditId ? undefined : 'pending',
+        created_by:  window._currentUser || '',
+        updated_at:  new Date().toISOString(),
+    };
+    if (_loEditId) delete payload.status;
+
+    try {
+        var {error} = _loEditId
+            ? await window._sb.from('loading_orders').update(payload).eq('id', _loEditId)
+            : await window._sb.from('loading_orders').insert([payload]);
+        if (error) throw error;
+        showToast(_loEditId ? '✅ แก้ไข Order สำเร็จ' : '✅ สร้าง Loading Order สำเร็จ');
+        loCloseModal();
+        // sync date filter
+        var dateEl = document.getElementById('lo-date');
+        if (dateEl) dateEl.value = dateVal;
+        _loLoadOrders(dateVal);
+    } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
+};
+
+window.loSetStatus = async function(id, status) {
+    try {
+        var {error} = await window._sb.from('loading_orders').update({status:status, updated_at:new Date().toISOString()}).eq('id', id);
+        if (error) throw error;
+        var label = {pending:'รอโหลด', in_progress:'กำลังโหลด', done:'โหลดเสร็จแล้ว'}[status] || status;
+        showToast('✅ อัปเดตสถานะ: '+label);
+        var dateVal = document.getElementById('lo-date')?.value;
+        if (dateVal) _loLoadOrders(dateVal);
+    } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
+};
+
+window.loDeleteOrder = function(id) {
+    showConfirmModal('ลบ Loading Order', 'ยืนยันลบ Order นี้?<br><span class="text-rose-400 text-xs">ไม่สามารถกู้คืนได้</span>', async function(){
+        var {error} = await window._sb.from('loading_orders').delete().eq('id', id);
+        if (error) { showToast('เกิดข้อผิดพลาด: '+error.message, true); return; }
+        showToast('🗑️ ลบ Order เรียบร้อย');
+        var dateVal = document.getElementById('lo-date')?.value;
+        if (dateVal) _loLoadOrders(dateVal);
+    }, {type:'danger', okText:'ลบเลย'});
+};
+
+function _loSubscribe() {
+    if (_loSub) { try { _loSub.unsubscribe(); } catch(e) {} }
+    _loSub = window._sb.channel('loading-orders-live')
+        .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'}, function(){
+            var dateVal = document.getElementById('lo-date')?.value;
+            if (dateVal) _loLoadOrders(dateVal);
+        }).subscribe(function(state){
+            var badge = document.getElementById('lo-realtime-badge');
+            if (badge) badge.classList.toggle('hidden', state !== 'SUBSCRIBED');
+        });
+}
+
+function _loEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 })();
 
