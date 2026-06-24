@@ -2103,6 +2103,10 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
             <button onclick="switchView('logistic-plan')" id="nav-logistic-plan" class="nav-btn" data-tip="Delivery Plan">
                 <span class="nav-icon"><i class="fas fa-route"></i></span> Delivery Plan
             </button>
+            <button onclick="switchView('loading')" id="nav-loading" class="nav-btn" data-tip="Loading">
+                <span class="nav-icon"><i class="fas fa-boxes"></i></span>
+                <span>Loading</span>
+            </button>
 
             <button onclick="switchView('driver-monitor')" id="nav-driver-monitor" class="nav-btn" data-tip="Driver Monitor">
                 <span class="nav-icon"><i class="fas fa-satellite-dish"></i></span> Driver Monitor
@@ -7394,6 +7398,184 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     LOADING CONTROL
+══════════════════════════════════════════════════════════════════ -->
+<div id="view-loading-content" class="hidden space-y-4">
+  <!-- Sub-tab bar -->
+  <div class="flex gap-3 mb-2">
+    <button id="ld-tab-btn-form" onclick="ldSwitchTab('form')" class="ld-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-emerald-500 bg-emerald-500 text-white transition-all"><i class="fas fa-clipboard-list mr-1.5"></i>บันทึกการโหลด</button>
+    <button id="ld-tab-btn-monitor" onclick="ldSwitchTab('monitor')" class="ld-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-slate-200 bg-white text-slate-500 transition-all"><i class="fas fa-desktop mr-1.5"></i>WMS Monitor</button>
+  </div>
+
+  <!-- ── TAB: บันทึกการโหลด (mobile form) ── -->
+  <div id="ld-tab-form" class="space-y-4">
+    <!-- Header: plan selector + date -->
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-black text-slate-500 mb-1">วันที่</label>
+        <input type="date" id="ld-date" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" onchange="ldLoadPlans()">
+      </div>
+      <div>
+        <label class="block text-xs font-black text-slate-500 mb-1">แผนการส่ง</label>
+        <select id="ld-plan-sel" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" onchange="ldOnPlanChange()">
+          <option value="">-- เลือกแผน --</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Truck info bar -->
+    <div id="ld-truck-bar" class="hidden bg-slate-800 text-white rounded-2xl px-4 py-3 flex items-center gap-4 flex-wrap">
+      <div class="flex items-center gap-2 font-black text-lg"><i class="fas fa-truck text-emerald-400"></i><span id="ld-truck-plate">—</span></div>
+      <div class="text-slate-400 text-sm flex-1 min-w-0 truncate" id="ld-truck-shops">—</div>
+      <div class="text-xs font-bold text-emerald-300">เป้า <span id="ld-truck-target-wt">—</span> กก.</div>
+    </div>
+
+    <!-- Summary stats row -->
+    <div id="ld-stats-bar" class="hidden grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-3 text-center">
+        <div class="text-[10px] font-black text-emerald-500 uppercase tracking-wider mb-1">โหลดแล้ว (กก.)</div>
+        <div id="ld-stat-total-wt" class="text-2xl font-black text-emerald-700 font-mono">0</div>
+      </div>
+      <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-3 text-center">
+        <div class="text-[10px] font-black text-sky-500 uppercase tracking-wider mb-1">โหลดแล้ว (เส้น)</div>
+        <div id="ld-stat-total-pcs" class="text-2xl font-black text-sky-700 font-mono">0</div>
+      </div>
+      <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3 text-center">
+        <div class="text-[10px] font-black text-amber-500 uppercase tracking-wider mb-1">รายการนี้ (กก.)</div>
+        <div id="ld-stat-cur-wt" class="text-2xl font-black text-amber-700 font-mono">0</div>
+      </div>
+      <div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3 text-center">
+        <div class="text-[10px] font-black text-purple-500 uppercase tracking-wider mb-1">เฉลี่ย/เส้น (กก.)</div>
+        <div id="ld-stat-avg-wt" class="text-2xl font-black text-purple-700 font-mono">—</div>
+      </div>
+    </div>
+
+    <!-- Form card -->
+    <div id="ld-form-card" class="hidden bg-white rounded-2xl border-2 border-slate-200 shadow-sm overflow-hidden">
+      <div class="bg-slate-800 text-white px-4 py-3 flex items-center gap-2">
+        <i class="fas fa-clipboard-check text-emerald-400"></i>
+        <span class="font-black text-sm">บันทึกการโหลดสินค้า</span>
+      </div>
+      <div class="p-4 space-y-4">
+
+        <!-- Product selector -->
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">สินค้าที่โหลด</label>
+          <select id="ld-sku-sel" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" onchange="ldOnSkuChange()">
+            <option value="">-- เลือกสินค้า --</option>
+          </select>
+          <div id="ld-sku-info" class="hidden mt-2 text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2 font-mono"></div>
+        </div>
+
+        <!-- Staff list -->
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">รหัสพนักงาน (คั่นด้วยจุลภาค)</label>
+          <input type="text" id="ld-staff-ids" placeholder="เช่น 60037, 60059, 66017" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none" oninput="ldLookupStaff()">
+          <div id="ld-staff-names" class="mt-1 text-xs text-slate-400 min-h-[20px]"></div>
+        </div>
+
+        <!-- Lifts grid -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-black text-slate-500">บันทึกต่อครั้ง (Lift)</label>
+            <button onclick="ldAddLift()" class="text-xs font-black px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition flex items-center gap-1"><i class="fas fa-plus"></i> เพิ่มครั้ง</button>
+          </div>
+          <div id="ld-lifts-container" class="space-y-2"></div>
+        </div>
+
+        <!-- Time -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-black text-slate-500 mb-1">เวลาเริ่ม</label>
+            <input type="time" id="ld-start-time" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-black text-slate-500 mb-1">เวลาเสร็จ</label>
+            <input type="time" id="ld-end-time" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none">
+          </div>
+        </div>
+
+        <!-- Photo -->
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">รูปถ่าย (ถ้ามี)</label>
+          <input type="file" id="ld-photo-input" accept="image/*" capture="environment" multiple class="hidden" onchange="ldHandlePhotos(this)">
+          <div onclick="document.getElementById('ld-photo-input').click()" class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition">
+            <i class="fas fa-camera text-2xl text-slate-400 mb-1 block"></i>
+            <span class="text-xs font-bold text-slate-400">แตะเพื่อถ่ายรูป / เลือกรูป</span>
+          </div>
+          <div id="ld-photo-previews" class="flex flex-wrap gap-2 mt-2"></div>
+        </div>
+
+        <!-- Note -->
+        <div>
+          <label class="block text-xs font-black text-slate-500 mb-1">หมายเหตุ</label>
+          <textarea id="ld-note" rows="2" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-emerald-400 focus:outline-none resize-none" placeholder="(ถ้ามี)"></textarea>
+        </div>
+
+        <button onclick="ldSaveSession()" class="w-full py-3.5 bg-emerald-600 text-white font-black text-base rounded-2xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-lg">
+          <i class="fas fa-save"></i> บันทึกการโหลด
+        </button>
+      </div>
+    </div>
+
+    <!-- Session history for this plan -->
+    <div id="ld-session-list" class="hidden space-y-2">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-black text-slate-700"><i class="fas fa-history text-slate-400 mr-1.5"></i>รายการที่บันทึกแล้ว</h3>
+        <button onclick="ldPrintSummary()" class="text-xs font-bold px-3 py-1.5 border border-slate-300 rounded-lg text-slate-500 hover:bg-slate-100 transition"><i class="fas fa-print mr-1"></i>พิมพ์</button>
+      </div>
+      <div id="ld-session-rows"></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: WMS Monitor ── -->
+  <div id="ld-tab-monitor" class="hidden space-y-4">
+    <div class="flex items-center gap-3 flex-wrap">
+      <div>
+        <label class="block text-xs font-black text-slate-500 mb-1">วันที่</label>
+        <input type="date" id="ld-mon-date" class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-sky-400 focus:outline-none" onchange="ldMonLoad()">
+      </div>
+      <div class="flex items-end pb-0.5">
+        <button onclick="ldMonLoad()" class="px-4 py-2 bg-sky-600 text-white text-sm font-black rounded-xl hover:bg-sky-700 transition flex items-center gap-2"><i class="fas fa-sync-alt"></i>โหลด</button>
+      </div>
+      <div id="ld-mon-realtime-badge" class="hidden px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 animate-pulse"><span class="w-2 h-2 bg-emerald-500 rounded-full block"></span>Live</div>
+    </div>
+
+    <!-- KPI row -->
+    <div id="ld-mon-kpi" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div id="ld-mon-table-wrap" class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="bg-slate-800 text-white">
+              <th class="px-3 py-2.5 text-left font-black">#</th>
+              <th class="px-3 py-2.5 text-left font-black">ประเภท</th>
+              <th class="px-3 py-2.5 text-left font-black">วันที่</th>
+              <th class="px-3 py-2.5 text-left font-black">รหัส</th>
+              <th class="px-3 py-2.5 text-left font-black">ชื่อพนักงาน</th>
+              <th class="px-3 py-2.5 text-center font-black">ทีม</th>
+              <th class="px-3 py-2.5 text-center font-black">เวลาเริ่ม</th>
+              <th class="px-3 py-2.5 text-center font-black">เวลาเสร็จ</th>
+              <th class="px-3 py-2.5 text-right font-black">นาที</th>
+              <th class="px-3 py-2.5 text-right font-black">จำนวน</th>
+              <th class="px-3 py-2.5 text-right font-black">น้ำหนัก</th>
+              <th class="px-3 py-2.5 text-right font-black">นาที/รายการ</th>
+              <th class="px-3 py-2.5 text-right font-black">น้ำหนัก/หน่วย</th>
+              <th class="px-3 py-2.5 text-center font-black">รูป</th>
+            </tr>
+          </thead>
+          <tbody id="ld-mon-tbody">
+            <tr><td colspan="14" class="text-center py-12 text-slate-400 font-bold">เลือกวันที่เพื่อโหลดข้อมูล</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- DRIVER MONITOR                                               -->
 <!-- ============================================================ -->
 <div id="view-driver-monitor-content" class="hidden space-y-4">
@@ -12567,7 +12749,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training'];
     
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -12581,6 +12763,7 @@ window.switchView = function switchView(view) {
     if (activeContent) activeContent.classList.remove('hidden');
     if (activeNav) activeNav.classList.add('active');
 
+    if (view === 'loading' && window.ldInit) window.ldInit();
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
     if (view === 'driver-analytics' && window.daInit) window.daInit();
 
@@ -12597,6 +12780,7 @@ window.switchView = function switchView(view) {
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
 
+            'loading': 'Loading Control — บันทึกการโหลดสินค้า',
             'driver-monitor': 'Driver Monitor — ติดตามคนขับ',
             'driver-analytics': 'Driver Analytics — สถิติคนขับ',
             'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
@@ -23120,6 +23304,494 @@ window.fixTrailerPlan = async function fixTrailerPlan(planId) {
         { type: 'warning', okText: 'Fix เลย' }
     );
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// LOADING CONTROL
+// Requires Supabase table: loading_sessions
+// -- loading_sessions table:
+// -- id uuid primary key default gen_random_uuid(),
+// -- plan_id text, plan_date date, record_type text,
+// -- staff_id text, staff_name text, team text,
+// -- sku text, product_name text,
+// -- qty numeric, weight numeric, lift_count int, lifts jsonb,
+// -- start_time timestamptz, end_time timestamptz,
+// -- note text, photo_urls jsonb,
+// -- created_at timestamptz default now(), updated_at timestamptz default now()
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+var _ldPlanData    = null;  // selected plan object
+var _ldStaffMaster = [];    // [{id, name, team}]
+var _ldPhotoPending= [];    // File objects pending upload
+var _ldSessions    = [];    // sessions loaded for current plan
+var _ldMonSub      = null;  // realtime subscription
+var _ldLiftCount   = 0;
+
+window.ldInit = function() {
+    var d = document.getElementById('ld-date');
+    var dm = document.getElementById('ld-mon-date');
+    var today = new Date().toISOString().slice(0,10);
+    if (d && !d.value) { d.value = today; ldLoadPlans(); }
+    if (dm && !dm.value) { dm.value = today; }
+    // load wh staff master
+    _ldLoadStaffMaster();
+    // init first lift row
+    if (!document.getElementById('ld-lifts-container').children.length) ldAddLift();
+};
+
+window.ldSwitchTab = function(tab) {
+    ['form','monitor'].forEach(function(t){
+        var pnl = document.getElementById('ld-tab-'+t);
+        var btn = document.getElementById('ld-tab-btn-'+t);
+        if (pnl) pnl.classList.toggle('hidden', t!==tab);
+        if (btn) {
+            if (t===tab) { btn.className='ld-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-emerald-500 bg-emerald-500 text-white transition-all'; }
+            else { btn.className='ld-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-slate-200 bg-white text-slate-500 transition-all'; }
+        }
+    });
+    if (tab==='monitor') ldMonLoad();
+};
+
+async function _ldLoadStaffMaster() {
+    try {
+        var {data} = await window._sb.from('logi_wh_staff').select('*');
+        _ldStaffMaster = (data||[]).map(function(s){ return {id:String(s.id||s.staff_id||''), name:s.name||'', team:s.team||''}; });
+    } catch(e) {}
+}
+
+window.ldLoadPlans = async function() {
+    var dateVal = document.getElementById('ld-date')?.value;
+    if (!dateVal) return;
+    var sel = document.getElementById('ld-plan-sel');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
+    try {
+        var {data} = await window._sb.from('logistic_plans').select('plan_id,truck_plate,child_plate,shops,total_weight,is_child').eq('plan_date',dateVal).order('plan_id');
+        var plans = (data||[]).filter(function(r){ return !r.is_child; });
+        sel.innerHTML = '<option value="">-- เลือกแผน --</option>';
+        plans.forEach(function(p){
+            var names = (p.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
+            var opt = document.createElement('option');
+            opt.value = p.plan_id;
+            opt.textContent = p.plan_id + ' | ' + (p.truck_plate||'—') + ' | ' + names.slice(0,40);
+            opt._planData = p;
+            sel.appendChild(opt);
+        });
+    } catch(e) { sel.innerHTML='<option value="">เกิดข้อผิดพลาด</option>'; }
+};
+
+window.ldOnPlanChange = function() {
+    var sel = document.getElementById('ld-plan-sel');
+    var opt = sel?.options[sel.selectedIndex];
+    _ldPlanData = opt?._planData || null;
+    if (!_ldPlanData) {
+        ['ld-truck-bar','ld-stats-bar','ld-form-card','ld-session-list'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.add('hidden'); });
+        return;
+    }
+    // truck bar
+    document.getElementById('ld-truck-bar').classList.remove('hidden');
+    document.getElementById('ld-truck-plate').textContent = _ldPlanData.truck_plate || '—';
+    var shopNames = (_ldPlanData.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
+    document.getElementById('ld-truck-shops').textContent = shopNames || '—';
+    document.getElementById('ld-truck-target-wt').textContent = Number(_ldPlanData.total_weight||0).toLocaleString();
+    // populate sku selector
+    var skuSel = document.getElementById('ld-sku-sel');
+    skuSel.innerHTML = '<option value="">-- เลือกสินค้า --</option>';
+    var seen = {};
+    (_ldPlanData.shops||[]).forEach(function(shop){
+        (shop.items||[]).forEach(function(it){
+            var key = it.sku||it.productCode||'';
+            if (!key || seen[key]) return;
+            seen[key] = true;
+            var opt2 = document.createElement('option');
+            opt2.value = key;
+            opt2.textContent = key + ' — ' + (it.productName||it.name||'');
+            opt2._itemData = it;
+            skuSel.appendChild(opt2);
+        });
+    });
+    // stats + form
+    document.getElementById('ld-stats-bar').classList.remove('hidden');
+    document.getElementById('ld-form-card').classList.remove('hidden');
+    document.getElementById('ld-session-list').classList.remove('hidden');
+    // load existing sessions
+    _ldLoadSessions();
+    // subscribe realtime
+    _ldSubscribeRealtime();
+};
+
+window.ldOnSkuChange = function() {
+    var sel = document.getElementById('ld-sku-sel');
+    var opt = sel?.options[sel.selectedIndex];
+    var it = opt?._itemData;
+    var info = document.getElementById('ld-sku-info');
+    if (it && it.weight && it.qty) {
+        var avgWt = (parseFloat(it.weight)||0) / (parseFloat(it.qty)||1);
+        info.textContent = 'เป้า: ' + (it.qty||0) + ' เส้น / ' + Number(it.weight||0).toLocaleString() + ' กก. | เฉลี่ย ' + avgWt.toFixed(2) + ' กก./เส้น';
+        info.classList.remove('hidden');
+    } else {
+        info.classList.add('hidden');
+    }
+    ldUpdateCurStats();
+};
+
+window.ldAddLift = function() {
+    _ldLiftCount++;
+    var n = _ldLiftCount;
+    var container = document.getElementById('ld-lifts-container');
+    var row = document.createElement('div');
+    row.id = 'ld-lift-row-'+n;
+    row.className = 'flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
+    row.innerHTML =
+        '<span class="text-xs font-black text-slate-400 w-12 shrink-0">ครั้ง '+n+'</span>'+
+        '<div class="flex-1 grid grid-cols-2 gap-2">'+
+          '<div><label class="text-[10px] font-black text-slate-400">จำนวน (เส้น)</label>'+
+          '<input type="number" id="ld-lift-qty-'+n+'" min="0" step="1" class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:outline-none focus:border-emerald-400" oninput="ldUpdateCurStats()"></div>'+
+          '<div><label class="text-[10px] font-black text-slate-400">น.น. จริง (กก.)</label>'+
+          '<input type="number" id="ld-lift-wt-'+n+'" min="0" step="0.01" class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold focus:outline-none focus:border-emerald-400" oninput="ldUpdateCurStats()"></div>'+
+        '</div>'+
+        '<button onclick="ldRemoveLift('+n+')" class="shrink-0 w-7 h-7 rounded-lg bg-rose-100 text-rose-500 text-xs hover:bg-rose-200 transition flex items-center justify-center"><i class="fas fa-times"></i></button>';
+    container.appendChild(row);
+};
+
+window.ldRemoveLift = function(n) {
+    var el = document.getElementById('ld-lift-row-'+n);
+    if (el) el.remove();
+    ldUpdateCurStats();
+};
+
+window.ldUpdateCurStats = function() {
+    var totalQty = 0, totalWt = 0;
+    var container = document.getElementById('ld-lifts-container');
+    if (!container) return;
+    Array.from(container.children).forEach(function(row){
+        var nStr = row.id.replace('ld-lift-row-','');
+        var qtyEl = document.getElementById('ld-lift-qty-'+nStr);
+        var wtEl  = document.getElementById('ld-lift-wt-'+nStr);
+        totalQty += parseFloat(qtyEl?.value||0)||0;
+        totalWt  += parseFloat(wtEl?.value||0)||0;
+    });
+    var avgWt = totalQty>0 ? (totalWt/totalQty) : 0;
+    var setEl = function(id, val){ var el=document.getElementById(id); if(el) el.textContent=val; };
+    setEl('ld-stat-cur-wt', totalWt>0 ? totalWt.toLocaleString(undefined,{maximumFractionDigits:2}) : '0');
+    setEl('ld-stat-avg-wt', totalQty>0 ? avgWt.toFixed(2) : '—');
+    _ldUpdateTotalStats();
+};
+
+function _ldUpdateTotalStats() {
+    var totalWt = 0, totalPcs = 0;
+    _ldSessions.forEach(function(s){
+        totalWt  += parseFloat(s.weight||0)||0;
+        totalPcs += parseFloat(s.qty||0)||0;
+    });
+    // also add current form values
+    var container = document.getElementById('ld-lifts-container');
+    if (container) {
+        Array.from(container.children).forEach(function(row){
+            var nStr = row.id.replace('ld-lift-row-','');
+            var qtyEl = document.getElementById('ld-lift-qty-'+nStr);
+            var wtEl  = document.getElementById('ld-lift-wt-'+nStr);
+            totalWt  += parseFloat(wtEl?.value||0)||0;
+            totalPcs += parseFloat(qtyEl?.value||0)||0;
+        });
+    }
+    var setEl = function(id, val){ var el=document.getElementById(id); if(el) el.textContent=val; };
+    setEl('ld-stat-total-wt', totalWt.toLocaleString(undefined,{maximumFractionDigits:2}));
+    setEl('ld-stat-total-pcs', totalPcs.toLocaleString());
+}
+
+window.ldLookupStaff = function() {
+    var raw = document.getElementById('ld-staff-ids')?.value || '';
+    var ids = raw.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    var names = ids.map(function(id){
+        var s = _ldStaffMaster.find(function(x){ return x.id===id || x.name===id; });
+        return s ? ('<span class="text-emerald-600 font-black">'+s.name+'</span> ['+s.team+']') : ('<span class="text-rose-400">'+id+' (?)</span>');
+    });
+    var el = document.getElementById('ld-staff-names');
+    if (el) el.innerHTML = names.join(' · ');
+};
+
+function _ldParseStaff() {
+    var raw = document.getElementById('ld-staff-ids')?.value || '';
+    var ids = raw.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    return ids.map(function(id){
+        var s = _ldStaffMaster.find(function(x){ return x.id===id||x.name===id; });
+        return s ? {id:s.id, name:s.name, team:s.team} : {id:id, name:id, team:''};
+    });
+}
+
+window.ldHandlePhotos = function(inp) {
+    var files = Array.from(inp.files||[]);
+    _ldPhotoPending = _ldPhotoPending.concat(files);
+    var prev = document.getElementById('ld-photo-previews');
+    if (!prev) return;
+    prev.innerHTML = '';
+    _ldPhotoPending.forEach(function(f, i){
+        var url = URL.createObjectURL(f);
+        var div = document.createElement('div');
+        div.className = 'relative w-16 h-16';
+        div.innerHTML = '<img src="'+url+'" class="w-16 h-16 object-cover rounded-xl border-2 border-slate-200">'+
+            '<button onclick="ldRemovePhoto('+i+')" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center"><i class="fas fa-times"></i></button>';
+        prev.appendChild(div);
+    });
+};
+
+window.ldRemovePhoto = function(i) {
+    _ldPhotoPending.splice(i, 1);
+    ldHandlePhotos({files:[]});
+    var prev = document.getElementById('ld-photo-previews');
+    if (!prev) return;
+    prev.innerHTML = '';
+    _ldPhotoPending.forEach(function(f, idx){
+        var url = URL.createObjectURL(f);
+        var div = document.createElement('div');
+        div.className = 'relative w-16 h-16';
+        div.innerHTML = '<img src="'+url+'" class="w-16 h-16 object-cover rounded-xl border-2 border-slate-200">'+
+            '<button onclick="ldRemovePhoto('+idx+')" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center"><i class="fas fa-times"></i></button>';
+        prev.appendChild(div);
+    });
+};
+
+window.ldSaveSession = async function() {
+    if (!_ldPlanData) { showToast('กรุณาเลือกแผนก่อน', true); return; }
+    var skuSel = document.getElementById('ld-sku-sel');
+    var sku = skuSel?.value || '';
+    var skuOpt = skuSel?.options[skuSel.selectedIndex];
+    var productName = skuOpt?._itemData?.productName || skuOpt?._itemData?.name || sku;
+    if (!sku) { showToast('กรุณาเลือกสินค้า', true); return; }
+
+    // collect lifts
+    var container = document.getElementById('ld-lifts-container');
+    var totalQty = 0, totalWt = 0, lifts = [];
+    Array.from(container.children).forEach(function(row){
+        var nStr = row.id.replace('ld-lift-row-','');
+        var qty = parseFloat(document.getElementById('ld-lift-qty-'+nStr)?.value||0)||0;
+        var wt  = parseFloat(document.getElementById('ld-lift-wt-'+nStr)?.value||0)||0;
+        if (qty>0||wt>0) { lifts.push({lift_no:lifts.length+1, qty:qty, weight:wt}); totalQty+=qty; totalWt+=wt; }
+    });
+    if (lifts.length===0) { showToast('กรุณากรอกข้อมูลการโหลดอย่างน้อย 1 ครั้ง', true); return; }
+
+    var staffList = _ldParseStaff();
+    var startTime = document.getElementById('ld-start-time')?.value || '';
+    var endTime   = document.getElementById('ld-end-time')?.value || '';
+    var note      = document.getElementById('ld-note')?.value || '';
+    var planDate  = document.getElementById('ld-date')?.value || '';
+
+    // upload photos
+    var photoUrls = [];
+    for (var pi=0; pi<_ldPhotoPending.length; pi++) {
+        try {
+            var f = _ldPhotoPending[pi];
+            var ext = (f.name||'photo.jpg').split('.').pop()||'jpg';
+            var path = 'loading/'+(_ldPlanData.plan_id||'unknown')+'/'+Date.now()+'_'+pi+'.'+ext;
+            var {error:ue} = await window._sb.storage.from('delivery-photos').upload(path, f, {contentType:f.type||'image/jpeg', upsert:true});
+            if (!ue) {
+                var {data:ud} = window._sb.storage.from('delivery-photos').getPublicUrl(path);
+                photoUrls.push(ud.publicUrl);
+            }
+        } catch(pe) {}
+    }
+
+    // build rows — one per staff member
+    var rows = staffList.length > 0 ? staffList.map(function(s){
+        return {
+            plan_id: _ldPlanData.plan_id, plan_date: planDate,
+            record_type: 'บันทึกการโหลด',
+            staff_id: s.id, staff_name: s.name, team: s.team,
+            sku: sku, product_name: productName,
+            qty: totalQty, weight: totalWt,
+            lift_count: lifts.length,
+            lifts: lifts,
+            start_time: startTime ? planDate+'T'+startTime+':00' : null,
+            end_time:   endTime   ? planDate+'T'+endTime+':00'   : null,
+            note: note,
+            photo_urls: photoUrls,
+        };
+    }) : [{
+        plan_id: _ldPlanData.plan_id, plan_date: planDate,
+        record_type: 'บันทึกการโหลด',
+        staff_id: '', staff_name: '', team: '',
+        sku: sku, product_name: productName,
+        qty: totalQty, weight: totalWt,
+        lift_count: lifts.length, lifts: lifts,
+        start_time: startTime ? planDate+'T'+startTime+':00' : null,
+        end_time:   endTime   ? planDate+'T'+endTime+':00'   : null,
+        note: note, photo_urls: photoUrls,
+    }];
+
+    try {
+        var {error} = await window._sb.from('loading_sessions').insert(rows);
+        if (error) throw error;
+        showToast('✅ บันทึกการโหลดสำเร็จ');
+        // reset form
+        _ldPhotoPending = [];
+        document.getElementById('ld-photo-previews').innerHTML = '';
+        document.getElementById('ld-note').value = '';
+        document.getElementById('ld-start-time').value = '';
+        document.getElementById('ld-end-time').value = '';
+        document.getElementById('ld-lifts-container').innerHTML = '';
+        _ldLiftCount = 0; ldAddLift();
+        document.getElementById('ld-staff-names').innerHTML = '';
+        _ldLoadSessions();
+    } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
+};
+
+async function _ldLoadSessions() {
+    if (!_ldPlanData) return;
+    var {data} = await window._sb.from('loading_sessions').select('*').eq('plan_id', _ldPlanData.plan_id).order('created_at');
+    _ldSessions = data || [];
+    _ldRenderSessionRows();
+    _ldUpdateTotalStats();
+}
+
+function _ldRenderSessionRows() {
+    var wrap = document.getElementById('ld-session-rows');
+    if (!wrap) return;
+    if (!_ldSessions.length) { wrap.innerHTML='<div class="text-xs text-slate-400 text-center py-4">ยังไม่มีรายการ</div>'; return; }
+    // group by sku
+    var bySkuMap = {};
+    _ldSessions.forEach(function(s){
+        if (!bySkuMap[s.sku]) bySkuMap[s.sku] = {sku:s.sku, name:s.product_name||s.sku, rows:[]};
+        bySkuMap[s.sku].rows.push(s);
+    });
+    var html = '';
+    Object.values(bySkuMap).forEach(function(g){
+        var totalQty = g.rows.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
+        var totalWt  = g.rows.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
+        html += '<div class="bg-white border border-slate-200 rounded-xl overflow-hidden mb-2">'+
+            '<div class="bg-slate-100 px-3 py-2 flex items-center justify-between">'+
+              '<span class="font-black text-xs text-slate-700">'+g.sku+' — '+g.name+'</span>'+
+              '<span class="text-xs font-bold text-emerald-600">'+totalQty+' เส้น / '+totalWt.toLocaleString()+' กก.</span>'+
+            '</div>';
+        // unique staff rows (deduplicate by staff_id+start_time)
+        var seenKeys = {};
+        var uniqueRows = [];
+        g.rows.forEach(function(r){
+            var k = (r.staff_id||'')+':'+(r.start_time||'');
+            if (!seenKeys[k]) { seenKeys[k]=true; uniqueRows.push(r); }
+        });
+        uniqueRows.forEach(function(r){
+            var tStart = r.start_time ? r.start_time.slice(11,16) : '—';
+            var tEnd   = r.end_time   ? r.end_time.slice(11,16)   : '—';
+            var dur = 0;
+            if (r.start_time && r.end_time) { dur = Math.round((new Date(r.end_time)-new Date(r.start_time))/60000); }
+            var photos = (r.photo_urls||[]).map(function(u){ return '<a href="'+u+'" target="_blank"><img src="'+u+'" class="w-8 h-8 object-cover rounded-lg border border-slate-200"></a>'; }).join('');
+            html += '<div class="px-3 py-2 border-t border-slate-100 flex items-center gap-2 text-xs">'+
+                '<span class="font-bold text-slate-600 flex-1">'+
+                  (r.staff_name||r.staff_id||'—')+(r.team?' ['+r.team+']':'')+
+                '</span>'+
+                '<span class="text-slate-400">'+tStart+'–'+tEnd+(dur?' ('+dur+'น.)':'')+'</span>'+
+                '<span class="font-black text-sky-600 ml-2">'+r.qty+' เส้น</span>'+
+                '<span class="font-black text-emerald-600 ml-2">'+Number(r.weight||0).toLocaleString()+' กก.</span>'+
+                (photos?'<div class="flex gap-1 ml-2">'+photos+'</div>':'')+
+            '</div>';
+        });
+        html += '</div>';
+    });
+    wrap.innerHTML = html;
+}
+
+function _ldSubscribeRealtime() {
+    if (_ldMonSub) { try { _ldMonSub.unsubscribe(); } catch(e) {} }
+    if (!_ldPlanData) return;
+    _ldMonSub = window._sb.channel('loading-sessions-'+_ldPlanData.plan_id)
+        .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions', filter:'plan_id=eq.'+_ldPlanData.plan_id}, function(){
+            _ldLoadSessions();
+            // also refresh monitor if visible
+            var monTab = document.getElementById('ld-tab-monitor');
+            if (monTab && !monTab.classList.contains('hidden')) ldMonLoad();
+        }).subscribe();
+}
+
+window.ldMonLoad = async function() {
+    var dateVal = document.getElementById('ld-mon-date')?.value;
+    if (!dateVal) return;
+    var tbody = document.getElementById('ld-mon-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</td></tr>';
+    try {
+        var {data, error} = await window._sb.from('loading_sessions').select('*').eq('plan_date', dateVal).order('created_at');
+        if (error) throw error;
+        var rows = data || [];
+        _ldRenderMonitorTable(rows);
+        _ldRenderMonKpi(rows);
+        // realtime badge
+        var badge = document.getElementById('ld-mon-realtime-badge');
+        if (badge) badge.classList.remove('hidden');
+        // subscribe for monitor refresh
+        if (_ldMonSub) { try { _ldMonSub.unsubscribe(); } catch(e) {} }
+        _ldMonSub = window._sb.channel('loading-mon-'+dateVal)
+            .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions'}, function(){
+                ldMonLoad();
+            }).subscribe();
+    } catch(e) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-rose-400 font-bold">เกิดข้อผิดพลาด: '+(e?.message||String(e))+'</td></tr>';
+    }
+};
+
+function _ldRenderMonKpi(rows) {
+    var el = document.getElementById('ld-mon-kpi');
+    if (!el) return;
+    var totalWt  = rows.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
+    var totalPcs = rows.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
+    var staffSet = new Set(rows.map(function(r){ return r.staff_id||''; }).filter(Boolean));
+    var planSet  = new Set(rows.map(function(r){ return r.plan_id||''; }).filter(Boolean));
+    el.innerHTML =
+        '<div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-emerald-500 uppercase mb-1">น.น.รวม (กก.)</div><div class="text-2xl font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+'</div></div>'+
+        '<div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-sky-500 uppercase mb-1">จำนวน (เส้น)</div><div class="text-2xl font-black text-sky-700 font-mono">'+totalPcs.toLocaleString()+'</div></div>'+
+        '<div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-amber-500 uppercase mb-1">พนักงาน</div><div class="text-2xl font-black text-amber-700 font-mono">'+staffSet.size+'</div></div>'+
+        '<div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-purple-500 uppercase mb-1">แผน</div><div class="text-2xl font-black text-purple-700 font-mono">'+planSet.size+'</div></div>';
+}
+
+function _ldRenderMonitorTable(rows) {
+    var tbody = document.getElementById('ld-mon-tbody');
+    if (!tbody) return;
+    if (!rows.length) { tbody.innerHTML='<tr><td colspan="14" class="text-center py-12 text-slate-400 font-bold">ไม่พบข้อมูล</td></tr>'; return; }
+    var rowNo = 0;
+    var html = rows.map(function(r){
+        rowNo++;
+        var tStart = r.start_time ? r.start_time.slice(11,16) : '—';
+        var tEnd   = r.end_time   ? r.end_time.slice(11,16)   : '—';
+        var dur = 0;
+        if (r.start_time && r.end_time) { dur = Math.round((new Date(r.end_time)-new Date(r.start_time))/60000); }
+        var qty = parseFloat(r.qty)||0, wt = parseFloat(r.weight)||0;
+        var minPerItem = qty>0 && dur>0 ? (dur/qty).toFixed(2) : '—';
+        var wtPerUnit  = qty>0 ? (wt/qty).toFixed(3) : '—';
+        var photos = (r.photo_urls||[]);
+        var photoCell = photos.length>0
+            ? '<a href="'+photos[0]+'" target="_blank"><img src="'+photos[0]+'" class="w-8 h-8 object-cover rounded-lg border border-slate-200 mx-auto"></a>'
+            : '—';
+        var bg = rowNo%2===0 ? 'background:#f8fafc' : '';
+        return '<tr style="'+bg+'">'+
+            '<td class="px-3 py-2 text-center text-slate-400">'+rowNo+'</td>'+
+            '<td class="px-3 py-2 text-slate-600">'+_ldEsc(r.record_type||'บันทึกการโหลด')+'</td>'+
+            '<td class="px-3 py-2 text-slate-500">'+_ldEsc(r.plan_date||'')+'</td>'+
+            '<td class="px-3 py-2 font-mono font-bold text-slate-700">'+_ldEsc(r.staff_id||'—')+'</td>'+
+            '<td class="px-3 py-2 font-bold text-slate-800">'+_ldEsc(r.staff_name||'—')+'</td>'+
+            '<td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-black '+(r.team==='A'?'bg-blue-100 text-blue-700':'bg-emerald-100 text-emerald-700')+'">'+_ldEsc(r.team||'—')+'</span></td>'+
+            '<td class="px-3 py-2 text-center font-mono font-bold text-sky-600">'+tStart+'</td>'+
+            '<td class="px-3 py-2 text-center font-mono font-bold text-sky-600">'+tEnd+'</td>'+
+            '<td class="px-3 py-2 text-right font-black text-slate-700">'+(dur||'—')+'</td>'+
+            '<td class="px-3 py-2 text-right font-black text-sky-700">'+qty.toLocaleString()+'</td>'+
+            '<td class="px-3 py-2 text-right font-black text-emerald-700">'+wt.toLocaleString(undefined,{maximumFractionDigits:2})+'</td>'+
+            '<td class="px-3 py-2 text-right text-slate-500">'+minPerItem+'</td>'+
+            '<td class="px-3 py-2 text-right text-slate-500">'+wtPerUnit+'</td>'+
+            '<td class="px-3 py-2 text-center">'+photoCell+'</td>'+
+        '</tr>';
+    }).join('');
+    tbody.innerHTML = html;
+}
+
+function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+window.ldPrintSummary = function() {
+    // simple print of session rows
+    var content = document.getElementById('ld-session-rows')?.innerHTML || '';
+    var w = window.open('','_blank');
+    w.document.write('<html><head><title>Loading Summary</title><style>body{font-family:sans-serif;font-size:12px;padding:20px} .bg-white{background:#fff} .border{border:1px solid #e2e8f0} img{max-width:60px}</style></head><body>'+content+'</body></html>');
+    w.document.close();
+    w.print();
+};
+
+})();
 
 // ── ลบแผนจากหน้าปฏิทิน (อัปเดต logiCalPlanList + re-render) ──
 window.deleteLogiPlanFromCal = function deleteLogiPlanFromCal(planId) {
