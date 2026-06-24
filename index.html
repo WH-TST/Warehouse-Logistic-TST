@@ -17781,6 +17781,11 @@ window.renderLogisticList = function renderLogisticList() {
         const statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border whitespace-nowrap" style="${st.style || ''}"><span class="w-1.5 h-1.5 rounded-full" style="background:currentColor"></span>${st.label}</span>`;
 
         // แถว -C (รถลูก): ไม่มีปุ่มจัดการ (จัดการผ่านแถวรถแม่)
+        // ตรวจ old plan: -M full_trailer แต่ items ไม่มี truckLabel
+        const _isOldTrailer = p.isMother && p.trailerMode === 'full_trailer' && (p.shops||[]).some(function(s){ return (s.items||[]).length > 0 && (s.items||[]).every(function(it){ return !it.truckLabel; }); });
+        const _fixBtn = _isOldTrailer
+            ? `<button onclick="fixTrailerPlan('${p.id}')" title="ซ่อมข้อมูลรถพ่วงเก่า" class="w-full mt-1 px-2 py-1 rounded-lg bg-violet-50 border border-violet-300 text-violet-700 hover:bg-violet-600 hover:text-white transition text-[10px] font-black col-span-2 flex items-center justify-center gap-1"><i class="fas fa-wrench"></i> Fix แผนนี้</button>`
+            : '';
         const actionBtns = (p.isChild || p.id?.endsWith('-C'))
             ? `<div class="text-[10px] text-purple-300 text-center">—</div>`
             : `<div class="grid grid-cols-2 gap-1">
@@ -17789,6 +17794,7 @@ window.renderLogisticList = function renderLogisticList() {
                     <button onclick="deleteLogiPlan('${p.id}')" title="${p.isMother ? 'ลบ (แม่+ลูกพร้อมกัน)' : 'ลบ'}" class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>
                     <button onclick="printPreShipmentFromPlan('${p.id}')" title="พิมพ์ PRE-SHIPMENT" class="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 text-orange-500 hover:bg-orange-500 hover:text-white transition text-xs"><i class="fas fa-file-invoice"></i></button>
                     <button onclick="viewTripResult('${p.id}')" title="ดูการส่ง (Driver App)" class="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-600 hover:text-white transition text-xs col-span-2"><i class="fas fa-route mr-1"></i>ดูการส่ง</button>
+                    ${_fixBtn}
                </div>`;
 
         // Col 1-4: ทะเบียน / เที่ยว / คนขับ / ประเภทงาน — rowspan ทั้งเที่ยว, align top
@@ -23025,6 +23031,107 @@ window.deleteLogiPlan = function deleteLogiPlan(planId) {
         { type: 'danger', okText: 'ลบเลย' }
     );
 }
+
+window.fixTrailerPlan = async function fixTrailerPlan(planId) {
+    const baseId  = planId.replace(/-M$/, '');
+    const childId = baseId + '-C';
+
+    showConfirmModal(
+        'ซ่อมข้อมูลรถพ่วง',
+        'ระบบจะแบ่งสินค้าแม่/ลูกใหม่ตาม Cap รถอัตโนมัติ แล้วบันทึกทับแผนเดิม<br><span class="text-amber-300 text-xs mt-1 block">⚠️ บันทึกแผน -M และ -C พร้อมกัน ไม่สามารถกู้คืนได้</span>',
+        async function() {
+            try {
+                // 1. ดึงข้อมูลแผนจาก DB
+                const { data: rows, error: fetchErr } = await window._sb
+                    .from('logistic_plans').select('*').in('plan_id', [planId, childId]);
+                if (fetchErr) throw fetchErr;
+                const mRow = (rows||[]).find(function(r){ return r.plan_id === planId; });
+                if (!mRow) { showToast('ไม่พบแผน ' + planId, true); return; }
+
+                // 2. ดึง cap รถ
+                const { data: tData } = await window._sb.from('logi_trucks').select('cap_mother,cap_child').eq('plate', mRow.truck_plate||'').maybeSingle();
+                var capM = parseInt(tData?.cap_mother || 0) || 20000;
+                var capC = parseInt(tData?.cap_child  || 0) || 20000;
+
+                // 3. Greedy split in-memory
+                var usedM = 0;
+                const splitShops = (mRow.shops||[]).map(function(shop) {
+                    var newItems = (shop.items||[]).map(function(it) {
+                        var totalWt = parseFloat(it.weight)||0;
+                        var qty = parseFloat(it.qty)||0;
+                        if (totalWt<=0||qty<=0) return Object.assign({},it,{truckLabel:'mother'});
+                        var prod = (window.LOGI_PRODUCTS_MASTER||[]).find(function(p){ return p.sku===(it.sku||'').toUpperCase(); });
+                        var lpb = (prod&&prod.linesPerBundle>0)?prod.linesPerBundle:10;
+                        var wtPerLine=totalWt/qty, wtPerBundle=wtPerLine*lpb;
+                        var totalBundles=Math.floor(qty/lpb), remainderLines=qty-totalBundles*lpb;
+                        var remainM=capM-usedM;
+                        var motherBundles, childBundles;
+                        if (wtPerBundle<=0||remainM<=0) { motherBundles=0; childBundles=totalBundles; }
+                        else { motherBundles=Math.min(totalBundles,Math.floor(remainM/wtPerBundle)); childBundles=totalBundles-motherBundles; }
+                        var motherLines=motherBundles*lpb+remainderLines, childLines=childBundles*lpb;
+                        var motherWt=motherLines*wtPerLine;
+                        usedM+=motherWt;
+                        var label=childLines===0?'mother':(motherLines===0?'child':'split');
+                        var newIt=Object.assign({},it,{truckLabel:label});
+                        if (label==='split') {
+                            newIt.motherQty=motherLines; newIt.childQty=childLines;
+                            newIt.motherWeight=Math.round(motherWt*100)/100;
+                            newIt.childWeight=Math.round(childLines*wtPerLine*100)/100;
+                        }
+                        return newIt;
+                    });
+                    return Object.assign({},shop,{items:newItems});
+                });
+
+                // 4. Filter per role
+                function _filterRole(shops, role) {
+                    return shops.map(function(s) {
+                        var kept=(s.items||[]).filter(function(it){
+                            return role==='mother'?(!it.truckLabel||it.truckLabel==='mother'||it.truckLabel==='split'):(it.truckLabel==='child'||it.truckLabel==='split');
+                        });
+                        if (kept.length===0) return null;
+                        var finalItems=kept.map(function(it){
+                            if (it.truckLabel!=='split') return it;
+                            return role==='mother'
+                                ? Object.assign({},it,{qty:it.motherQty||it.qty,weight:it.motherWeight||it.weight})
+                                : Object.assign({},it,{qty:it.childQty||it.qty,weight:it.childWeight||it.weight});
+                        });
+                        return Object.assign({},s,{truckLabel:role,items:finalItems});
+                    }).filter(Boolean);
+                }
+
+                const motherShops=_filterRole(splitShops,'mother');
+                const childShops =_filterRole(splitShops,'child');
+                function _wt(sh){ return sh.reduce(function(s,x){ return s+(x.items||[]).reduce(function(a,i){ return a+(parseFloat(i.weight)||0); },0); },0); }
+
+                const cRow=(rows||[]).find(function(r){ return r.plan_id===childId; });
+                const now=new Date().toISOString();
+
+                const upsertRows=[
+                    Object.assign({},mRow,{shops:motherShops,total_weight:_wt(motherShops),updated_at:now}),
+                    Object.assign({},cRow||{},{
+                        plan_id:childId,pair_id:baseId,is_mother:false,is_child:true,
+                        trailer_mode:mRow.trailer_mode,truck_plate:mRow.child_plate||'',child_plate:'',
+                        driver_transport:mRow.driver_transport,driver_id:mRow.driver_id,
+                        plan_date:mRow.plan_date,job_type:mRow.job_type,status:cRow?.status||'planned',
+                        trip_no:mRow.trip_no,warehouse:mRow.warehouse,
+                        shops:childShops,total_weight:_wt(childShops),updated_at:now,
+                    }),
+                ];
+
+                const { error: saveErr } = await window._sb.from('logistic_plans').upsert(upsertRows,{onConflict:'plan_id'});
+                if (saveErr) throw saveErr;
+
+                showToast('✅ Fix แผน '+planId+' สำเร็จ');
+                await loadLogisticList();
+            } catch(e) {
+                console.error('[fixTrailerPlan]',e);
+                showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)),true);
+            }
+        },
+        { type: 'warning', okText: 'Fix เลย' }
+    );
+};
 
 // ── ลบแผนจากหน้าปฏิทิน (อัปเดต logiCalPlanList + re-render) ──
 window.deleteLogiPlanFromCal = function deleteLogiPlanFromCal(planId) {
