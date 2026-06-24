@@ -23585,14 +23585,14 @@ window.ldCardStats = function(oid) {
         if (actAvgEl) actAvgEl.textContent = avg!=null ? avg.toFixed(2) : '—';
         // validate avg vs min/max
         var rangeEl = document.getElementById('ldf-range-'+oid+'-'+iIdx);
-        if (rangeEl && itemQty>0) {
-            var avg = itemWt/itemQty;
-            var prod = _ldProductMap[rangeEl.dataset.sku]||{};
-            // find sku from the order items cache via data attribute set on rangeEl
+        if (rangeEl) {
             var minW = parseFloat(rangeEl.dataset.min)||null;
             var maxW = parseFloat(rangeEl.dataset.max)||null;
-            var outOfRange = minW!=null && maxW!=null && (avg<minW||avg>maxW);
-            rangeEl.style.color = outOfRange ? '#f87171' : '#34d399';
+            if (itemQty>0 && minW!=null && maxW!=null) {
+                var outOfRange = avg<minW || avg>maxW;
+                rangeEl.style.color = outOfRange ? '#f87171' : '#34d399';
+                if (actAvgEl) actAvgEl.style.color = outOfRange ? '#f87171' : '#7c3aed';
+            }
         }
         iIdx++;
     }
