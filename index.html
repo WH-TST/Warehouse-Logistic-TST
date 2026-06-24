@@ -24451,7 +24451,7 @@ window.ldMonLoad = async function() {
         var rows = sessions||[];
         var ords = orders||[];
         _ldRenderMonitorTable(rows, ords);
-        _ldRenderMonKpi(rows);
+        _ldRenderMonKpi(rows, ords);
         var badge = document.getElementById('ld-mon-realtime-badge');
         if (badge) badge.classList.remove('hidden');
         if (_ldMonSub) { try { _ldMonSub.unsubscribe(); } catch(e) {} }
@@ -24579,7 +24579,15 @@ function _ldRenderMonitorTable(sessions, orders) {
     wrap.innerHTML = html || '<div class="text-center py-12 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
 }
 
-function _ldRenderMonKpi(rows) {
+function _ldStatChip(icon, color, label, value) {
+    return '<div style="display:flex;align-items:center;gap:5px;background:#1e293b;border-radius:8px;padding:5px 10px;">'
+        +'<i class="'+icon+'" style="color:'+color+';font-size:10px;"></i>'
+        +'<span style="font-size:10px;color:#64748b;">'+label+'</span>'
+        +'<span style="font-size:12px;font-weight:900;color:#f1f5f9;font-family:monospace;">'+value+'</span>'
+        +'</div>';
+}
+
+function _ldRenderMonKpi(rows, orders) {
     var el = document.getElementById('ld-mon-kpi');
     if (!el) return;
     var done  = rows.filter(function(r){ return r.record_type!=='draft'; });
@@ -24662,50 +24670,138 @@ function _ldRenderMonitorTable(rows) {
         +'</div>';
     }
 
-    // ── DONE SECTION ──
+    // ── DONE SECTION — grouped by order, card layout ──
     var doneHtml = '';
     if (done.length) {
-        var rowNo = 0;
-        var tableRows = done.map(function(r){
-            rowNo++;
-            var tStart = r.start_time ? r.start_time.slice(11,16) : '—';
-            var tEnd   = r.end_time   ? r.end_time.slice(11,16)   : '—';
-            var dur = (r.start_time&&r.end_time) ? Math.round((new Date(r.end_time)-new Date(r.start_time))/60000) : 0;
-            var qty = parseFloat(r.qty)||0, wt = parseFloat(r.weight)||0;
-            var wtPerUnit = qty>0 ? (wt/qty).toFixed(2) : '—';
-            var pName = (r.product_name||r.sku||'').replace(/[฀-๿]+/g,'').trim();
-            var bg = rowNo%2===0 ? '#f8fafc' : '#fff';
-            return '<tr style="background:'+bg+';border-bottom:1px solid #e2e8f0;">'
-                +'<td class="px-3 py-2.5 text-center text-xs text-slate-400">'+rowNo+'</td>'
-                +'<td class="px-3 py-2.5 text-xs font-bold text-slate-700">'+_ldEsc(pName)+'<div class="text-[10px] text-slate-400">'+_ldEsc(r.sku||'')+'</div></td>'
-                +'<td class="px-3 py-2.5 text-xs font-bold text-slate-600">'+_ldEsc(r.staff_name||'—')+'</td>'
-                +'<td class="px-3 py-2.5 text-xs text-center font-mono text-sky-600">'+tStart+'</td>'
-                +'<td class="px-3 py-2.5 text-xs text-center font-mono text-sky-600">'+tEnd+'</td>'
-                +'<td class="px-3 py-2.5 text-xs text-right font-black text-slate-600">'+(dur||'—')+'</td>'
-                +'<td class="px-3 py-2.5 text-xs text-right font-black text-sky-700">'+qty.toLocaleString()+'</td>'
-                +'<td class="px-3 py-2.5 text-xs text-right font-black text-emerald-700">'+wt.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
-                +'<td class="px-3 py-2.5 text-xs text-right text-purple-600 font-bold">'+wtPerUnit+'</td>'
-            +'</tr>';
-        }).join('');
-        doneHtml = '<div class="text-sm font-black text-slate-600 uppercase tracking-wider mb-2">โหลดเสร็จแล้ว ('+done.length+' รายการ)</div>'
-            +'<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">'
-                +'<div class="overflow-x-auto">'
-                +'<table style="width:100%;border-collapse:collapse;">'
-                    +'<thead><tr style="background:#1e293b;">'
-                        +'<th class="px-3 py-2.5 text-center text-[10px] font-black text-white">#</th>'
-                        +'<th class="px-3 py-2.5 text-left text-[10px] font-black text-white">PRODUCT</th>'
-                        +'<th class="px-3 py-2.5 text-left text-[10px] font-black text-white">STAFF</th>'
-                        +'<th class="px-3 py-2.5 text-center text-[10px] font-black text-white">START</th>'
-                        +'<th class="px-3 py-2.5 text-center text-[10px] font-black text-white">END</th>'
-                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-white">MIN</th>'
-                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-sky-300">PCS</th>'
-                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-emerald-300">KG</th>'
-                        +'<th class="px-3 py-2.5 text-right text-[10px] font-black text-purple-300">KG/PCS</th>'
+        // group done sessions by order_id
+        var doneByOrder = {};
+        done.forEach(function(r){
+            var k = r.order_id||'?';
+            if (!doneByOrder[k]) doneByOrder[k] = [];
+            doneByOrder[k].push(r);
+        });
+        // build index of orders by id for truck plate + target items
+        var orderIdx = {};
+        (orders||[]).forEach(function(o){ orderIdx[o.id] = o; });
+
+        var orderCards = Object.keys(doneByOrder).map(function(orderId){
+            var sessions = doneByOrder[orderId];
+            var order = orderIdx[orderId] || {};
+            var orderItems = order.items||[];
+
+            // aggregate header data
+            var staffSet = {}, teamSet = {};
+            var minStart = null, maxEnd = null;
+            var totalQty = 0, totalWt = 0;
+            sessions.forEach(function(r){
+                if (r.staff_name) staffSet[r.staff_name] = 1;
+                if (r.team) teamSet[r.team] = 1;
+                if (r.start_time) { if (!minStart||r.start_time<minStart) minStart=r.start_time; }
+                if (r.end_time)   { if (!maxEnd  ||r.end_time>maxEnd)     maxEnd=r.end_time;   }
+                totalQty += parseFloat(r.qty)||0;
+                totalWt  += parseFloat(r.weight)||0;
+            });
+            var staffNames = Object.keys(staffSet).join(', ') || '—';
+            var teamName   = Object.keys(teamSet).join(', ')  || '—';
+            var tStart = minStart ? minStart.slice(11,16) : '—';
+            var tEnd   = maxEnd   ? maxEnd.slice(11,16)   : '—';
+            var durMin = (minStart&&maxEnd) ? Math.round((new Date(maxEnd)-new Date(minStart))/60000) : 0;
+
+            // build item rows — match sessions to orderItems by sku
+            var sessMap = {};
+            sessions.forEach(function(r){ if(r.sku) sessMap[r.sku] = r; });
+
+            // use orderItems order if available, else fall back to sessions
+            var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
+                return {sku:r.sku, product_name:r.product_name, qty:0, target_weight:0};
+            });
+
+            var itemRows = itemsToRender.map(function(it, idx){
+                var r = sessMap[it.sku] || {};
+                var actualQty = parseFloat(r.qty)||0;
+                var actualWt  = parseFloat(r.weight)||0;
+                var avgWt = actualQty>0 ? (actualWt/actualQty).toFixed(2) : '—';
+                var prod = _ldProductMap[it.sku]||{};
+                var minW = prod.min_w!=null ? prod.min_w : '—';
+                var maxW = prod.max_w!=null ? prod.max_w : '—';
+                var pName = (it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+                var bg = idx%2===0 ? '#fff' : '#f8fafc';
+                var okColor = actualQty>0 ? '#16a34a' : '#cbd5e1';
+                return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
+                    +'<td style="padding:7px 10px;font-size:11px;color:#94a3b8;text-align:center;width:28px;">'+(idx+1)+'</td>'
+                    +'<td style="padding:7px 10px;font-size:10px;color:#64748b;font-family:monospace;font-weight:700;">'+_ldEsc(it.sku||'')+'</td>'
+                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#1e293b;min-width:120px;">'+_ldEsc(pName)+'</td>'
+                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+(Number(it.qty||0)).toLocaleString()+'</td>'
+                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+minW+'</td>'
+                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+maxW+'</td>'
+                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+okColor+';text-align:right;">'+(actualQty>0?actualQty.toLocaleString():'—')+'</td>'
+                    +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+okColor+';text-align:right;">'+(actualWt>0?actualWt.toLocaleString(undefined,{maximumFractionDigits:1}):'—')+'</td>'
+                    +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#7c3aed;text-align:right;">'+avgWt+'</td>'
+                +'</tr>';
+            }).join('');
+
+            return '<div style="background:#fff;border-radius:18px;border:2px solid #86efac;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px #0001;">'
+                // ── Card header ──
+                +'<div style="background:#0f172a;padding:14px 18px;">'
+                    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">'
+                        // Left: truck + team/staff
+                        +'<div style="display:flex;align-items:center;gap:12px;">'
+                            +'<div style="width:42px;height:42px;background:#10b981;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+                                +'<i class="fas fa-truck" style="color:#fff;font-size:16px;"></i>'
+                            +'</div>'
+                            +'<div>'
+                                +'<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;">'+_ldEsc(order.truck_plate||orderId.slice(0,8))+'</div>'
+                                +'<div style="font-size:11px;color:#64748b;margin-top:2px;"><span style="color:#94a3b8;">ทีม</span> '+_ldEsc(teamName)+' &nbsp;·&nbsp; '+_ldEsc(staffNames)+'</div>'
+                            +'</div>'
+                        +'</div>'
+                        // Right: status badge
+                        +'<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>'
+                    +'</div>'
+                    // ── Time + summary row ──
+                    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">'
+                        +_ldStatChip('fas fa-clock','#38bdf8','เริ่ม',tStart)
+                        +_ldStatChip('fas fa-flag-checkered','#34d399','สิ้นสุด',tEnd)
+                        +_ldStatChip('fas fa-stopwatch','#a78bfa','รวม',durMin+' นาที')
+                        +_ldStatChip('fas fa-boxes','#fb923c','รายการ',itemsToRender.length+' รายการ')
+                        +_ldStatChip('fas fa-weight-hanging','#f472b6','น้ำหนัก',totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG')
+                        +_ldStatChip('fas fa-cubes','#60a5fa','PCS',totalQty.toLocaleString())
+                    +'</div>'
+                +'</div>'
+                // ── Item table ──
+                +'<div style="overflow-x:auto;">'
+                +'<table style="width:100%;border-collapse:collapse;min-width:560px;">'
+                    +'<thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0;">'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:center;">#</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">รหัส</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">ชื่อสินค้า</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#0369a1;text-align:right;">ออเดอร์</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MIN</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MAX</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">โหลดจริง (PCS)</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">น้ำหนักจริง (KG)</th>'
+                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#7c3aed;text-align:right;">เฉลี่ย/เส้น</th>'
                     +'</tr></thead>'
-                    +'<tbody>'+tableRows+'</tbody>'
+                    +'<tbody>'+itemRows+'</tbody>'
+                    // ── footer total row ──
+                    +'<tfoot><tr style="background:#f0fdf4;border-top:2px solid #86efac;">'
+                        +'<td colspan="3" style="padding:8px 10px;font-size:11px;font-weight:900;color:#15803d;">รวม</td>'
+                        +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+orderItems.reduce(function(a,i){return a+(Number(i.qty)||0);},0).toLocaleString()+'</td>'
+                        +'<td colspan="2"></td>'
+                        +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+totalQty.toLocaleString()+'</td>'
+                        +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
+                        +'<td style="padding:8px 10px;font-size:11px;font-weight:700;color:#7c3aed;text-align:right;">'+(totalQty>0?(totalWt/totalQty).toFixed(2):'—')+'</td>'
+                    +'</tr></tfoot>'
                 +'</table>'
                 +'</div>'
             +'</div>';
+        }).join('');
+
+        var doneOrderCount = Object.keys(doneByOrder).length;
+        doneHtml = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
+            +'<i class="fas fa-check-circle" style="color:#16a34a;font-size:14px;"></i>'
+            +'<span style="font-size:13px;font-weight:900;color:#15803d;text-transform:uppercase;letter-spacing:.05em;">โหลดเสร็จแล้ว ('+doneOrderCount+' คัน · '+done.length+' รายการ)</span>'
+            +'</div>'
+            +orderCards;
     }
 
     wrap.innerHTML = liveHtml + doneHtml || '<div class="text-center py-12 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
