@@ -23455,8 +23455,8 @@ function _ldBuildForm(order) {
         var liftCells = '';
         for (var c=0; c<_LFT_COLS; c++) {
             liftCells += '<td style="padding:6px 4px;vertical-align:middle;border-right:1px solid #f1f5f9;background:#fff;">'
-                +'<input type="number" min="0" step="0.01" placeholder="0" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\')">'
-                +'<input type="number" min="0" step="1" placeholder="0" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\')">'
+                +'<input type="number" min="0" step="0.01" placeholder="0" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
+                +'<input type="number" min="0" step="1" placeholder="0" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+idx+'-'+c+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
             +'</td>';
         }
         return '<tr style="border-bottom:2px solid #e2e8f0;">'
@@ -23551,14 +23551,57 @@ function _ldBuildForm(order) {
 }
 
 var _ldCardStartTimes = {};
+
+window.ldDraftSave = function(oid) {
+    var draft = {lifts: [], note: ''};
+    var iIdx = 0;
+    while (true) {
+        if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
+        var itemLifts = [];
+        for (var c=0; c<_LFT_COLS; c++) {
+            var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
+            var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+            itemLifts.push({w: wEl?wEl.value:'', q: qEl?qEl.value:''});
+        }
+        draft.lifts.push(itemLifts);
+        iIdx++;
+    }
+    var noteEl = document.getElementById('ldf-note-'+oid);
+    if (noteEl) draft.note = noteEl.value;
+    try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(draft)); } catch(e){}
+};
+
+function _ldDraftLoad(oid) {
+    try {
+        var raw = localStorage.getItem('ld_draft_'+oid);
+        if (!raw) return;
+        var draft = JSON.parse(raw);
+        (draft.lifts||[]).forEach(function(itemLifts, iIdx) {
+            itemLifts.forEach(function(cell, c) {
+                var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
+                var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                if (wEl && cell.w) wEl.value = cell.w;
+                if (qEl && cell.q) qEl.value = cell.q;
+            });
+        });
+        var noteEl = document.getElementById('ldf-note-'+oid);
+        if (noteEl && draft.note) noteEl.value = draft.note;
+        ldCardStats(oid);
+    } catch(e){}
+}
+
+function _ldDraftClear(oid) {
+    try { localStorage.removeItem('ld_draft_'+oid); } catch(e){}
+}
 window.ldToggleCard = function(orderId) {
     var isOpen = _ldActiveOrderId === orderId;
     _ldActiveOrderId = isOpen ? null : orderId;
     var today = new Date().toISOString().slice(0,10);
     _ldLoadOrderCards(today);
     if (!isOpen) {
-        _ldCardStartTimes[orderId] = new Date().toISOString();
+        if (!_ldCardStartTimes[orderId]) _ldCardStartTimes[orderId] = new Date().toISOString();
         window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
+        setTimeout(function(){ _ldDraftLoad(orderId); }, 100);
     }
 };
 
@@ -23727,6 +23770,7 @@ window.ldCardSave = async function(oid) {
         if (allFilled) {
             await window._sb.from('loading_orders').update({status:'done', updated_at:new Date().toISOString()}).eq('id',oid);
         }
+        _ldDraftClear(oid);
         showToast('✅ บันทึกการโหลดสำเร็จ');
         _ldActiveOrderId = null;
         delete _ldCardPhotos[oid];
@@ -24057,6 +24101,7 @@ window.ldSaveSession = async function() {
     try {
         var {error} = await window._sb.from('loading_sessions').insert(rows);
         if (error) throw error;
+        _ldDraftClear(oid);
         showToast('✅ บันทึกการโหลดสำเร็จ');
         // reset form
         _ldPhotoPending = [];
