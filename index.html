@@ -24803,9 +24803,8 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
                             +'<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>'
                             +(allPhotos.length
-                                ? '<button onclick="ldShowPhotos(\''+_ldEsc(JSON.stringify(allPhotos).replace(/'/g,"\\'"))+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#7c3aed;color:#fff;border:none;cursor:pointer;">'
-                                    +'<i class="fas fa-images"></i> รูปภาพ ('+allPhotos.length+')'
-                                  +'</button>'
+                                ? (function(){ var k='ph_'+orderId; _ldPhotoRegistry[k]=allPhotos; return '<button onclick="ldShowPhotos(\''+k+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#7c3aed;color:#fff;border:none;cursor:pointer;"><i class="fas fa-images"></i> รูปภาพ ('+allPhotos.length+')</button>'; })()
+
                                 : '<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;background:#1e293b;color:#475569;border:1px solid #334155;"><i class="fas fa-image" style="margin-right:4px;"></i>ไม่มีรูป</span>')
                         +'</div>'
                     +'</div>'
@@ -24862,9 +24861,10 @@ function _ldRenderMonitorTable(rows, orders) {
 function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ── Photo lightbox ──────────────────────────────────────────────────
-window.ldShowPhotos = function(jsonStr) {
-    var urls = [];
-    try { urls = JSON.parse(jsonStr); } catch(e){}
+var _ldPhotoRegistry = {};   // {key: [url,...]} — avoids passing JSON in onclick
+
+window.ldShowPhotos = function(key) {
+    var urls = _ldPhotoRegistry[key] || [];
     if (!urls.length) return;
     var modal = document.getElementById('ld-photo-modal');
     if (!modal) return;
