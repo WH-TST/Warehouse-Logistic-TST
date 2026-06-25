@@ -24860,9 +24860,12 @@ function _ldRenderMonitorTable(rows, orders) {
     if (live.length) {
         // group by order_id
         var liveByOrder = {};
+        var orderIdx2 = {};
+        (orders||[]).forEach(function(o){ orderIdx2[o.id] = o; });
         live.forEach(function(r){
             var k = r.order_id||'?';
-            if (!liveByOrder[k]) liveByOrder[k] = {staff_name:r.staff_name, plan_id:r.plan_id, items:[]};
+            var ord = orderIdx2[r.order_id]||{};
+            if (!liveByOrder[k]) liveByOrder[k] = {staff_name:r.staff_name, plan_id:r.plan_id, order_no:ord.order_no, truck_plate:ord.truck_plate, customer_name:ord.customer_name, items:[]};
             liveByOrder[k].items.push(r);
         });
         liveHtml = '<div class="mb-4">'
@@ -24875,12 +24878,14 @@ function _ldRenderMonitorTable(rows, orders) {
                 var totalWt  = g.items.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
                 var totalPcs = g.items.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
                 var tStart = g.items[0]&&g.items[0].start_time ? g.items[0].start_time.slice(11,16) : '—';
-                var orderLabel = g.plan_id||orderId.slice(0,8);
+                var orderLabel = g.order_no || g.plan_id || ('LD'+orderId.slice(0,8));
+                var truckLabel = g.truck_plate ? ' · 🚛 '+g.truck_plate : '';
+                var custLabel  = g.customer_name ? ' · '+g.customer_name : '';
                 return '<div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 mb-2">'
                     +'<div class="flex items-center justify-between mb-3">'
                         +'<div>'
-                            +'<div class="font-black text-slate-800 text-base">'+_ldEsc(orderLabel)+'</div>'
-                            +'<div class="text-xs text-slate-500">'+_ldEsc(g.staff_name||'—')+' · เริ่ม '+tStart+'</div>'
+                            +'<div class="font-black text-indigo-700 text-base font-mono">'+_ldEsc(orderLabel)+'</div>'
+                            +'<div class="text-xs text-slate-500">'+_ldEsc(g.staff_name||'—')+' · เริ่ม '+tStart+_ldEsc(truckLabel)+_ldEsc(custLabel)+'</div>'
                         +'</div>'
                         +'<div class="flex items-center gap-3">'
                             +'<div class="text-right">'
