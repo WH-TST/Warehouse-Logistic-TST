@@ -7630,12 +7630,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
     <div class="flex items-center gap-3 flex-wrap">
       <i class="fas fa-satellite-dish" style="color:#059669;font-size:20px;"></i>
       <div style="flex:1;min-width:200px;">
-        <label style="font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;display:block;margin-bottom:4px;">เลือกคนขับ</label>
-        <select id="dm-driver-select" onchange="dmSelectDriver()" style="width:100%;max-width:320px;border:2px solid #cbd5e1;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:700;outline:none;background:#fff;">
-          <option value="">— เลือกคนขับ —</option>
-        </select>
+        <label style="font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;display:block;margin-bottom:4px;">มอนิเตอร์คนขับ</label>
+        <div id="dm-status-line" style="font-size:13px;color:#059669;font-weight:700;">กำลังโหลด...</div>
       </div>
-      <button onclick="dmRefresh()" style="background:#059669;border:none;border-radius:10px;padding:9px 16px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
+      <button onclick="dmRefreshAll()" style="background:#059669;border:none;border-radius:10px;padding:9px 16px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
         <i class="fas fa-sync-alt"></i> รีเฟรช
       </button>
     </div>
@@ -7644,8 +7642,8 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
   <!-- Driver view area -->
   <div id="dm-area" style="background:#0d1b2a;border-radius:20px;overflow:hidden;min-height:400px;">
     <div style="text-align:center;padding:80px 20px;color:#475569;">
-      <i class="fas fa-user-slash" style="font-size:48px;display:block;margin-bottom:16px;opacity:.3;"></i>
-      <p style="font-weight:700;font-size:15px;">เลือกคนขับเพื่อดูสถานะ</p>
+      <i class="fas fa-spinner fa-spin" style="font-size:48px;display:block;margin-bottom:16px;opacity:.5;"></i>
+      <p style="font-weight:700;font-size:15px;">กำลังโหลดข้อมูลคนขับ...</p>
     </div>
   </div>
 
@@ -36654,15 +36652,130 @@ function drvTick(){
 // ══════════════════════════════════════════════════════════════
 var _dmDrivers=[];
 
+window.dmRefreshAll=async function(){
+  var area=document.getElementById('dm-area');
+  var statusLine=document.getElementById('dm-status-line');
+  if(!area)return;
+  area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
+  var today=new Date().toISOString().split('T')[0];
+  var drivers=_dmDrivers;
+  if(!drivers.length){
+    area.innerHTML='<div style="text-align:center;padding:80px 20px;color:#475569;"><p style="font-weight:700;font-size:15px;">ไม่มีข้อมูลคนขับ</p></div>';
+    return;
+  }
+  // Load all plans for today
+  var {data:allPlans}=await window._sb.from('logistic_plans')
+    .select('plan_id,plan_date,status,truck_plate,shops,driver_transport,driver_id,job_type')
+    .eq('plan_date',today);
+  allPlans=allPlans||[];
+  var allPlanIds=allPlans.map(function(p){return p.plan_id;});
+  var tripLogsMap={}, svMap={};
+  if(allPlanIds.length){
+    var [{data:logs},{data:visits}]=await Promise.all([
+      window._sb.from('trip_logs').select('*').in('plan_id',allPlanIds),
+      window._sb.from('shop_visits').select('*').in('plan_id',allPlanIds)
+    ]);
+    (logs||[]).forEach(function(l){tripLogsMap[l.plan_id]=l;});
+    (visits||[]).forEach(function(v){
+      if(!svMap[v.plan_id])svMap[v.plan_id]={};
+      svMap[v.plan_id][v.shop_seq]=v;
+    });
+  }
+  var activeCount=0;
+  var html='<div style="padding:16px;font-family:\'Segoe UI\',sans-serif;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">';
+  drivers.forEach(function(driver){
+    var plans=allPlans.filter(function(p){
+      return (driver.driver_id && p.driver_id===driver.driver_id)||(driver.driver_name && p.driver_transport===driver.driver_name);
+    });
+    var done=plans.filter(function(p){var l=tripLogsMap[p.plan_id];return l&&l.status==='completed';}).length;
+    var activePlan=plans.find(function(p){var l=tripLogsMap[p.plan_id];return l&&l.status!=='completed';});
+    var curLog=activePlan?tripLogsMap[activePlan.plan_id]:null;
+    var st=curLog?curLog.status:(plans.length?'idle':'off');
+    if(st!=='off')activeCount++;
+    var stColors={
+      off:{color:'#475569',label:'ไม่มีงานวันนี้',icon:'fa-moon',bg:'#1e293b',border:'#334155'},
+      idle:{color:'#94a3b8',label:'รอเริ่มงาน',icon:'fa-clock',bg:'#1e293b',border:'#334155'},
+      traveling:{color:'#3b82f6',label:'กำลังเดินทาง',icon:'fa-truck-moving',bg:'#1e3a5f',border:'#1d4ed8'},
+      at_shop:{color:'#f59e0b',label:'อยู่ที่ร้าน',icon:'fa-store',bg:'#3b2a05',border:'#d97706'},
+      returning:{color:'#a78bfa',label:'กำลังกลับ',icon:'fa-route',bg:'#2e1f5e',border:'#7c3aed'},
+      completed:{color:'#34d399',label:'เสร็จสิ้น',icon:'fa-check-circle',bg:'#052e16',border:'#059669'}
+    };
+    var sm=stColors[st]||stColors.off;
+    var trucks=Array.from(new Set(plans.map(function(p){return p.truck_plate;}).filter(Boolean))).join(', ');
+    var initials=driver.driver_name.charAt(0);
+    var shopInfo='';
+    if(curLog&&st==='at_shop'&&activePlan){
+      var shops=activePlan.shops||[];
+      var sv=svMap[activePlan.plan_id]||{};
+      var curShop=shops.find(function(s){var v=sv[s.seq];return v&&v.lat_arrival&&!v.lat_depart;});
+      if(curShop) shopInfo='<div style="font-size:11px;color:#fbbf24;margin-top:4px;">📍 '+dmEsc(curShop.name||'ร้านที่ '+curShop.seq)+'</div>';
+    }
+    html+='<div onclick="dmOpenAllDriverTrip(\''+driver.username+'\')" style="background:'+sm.bg+';border:1px solid '+sm.border+';border-radius:16px;padding:14px;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity=\'.85\'" onmouseout="this.style.opacity=\'1\'">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+      +'<div style="width:42px;height:42px;border-radius:12px;background:'+sm.border+';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;font-weight:900;color:'+sm.color+';">'+initials+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-weight:900;color:#fff;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+dmEsc(driver.driver_name)+'</div>'
+      +'<div style="font-size:11px;color:'+sm.color+';font-weight:700;margin-top:2px;"><i class="fas '+sm.icon+'" style="margin-right:5px;"></i>'+sm.label+'</div>'
+      +shopInfo
+      +'</div>'
+      +'<div style="text-align:right;flex-shrink:0;">'
+      +'<div style="font-size:13px;font-weight:900;color:#fff;">'+done+'/'+plans.length+'</div>'
+      +'<div style="font-size:10px;color:#64748b;font-weight:700;">เที่ยว</div>'
+      +(trucks?'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">🚛 '+dmEsc(trucks)+'</div>':'')
+      +'</div></div></div>';
+  });
+  html+='</div>';
+  area.innerHTML=html;
+  if(statusLine) statusLine.textContent='คนขับ '+drivers.length+' คน · ทำงานอยู่ '+activeCount+' คน · อัปเดต '+new Date().toLocaleTimeString('th-TH');
+};
+
+window.dmOpenAllDriverTrip=async function(username){
+  var driver=_dmDrivers.find(function(d){return d.username===username;});
+  if(!driver)return;
+  _dmCurrentDriver=driver;
+  _dmSelectedShopSeq=null;
+  var area=document.getElementById('dm-area');
+  if(area) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
+  var today=new Date().toISOString().split('T')[0];
+  var orParts=[];
+  if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
+  if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
+  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,shops,driver_transport,job_type').eq('plan_date',today);
+  if(orParts.length) q=q.or(orParts.join(','));
+  var {data:plans}=await q;
+  _dmPlans=plans||[];
+  _dmTripLogs={};_dmSvMap={};
+  if(_dmPlans.length){
+    var ids=_dmPlans.map(function(p){return p.plan_id;});
+    var [{data:logs},{data:visits}]=await Promise.all([
+      window._sb.from('trip_logs').select('*').in('plan_id',ids),
+      window._sb.from('shop_visits').select('*').in('plan_id',ids)
+    ]);
+    (logs||[]).forEach(function(l){_dmTripLogs[l.plan_id]=l;});
+    (visits||[]).forEach(function(v){
+      if(!_dmSvMap[v.plan_id])_dmSvMap[v.plan_id]={};
+      _dmSvMap[v.plan_id][v.shop_seq]=v;
+    });
+  }
+  if(area) dmRenderPlanList(area);
+};
+
 window.dmInit=async function(){
   var {data}=await window._sb.from('driver_users').select('username,driver_name,driver_id,active').eq('active',true).order('driver_name');
   _dmDrivers=data||[];
-  var sel=document.getElementById('dm-driver-select');
-  if(!sel)return;
-  sel.innerHTML='<option value="">— เลือกคนขับ —</option>'
-    +_dmDrivers.map(function(d){return'<option value="'+d.username+'">'+d.driver_name+'</option>';}).join('');
+  dmRefreshAll();
   dmLoadApprovals();
   dmLoadInspections();
+  // Realtime: trip_logs changes → refresh all-driver grid
+  if(window._dmTripRt) window._sb.removeChannel(window._dmTripRt);
+  window._dmTripRt=window._sb.channel('dm-trip-rt')
+    .on('postgres_changes',{event:'*',schema:'public',table:'trip_logs'},function(){
+      if(!_dmCurrentDriver && !_dmTripPlan) dmRefreshAll();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'shop_visits'},function(){
+      if(!_dmCurrentDriver && !_dmTripPlan) dmRefreshAll();
+    })
+    .subscribe();
   // Realtime: แจ้งเตือนเมื่อมีการตรวจสภาพรถ/ขออนุมัติ
   if(window._dmInspectRt) window._sb.removeChannel(window._dmInspectRt);
   window._dmInspectRt=window._sb.channel('dm-inspect-rt')
@@ -36999,6 +37112,7 @@ function dmRenderPlanList(area){
   var trucks=Array.from(new Set(plans.map(function(p){return p.truck_plate;}).filter(Boolean))).join(', ');
   var done=plans.filter(function(p){var l=_dmTripLogs[p.plan_id];return l&&l.status==='completed';}).length;
   var html='<div style="background:#0f172a;min-height:100%;padding:16px;font-family:\'Segoe UI\',sans-serif;">';
+  html+='<button onclick="_dmCurrentDriver=null;_dmTripPlan=null;dmRefreshAll();" style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:7px 14px;color:#94a3b8;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:12px;"><i class="fas fa-arrow-left" style="margin-right:6px;"></i>← ดูทุกคน</button>';
   html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:14px 16px;background:#1e293b;border-radius:16px;border:1px solid #334155;">'
     +'<div style="width:48px;height:48px;border-radius:14px;background:#065f46;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;font-weight:900;color:#6ee7b7;">'+driver.driver_name.charAt(0)+'</div>'
     +'<div style="flex:1;"><div style="font-weight:900;color:#fff;font-size:17px;">'+dmEsc(driver.driver_name)+'</div>'
@@ -37451,7 +37565,7 @@ window.dmResetTrip=async function(){
 };
 
 window.dmRefresh=function(){
-  if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}else{dmSelectDriver();}
+  if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}else{dmRefreshAll();}
 };
 
 // ═══════════════════════════════════════════════════════
