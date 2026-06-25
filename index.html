@@ -7510,8 +7510,14 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 <div id="lo-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-6 px-3">
   <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl">
     <!-- Modal header -->
-    <div class="bg-indigo-700 text-white px-6 py-4 rounded-t-3xl flex items-center justify-between">
-      <div class="font-black text-lg flex items-center gap-2"><i class="fas fa-clipboard-list"></i><span id="lo-modal-title">สร้าง Loading Order</span></div>
+    <div id="lo-modal-header" class="bg-indigo-700 text-white px-6 py-4 rounded-t-3xl flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i id="lo-modal-icon" class="fas fa-clipboard-list"></i>
+        <div>
+          <div class="font-black text-lg" id="lo-modal-title">สร้าง Loading Order</div>
+          <div id="lo-modal-sub" class="text-xs text-white/60 hidden">แก้ไขข้อมูล — รายการใหม่จะต่อท้ายฝั่งโหลดอัตโนมัติ</div>
+        </div>
+      </div>
       <button onclick="loCloseModal()" class="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 text-white flex items-center justify-center"><i class="fas fa-times"></i></button>
     </div>
 
@@ -7583,8 +7589,8 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       <!-- Submit -->
       <div class="flex gap-3">
         <button onclick="loCloseModal()" class="flex-1 py-3 border-2 border-slate-200 text-slate-500 font-black rounded-2xl hover:bg-slate-50 transition">ยกเลิก</button>
-        <button onclick="loSaveOrder()" class="flex-2 px-8 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg">
-          <i class="fas fa-paper-plane"></i> ส่ง Loading Order
+        <button onclick="loSaveOrder()" id="lo-submit-btn" class="flex-2 px-8 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg">
+          <i id="lo-submit-icon" class="fas fa-paper-plane"></i> <span id="lo-submit-label">ส่ง Loading Order</span>
         </button>
       </div>
     </div>
@@ -25387,10 +25393,35 @@ window._loLoadCustomers = async function() {
     if (data) dl.innerHTML = data.map(function(s){ return '<option value="'+s.name+'">'; }).join('');
 };
 
+function _loSetModalMode(isEdit) {
+    var hdr  = document.getElementById('lo-modal-header');
+    var icon = document.getElementById('lo-modal-icon');
+    var sub  = document.getElementById('lo-modal-sub');
+    var lbl  = document.getElementById('lo-submit-label');
+    var ico  = document.getElementById('lo-submit-icon');
+    var btn  = document.getElementById('lo-submit-btn');
+    if (isEdit) {
+        if (hdr)  { hdr.style.background  = 'linear-gradient(135deg,#92400e,#d97706)'; }
+        if (icon) icon.className = 'fas fa-edit';
+        if (sub)  sub.classList.remove('hidden');
+        if (lbl)  lbl.textContent = 'บันทึกการแก้ไข';
+        if (ico)  ico.className = 'fas fa-save';
+        if (btn)  { btn.className = btn.className.replace('bg-indigo-600','bg-amber-600').replace('hover:bg-indigo-700','hover:bg-amber-700'); btn.style.background='#d97706'; }
+        document.getElementById('lo-modal-title').textContent = 'แก้ไข Loading Order';
+    } else {
+        if (hdr)  hdr.style.background = '';
+        if (icon) icon.className = 'fas fa-clipboard-list';
+        if (sub)  sub.classList.add('hidden');
+        if (lbl)  lbl.textContent = 'ส่ง Loading Order';
+        if (ico)  ico.className = 'fas fa-paper-plane';
+        if (btn)  { btn.style.background = ''; btn.className = btn.className.replace('bg-amber-600','bg-indigo-600').replace('hover:bg-amber-700','hover:bg-indigo-700'); }
+        document.getElementById('lo-modal-title').textContent = 'สร้าง Loading Order';
+    }
+}
+
 window.loNewOrder = function() {
     _loEditId = null;
-    document.getElementById('lo-modal-title').textContent = 'สร้าง Loading Order';
-    // reset form
+    _loSetModalMode(false);
     var today = document.getElementById('lo-date')?.value || new Date().toISOString().slice(0,10);
     document.getElementById('lo-m-date').value  = today;
     document.getElementById('lo-m-truck').value = '';
@@ -25411,7 +25442,7 @@ window.loEditOrder = async function(id) {
     var {data} = await window._sb.from('loading_orders').select('*').eq('id', id).maybeSingle();
     if (!data) { showToast('ไม่พบ Order', true); return; }
     _loEditId = id;
-    document.getElementById('lo-modal-title').textContent = 'แก้ไข Loading Order';
+    _loSetModalMode(true);
     document.getElementById('lo-m-date').value     = data.order_date    || '';
     document.getElementById('lo-m-truck').value    = data.truck_plate   || '';
     document.getElementById('lo-m-note').value     = data.note          || '';
