@@ -36766,16 +36766,29 @@ window.dmInit=async function(){
   dmRefreshAll();
   dmLoadApprovals();
   dmLoadInspections();
-  // Realtime: trip_logs changes → refresh all-driver grid
+  // Realtime: trip_logs / shop_visits → อัปเดตทันที
   if(window._dmTripRt) window._sb.removeChannel(window._dmTripRt);
-  window._dmTripRt=window._sb.channel('dm-trip-rt')
-    .on('postgres_changes',{event:'*',schema:'public',table:'trip_logs'},function(){
-      if(!_dmCurrentDriver && !_dmTripPlan) dmRefreshAll();
+  window._dmTripRt=window._sb.channel('dm-trip-rt-'+Date.now())
+    .on('postgres_changes',{event:'*',schema:'public',table:'trip_logs'},function(payload){
+      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
+      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
+      else{dmRefreshAll();}
     })
-    .on('postgres_changes',{event:'*',schema:'public',table:'shop_visits'},function(){
-      if(!_dmCurrentDriver && !_dmTripPlan) dmRefreshAll();
+    .on('postgres_changes',{event:'*',schema:'public',table:'shop_visits'},function(payload){
+      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
+      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
+      else{dmRefreshAll();}
     })
     .subscribe();
+  // Polling fallback ทุก 30 วินาที
+  if(window._dmPollTimer) clearInterval(window._dmPollTimer);
+  window._dmPollTimer=setInterval(function(){
+    var dmContent=document.getElementById('view-driver-monitor-content');
+    if(!dmContent||dmContent.classList.contains('hidden'))return;
+    if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
+    else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
+    else{dmRefreshAll();}
+  },30000);
   // Realtime: แจ้งเตือนเมื่อมีการตรวจสภาพรถ/ขออนุมัติ
   if(window._dmInspectRt) window._sb.removeChannel(window._dmInspectRt);
   window._dmInspectRt=window._sb.channel('dm-inspect-rt')
