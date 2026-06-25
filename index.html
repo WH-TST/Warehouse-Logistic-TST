@@ -37697,11 +37697,11 @@ function drvTick(){
 // ══════════════════════════════════════════════════════════════
 var _dmDrivers=[];
 
-window.dmRefreshAll=async function(){
+window.dmRefreshAll=async function(silent){
   var area=document.getElementById('dm-area');
   var statusLine=document.getElementById('dm-status-line');
   if(!area)return;
-  area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
+  if(!silent) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
   var today=new Date().toISOString().split('T')[0];
   var drivers=_dmDrivers;
   if(!drivers.length){
@@ -37774,13 +37774,13 @@ window.dmRefreshAll=async function(){
   if(statusLine) statusLine.textContent='คนขับ '+drivers.length+' คน · ทำงานอยู่ '+activeCount+' คน · อัปเดต '+new Date().toLocaleTimeString('th-TH');
 };
 
-window.dmOpenAllDriverTrip=async function(username){
+window.dmOpenAllDriverTrip=async function(username,silent){
   var driver=_dmDrivers.find(function(d){return d.username===username;});
   if(!driver)return;
   _dmCurrentDriver=driver;
   _dmSelectedShopSeq=null;
   var area=document.getElementById('dm-area');
-  if(area) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
+  if(area&&!silent) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
   var today=new Date().toISOString().split('T')[0];
   var orParts=[];
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
@@ -37815,19 +37815,19 @@ window.dmInit=async function(){
   if(window._dmTripRt) window._sb.removeChannel(window._dmTripRt);
   window._dmTripRt=window._sb.channel('dm-trip-rt-'+Date.now())
     .on('postgres_changes',{event:'*',schema:'public',table:'trip_logs'},function(payload){
-      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
-      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
-      else{dmRefreshAll();}
+      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id,true);}
+      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username,true);}
+      else{dmRefreshAll(true);}
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'shop_visits'},function(payload){
-      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
-      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
-      else{dmRefreshAll();}
+      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id,true);}
+      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username,true);}
+      else{dmRefreshAll(true);}
     })
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'logistic_plans'},function(payload){
-      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
-      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
-      else{dmRefreshAll();}
+      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id,true);}
+      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username,true);}
+      else{dmRefreshAll(true);}
     })
     .subscribe();
   // Polling fallback ทุก 30 วินาที
@@ -37835,9 +37835,9 @@ window.dmInit=async function(){
   window._dmPollTimer=setInterval(function(){
     var dmContent=document.getElementById('view-driver-monitor-content');
     if(!dmContent||dmContent.classList.contains('hidden'))return;
-    if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
-    else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
-    else{dmRefreshAll();}
+    if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id,true);}
+    else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username,true);}
+    else{dmRefreshAll(true);}
   },30000);
   // Realtime: แจ้งเตือนเมื่อมีการตรวจสภาพรถ/ขออนุมัติ
   if(window._dmInspectRt) window._sb.removeChannel(window._dmInspectRt);
@@ -38255,12 +38255,12 @@ function dmRenderPlanList(area){
   area.innerHTML=html+'</div>';
 }
 
-window.dmOpenTrip=async function(planId){
+window.dmOpenTrip=async function(planId,silent){
   _dmTripPlan=_dmPlans.find(function(p){return p.plan_id===planId;})||null;
   if(!_dmTripPlan)return;
   _dmSelectedShopSeq=null;
   var area=document.getElementById('dm-area');
-  area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
+  if(!silent) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
   var [{data:log},{data:visits}]=await Promise.all([
     window._sb.from('trip_logs').select('*').eq('plan_id',planId).maybeSingle(),
     window._sb.from('shop_visits').select('*').eq('plan_id',planId)
