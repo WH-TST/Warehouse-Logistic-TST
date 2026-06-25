@@ -23877,6 +23877,41 @@ function _ldBuildForm(order) {
                 +'<div style="font-size:10px;color:#64748b;">PCS</div>'
             +'</div>'
         +'</div>'
+        // timer bar
+        +'<div id="ldf-timer-bar-'+oid+'" style="background:#fff;border-radius:14px;border:2px solid #10b981;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">'
+            +'<div style="display:flex;align-items:center;gap:10px;">'
+                +'<i class="fas fa-stopwatch" style="color:#10b981;font-size:20px;"></i>'
+                +'<div>'
+                    +'<div id="ldf-timer-label-'+oid+'" style="font-size:9px;font-weight:900;color:#16a34a;text-transform:uppercase;letter-spacing:.5px;">กำลังโหลด</div>'
+                    +'<div id="ldf-elapsed-'+oid+'" style="font-size:24px;font-weight:900;color:#047857;font-family:monospace;line-height:1.1;">00:00</div>'
+                +'</div>'
+            +'</div>'
+            +'<button id="ldf-pause-btn-'+oid+'" onclick="ldPauseStart(\''+oid+'\')" style="background:#f59e0b;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;">'
+                +'<i class="fas fa-pause"></i> หยุดพัก'
+            +'</button>'
+        +'</div>'
+        // pause photo panel (hidden)
+        +'<div id="ldf-pause-panel-'+oid+'" style="display:none;background:#fffbeb;border-radius:14px;border:2px solid #f59e0b;padding:14px;">'
+            +'<div style="font-size:12px;font-weight:900;color:#92400e;margin-bottom:10px;"><i class="fas fa-camera" style="margin-right:6px;color:#d97706;"></i>ถ่ายรูปก่อนพัก <span style="color:#dc2626;">*</span></div>'
+            +'<input type="file" id="ldf-pause-photo-inp-'+oid+'" accept="image/*" capture="environment" style="display:none;" onchange="ldPauseHandlePhoto(this,\''+oid+'\')">'
+            +'<div onclick="document.getElementById(\'ldf-pause-photo-inp-'+oid+'\').click()" style="border:2px dashed #fcd34d;border-radius:10px;padding:14px;text-align:center;cursor:pointer;">'
+                +'<i class="fas fa-camera" style="font-size:20px;color:#d97706;display:block;margin-bottom:4px;"></i>'
+                +'<span style="font-size:11px;font-weight:700;color:#b45309;">แตะเพื่อถ่ายรูป</span>'
+            +'</div>'
+            +'<div id="ldf-pause-prev-'+oid+'" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>'
+            +'<button id="ldf-pause-confirm-'+oid+'" onclick="ldPauseConfirm(\''+oid+'\')" disabled style="margin-top:10px;width:100%;padding:12px;background:#d1d5db;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:900;">'
+                +'<i class="fas fa-check"></i> ยืนยันพัก'
+            +'</button>'
+        +'</div>'
+        // paused panel (hidden)
+        +'<div id="ldf-resume-panel-'+oid+'" style="display:none;background:#fef3c7;border-radius:14px;border:2px solid #fbbf24;padding:16px;text-align:center;">'
+            +'<i class="fas fa-pause-circle" style="font-size:30px;color:#d97706;margin-bottom:8px;display:block;"></i>'
+            +'<div style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:4px;">กำลังพัก · รอสินค้า</div>'
+            +'<div style="font-size:11px;color:#b45309;margin-bottom:12px;">เวลาโหลดที่ผ่านมา <b id="ldf-paused-so-far-'+oid+'">—</b></div>'
+            +'<button onclick="ldPauseResume(\''+oid+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">'
+                +'<i class="fas fa-play"></i> เริ่มโหลดใหม่'
+            +'</button>'
+        +'</div>'
         // item table (horizontally scrollable, product column sticky left, actual sticky right)
         +'<div style="background:#fff;border-radius:14px;border:1.5px solid #e2e8f0;overflow:hidden;">'
             +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'
@@ -23955,6 +23990,94 @@ function _ldBuildForm(order) {
         +'</button>'
     +'</div>';
 }
+
+// ── Pause / Resume ───────────────────────────────────────────────────
+var _ldSegments     = {}; // {oid: [{s:isoStart, e:isoEnd}]}  completed segments
+var _ldPaused       = {}; // {oid: bool}
+var _ldPausePhotos  = {}; // {oid: [File]}  temp for pause-photo capture
+var _ldElapsedTmr   = {}; // {oid: intervalId}
+
+function _ldGetWorkMs(oid) {
+    var ms = 0;
+    (_ldSegments[oid]||[]).forEach(function(sg){
+        var e = sg.e ? new Date(sg.e) : new Date();
+        ms += Math.max(0, e - new Date(sg.s));
+    });
+    return ms;
+}
+function _ldFmtMs(ms) {
+    var s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = s%60;
+    if (h>0) return h+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+    return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+}
+function _ldStartTimer(oid) {
+    if (_ldElapsedTmr[oid]) clearInterval(_ldElapsedTmr[oid]);
+    _ldElapsedTmr[oid] = setInterval(function(){
+        if (_ldPaused[oid]) return;
+        var el = document.getElementById('ldf-elapsed-'+oid);
+        if (!el) { clearInterval(_ldElapsedTmr[oid]); delete _ldElapsedTmr[oid]; return; }
+        el.textContent = _ldFmtMs(_ldGetWorkMs(oid));
+    }, 1000);
+}
+function _ldInitSegment(oid) {
+    if (!_ldSegments[oid] || !_ldSegments[oid].length) {
+        _ldSegments[oid] = [{s: _ldCardStartTimes[oid] || new Date().toISOString()}];
+    } else if (!_ldSegments[oid][_ldSegments[oid].length-1].e) {
+        // already has open segment — don't add new one
+    }
+}
+
+window.ldPauseStart = function(oid) {
+    _ldPausePhotos[oid] = [];
+    document.getElementById('ldf-pause-panel-'+oid).style.display = 'block';
+    document.getElementById('ldf-pause-btn-'+oid).style.display = 'none';
+    // reset confirm btn
+    var cb = document.getElementById('ldf-pause-confirm-'+oid);
+    if (cb) { cb.disabled = true; cb.style.background = '#d1d5db'; cb.style.cursor = 'default'; }
+    document.getElementById('ldf-pause-prev-'+oid).innerHTML = '';
+};
+window.ldPauseHandlePhoto = function(inp, oid) {
+    if (!_ldPausePhotos[oid]) _ldPausePhotos[oid] = [];
+    Array.from(inp.files||[]).forEach(function(f){ _ldPausePhotos[oid].push(f); });
+    var prev = document.getElementById('ldf-pause-prev-'+oid);
+    if (prev) prev.innerHTML = _ldPausePhotos[oid].map(function(f){
+        return '<img src="'+URL.createObjectURL(f)+'" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid #fcd34d;">';
+    }).join('');
+    var cb = document.getElementById('ldf-pause-confirm-'+oid);
+    if (cb && _ldPausePhotos[oid].length) { cb.disabled = false; cb.style.background = '#d97706'; cb.style.cursor = 'pointer'; }
+};
+window.ldPauseConfirm = function(oid) {
+    if (!(_ldPausePhotos[oid]||[]).length) { showToast('⚠️ กรุณาถ่ายรูปก่อนพัก', true); return; }
+    var now = new Date().toISOString();
+    _ldInitSegment(oid);
+    var segs = _ldSegments[oid];
+    if (!segs[segs.length-1].e) segs[segs.length-1].e = now;
+    _ldPaused[oid] = true;
+    // move pause photos → main photos
+    if (!_ldCardPhotos[oid]) _ldCardPhotos[oid] = [];
+    _ldPausePhotos[oid].forEach(function(f){ _ldCardPhotos[oid].push(f); });
+    _ldPausePhotos[oid] = [];
+    var workMs = _ldGetWorkMs(oid);
+    // update UI
+    document.getElementById('ldf-pause-panel-'+oid).style.display = 'none';
+    document.getElementById('ldf-resume-panel-'+oid).style.display = 'block';
+    document.getElementById('ldf-elapsed-'+oid).textContent = _ldFmtMs(workMs);
+    document.getElementById('ldf-paused-so-far-'+oid).textContent = _ldFmtMs(workMs);
+    var lbl = document.getElementById('ldf-timer-label-'+oid);
+    if (lbl) { lbl.textContent = 'หยุดพัก'; lbl.style.color = '#d97706'; }
+    showToast('⏸ หยุดพักแล้ว กดเริ่มใหม่เมื่อสินค้าพร้อม');
+};
+window.ldPauseResume = function(oid) {
+    var now = new Date().toISOString();
+    if (!_ldSegments[oid]) _ldSegments[oid] = [];
+    _ldSegments[oid].push({s: now});
+    _ldPaused[oid] = false;
+    document.getElementById('ldf-resume-panel-'+oid).style.display = 'none';
+    document.getElementById('ldf-pause-btn-'+oid).style.display = 'flex';
+    var lbl = document.getElementById('ldf-timer-label-'+oid);
+    if (lbl) { lbl.textContent = 'กำลังโหลด'; lbl.style.color = '#16a34a'; }
+    showToast('▶ เริ่มโหลดใหม่แล้ว');
+};
 
 // QC checkbox toggle
 var _ldQcState = {}; // {oid: [bool x5]}
@@ -24144,9 +24267,12 @@ window.ldToggleTrailerUnit = function(orderId, unit) {
         // opening — set as current unit for draft saving + mark in_progress
         _ldTrailerUnit[orderId] = unit;
         if (!_ldCardStartTimes[orderId+'-'+unit]) _ldCardStartTimes[orderId+'-'+unit] = new Date().toISOString();
+        var uKey = orderId+'-'+unit;
+        if (!_ldCardStartTimes[uKey]) _ldCardStartTimes[uKey] = new Date().toISOString();
+        _ldInitSegment(uKey);
         window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
         _ldRestoreDraftIds(orderId).then(function(){
-            setTimeout(function(){ _ldDraftLoad(orderId); }, 100);
+            setTimeout(function(){ _ldDraftLoad(orderId); _ldStartTimer(uKey); }, 120);
         });
     }
     var today = new Date().toISOString().slice(0,10);
@@ -24166,9 +24292,10 @@ window.ldToggleCard = function(orderId) {
     _ldLoadOrderCards(today);
     if (!isOpen) {
         if (!_ldCardStartTimes[orderId]) _ldCardStartTimes[orderId] = new Date().toISOString();
+        _ldInitSegment(orderId);
         window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
         _ldRestoreDraftIds(orderId).then(function(){
-            setTimeout(function(){ _ldDraftLoad(orderId); }, 100);
+            setTimeout(function(){ _ldDraftLoad(orderId); _ldStartTimer(orderId); }, 120);
         });
     }
 };
@@ -24361,13 +24488,23 @@ window.ldCardSave = async function(oid) {
         team: staffRec ? staffRec.team : ''
     }];
 
-    var startIso = _ldCardStartTimes[oid]||null;
-    var endIso   = new Date().toISOString();
+    var endIso = new Date().toISOString();
+    // close open segment if still active (not paused)
+    var segKey = (_ldTrailerUnit[oid] ? oid+'-'+_ldTrailerUnit[oid] : oid);
+    _ldInitSegment(segKey);
+    var segs = _ldSegments[segKey]||[];
+    if (segs.length && !segs[segs.length-1].e) segs[segs.length-1].e = endIso;
+    var workMs  = _ldGetWorkMs(segKey);
+    var workMin = Math.round(workMs/60000);
+    var startIso = segs.length ? segs[0].s : (_ldCardStartTimes[oid]||endIso);
+    var segCount = segs.length;
+
     var userNote = document.getElementById('ldf-note-'+oid)?.value||'';
     var dPcs = parseInt(document.getElementById('ldf-dunnage-pcs-'+oid)?.value||0)||0;
     var dKg  = parseFloat(document.getElementById('ldf-dunnage-kg-'+oid)?.value||0)||0;
     var dunnageNote = (dPcs>0||dKg>0) ? '[เหล็กรอง: '+dPcs+' ท่อน / '+dKg+' KG]' : '';
-    var note = [dunnageNote, userNote].filter(Boolean).join('\n');
+    var timeNote = segCount>1 ? '[เวลาโหลดจริง: '+workMin+' · '+segCount+' ช่วง]' : '';
+    var note = [timeNote, dunnageNote, userNote].filter(Boolean).join('\n');
 
     // upload photos
     var photoUrls = [];
@@ -24415,6 +24552,8 @@ window.ldCardSave = async function(oid) {
             await window._sb.from('loading_orders').update({status:'done', updated_at:new Date().toISOString()}).eq('id',oid);
         }
         _ldDraftClear(oid);
+        if (_ldElapsedTmr[segKey]) { clearInterval(_ldElapsedTmr[segKey]); delete _ldElapsedTmr[segKey]; }
+        delete _ldSegments[segKey]; delete _ldPaused[segKey];
         showToast('✅ บันทึกการโหลดสำเร็จ');
         _ldActiveOrderId = null;
         delete _ldCardPhotos[oid];
@@ -25499,7 +25638,14 @@ function _ldRenderMonitorTable(rows, orders) {
             var teamName   = Object.keys(teamSet).join(', ')  || '—';
             var tStart = minStart ? minStart.slice(11,16) : '—';
             var tEnd   = maxEnd   ? maxEnd.slice(11,16)   : '—';
-            var durMin = (minStart&&maxEnd) ? Math.round((new Date(maxEnd)-new Date(minStart))/60000) : 0;
+            // parse actual work time if segments were used (paused during loading)
+            var parsedWorkMin = null;
+            sessions.forEach(function(r){
+                var m = (r.note||'').match(/\[เวลาโหลดจริง:\s*(\d+)/);
+                if (m) parsedWorkMin = parseInt(m[1]);
+            });
+            var durMin = parsedWorkMin !== null ? parsedWorkMin
+                : ((minStart&&maxEnd) ? Math.round((new Date(maxEnd)-new Date(minStart))/60000) : 0);
 
             // ── helper: build done table for a subset of sessions + items
             function _buildDoneTable(filtSess, targetItems) {
@@ -25612,7 +25758,15 @@ function _ldRenderMonitorTable(rows, orders) {
                     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">'
                         +_ldStatChip('fas fa-clock','#38bdf8','เริ่ม',tStart)
                         +_ldStatChip('fas fa-flag-checkered','#34d399','สิ้นสุด',tEnd)
-                        +_ldStatChip('fas fa-stopwatch','#a78bfa','รวม',durMin+' นาที')
+                        +(function(){
+                            var segM = null, segC = null;
+                            sessions.forEach(function(r){
+                                var m = (r.note||'').match(/\[เวลาโหลดจริง:\s*(\d+)\s*·\s*(\d+)\s*ช่วง\]/);
+                                if (m) { segM=parseInt(m[1]); segC=parseInt(m[2]); }
+                            });
+                            var label = segC ? durMin+' นาที ('+segC+' ช่วง)' : durMin+' นาที';
+                            return _ldStatChip('fas fa-stopwatch','#a78bfa','รวม',label);
+                        })()
                         +_ldStatChip('fas fa-weight-hanging','#f472b6','น้ำหนัก',totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG')
                         +_ldStatChip('fas fa-cubes','#60a5fa','PCS',totalQty.toLocaleString())
                         +(function(){ var dd=_monDunnage(sessions); return dd.pcs||dd.kg ? _ldStatChip('fas fa-grip-lines','#f59e0b','เหล็กรอง',dd.pcs+' ท่อน · '+dd.kg+' KG') : ''; })()
