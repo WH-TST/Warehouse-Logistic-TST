@@ -25380,10 +25380,12 @@ function _ldRenderMonitorTable(rows, orders) {
                         var uStart = uTimes.length ? _thTime(uTimes[0]) : null;
                         var uTeamStr  = Object.keys(uTeam).join(', ')  || '—';
                         var uStaffStr = Object.keys(uStaff).join(', ') || '—';
-                        return uStart
-                            ? '<span style="font-size:10px;color:#475569;"><i class="fas fa-users" style="margin-right:3px;"></i>'+_ldEsc(uTeamStr)+' · '+_ldEsc(uStaffStr)+'</span>'
-                              +'<span style="font-size:10px;color:#475569;margin-left:10px;"><i class="fas fa-clock" style="margin-right:3px;"></i>เริ่ม '+_ldEsc(uStart)+'</span>'
-                            : '<span style="font-size:10px;color:#94a3b8;">ยังไม่เริ่มโหลด</span>';
+                        var ud = _monDunnage(unitSess);
+                        if (!uStart) return '<span style="font-size:10px;color:#94a3b8;">ยังไม่เริ่มโหลด</span>';
+                        return '<span style="font-size:10px;color:#475569;"><i class="fas fa-users" style="margin-right:3px;"></i>'+_ldEsc(uTeamStr)+' · '+_ldEsc(uStaffStr)+'</span>'
+                            +'<span style="font-size:10px;color:#475569;margin-left:10px;"><i class="fas fa-clock" style="margin-right:3px;"></i>เริ่ม '+_ldEsc(uStart)+'</span>'
+                            +'<span style="margin-left:8px;">'+_monQcBadge()+'</span>'
+                            +(ud.pcs||ud.kg ? '<span style="margin-left:6px;">'+_monDunnageChip(ud)+'</span>' : '');
                     }
                     tablesHtml =
                         '<div style="background:#dcfce7;padding:8px 14px;border-bottom:1px solid #86efac;">'
@@ -25432,10 +25434,15 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'</div>'
                     +'</div>'
                     +(g.is_trailer && g.trailer_split ? ''
-                        : '<div style="background:#fff5f5;padding:10px 18px;display:flex;gap:20px;flex-wrap:wrap;border-bottom:1px solid #ffe4e6;">'
-                            +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-users" style="color:#dc2626;margin-right:5px;"></i><b>ทีม:</b> '+_ldEsc(teamList)+' — '+_ldEsc(staffList)+'</div>'
-                            +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="color:#dc2626;margin-right:5px;"></i><b>เริ่ม:</b> '+tStart+(tEnd?' &nbsp;|&nbsp; <b>เสร็จ:</b> '+tEnd:'')+'</div>'
-                        +'</div>')
+                        : (function(){
+                            var ld = _monDunnage(sess);
+                            return '<div style="background:#fff5f5;padding:10px 18px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #ffe4e6;">'
+                                +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-users" style="color:#dc2626;margin-right:5px;"></i><b>ทีม:</b> '+_ldEsc(teamList)+' — '+_ldEsc(staffList)+'</div>'
+                                +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="color:#dc2626;margin-right:5px;"></i><b>เริ่ม:</b> '+tStart+(tEnd?' &nbsp;|&nbsp; <b>เสร็จ:</b> '+tEnd:'')+'</div>'
+                                +_monQcBadge()
+                                +_monDunnageChip(ld)
+                            +'</div>';
+                        })())
                     +tablesHtml
                 +'</div>';
             }).join('')
@@ -25608,6 +25615,8 @@ function _ldRenderMonitorTable(rows, orders) {
                         +_ldStatChip('fas fa-stopwatch','#a78bfa','รวม',durMin+' นาที')
                         +_ldStatChip('fas fa-weight-hanging','#f472b6','น้ำหนัก',totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG')
                         +_ldStatChip('fas fa-cubes','#60a5fa','PCS',totalQty.toLocaleString())
+                        +(function(){ var dd=_monDunnage(sessions); return dd.pcs||dd.kg ? _ldStatChip('fas fa-grip-lines','#f59e0b','เหล็กรอง',dd.pcs+' ท่อน · '+dd.kg+' KG') : ''; })()
+                        +_monQcBadge()
                     +'</div>'
                 +'</div>'
                 +doneTableHtml
@@ -25626,6 +25635,27 @@ function _ldRenderMonitorTable(rows, orders) {
 }
 
 function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── parse dunnage from session notes ──────────────────────────────────
+function _monDunnage(sessions) {
+    var pcs=0, kg=0;
+    (sessions||[]).forEach(function(r){
+        var m = (r.note||'').match(/\[เหล็กรอง:\s*(\d+)\s*ท่อน\s*\/\s*([\d.]+)\s*KG\]/);
+        if (m) { pcs=parseInt(m[1])||0; kg=parseFloat(m[2])||0; }
+    });
+    return {pcs:pcs, kg:kg};
+}
+function _monDunnageChip(d) {
+    if (!d.pcs && !d.kg) return '';
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:900;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">'
+        +'<i class="fas fa-grip-lines"></i> เหล็กรอง '+d.pcs+' ท่อน · '+d.kg+' KG'
+    +'</span>';
+}
+function _monQcBadge() {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:900;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;">'
+        +'<i class="fas fa-clipboard-check"></i> QC ✓'
+    +'</span>';
+}
 
 // ── Photo lightbox ──────────────────────────────────────────────────
 var _ldPhotoRegistry = {};   // {key: [url,...]} — avoids passing JSON in onclick
