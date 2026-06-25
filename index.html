@@ -25900,10 +25900,16 @@ function _ldComputeFinalWeights(sessions, diff) {
             });
         }
     } else {
-        // negative diff → deduct proportional to weight
-        var totW=skus.reduce(function(s,sk){return s+sm[sk].weight;},0);
-        skus.forEach(function(sk){
-            adds[sk]+=totW>0 ? diff*(sm[sk].weight/totW) : diff/skus.length;
+        // negative diff → deduct ONLY from items at/above min (protect below-min items)
+        var eligible = skus.filter(function(sk){
+            var p=_ldProductMap[sk]||{}, r=sm[sk];
+            if (!r.qty) return false;
+            return p.min_w==null || (r.weight/r.qty)>=p.min_w;
+        });
+        var pool = eligible.length ? eligible : skus;
+        var totWPool=pool.reduce(function(s,sk){return s+sm[sk].weight;},0);
+        pool.forEach(function(sk){
+            adds[sk]+=totWPool>0 ? diff*(sm[sk].weight/totWPool) : diff/pool.length;
         });
     }
 
