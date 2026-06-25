@@ -24202,56 +24202,48 @@ function _ldShowToast(msg) {
 
 var _ldPollTimer = null;
 
-function _ldSubOrders() {
-    if (_ldOrderSub) { try { _ldOrderSub.unsubscribe(); } catch(e){} }
-    var _ldLastKnownIds = new Set();
+var _ldLastKnownIds = new Set();
 
-    _ldOrderSub = window._sb.channel('ld-orders-watch-v3')
+function _ldSubOrders() {
+    if (_ldOrderSub) { try { window._sb.removeChannel(_ldOrderSub); } catch(e){} _ldOrderSub = null; }
+
+    _ldOrderSub = window._sb.channel('ld-orders-rt-v4')
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'loading_orders'}, function(payload){
             var today = new Date().toISOString().slice(0,10);
             _ldLoadOrderCards(today);
             if (payload && payload.new && payload.new.order_date === today) {
                 _ldNotifyNewOrder(payload.new);
+                if (!_ldLastKnownIds.has(payload.new.id+'_notified')) {
+                    _ldLastKnownIds.add(payload.new.id+'_notified');
+                }
             }
         })
         .on('postgres_changes',{event:'UPDATE',schema:'public',table:'loading_orders'}, function(){
             var today = new Date().toISOString().slice(0,10);
             _ldLoadOrderCards(today);
-            if (typeof window.ldMonLoad === 'function') {
-                var monTab = document.getElementById('ld-tab-monitor');
-                if (monTab && !monTab.classList.contains('hidden')) window.ldMonLoad();
-            }
+            if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .on('postgres_changes',{event:'DELETE',schema:'public',table:'loading_orders'}, function(){
             var today = new Date().toISOString().slice(0,10);
             _ldLoadOrderCards(today);
-            if (typeof window.ldMonLoad === 'function') {
-                var monTab = document.getElementById('ld-tab-monitor');
-                if (monTab && !monTab.classList.contains('hidden')) window.ldMonLoad();
-            }
+            if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .on('postgres_changes',{event:'*',schema:'public',table:'loading_sessions'}, function(){
             var today = new Date().toISOString().slice(0,10);
             _ldRefreshGlobalStats(today);
-            if (typeof window.ldMonLoad === 'function') {
-                var monTab = document.getElementById('ld-tab-monitor');
-                if (monTab && !monTab.classList.contains('hidden')) window.ldMonLoad();
-            }
+            if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .subscribe(function(status){
-            console.log('[WMS-LD] realtime status:', status);
+            console.log('[WMS-LD] realtime:', status);
         });
 
-    // Polling fallback for WH Staff — re-fetch every 10s in case realtime misses
+    // Polling fallback ทุก 15 วิ — ทำงานทุก mode (admin + WH staff)
     if (_ldPollTimer) clearInterval(_ldPollTimer);
-    // Pre-populate known IDs so existing orders don't trigger notification on first run
     var today0 = new Date().toISOString().slice(0,10);
-    window._sb.from('loading_orders').select('id')
-        .eq('order_date', today0).in('status',['pending','in_progress'])
+    window._sb.from('loading_orders').select('id').eq('order_date', today0)
         .then(function(res){ (res.data||[]).forEach(function(o){ _ldLastKnownIds.add(o.id); _ldLastKnownIds.add(o.id+'_notified'); }); });
 
     _ldPollTimer = setInterval(function() {
-        if (!window._whMode) return;
         var today = new Date().toISOString().slice(0,10);
         window._sb.from('loading_orders').select('*')
             .eq('order_date', today).in('status',['pending','in_progress'])
@@ -24267,7 +24259,7 @@ function _ldSubOrders() {
                     }
                 });
             });
-    }, 10000);
+    }, 15000);
 }
 
 window.ldSwitchTab = function(tab) {
