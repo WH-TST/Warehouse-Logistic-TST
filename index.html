@@ -23409,8 +23409,10 @@ var _ldMonSub      = null;  // realtime subscription
 var _ldLiftCount   = 0;
 var _ldProductMap  = {};    // {sku: {min_w, max_w}}
 
-// _ldActiveOrderId: order ที่กำลัง expand อยู่
+// _ldActiveOrderId: order ที่กำลัง expand อยู่ (non-trailer)
 var _ldActiveOrderId = null;
+// _ldTrailerActive: {orderId: {mother:bool, trailer:bool}} — แยก state สำหรับรถพ่วง
+var _ldTrailerActive = {};
 var _ldOrderSub = null;
 
 window.ldInit = function() {
@@ -23476,33 +23478,106 @@ function _ldRenderCards(orders) {
             +'</tr>';
         }).join('');
 
+        // ── Trailer order with split → 2 independent sub-rows
+        if (o.is_trailer && o.trailer_split) {
+            var ta = _ldTrailerActive[o.id] || {};
+            var mOpen = !!ta.mother, tOpen = !!ta.trailer;
+            var split = o.trailer_split;
+            var mKg=0, mPcs=0, tKg=0, tPcs=0;
+            Object.values(split).forEach(function(s){ mKg+=s.mother_kg||0; mPcs+=s.mother_pcs||0; tKg+=s.trailer_kg||0; tPcs+=s.trailer_pcs||0; });
+            var mFormHtml = mOpen ? _ldBuildFormForUnit(o, 'mother') : '';
+            var tFormHtml = tOpen ? _ldBuildFormForUnit(o, 'trailer') : '';
+            return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 border-blue-400 shadow-sm overflow-hidden transition-all">'
+                // Card header — info only, not clickable
+                +'<div class="px-4 py-3 flex items-center justify-between">'
+                    +'<div class="flex items-center gap-3">'
+                        +'<div class="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
+                        +'<div>'
+                            +'<div class="font-black text-slate-800 text-base">'+(o.order_no||o.truck_plate||'—')+'</div>'
+                            +'<div style="font-size:11px;color:#64748b;">'+(o.customer_name||'')+'</div>'
+                        +'</div>'
+                    +'</div>'
+                    +'<div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span>'+stBadge+'</div>'
+                +'</div>'
+                // แม่ sub-row
+                +'<div style="border-top:1px solid #e2e8f0;">'
+                    +'<div onclick="ldToggleTrailerUnit(\''+o.id+'\',\'mother\')" class="px-4 py-3 flex items-center justify-between cursor-pointer select-none active:bg-green-50" style="background:#f0fdf4;">'
+                        +'<div class="flex items-center gap-3">'
+                            +'<div style="width:8px;height:8px;background:#16a34a;border-radius:50%;flex-shrink:0;"></div>'
+                            +'<div>'
+                                +'<div style="font-size:13px;font-weight:700;color:#15803d;">แม่ · Head · '+(o.truck_plate||'—')+'</div>'
+                                +'<div style="font-size:11px;color:#86efac;">'+Math.round(mKg).toLocaleString()+' KG · '+mPcs.toLocaleString()+' เส้น</div>'
+                            +'</div>'
+                        +'</div>'
+                        +'<i class="fas fa-chevron-'+(mOpen?'up':'down')+' text-green-400 text-xs"></i>'
+                    +'</div>'
+                    +(mOpen ? '<div class="border-t border-dashed border-green-200">'+mFormHtml+'</div>' : '')
+                +'</div>'
+                // ลูก sub-row
+                +'<div style="border-top:1px solid #e2e8f0;">'
+                    +'<div onclick="ldToggleTrailerUnit(\''+o.id+'\',\'trailer\')" class="px-4 py-3 flex items-center justify-between cursor-pointer select-none active:bg-blue-50" style="background:#eff6ff;">'
+                        +'<div class="flex items-center gap-3">'
+                            +'<div style="width:8px;height:8px;background:#2563eb;border-radius:50%;flex-shrink:0;"></div>'
+                            +'<div>'
+                                +'<div style="font-size:13px;font-weight:700;color:#1d4ed8;">ลูก · Trailer · '+(o.trailer_plate||'—')+'</div>'
+                                +'<div style="font-size:11px;color:#93c5fd;">'+Math.round(tKg).toLocaleString()+' KG · '+tPcs.toLocaleString()+' เส้น</div>'
+                            +'</div>'
+                        +'</div>'
+                        +'<i class="fas fa-chevron-'+(tOpen?'up':'down')+' text-blue-400 text-xs"></i>'
+                    +'</div>'
+                    +(tOpen ? '<div class="border-t border-dashed border-blue-200">'+tFormHtml+'</div>' : '')
+                +'</div>'
+            +'</div>';
+        }
+
+        // ── Trailer order without split yet → split plan screen
+        if (o.is_trailer && !o.trailer_split) {
+            var isActive = _ldActiveOrderId === o.id;
+            var formHtml = isActive ? _ldBuildTrailerSplitScreen(o) : '';
+            return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 border-blue-400 shadow-sm overflow-hidden transition-all">'
+                +'<div onclick="ldToggleCard(\''+o.id+'\')" class="px-4 py-3 flex items-center justify-between cursor-pointer select-none active:bg-slate-50">'
+                    +'<div class="flex items-center gap-3">'
+                        +'<div class="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
+                        +'<div>'
+                            +'<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'<span class="text-xs font-bold text-green-600 ml-1">แม่</span></div>'
+                            +'<div style="font-size:12px;font-weight:700;color:#3b82f6;">'+(o.trailer_plate||'—')+' <span style="font-size:10px;color:#93c5fd;">ลูก·Trailer</span></div>'
+                            +'<div style="font-size:12px;color:#f59e0b;margin-top:2px;font-weight:700;">⚠ กดเพื่อจัดรายการก่อนโหลด</div>'
+                        +'</div>'
+                    +'</div>'
+                    +'<div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span>'+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
+                +'</div>'
+                +(isActive ? '<div class="border-t-2 border-dashed border-blue-200">'+formHtml+'</div>' : '')
+            +'</div>';
+        }
+
+        // ── Normal (non-trailer) order
+        var isActive = _ldActiveOrderId === o.id;
         var formHtml = isActive ? _ldBuildForm(o) : '';
-        var trailerBadge = o.is_trailer
-            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span>'
-            : '';
-        var truckDisplay = o.is_trailer
-            ? '<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'<span class="text-xs font-bold text-green-600 ml-1">แม่</span></div>'
-              +'<div style="font-size:12px;font-weight:700;color:#3b82f6;">'+(o.trailer_plate||'—')+' <span style="font-size:10px;color:#93c5fd;">ลูก·Trailer</span></div>'
-            : '<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'</div>';
 
         return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 '+stColor+' shadow-sm overflow-hidden transition-all">'
             +'<div onclick="ldToggleCard(\''+o.id+'\')" class="px-4 py-3 flex items-center justify-between cursor-pointer select-none active:bg-slate-50">'
                 +'<div class="flex items-center gap-3">'
-                    +'<div class="w-10 h-10 rounded-xl '+(o.is_trailer?'bg-blue-700':'bg-slate-800')+' text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
+                    +'<div class="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
                     +'<div>'
-                        +truckDisplay
+                        +'<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'</div>'
                         +'<div style="font-size:13px;font-weight:900;color:#cbd5e1;margin-top:2px;font-family:monospace;">'+totalQty.toLocaleString()+' <span style="font-size:11px;font-weight:700;">PCS</span> &nbsp;/&nbsp; '+totalWt.toLocaleString()+' <span style="font-size:11px;font-weight:700;">KG</span></div>'
                     +'</div>'
                 +'</div>'
-                +'<div class="flex items-center gap-2">'+trailerBadge+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
+                +'<div class="flex items-center gap-2">'+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
             +'</div>'
             +(isActive ? '<div class="border-t-2 border-dashed border-emerald-200">'+formHtml+'</div>' : '')
         +'</div>';
     }).join('');
-    // After re-render (realtime refresh), restore form values for the active card
+    // After re-render — restore form values
     if (_ldActiveOrderId) {
         setTimeout(function(){ _ldDraftLoad(_ldActiveOrderId); }, 80);
     }
+    Object.keys(_ldTrailerActive).forEach(function(oid){
+        var ta = _ldTrailerActive[oid];
+        if (ta.mother || ta.trailer) {
+            setTimeout(function(){ _ldDraftLoad(oid); }, 80);
+        }
+    });
 }
 
 var _LFT_COLS = 7; // lift columns per row (default / minimum)
@@ -23999,7 +24074,30 @@ function _ldDraftClear(oid) {
     delete _ldDraftTimers[oid];
     delete _ldDraftOrderCache[oid];
 }
-var _ldTrailerUnit = {}; // orderId → 'mother'|'trailer' currently selected
+var _ldTrailerUnit = {}; // orderId → 'mother'|'trailer' currently selected (used for draft saving)
+
+window.ldToggleTrailerUnit = function(orderId, unit) {
+    if (!_ldTrailerActive[orderId]) _ldTrailerActive[orderId] = {};
+    var isOpen = !!_ldTrailerActive[orderId][unit];
+    _ldTrailerActive[orderId][unit] = !isOpen;
+    if (!isOpen) {
+        // opening — set as current unit for draft saving + mark in_progress
+        _ldTrailerUnit[orderId] = unit;
+        if (!_ldCardStartTimes[orderId+'-'+unit]) _ldCardStartTimes[orderId+'-'+unit] = new Date().toISOString();
+        window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
+        _ldRestoreDraftIds(orderId).then(function(){
+            setTimeout(function(){ _ldDraftLoad(orderId); }, 100);
+        });
+    }
+    var today = new Date().toISOString().slice(0,10);
+    _ldLoadOrderCards(today);
+};
+
+// Build loading form for a specific truck unit (trailer orders)
+function _ldBuildFormForUnit(order, unit) {
+    _ldTrailerUnit[order.id] = unit;
+    return _ldBuildForm(order);
+}
 
 window.ldToggleCard = function(orderId) {
     var isOpen = _ldActiveOrderId === orderId;
