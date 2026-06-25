@@ -25900,17 +25900,51 @@ function _ldComputeFinalWeights(sessions, diff) {
             });
         }
     } else {
-        // negative diff → deduct ONLY from items at/above min (protect below-min items)
-        var eligible = skus.filter(function(sk){
+        // negative diff — mirror of positive, protect below-min items
+        var rem2 = diff; // negative number
+        // ① above-max items first — deduct 50% of gap toward max (stay above max)
+        var aboveMax = skus.filter(function(sk){
             var p=_ldProductMap[sk]||{}, r=sm[sk];
-            if (!r.qty) return false;
-            return p.min_w==null || (r.weight/r.qty)>=p.min_w;
+            return p.max_w!=null && r.qty>0 && (r.weight/r.qty)>p.max_w;
         });
-        var pool = eligible.length ? eligible : skus;
-        var totWPool=pool.reduce(function(s,sk){return s+sm[sk].weight;},0);
-        pool.forEach(function(sk){
-            adds[sk]+=totWPool>0 ? diff*(sm[sk].weight/totWPool) : diff/pool.length;
+        aboveMax.forEach(function(sk){
+            if (rem2>=0) return;
+            var r=sm[sk], p=_ldProductMap[sk]||{};
+            var gap=((r.weight/r.qty)-p.max_w)*r.qty; // positive: how much over max
+            var take=Math.max(gap*0.5, rem2); // take up to 50% of over-max gap (rem2 is neg cap)
+            adds[sk]+=take; rem2-=take;
         });
+        // ② within range but near max (top 30%) — deduct but stay ≥ min
+        var nearMax = skus.filter(function(sk){
+            var p=_ldProductMap[sk]||{}, r=sm[sk];
+            if (p.min_w==null||p.max_w==null||!r.qty) return false;
+            var avg=(r.weight+adds[sk])/r.qty;
+            return avg<=p.max_w && avg > p.max_w-(p.max_w-p.min_w)*0.3;
+        });
+        if (nearMax.length && rem2<0) {
+            var share2=rem2/nearMax.length;
+            nearMax.forEach(function(sk){
+                if (rem2>=0) return;
+                var r=sm[sk], p=_ldProductMap[sk]||{};
+                var curAvg=(r.weight+adds[sk])/r.qty;
+                var maxTake=(curAvg-p.min_w)*r.qty; // can deduct down to min
+                var take=Math.max(share2, -maxTake, rem2);
+                adds[sk]+=take; rem2-=take;
+            });
+        }
+        // ③ remaining → distribute proportionally by weight, skip below-min items
+        if (rem2<0) {
+            var eligible2=skus.filter(function(sk){
+                var p=_ldProductMap[sk]||{}, r=sm[sk];
+                if (!r.qty) return false;
+                return p.min_w==null || (r.weight/r.qty)>=p.min_w;
+            });
+            var pool2=eligible2.length?eligible2:skus;
+            var totWPool=pool2.reduce(function(s,sk){return s+sm[sk].weight;},0);
+            pool2.forEach(function(sk){
+                adds[sk]+=totWPool>0 ? rem2*(sm[sk].weight/totWPool) : rem2/pool2.length;
+            });
+        }
     }
 
     var result={};
