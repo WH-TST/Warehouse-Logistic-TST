@@ -37824,6 +37824,11 @@ window.dmInit=async function(){
       else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
       else{dmRefreshAll();}
     })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'logistic_plans'},function(payload){
+      if(_dmTripPlan){dmOpenTrip(_dmTripPlan.plan_id);}
+      else if(_dmCurrentDriver){dmOpenAllDriverTrip(_dmCurrentDriver.username);}
+      else{dmRefreshAll();}
+    })
     .subscribe();
   // Polling fallback ทุก 30 วินาที
   if(window._dmPollTimer) clearInterval(window._dmPollTimer);
