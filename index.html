@@ -7552,12 +7552,28 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       <!-- Truck + Note -->
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-black text-slate-500 mb-1">ทะเบียนรถ</label>
+          <label class="block text-xs font-black text-slate-500 mb-1">ทะเบียนรถ <span id="lo-m-truck-label" class="text-green-600">(แม่ · Head)</span></label>
           <input type="text" id="lo-m-truck" placeholder="เช่น 84-5099" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none">
         </div>
         <div>
           <label class="block text-xs font-black text-slate-500 mb-1">หมายเหตุ</label>
           <input type="text" id="lo-m-note" placeholder="(ถ้ามี)" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- รถพ่วง toggle -->
+      <div>
+        <label class="flex items-center gap-3 cursor-pointer select-none">
+          <div class="relative">
+            <input type="checkbox" id="lo-m-is-trailer" class="sr-only" onchange="loToggleTrailer()">
+            <div id="lo-trailer-track" class="w-11 h-6 bg-slate-200 rounded-full transition-colors"></div>
+            <div id="lo-trailer-thumb" class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"></div>
+          </div>
+          <span class="text-sm font-black text-slate-600">รถพ่วง <span class="font-normal text-slate-400">(Trailer Truck)</span></span>
+        </label>
+        <div id="lo-m-trailer-row" class="hidden mt-2">
+          <label class="block text-xs font-black text-slate-500 mb-1">ทะเบียนรถลูก <span class="text-blue-500">(Trailer)</span></label>
+          <input type="text" id="lo-m-trailer-plate" placeholder="เช่น 72-888" class="w-full border-2 border-blue-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-blue-400 focus:outline-none">
         </div>
       </div>
 
@@ -23461,20 +23477,25 @@ function _ldRenderCards(orders) {
         }).join('');
 
         var formHtml = isActive ? _ldBuildForm(o) : '';
+        var trailerBadge = o.is_trailer
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span>'
+            : '';
+        var truckDisplay = o.is_trailer
+            ? '<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'<span class="text-xs font-bold text-green-600 ml-1">แม่</span></div>'
+              +'<div style="font-size:12px;font-weight:700;color:#3b82f6;">'+(o.trailer_plate||'—')+' <span style="font-size:10px;color:#93c5fd;">ลูก·Trailer</span></div>'
+            : '<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'</div>';
 
         return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 '+stColor+' shadow-sm overflow-hidden transition-all">'
-            // Card header — กดเพื่อ expand
             +'<div onclick="ldToggleCard(\''+o.id+'\')" class="px-4 py-3 flex items-center justify-between cursor-pointer select-none active:bg-slate-50">'
                 +'<div class="flex items-center gap-3">'
-                    +'<div class="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
+                    +'<div class="w-10 h-10 rounded-xl '+(o.is_trailer?'bg-blue-700':'bg-slate-800')+' text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
                     +'<div>'
-                        +'<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'</div>'
-                        +'<div style="font-size:15px;font-weight:900;color:#cbd5e1;margin-top:2px;font-family:monospace;">'+totalQty.toLocaleString()+' <span style="font-size:11px;font-weight:700;">PCS</span> &nbsp;/&nbsp; '+totalWt.toLocaleString()+' <span style="font-size:11px;font-weight:700;">KG</span></div>'
+                        +truckDisplay
+                        +'<div style="font-size:13px;font-weight:900;color:#cbd5e1;margin-top:2px;font-family:monospace;">'+totalQty.toLocaleString()+' <span style="font-size:11px;font-weight:700;">PCS</span> &nbsp;/&nbsp; '+totalWt.toLocaleString()+' <span style="font-size:11px;font-weight:700;">KG</span></div>'
                     +'</div>'
                 +'</div>'
-                +'<div class="flex items-center gap-2">'+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
+                +'<div class="flex items-center gap-2">'+trailerBadge+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
             +'</div>'
-            // Form section (show when active)
             +(isActive ? '<div class="border-t-2 border-dashed border-emerald-200">'+formHtml+'</div>' : '')
         +'</div>';
     }).join('');
@@ -23511,10 +23532,184 @@ function _ldCalcCols(order) {
     return maxCols;
 }
 
-function _ldBuildForm(order) {
-    var items = order.items||[];
+function _ldBuildTrailerSplitScreen(order) {
     var oid = order.id;
-    var numCols = _ldCalcCols(order);
+    var items = order.items||[];
+    var rows = items.map(function(it, idx){
+        var prod = _ldProductMap[it.sku]||{};
+        var pName = prod.name || it.product_name || it.sku || '—';
+        var kgPerPcs = it.qty>0 && it.target_weight>0 ? it.target_weight/it.qty : (prod.min_w&&prod.max_w?(prod.min_w+prod.max_w)/2:0);
+        return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:8px;">'
+            +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+                +'<div style="font-size:13px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</div>'
+                +'<span style="font-size:11px;color:#64748b;">ออเดอร์ '+Number(it.qty||0).toLocaleString()+' เส้น</span>'
+            +'</div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr 72px;gap:8px;align-items:end;">'
+                +'<div>'
+                    +'<div style="font-size:10px;font-weight:700;color:#15803d;margin-bottom:3px;">แม่ · Head (เส้น)</div>'
+                    +'<input type="number" id="ldsp-m-'+oid+'-'+idx+'" min="0" max="'+Number(it.qty||0)+'" value="0" placeholder="0" oninput="ldSpCalc(\''+oid+'\')" style="width:100%;box-sizing:border-box;border:2px solid #bbf7d0;border-radius:8px;padding:6px 8px;font-size:16px;font-weight:700;color:#15803d;text-align:right;">'
+                    +'<div style="font-size:10px;color:#16a34a;margin-top:3px;" id="ldsp-mkg-'+oid+'-'+idx+'">0 KG</div>'
+                +'</div>'
+                +'<div>'
+                    +'<div style="font-size:10px;font-weight:700;color:#1d4ed8;margin-bottom:3px;">ลูก · Trailer (เส้น)</div>'
+                    +'<input type="number" id="ldsp-t-'+oid+'-'+idx+'" min="0" max="'+Number(it.qty||0)+'" value="0" placeholder="0" oninput="ldSpCalc(\''+oid+'\')" style="width:100%;box-sizing:border-box;border:2px solid #bfdbfe;border-radius:8px;padding:6px 8px;font-size:16px;font-weight:700;color:#1d4ed8;text-align:right;">'
+                    +'<div style="font-size:10px;color:#2563eb;margin-top:3px;" id="ldsp-tkg-'+oid+'-'+idx+'">0 KG</div>'
+                +'</div>'
+                +'<div style="text-align:center;">'
+                    +'<div style="font-size:10px;color:#64748b;margin-bottom:3px;">เหลือ</div>'
+                    +'<div style="font-size:16px;font-weight:700;" id="ldsp-rem-'+oid+'-'+idx+'">'+Number(it.qty||0)+'</div>'
+                    +'<div style="font-size:10px;color:#94a3b8;">เส้น</div>'
+                +'</div>'
+            +'</div>'
+            +'<input type="hidden" id="ldsp-kpp-'+oid+'-'+idx+'" value="'+kgPerPcs+'">'
+            +'<input type="hidden" id="ldsp-sku-'+oid+'-'+idx+'" value="'+_ldEsc(it.sku||'')+'">'
+            +'<input type="hidden" id="ldsp-ord-'+oid+'-'+idx+'" value="'+Number(it.qty||0)+'">'
+        +'</div>';
+    }).join('');
+
+    return '<div style="padding:16px;">'
+        +'<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:12px;padding:12px;margin-bottom:12px;">'
+            +'<div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px;">น้ำหนักที่ใส่ได้ (รถบอก)</div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+                +'<div>'
+                    +'<div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:3px;">แม่ · Head (KG)</div>'
+                    +'<input type="number" id="ldsp-capm-'+oid+'" value="" placeholder="เช่น 20000" oninput="ldSpCalc(\''+oid+'\')" style="width:100%;box-sizing:border-box;border:2px solid #bbf7d0;border-radius:8px;padding:8px 10px;font-size:16px;font-weight:700;color:#15803d;">'
+                +'</div>'
+                +'<div>'
+                    +'<div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:3px;">ลูก · Trailer (KG)</div>'
+                    +'<input type="number" id="ldsp-capt-'+oid+'" value="" placeholder="เช่น 15000" oninput="ldSpCalc(\''+oid+'\')" style="width:100%;box-sizing:border-box;border:2px solid #bfdbfe;border-radius:8px;padding:8px 10px;font-size:16px;font-weight:700;color:#1d4ed8;">'
+                +'</div>'
+            +'</div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">'
+                +'<div id="ldsp-barm-'+oid+'" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px;text-align:center;">'
+                    +'<div style="font-size:10px;color:#16a34a;">แม่ · จัดแล้ว</div>'
+                    +'<div style="font-size:16px;font-weight:700;color:#15803d;" id="ldsp-totm-'+oid+'">0 KG</div>'
+                +'</div>'
+                +'<div id="ldsp-bart-'+oid+'" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px;text-align:center;">'
+                    +'<div style="font-size:10px;color:#2563eb;">ลูก · จัดแล้ว</div>'
+                    +'<div style="font-size:16px;font-weight:700;color:#1d4ed8;" id="ldsp-tott-'+oid+'">0 KG</div>'
+                +'</div>'
+            +'</div>'
+        +'</div>'
+        +'<div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:8px;">จัดรายการสินค้า</div>'
+        +rows
+        +'<button onclick="ldSpConfirm(\''+oid+'\','+items.length+')" style="width:100%;margin-top:8px;padding:14px;border-radius:12px;border:none;background:#1d4ed8;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">'
+            +'<i class="fas fa-check" style="margin-right:6px;"></i>ยืนยันการจัด แล้วเริ่มโหลด'
+        +'</button>'
+    +'</div>';
+}
+
+function _ldBuildTrailerPicker(order) {
+    var oid = order.id;
+    var split = order.trailer_split||{};
+    var mKg=0, tKg=0;
+    Object.values(split).forEach(function(s){ mKg+=s.mother_kg||0; tKg+=s.trailer_kg||0; });
+    return '<div style="padding:16px;">'
+        +'<div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:12px;text-align:center;">เลือกรถที่จะโหลด</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+            +'<button onclick="ldPickTrailerUnit(\''+oid+'\',\'mother\')" style="padding:16px;border-radius:14px;border:2px solid #bbf7d0;background:#f0fdf4;cursor:pointer;">'
+                +'<div style="font-size:14px;font-weight:700;color:#15803d;">แม่</div>'
+                +'<div style="font-size:12px;color:#16a34a;">Head · '+(order.truck_plate||'—')+'</div>'
+                +'<div style="font-size:11px;color:#64748b;margin-top:4px;">'+Math.round(mKg).toLocaleString()+' KG</div>'
+            +'</button>'
+            +'<button onclick="ldPickTrailerUnit(\''+oid+'\',\'trailer\')" style="padding:16px;border-radius:14px;border:2px solid #bfdbfe;background:#eff6ff;cursor:pointer;">'
+                +'<div style="font-size:14px;font-weight:700;color:#1d4ed8;">ลูก</div>'
+                +'<div style="font-size:12px;color:#2563eb;">Trailer · '+(order.trailer_plate||'—')+'</div>'
+                +'<div style="font-size:11px;color:#64748b;margin-top:4px;">'+Math.round(tKg).toLocaleString()+' KG</div>'
+            +'</button>'
+        +'</div>'
+    +'</div>';
+}
+
+window.ldPickTrailerUnit = function(oid, unit) {
+    _ldTrailerUnit[oid] = unit;
+    var today = new Date().toISOString().slice(0,10);
+    _ldLoadOrderCards(today);
+    setTimeout(function(){ _ldDraftLoad(oid); }, 150);
+};
+
+window.ldSpCalc = function(oid) {
+    var items = [];
+    var i=0;
+    while(document.getElementById('ldsp-sku-'+oid+'-'+i)) {
+        var kpp = parseFloat(document.getElementById('ldsp-kpp-'+oid+'-'+i).value)||0;
+        var ord = parseFloat(document.getElementById('ldsp-ord-'+oid+'-'+i).value)||0;
+        var m = parseFloat(document.getElementById('ldsp-m-'+oid+'-'+i).value)||0;
+        var t = parseFloat(document.getElementById('ldsp-t-'+oid+'-'+i).value)||0;
+        var mkg = Math.round(m*kpp); var tkg = Math.round(t*kpp);
+        var remEl = document.getElementById('ldsp-rem-'+oid+'-'+i);
+        var rem = ord-m-t;
+        if(remEl){ remEl.textContent=rem; remEl.style.color=rem===0?'#16a34a':rem<0?'#dc2626':'#1e293b'; }
+        var mkgEl=document.getElementById('ldsp-mkg-'+oid+'-'+i);
+        var tkgEl=document.getElementById('ldsp-tkg-'+oid+'-'+i);
+        if(mkgEl) mkgEl.textContent=mkg.toLocaleString()+' KG';
+        if(tkgEl) tkgEl.textContent=tkg.toLocaleString()+' KG';
+        items.push({mkg:mkg,tkg:tkg}); i++;
+    }
+    var totM=items.reduce(function(a,x){return a+x.mkg;},0);
+    var totT=items.reduce(function(a,x){return a+x.tkg;},0);
+    var capM=parseFloat(document.getElementById('ldsp-capm-'+oid)?.value)||0;
+    var capT=parseFloat(document.getElementById('ldsp-capt-'+oid)?.value)||0;
+    var overM=capM>0&&totM>capM, overT=capT>0&&totT>capT;
+    var elmM=document.getElementById('ldsp-totm-'+oid);
+    var elmT=document.getElementById('ldsp-tott-'+oid);
+    var barM=document.getElementById('ldsp-barm-'+oid);
+    var barT=document.getElementById('ldsp-bart-'+oid);
+    if(elmM){ elmM.textContent=totM.toLocaleString()+' KG'+(capM>0?' / '+capM.toLocaleString():''); elmM.style.color=overM?'#dc2626':'#15803d'; }
+    if(elmT){ elmT.textContent=totT.toLocaleString()+' KG'+(capT>0?' / '+capT.toLocaleString():''); elmT.style.color=overT?'#dc2626':'#1d4ed8'; }
+    if(barM){ barM.style.borderColor=overM?'#fca5a5':'#bbf7d0'; barM.style.background=overM?'#fef2f2':'#f0fdf4'; }
+    if(barT){ barT.style.borderColor=overT?'#fca5a5':'#bfdbfe'; barT.style.background=overT?'#fef2f2':'#eff6ff'; }
+};
+
+window.ldSpConfirm = async function(oid, itemCount) {
+    var split = {};
+    var i=0;
+    while(i < itemCount) {
+        var skuEl=document.getElementById('ldsp-sku-'+oid+'-'+i);
+        if(!skuEl) break;
+        var sku=skuEl.value;
+        var kpp=parseFloat(document.getElementById('ldsp-kpp-'+oid+'-'+i).value)||0;
+        var m=parseFloat(document.getElementById('ldsp-m-'+oid+'-'+i).value)||0;
+        var t=parseFloat(document.getElementById('ldsp-t-'+oid+'-'+i).value)||0;
+        split[sku]={mother_pcs:m, mother_kg:Math.round(m*kpp), trailer_pcs:t, trailer_kg:Math.round(t*kpp)};
+        i++;
+    }
+    try {
+        var {error}=await window._sb.from('loading_orders').update({trailer_split:split, updated_at:new Date().toISOString()}).eq('id',oid);
+        if(error) throw error;
+        showToast('✅ จัดรายการเสร็จแล้ว กดเลือกรถได้เลย');
+        var today=new Date().toISOString().slice(0,10);
+        _ldLoadOrderCards(today);
+    } catch(e){ showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)),true); }
+};
+
+function _ldBuildForm(order) {
+    var oid = order.id;
+
+    // ── Trailer: no split yet → show split plan screen
+    if (order.is_trailer && !order.trailer_split) {
+        return _ldBuildTrailerSplitScreen(order);
+    }
+
+    // ── Trailer: split exists but no truck picked → show truck picker
+    if (order.is_trailer && order.trailer_split && !_ldTrailerUnit[oid]) {
+        return _ldBuildTrailerPicker(order);
+    }
+
+    // ── Trailer: truck picked → filter items to that unit
+    var items = order.items||[];
+    if (order.is_trailer && _ldTrailerUnit[oid]) {
+        var unit = _ldTrailerUnit[oid]; // 'mother' or 'trailer'
+        var split = order.trailer_split||{};
+        items = items.map(function(it){
+            var sp = split[it.sku]||{};
+            var pcs = unit==='mother' ? (sp.mother_pcs||0) : (sp.trailer_pcs||0);
+            var wt  = unit==='mother' ? (sp.mother_kg||0)  : (sp.trailer_kg||0);
+            return Object.assign({}, it, {qty: pcs, target_weight: wt});
+        }).filter(function(it){ return it.qty > 0; });
+    }
+
+    var numCols = _ldCalcCols({items: items});
     _ldOrderCols[oid] = numCols;
 
     var INP_BASE = 'width:100%;box-sizing:border-box;border:2px solid #e2e8f0;border-radius:8px;background:#fff;text-align:center;font-size:18px;font-weight:700;padding:8px 2px;outline:none;caret-color:#7c3aed;color:#1e293b;-webkit-appearance:none;display:block;';
@@ -23746,6 +23941,7 @@ async function _ldUpsertDraft(oid) {
                 lift_count: lifts.length, lifts: lifts,
                 start_time: _ldCardStartTimes[oid]||null,
                 end_time: null,
+                truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: new Date().toISOString()
             };
             var existingId = _ldDraftRowIds[oid][iIdx];
@@ -23803,6 +23999,8 @@ function _ldDraftClear(oid) {
     delete _ldDraftTimers[oid];
     delete _ldDraftOrderCache[oid];
 }
+var _ldTrailerUnit = {}; // orderId → 'mother'|'trailer' currently selected
+
 window.ldToggleCard = function(orderId) {
     var isOpen = _ldActiveOrderId === orderId;
     _ldActiveOrderId = isOpen ? null : orderId;
@@ -23811,7 +24009,6 @@ window.ldToggleCard = function(orderId) {
     if (!isOpen) {
         if (!_ldCardStartTimes[orderId]) _ldCardStartTimes[orderId] = new Date().toISOString();
         window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
-        // Restore existing draft row IDs from DB first, then load form values
         _ldRestoreDraftIds(orderId).then(function(){
             setTimeout(function(){ _ldDraftLoad(orderId); }, 100);
         });
@@ -24019,6 +24216,7 @@ window.ldCardSave = async function(oid) {
                 lift_count: it.lifts.length, lifts: it.lifts,
                 start_time: startIso, end_time: endIso,
                 note: note, photo_urls: photoUrls,
+                truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: endIso
             };
             if (draftIds[iIdx2]) {
@@ -24870,7 +25068,9 @@ function _ldRenderMonitorTable(rows, orders) {
             if (!liveByOrder[k]) liveByOrder[k] = {
                 order_no:ord.order_no, truck_plate:ord.truck_plate,
                 customer_name:ord.customer_name, plan_id:r.plan_id,
-                orderItems: ord.items||[], sessions:[]
+                orderItems: ord.items||[], sessions:[],
+                is_trailer: ord.is_trailer, trailer_plate: ord.trailer_plate,
+                trailer_split: ord.trailer_split
             };
             liveByOrder[k].sessions.push(r);
         });
@@ -24905,91 +25105,132 @@ function _ldRenderMonitorTable(rows, orders) {
                 var tStart = startTimes.length ? _thTime(startTimes[0]) : '—';
                 var tEnd   = endTimes.length   ? _thTime(endTimes[endTimes.length-1]) : null;
 
-                // group sessions by sku
-                var sessBySku = {};
-                sess.forEach(function(r){
-                    var sk = r.sku||'?';
-                    if(!sessBySku[sk]) sessBySku[sk] = {qty:0, weight:0, sku:r.sku, product_name:r.product_name};
-                    sessBySku[sk].qty    += parseFloat(r.qty||0);
-                    sessBySku[sk].weight += parseFloat(r.weight||0);
-                });
+                // helper: build one item table for a set of sessions + target items
+                function _buildLiveTable(filtSess, targetItems, headerBg, borderColor) {
+                    var sb = {};
+                    filtSess.forEach(function(r){
+                        var sk=r.sku||'?';
+                        if(!sb[sk]) sb[sk]={qty:0,weight:0,product_name:r.product_name};
+                        sb[sk].qty+=parseFloat(r.qty||0);
+                        sb[sk].weight+=parseFloat(r.weight||0);
+                    });
+                    var tgtMap={};
+                    targetItems.forEach(function(it){ tgtMap[it.sku||'']=it; });
+                    var allSk=Array.from(new Set(targetItems.map(function(it){return it.sku;}).concat(Object.keys(sb))));
+                    var totActWt=0,totActPcs=0,totTgtWt=0,totTgtPcs=0;
+                    var rows2=allSk.map(function(sk){
+                        var oIt=tgtMap[sk]||{};
+                        var sIt=sb[sk]||{};
+                        var prod=_ldProductMap[sk]||{};
+                        var pName=prod.name||oIt.product_name||sIt.product_name||sk||'—';
+                        var tgtQ=parseFloat(oIt.qty||0),tgtW=parseFloat(oIt.target_weight||oIt.target_kg||0);
+                        var actQ=sIt.qty||0,actW=sIt.weight||0;
+                        var kgPcs=actQ>0&&actW>0?(actW/actQ).toFixed(2):'—';
+                        var minW=prod.min_w,maxW=prod.max_w;
+                        totTgtPcs+=tgtQ;totTgtWt+=tgtW;totActPcs+=actQ;totActWt+=actW;
+                        var overW=actW>0&&maxW&&actW/actQ>maxW;
+                        var underW=actW>0&&minW&&actW/actQ<minW;
+                        var kgColor=overW?'#dc2626':underW?'#d97706':'#7c3aed';
+                        return '<tr style="border-bottom:1px solid '+borderColor+'20;">'
+                            +'<td style="padding:8px 10px;">'
+                                +'<div style="font-size:12px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</div>'
+                                +'<div style="font-size:10px;color:#94a3b8;">'+_ldEsc(sk)+'</div>'
+                            +'</td>'
+                            +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtQ>0?tgtQ.toLocaleString()+' PCS':'—')+'</td>'
+                            +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtW>0?Math.round(tgtW).toLocaleString()+' KG':'—')+'</td>'
+                            +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#0369a1;">'+(actQ>0?actQ.toLocaleString()+' PCS':'<span style="color:#cbd5e1;">—</span>')+'</td>'
+                            +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#059669;">'+(actW>0?actW.toLocaleString(undefined,{maximumFractionDigits:0})+' KG':'<span style="color:#cbd5e1;">—</span>')+'</td>'
+                            +'<td style="padding:8px 6px;text-align:center;font-size:12px;font-weight:900;color:'+kgColor+';">'
+                                +kgPcs+(kgPcs!=='—'?' kg/pcs':'')
+                                +(minW&&maxW?'<div style="font-size:9px;color:#94a3b8;font-weight:500;">'+minW+'–'+maxW+'</div>':'')
+                            +'</td>'
+                        +'</tr>';
+                    }).join('');
+                    return {html:
+                        '<div style="overflow-x:auto;">'
+                        +'<table style="width:100%;border-collapse:collapse;min-width:500px;">'
+                            +'<thead><tr style="background:'+headerBg+';border-bottom:2px solid '+borderColor+';">'
+                                +'<th style="padding:8px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:left;">สินค้า</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">แผน PCS</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">แผน KG</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#0369a1;text-align:center;">โหลดจริง PCS</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#059669;text-align:center;">โหลดจริง KG</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#7c3aed;text-align:center;">kg/pcs (ช่วง)</th>'
+                            +'</tr></thead>'
+                            +'<tbody style="background:#fff;">'+rows2+'</tbody>'
+                            +'<tfoot><tr style="background:'+headerBg+';border-top:2px solid '+borderColor+';">'
+                                +'<td style="padding:10px;font-size:12px;font-weight:900;color:#1e293b;">รวม</td>'
+                                +'<td style="padding:10px;text-align:center;font-size:12px;font-weight:900;color:#475569;">'+(totTgtPcs>0?totTgtPcs.toLocaleString()+' PCS':'—')+'</td>'
+                                +'<td style="padding:10px;text-align:center;font-size:12px;font-weight:900;color:#475569;">'+(totTgtWt>0?Math.round(totTgtWt).toLocaleString()+' KG':'—')+'</td>'
+                                +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#0369a1;">'+totActPcs.toLocaleString()+' PCS</td>'
+                                +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#059669;">'+totActWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG</td>'
+                                +'<td></td>'
+                            +'</tr></tfoot>'
+                        +'</table></div>',
+                        actWt: totActWt, actPcs: totActPcs
+                    };
+                }
 
-                // merge order items with sessions
-                var orderItemMap = {};
-                g.orderItems.forEach(function(it){ orderItemMap[it.sku||''] = it; });
-                var allSkus = Array.from(new Set(g.orderItems.map(function(it){return it.sku;}).concat(Object.keys(sessBySku))));
+                // build table content — trailer gets 2 sections, normal gets 1
+                var tablesHtml = '';
+                if (g.is_trailer && g.trailer_split) {
+                    var split = g.trailer_split;
+                    var motherSess = sess.filter(function(r){ return (r.truck_unit||'mother')==='mother'; });
+                    var trailerSess = sess.filter(function(r){ return r.truck_unit==='trailer'; });
+                    // build target items from split
+                    var mItems = g.orderItems.map(function(it){
+                        var sp=split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.mother_pcs||0,target_kg:sp.mother_kg||0};
+                    }).filter(function(it){return it.qty>0;});
+                    var tItems = g.orderItems.map(function(it){
+                        var sp=split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.trailer_pcs||0,target_kg:sp.trailer_kg||0};
+                    }).filter(function(it){return it.qty>0;});
+                    var mTable = _buildLiveTable(motherSess, mItems, '#f0fdf4', '#86efac');
+                    var tTable = _buildLiveTable(trailerSess, tItems, '#eff6ff', '#bfdbfe');
+                    tablesHtml =
+                        '<div style="background:#dcfce7;padding:8px 14px;border-bottom:1px solid #86efac;display:flex;align-items:center;justify-content:space-between;">'
+                            +'<span style="font-size:12px;font-weight:700;color:#15803d;">แม่ · Head · '+_ldEsc(g.truck_plate||'—')+'</span>'
+                            +'<span style="font-size:11px;color:#16a34a;">'+Math.round(mTable.actWt).toLocaleString()+' KG</span>'
+                        +'</div>'
+                        +mTable.html
+                        +'<div style="background:#dbeafe;padding:8px 14px;border-top:1px solid #bfdbfe;border-bottom:1px solid #bfdbfe;display:flex;align-items:center;justify-content:space-between;">'
+                            +'<span style="font-size:12px;font-weight:700;color:#1d4ed8;">ลูก · Trailer · '+_ldEsc(g.trailer_plate||'—')+'</span>'
+                            +'<span style="font-size:11px;color:#2563eb;">'+Math.round(tTable.actWt).toLocaleString()+' KG</span>'
+                        +'</div>'
+                        +tTable.html;
+                } else {
+                    var t1 = _buildLiveTable(sess, g.orderItems, '#fef2f2', '#fda4af');
+                    tablesHtml = t1.html;
+                }
 
-                var totalActWt = 0, totalActPcs = 0, totalTgtWt = 0, totalTgtPcs = 0;
-                var itemRows = allSkus.map(function(sk){
-                    var oIt  = orderItemMap[sk]||{};
-                    var sIt  = sessBySku[sk]||{};
-                    var prod = _ldProductMap[sk]||{};
-                    var pName= prod.name || oIt.product_name || sIt.product_name || sk || '—';
-                    var tgtQ = parseFloat(oIt.qty||0), tgtW = parseFloat(oIt.target_weight||0);
-                    var actQ = sIt.qty||0, actW = sIt.weight||0;
-                    var kgPcs= actQ>0&&actW>0 ? (actW/actQ).toFixed(2) : '—';
-                    var minW = prod.min_w, maxW = prod.max_w;
-                    totalTgtPcs += tgtQ; totalTgtWt += tgtW;
-                    totalActPcs += actQ; totalActWt += actW;
-                    var overW = actW>0 && maxW && actW/actQ > maxW;
-                    var underW= actW>0 && minW && actW/actQ < minW;
-                    var kgColor= overW?'#dc2626': underW?'#d97706': '#7c3aed';
-                    return '<tr style="border-bottom:1px solid #ffe4e6;">'
-                        +'<td style="padding:8px 10px;">'
-                            +'<div style="font-size:12px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</div>'
-                            +'<div style="font-size:10px;color:#94a3b8;">'+_ldEsc(sk)+'</div>'
-                        +'</td>'
-                        +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtQ>0?tgtQ.toLocaleString()+' PCS':'—')+'</td>'
-                        +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtW>0?tgtW.toLocaleString()+' KG':'—')+'</td>'
-                        +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#0369a1;">'+(actQ>0?actQ.toLocaleString()+' PCS':'<span style="color:#cbd5e1;">—</span>')+'</td>'
-                        +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#059669;">'+(actW>0?actW.toLocaleString(undefined,{maximumFractionDigits:0})+' KG':'<span style="color:#cbd5e1;">—</span>')+'</td>'
-                        +'<td style="padding:8px 6px;text-align:center;font-size:12px;font-weight:900;color:'+kgColor+';">'
-                            +kgPcs+(kgPcs!=='—'?' kg/pcs':'')
-                            +(minW&&maxW?'<div style="font-size:9px;color:#94a3b8;font-weight:500;">'+minW+'–'+maxW+'</div>':'')
-                        +'</td>'
-                    +'</tr>';
-                }).join('');
+                // truck plate display in header
+                var plateHtml = g.is_trailer
+                    ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+                        +'<div style="background:rgba(0,0,0,.3);border-radius:8px;padding:5px 12px;font-size:13px;font-weight:900;color:#fff;font-family:monospace;">🚛 '+_ldEsc(g.truck_plate||'—')+'<span style="font-size:10px;color:#86efac;margin-left:4px;">แม่</span></div>'
+                        +'<div style="background:rgba(0,0,0,.3);border-radius:8px;padding:5px 12px;font-size:13px;font-weight:900;color:#93c5fd;font-family:monospace;">'+_ldEsc(g.trailer_plate||'—')+'<span style="font-size:10px;color:#93c5fd;margin-left:4px;">ลูก</span></div>'
+                    +'</div>'
+                    : (g.truck_plate?'<div style="background:rgba(0,0,0,.3);border-radius:8px;padding:5px 12px;font-size:14px;font-weight:900;color:#fff;font-family:monospace;">🚛 '+_ldEsc(g.truck_plate)+'</div>':'');
 
                 return '<div style="background:#fff;border:2px solid #fda4af;border-radius:20px;overflow:hidden;margin-bottom:16px;">'
-                    // header bar
                     +'<div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
                         +'<div>'
-                            +'<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:.05em;">'+_ldEsc(orderLabel)+'</div>'
+                            +'<div style="display:flex;align-items:center;gap:8px;">'
+                                +'<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:.05em;">'+_ldEsc(orderLabel)+'</div>'
+                                +(g.is_trailer?'<span style="background:#1d4ed8;color:#bfdbfe;font-size:10px;font-weight:900;padding:2px 8px;border-radius:10px;">รถพ่วง</span>':'')
+                            +'</div>'
                             +(g.customer_name?'<div style="font-size:12px;color:#fca5a5;margin-top:2px;"><i class="fas fa-building" style="margin-right:5px;"></i>'+_ldEsc(g.customer_name)+'</div>':'')
                         +'</div>'
                         +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
-                            +(g.truck_plate?'<div style="background:rgba(0,0,0,.3);border-radius:8px;padding:5px 12px;font-size:14px;font-weight:900;color:#fff;font-family:monospace;">🚛 '+_ldEsc(g.truck_plate)+'</div>':'')
+                            +plateHtml
                             +(_cu&&_cu.isAdmin
                                 ? '<button onclick="ldMonResetOrder(\''+orderId+'\',\''+_ldEsc(orderLabel)+'\')" style="background:rgba(0,0,0,.4);border:1.5px solid #fca5a5;color:#fca5a5;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:900;cursor:pointer;"><i class="fas fa-undo-alt" style="margin-right:5px;"></i>รีเซท</button>'
                                 : '')
                         +'</div>'
                     +'</div>'
-                    // info row
                     +'<div style="background:#fff5f5;padding:10px 18px;display:flex;gap:20px;flex-wrap:wrap;border-bottom:1px solid #ffe4e6;">'
                         +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-users" style="color:#dc2626;margin-right:5px;"></i><b>ทีม:</b> '+_ldEsc(teamList)+' — '+_ldEsc(staffList)+'</div>'
                         +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="color:#dc2626;margin-right:5px;"></i><b>เริ่ม:</b> '+tStart+(tEnd?' &nbsp;|&nbsp; <b>เสร็จ:</b> '+tEnd:'')+'</div>'
                     +'</div>'
-                    // items table
-                    +'<div style="overflow-x:auto;">'
-                    +'<table style="width:100%;border-collapse:collapse;min-width:500px;">'
-                        +'<thead><tr style="background:#fef2f2;border-bottom:2px solid #fda4af;">'
-                            +'<th style="padding:8px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:left;">สินค้า</th>'
-                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">ออเดอร์ PCS</th>'
-                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">ออเดอร์ KG</th>'
-                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#0369a1;text-align:center;">โหลดจริง PCS</th>'
-                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#059669;text-align:center;">โหลดจริง KG</th>'
-                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#7c3aed;text-align:center;">kg/pcs (ช่วง)</th>'
-                        +'</tr></thead>'
-                        +'<tbody style="background:#fff;">'+itemRows+'</tbody>'
-                        +'<tfoot><tr style="background:#fef2f2;border-top:2px solid #fda4af;">'
-                            +'<td style="padding:10px;font-size:12px;font-weight:900;color:#1e293b;">รวมทั้งหมด</td>'
-                            +'<td style="padding:10px;text-align:center;font-size:12px;font-weight:900;color:#475569;">'+(totalTgtPcs>0?totalTgtPcs.toLocaleString()+' PCS':'—')+'</td>'
-                            +'<td style="padding:10px;text-align:center;font-size:12px;font-weight:900;color:#475569;">'+(totalTgtWt>0?totalTgtWt.toLocaleString()+' KG':'—')+'</td>'
-                            +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#0369a1;">'+totalActPcs.toLocaleString()+' PCS</td>'
-                            +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#059669;">'+totalActWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG</td>'
-                            +'<td></td>'
-                        +'</tr></tfoot>'
-                    +'</table></div>'
+                    +tablesHtml
                 +'</div>';
             }).join('')
         +'</div>';
@@ -25047,14 +25288,94 @@ function _ldRenderMonitorTable(rows, orders) {
             var tEnd   = maxEnd   ? maxEnd.slice(11,16)   : '—';
             var durMin = (minStart&&maxEnd) ? Math.round((new Date(maxEnd)-new Date(minStart))/60000) : 0;
 
-            // build item rows — match sessions to orderItems by sku
-            var sessMap = {};
-            sessions.forEach(function(r){ if(r.sku) sessMap[r.sku] = r; });
+            // ── helper: build done table for a subset of sessions + items
+            function _buildDoneTable(filtSess, targetItems) {
+                var sm2 = {};
+                filtSess.forEach(function(r){ if(r.sku) sm2[r.sku]=r; });
+                var itms = targetItems.length ? targetItems : filtSess.map(function(r){
+                    return {sku:r.sku,product_name:r.product_name,qty:0,target_weight:0};
+                });
+                var tTotQ=0,tTotW=0;
+                var tbody = itms.map(function(it,idx){
+                    var r=sm2[it.sku]||{};
+                    var aQ=parseFloat(r.qty)||0,aW=parseFloat(r.weight)||0;
+                    var avg=aQ>0?aW/aQ:null;
+                    var prod=_ldProductMap[it.sku]||{};
+                    var minW=prod.min_w,maxW=prod.max_w;
+                    var pName=(prod.name||it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+                    var tQ=Number(it.qty||0);
+                    var bg=idx%2===0?'#fff':'#f8fafc';
+                    var oor=avg!=null&&minW!=null&&maxW!=null&&(avg<minW||avg>maxW);
+                    var avgColor=oor?'#dc2626':'#7c3aed';
+                    var avgCell=avg!=null?'<span style="color:'+avgColor+';font-weight:900;">'+avg.toFixed(2)+(oor?' ⚠':'')+'</span>':'<span style="color:#cbd5e1;">—</span>';
+                    var qDiff=tQ>0?aQ-tQ:0;
+                    var qColor=aQ>0?'#16a34a':'#cbd5e1';
+                    var qBadge='';
+                    if(tQ>0&&aQ>0&&qDiff!==0){var ov=qDiff>0;qColor=ov?'#d97706':'#dc2626';qBadge=' <span style="font-size:10px;font-weight:900;padding:1px 5px;border-radius:4px;background:'+(ov?'#fef3c7':'#fee2e2')+';color:'+(ov?'#92400e':'#991b1b')+'">'+(ov?'▲ +':'▼ ')+Math.abs(qDiff)+'</span>';}
+                    tTotQ+=aQ;tTotW+=aW;
+                    return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
+                        +'<td style="padding:7px 10px;font-size:11px;color:#94a3b8;text-align:center;">'+(idx+1)+'</td>'
+                        +'<td style="padding:7px 10px;font-size:10px;color:#64748b;font-family:monospace;font-weight:700;">'+_ldEsc(it.sku||'')+'</td>'
+                        +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#1e293b;min-width:120px;">'+_ldEsc(pName)+'</td>'
+                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+tQ.toLocaleString()+'</td>'
+                        +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(minW!=null?minW:'—')+'</td>'
+                        +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(maxW!=null?maxW:'—')+'</td>'
+                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+qColor+';text-align:right;">'+(aQ>0?aQ.toLocaleString():'—')+qBadge+'</td>'
+                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+(aW>0?'#16a34a':'#cbd5e1')+';text-align:right;">'+(aW>0?aW.toLocaleString(undefined,{maximumFractionDigits:1}):'—')+'</td>'
+                        +'<td style="padding:7px 10px;font-size:11px;text-align:right;">'+avgCell+'</td>'
+                    +'</tr>';
+                }).join('');
+                var thead='<thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0;">'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:center;">#</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">รหัส</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">ชื่อสินค้า</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#0369a1;text-align:right;">ออเดอร์</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MIN</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MAX</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">โหลดจริง (PCS)</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">น้ำหนักจริง (KG)</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#7c3aed;text-align:right;">เฉลี่ย/เส้น</th>'
+                    +'</tr></thead>';
+                var tfoot='<tfoot><tr style="background:#f0fdf4;border-top:2px solid #86efac;">'
+                    +'<td colspan="3" style="padding:8px 10px;font-size:11px;font-weight:900;color:#15803d;">รวม</td>'
+                    +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+itms.reduce(function(a,i){return a+(Number(i.qty)||0);},0).toLocaleString()+'</td>'
+                    +'<td colspan="2"></td>'
+                    +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+tTotQ.toLocaleString()+'</td>'
+                    +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+tTotW.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
+                    +'<td style="padding:8px 10px;font-size:11px;font-weight:700;color:#7c3aed;text-align:right;">'+(tTotQ>0?(tTotW/tTotQ).toFixed(2):'—')+'</td>'
+                    +'</tr></tfoot>';
+                return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:560px;">'+thead+'<tbody>'+tbody+'</tbody>'+tfoot+'</table></div>';
+            }
 
-            // use orderItems order if available, else fall back to sessions
+            // build item table(s) — trailer: 2 sections; normal: 1
+            var doneTableHtml = '';
+            if (order.is_trailer && order.trailer_split) {
+                var sp=order.trailer_split;
+                var mSess=sessions.filter(function(r){return (r.truck_unit||'mother')==='mother';});
+                var tSess=sessions.filter(function(r){return r.truck_unit==='trailer';});
+                var mItems=orderItems.map(function(it){var s=sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
+                var tItems=orderItems.map(function(it){var s=sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
+                doneTableHtml=
+                    '<div style="background:#dcfce7;padding:8px 14px;border-top:1px solid #86efac;display:flex;align-items:center;justify-content:space-between;">'
+                        +'<span style="font-size:12px;font-weight:700;color:#15803d;">แม่ · Head · '+_ldEsc(order.truck_plate||'—')+'</span>'
+                    +'</div>'
+                    +_buildDoneTable(mSess,mItems)
+                    +'<div style="background:#dbeafe;padding:8px 14px;border-top:1px solid #bfdbfe;display:flex;align-items:center;justify-content:space-between;">'
+                        +'<span style="font-size:12px;font-weight:700;color:#1d4ed8;">ลูก · Trailer · '+_ldEsc(order.trailer_plate||'—')+'</span>'
+                    +'</div>'
+                    +_buildDoneTable(tSess,tItems);
+            } else {
+                var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
+                    return {sku:r.sku, product_name:r.product_name, qty:0, target_weight:0};
+                });
+                doneTableHtml = _buildDoneTable(sessions, itemsToRender);
+            }
+
+            // (legacy path — used only for non-trailer; kept for tfoot total in header)
             var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
                 return {sku:r.sku, product_name:r.product_name, qty:0, target_weight:0};
             });
+            var itemRows = []; // not used directly anymore — kept to avoid ref errors below
 
             var itemRows = itemsToRender.map(function(it, idx){
                 var r = sessMap[it.sku] || {};
@@ -25107,65 +25428,40 @@ function _ldRenderMonitorTable(rows, orders) {
                 +'</tr>';
             }).join('');
 
+            var donePlateHtml = order.is_trailer
+                ? '<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;">'+_ldEsc(order.truck_plate||orderId.slice(0,8))+'<span style="font-size:11px;color:#86efac;margin-left:6px;">แม่</span></div>'
+                  +'<div style="font-size:13px;font-weight:700;color:#93c5fd;font-family:monospace;">'+_ldEsc(order.trailer_plate||'—')+'<span style="font-size:10px;color:#93c5fd;margin-left:4px;">ลูก · Trailer</span></div>'
+                : '<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;">'+_ldEsc(order.truck_plate||orderId.slice(0,8))+'</div>';
+
             return '<div style="background:#fff;border-radius:18px;border:2px solid #86efac;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px #0001;">'
-                // ── Card header ──
                 +'<div style="background:#0f172a;padding:14px 18px;">'
                     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">'
-                        // Left: truck + team/staff
                         +'<div style="display:flex;align-items:center;gap:12px;">'
-                            +'<div style="width:42px;height:42px;background:#10b981;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+                            +'<div style="width:42px;height:42px;background:'+(order.is_trailer?'#1d4ed8':'#10b981')+';border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
                                 +'<i class="fas fa-truck" style="color:#fff;font-size:16px;"></i>'
                             +'</div>'
                             +'<div>'
-                                +'<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;">'+_ldEsc(order.truck_plate||orderId.slice(0,8))+'</div>'
+                                +donePlateHtml
                                 +'<div style="font-size:11px;color:#64748b;margin-top:2px;"><span style="color:#94a3b8;">ทีม</span> '+_ldEsc(teamName)+' &nbsp;·&nbsp; '+_ldEsc(staffNames)+'</div>'
                             +'</div>'
                         +'</div>'
-                        // Right: status + photo button
                         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+                            +(order.is_trailer?'<span style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#1d4ed8;color:#bfdbfe;">รถพ่วง</span>':'')
                             +'<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>'
                             +(allPhotos.length
                                 ? (function(){ var k='ph_'+orderId; _ldPhotoRegistry[k]=allPhotos; return '<button onclick="ldShowPhotos(\''+k+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#7c3aed;color:#fff;border:none;cursor:pointer;"><i class="fas fa-images"></i> รูปภาพ ('+allPhotos.length+')</button>'; })()
-
                                 : '<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;background:#1e293b;color:#475569;border:1px solid #334155;"><i class="fas fa-image" style="margin-right:4px;"></i>ไม่มีรูป</span>')
                         +'</div>'
                     +'</div>'
-                    // ── Time + summary row ──
                     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">'
                         +_ldStatChip('fas fa-clock','#38bdf8','เริ่ม',tStart)
                         +_ldStatChip('fas fa-flag-checkered','#34d399','สิ้นสุด',tEnd)
                         +_ldStatChip('fas fa-stopwatch','#a78bfa','รวม',durMin+' นาที')
-                        +_ldStatChip('fas fa-boxes','#fb923c','รายการ',itemsToRender.length+' รายการ')
                         +_ldStatChip('fas fa-weight-hanging','#f472b6','น้ำหนัก',totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG')
                         +_ldStatChip('fas fa-cubes','#60a5fa','PCS',totalQty.toLocaleString())
                     +'</div>'
                 +'</div>'
-                // ── Item table ──
-                +'<div style="overflow-x:auto;">'
-                +'<table style="width:100%;border-collapse:collapse;min-width:560px;">'
-                    +'<thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0;">'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:center;">#</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">รหัส</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">ชื่อสินค้า</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#0369a1;text-align:right;">ออเดอร์</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MIN</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MAX</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">โหลดจริง (PCS)</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">น้ำหนักจริง (KG)</th>'
-                        +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#7c3aed;text-align:right;">เฉลี่ย/เส้น</th>'
-                    +'</tr></thead>'
-                    +'<tbody>'+itemRows+'</tbody>'
-                    // ── footer total row ──
-                    +'<tfoot><tr style="background:#f0fdf4;border-top:2px solid #86efac;">'
-                        +'<td colspan="3" style="padding:8px 10px;font-size:11px;font-weight:900;color:#15803d;">รวม</td>'
-                        +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+orderItems.reduce(function(a,i){return a+(Number(i.qty)||0);},0).toLocaleString()+'</td>'
-                        +'<td colspan="2"></td>'
-                        +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+totalQty.toLocaleString()+'</td>'
-                        +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
-                        +'<td style="padding:8px 10px;font-size:11px;font-weight:700;color:#7c3aed;text-align:right;">'+(totalQty>0?(totalWt/totalQty).toFixed(2):'—')+'</td>'
-                    +'</tr></tfoot>'
-                +'</table>'
-                +'</div>'
+                +doneTableHtml
             +'</div>';
         }).join('');
 
@@ -25385,6 +25681,63 @@ window._loLoadCustomers = async function() {
     if (data) dl.innerHTML = data.map(function(s){ return '<option value="'+s.name+'">'; }).join('');
 };
 
+window.loToggleTrailer = function() {
+    var cb = document.getElementById('lo-m-is-trailer');
+    var row = document.getElementById('lo-m-trailer-row');
+    var track = document.getElementById('lo-trailer-track');
+    var thumb = document.getElementById('lo-trailer-thumb');
+    var label = document.getElementById('lo-m-truck-label');
+    if (cb.checked) {
+        row.classList.remove('hidden');
+        track.style.background = '#3b82f6';
+        thumb.style.transform = 'translateX(20px)';
+        if (label) label.textContent = '(แม่ · Head)';
+    } else {
+        row.classList.add('hidden');
+        track.style.background = '';
+        thumb.style.transform = '';
+        if (label) label.textContent = '';
+    }
+};
+
+function _loResetTrailerToggle() {
+    var cb = document.getElementById('lo-m-is-trailer');
+    var row = document.getElementById('lo-m-trailer-row');
+    var track = document.getElementById('lo-trailer-track');
+    var thumb = document.getElementById('lo-trailer-thumb');
+    var label = document.getElementById('lo-m-truck-label');
+    if (cb) cb.checked = false;
+    if (row) row.classList.add('hidden');
+    if (track) track.style.background = '';
+    if (thumb) thumb.style.transform = '';
+    if (label) label.textContent = '';
+    var tp = document.getElementById('lo-m-trailer-plate');
+    if (tp) tp.value = '';
+}
+
+function _loSetTrailerToggle(isTrailer, trailerPlate) {
+    var cb = document.getElementById('lo-m-is-trailer');
+    var row = document.getElementById('lo-m-trailer-row');
+    var track = document.getElementById('lo-trailer-track');
+    var thumb = document.getElementById('lo-trailer-thumb');
+    var label = document.getElementById('lo-m-truck-label');
+    var tp = document.getElementById('lo-m-trailer-plate');
+    if (!cb) return;
+    cb.checked = !!isTrailer;
+    if (isTrailer) {
+        if (row) row.classList.remove('hidden');
+        if (track) track.style.background = '#3b82f6';
+        if (thumb) thumb.style.transform = 'translateX(20px)';
+        if (label) label.textContent = '(แม่ · Head)';
+        if (tp) tp.value = trailerPlate || '';
+    } else {
+        if (row) row.classList.add('hidden');
+        if (track) track.style.background = '';
+        if (thumb) thumb.style.transform = '';
+        if (label) label.textContent = '';
+    }
+}
+
 function _loSetModalMode(isEdit) {
     var hdr  = document.getElementById('lo-modal-header');
     var icon = document.getElementById('lo-modal-icon');
@@ -25421,6 +25774,7 @@ window.loNewOrder = function() {
     document.getElementById('lo-m-customer').value = '';
     document.getElementById('lo-m-order-no').value = '';
     document.getElementById('lo-m-items-tbody').innerHTML = '';
+    _loResetTrailerToggle();
     loGenOrderNo();
     _loLoadCustomers();
     document.getElementById('lo-m-total').textContent = '';
@@ -25442,6 +25796,7 @@ window.loEditOrder = async function(id) {
     document.getElementById('lo-m-order-no').value = data.order_no      || '';
     document.getElementById('lo-m-items-tbody').innerHTML = '';
     _loItemCount = 0;
+    _loSetTrailerToggle(data.is_trailer, data.trailer_plate);
     await loModalLoadPlans();
     document.getElementById('lo-m-plan').value = data.plan_id || '';
     (data.items||[]).forEach(function(it){ loAddItem(it); });
@@ -25693,19 +26048,23 @@ window.loSaveOrder = async function() {
     });
     if (!items.length) { showToast('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', true); return; }
 
-    var orderNo   = document.getElementById('lo-m-order-no')?.value.trim();
-    var custName  = document.getElementById('lo-m-customer')?.value.trim();
+    var orderNo      = document.getElementById('lo-m-order-no')?.value.trim();
+    var custName     = document.getElementById('lo-m-customer')?.value.trim();
+    var isTrailer    = !!(document.getElementById('lo-m-is-trailer')?.checked);
+    var trailerPlate = (document.getElementById('lo-m-trailer-plate')?.value||'').trim();
     var payload = {
-        plan_id:       planId,
-        order_date:    dateVal,
-        truck_plate:   truck,
-        items:         items,
-        note:          note,
-        customer_name: custName || null,
-        order_no:      orderNo  || null,
-        status:        _loEditId ? undefined : 'pending',
-        created_by:    window._currentUser || '',
-        updated_at:    new Date().toISOString(),
+        plan_id:        planId,
+        order_date:     dateVal,
+        truck_plate:    truck,
+        items:          items,
+        note:           note,
+        customer_name:  custName      || null,
+        order_no:       orderNo       || null,
+        is_trailer:     isTrailer,
+        trailer_plate:  isTrailer ? (trailerPlate||null) : null,
+        status:         _loEditId ? undefined : 'pending',
+        created_by:     window._currentUser || '',
+        updated_at:     new Date().toISOString(),
     };
     if (_loEditId) delete payload.status;
 
