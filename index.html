@@ -25648,20 +25648,30 @@ function _ldRenderMonitorTable(rows, orders) {
                 : ((minStart&&maxEnd) ? Math.round((new Date(maxEnd)-new Date(minStart))/60000) : 0);
 
             // ── helper: build done table for a subset of sessions + items
+            // finalMap: {sku: {finalKg, finalAvg}} — from scale diff calculation
+            var finalMap = (_ldScaleDiff[orderId]!=null && _ldScaleDiff[orderId]!==0)
+                ? _ldComputeFinalWeights(sessions, _ldScaleDiff[orderId]) : null;
+
             function _buildDoneTable(filtSess, targetItems) {
                 var sm2 = {};
-                filtSess.forEach(function(r){ if(r.sku) sm2[r.sku]=r; });
+                filtSess.forEach(function(r){
+                    if (!r.sku) return;
+                    if (!sm2[r.sku]) sm2[r.sku]={qty:0,weight:0};
+                    sm2[r.sku].qty+=parseFloat(r.qty)||0;
+                    sm2[r.sku].weight+=parseFloat(r.weight)||0;
+                });
                 var itms = targetItems.length ? targetItems : filtSess.map(function(r){
                     return {sku:r.sku,product_name:r.product_name,qty:0,target_weight:0};
                 });
-                var tTotQ=0,tTotW=0;
+                var tTotQ=0,tTotW=0,tTotFinal=0;
+                var hasFinal = !!finalMap;
                 var tbody = itms.map(function(it,idx){
                     var r=sm2[it.sku]||{};
                     var aQ=parseFloat(r.qty)||0,aW=parseFloat(r.weight)||0;
                     var avg=aQ>0?aW/aQ:null;
                     var prod=_ldProductMap[it.sku]||{};
                     var minW=prod.min_w,maxW=prod.max_w;
-                    var pName=(prod.name||it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+                    var pName=(prod.name||it.product_name||it.sku||'').replace(/[\u0e00-\u0e7f]+/g,'').trim();
                     var tQ=Number(it.qty||0);
                     var bg=idx%2===0?'#fff':'#f8fafc';
                     var oor=avg!=null&&minW!=null&&maxW!=null&&(avg<minW||avg>maxW);
@@ -25670,8 +25680,21 @@ function _ldRenderMonitorTable(rows, orders) {
                     var qDiff=tQ>0?aQ-tQ:0;
                     var qColor=aQ>0?'#16a34a':'#cbd5e1';
                     var qBadge='';
-                    if(tQ>0&&aQ>0&&qDiff!==0){var ov=qDiff>0;qColor=ov?'#d97706':'#dc2626';qBadge=' <span style="font-size:10px;font-weight:900;padding:1px 5px;border-radius:4px;background:'+(ov?'#fef3c7':'#fee2e2')+';color:'+(ov?'#92400e':'#991b1b')+'">'+(ov?'▲ +':'▼ ')+Math.abs(qDiff)+'</span>';}
-                    tTotQ+=aQ;tTotW+=aW;
+                    if(tQ>0&&aQ>0&&qDiff!==0){var ov=qDiff>0;qColor=ov?'#d97706':'#dc2626';qBadge=' <span style="font-size:10px;font-weight:900;padding:1px 5px;border-radius:4px;background:'+(ov?'#fef3c7':'#fee2e2')+';color:'+(ov?'#92400e':'#991b1b')+'">'+( ov?'▲ +':'▼ ')+Math.abs(qDiff)+'</span>';}
+                    tTotQ+=aQ; tTotW+=aW;
+                    var finalCells='';
+                    if (hasFinal) {
+                        var fm=finalMap[it.sku]||{finalKg:aW,finalAvg:avg||0};
+                        var fKg=fm.finalKg, fAvg=fm.finalAvg;
+                        tTotFinal+=fKg;
+                        var fOor=fAvg>0&&minW!=null&&maxW!=null&&(fAvg<minW||fAvg>maxW);
+                        var fAvgColor=fOor?'#dc2626':'#0d9488';
+                        var diff2=fKg-aW;
+                        var diffBadge=diff2!==0?'<span style="font-size:9px;font-weight:900;padding:1px 4px;border-radius:4px;margin-left:3px;background:'+(diff2>0?'#f0fdf4':'#fff1f2')+';color:'+(diff2>0?'#15803d':'#dc2626')+';"> '+(diff2>0?'+':'')+diff2.toFixed(1)+'</span>':'';
+                        finalCells=
+                            '<td style="padding:7px 8px;font-size:12px;font-weight:900;color:#0d9488;text-align:right;background:#f0fdfa;">'+fKg.toLocaleString(undefined,{maximumFractionDigits:1})+diffBadge+'</td>'
+                            +'<td style="padding:7px 8px;font-size:11px;font-weight:900;color:'+fAvgColor+';text-align:right;background:#f0fdfa;">'+fAvg.toFixed(2)+(fOor?' ⚠':'')+'</td>';
+                    }
                     return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
                         +'<td style="padding:7px 10px;font-size:11px;color:#94a3b8;text-align:center;">'+(idx+1)+'</td>'
                         +'<td style="padding:7px 10px;font-size:10px;color:#64748b;font-family:monospace;font-weight:700;">'+_ldEsc(it.sku||'')+'</td>'
@@ -25682,8 +25705,13 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+qColor+';text-align:right;">'+(aQ>0?aQ.toLocaleString():'—')+qBadge+'</td>'
                         +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+(aW>0?'#16a34a':'#cbd5e1')+';text-align:right;">'+(aW>0?aW.toLocaleString(undefined,{maximumFractionDigits:1}):'—')+'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;text-align:right;">'+avgCell+'</td>'
+                        +finalCells
                     +'</tr>';
                 }).join('');
+                var finalTh = hasFinal
+                    ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">นน ไฟนอล (KG)</th>'
+                      +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">เฉลี่ย ไฟนอล</th>'
+                    : '';
                 var thead='<thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0;">'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:center;">#</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">รหัส</th>'
@@ -25694,7 +25722,12 @@ function _ldRenderMonitorTable(rows, orders) {
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">โหลดจริง (PCS)</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">น้ำหนักจริง (KG)</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#7c3aed;text-align:right;">เฉลี่ย/เส้น</th>'
+                    +finalTh
                     +'</tr></thead>';
+                var finalFtd = hasFinal
+                    ? '<td style="padding:8px 8px;font-size:12px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">'+tTotFinal.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
+                      +'<td style="padding:8px 8px;font-size:11px;font-weight:700;color:#0d9488;text-align:right;background:#ccfbf1;">'+(tTotQ>0?(tTotFinal/tTotQ).toFixed(2):'—')+'</td>'
+                    : '';
                 var tfoot='<tfoot><tr style="background:#f0fdf4;border-top:2px solid #86efac;">'
                     +'<td colspan="3" style="padding:8px 10px;font-size:11px;font-weight:900;color:#15803d;">รวม</td>'
                     +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+itms.reduce(function(a,i){return a+(Number(i.qty)||0);},0).toLocaleString()+'</td>'
@@ -25702,6 +25735,7 @@ function _ldRenderMonitorTable(rows, orders) {
                     +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+tTotQ.toLocaleString()+'</td>'
                     +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+tTotW.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
                     +'<td style="padding:8px 10px;font-size:11px;font-weight:700;color:#7c3aed;text-align:right;">'+(tTotQ>0?(tTotW/tTotQ).toFixed(2):'—')+'</td>'
+                    +finalFtd
                     +'</tr></tfoot>';
                 return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:560px;">'+thead+'<tbody>'+tbody+'</tbody>'+tfoot+'</table></div>';
             }
@@ -25773,6 +25807,16 @@ function _ldRenderMonitorTable(rows, orders) {
                         +_monQcBadge()
                     +'</div>'
                 +'</div>'
+                // scale diff input (office only)
+                +'<div style="background:#f8fafc;padding:10px 18px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+                    +'<i class="fas fa-balance-scale" style="color:#7c3aed;font-size:14px;"></i>'
+                    +'<span style="font-size:11px;font-weight:900;color:#64748b;">ส่วนต่างตราชั่งใหญ่</span>'
+                    +'<input type="number" id="ld-scale-diff-'+orderId+'" step="0.1" placeholder="±KG  (+มากกว่า / −น้อยกว่า)" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;width:200px;outline:none;background:#fff;" value="'+(_ldScaleDiff[orderId]!=null?_ldScaleDiff[orderId]:'')+'">'
+                    +'<button onclick="ldCalcFinal(\''+orderId+'\')" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;"><i class="fas fa-calculator"></i> คำนวณ</button>'
+                    +(_ldScaleDiff[orderId]!=null&&_ldScaleDiff[orderId]!==0
+                        ? '<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:4px 10px;border-radius:6px;">ใช้ค่า '+(_ldScaleDiff[orderId]>0?'+':'')+_ldScaleDiff[orderId]+' KG</span>'
+                        : '')
+                +'</div>'
                 +doneTableHtml
             +'</div>';
         }).join('');
@@ -25789,6 +25833,88 @@ function _ldRenderMonitorTable(rows, orders) {
 }
 
 function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Scale diff / Final weight distribution ───────────────────────────
+var _ldScaleDiff = {}; // {orderId: number (KG, +/-)}
+
+window.ldCalcFinal = function(oid) {
+    var inp = document.getElementById('ld-scale-diff-'+oid);
+    var val = parseFloat(inp ? inp.value : 0)||0;
+    _ldScaleDiff[oid] = val;
+    var d = document.getElementById('ld-mon-date')?.value;
+    if (d) _ldMonFetch(d, false);
+};
+
+// Compute final weights distribution across sessions
+// Returns {sku: {finalKg, finalAvg}}
+function _ldComputeFinalWeights(sessions, diff) {
+    // aggregate by sku
+    var sm = {};
+    sessions.forEach(function(r){
+        if (!r.sku) return;
+        if (!sm[r.sku]) sm[r.sku] = {qty:0, weight:0, product_name:r.product_name};
+        sm[r.sku].qty    += parseFloat(r.qty)||0;
+        sm[r.sku].weight += parseFloat(r.weight)||0;
+    });
+    var skus = Object.keys(sm);
+    if (!skus.length) return {};
+    var adds = {}; skus.forEach(function(sk){ adds[sk]=0; });
+    var rem = diff;
+
+    if (diff > 0) {
+        // ① below-min items — give 50% of gap toward min (stay below)
+        var belowMin = skus.filter(function(sk){
+            var p=_ldProductMap[sk]||{}; var r=sm[sk];
+            return p.min_w!=null && r.qty>0 && (r.weight/r.qty)<p.min_w;
+        });
+        belowMin.forEach(function(sk){
+            if (rem<=0) return;
+            var r=sm[sk]; var p=_ldProductMap[sk]||{};
+            var gap=(p.min_w - r.weight/r.qty)*r.qty;
+            var give=Math.min(gap*0.5, rem);
+            adds[sk]+=give; rem-=give;
+        });
+        // ② within range but near min (bottom 30% of range) — boost but stay ≤ max
+        var nearMin = skus.filter(function(sk){
+            var p=_ldProductMap[sk]||{}; var r=sm[sk];
+            if (p.min_w==null||p.max_w==null||!r.qty) return false;
+            var avg=(r.weight+adds[sk])/r.qty;
+            return avg>=p.min_w && avg < p.min_w+(p.max_w-p.min_w)*0.3;
+        });
+        if (nearMin.length && rem>0) {
+            var share=rem/nearMin.length;
+            nearMin.forEach(function(sk){
+                if (rem<=0) return;
+                var r=sm[sk]; var p=_ldProductMap[sk]||{};
+                var curAvg=(r.weight+adds[sk])/r.qty;
+                var maxAdd=(p.max_w-curAvg)*r.qty;
+                var give=Math.min(share, maxAdd, rem);
+                adds[sk]+=give; rem-=give;
+            });
+        }
+        // ③ remaining → distribute proportionally by PCS
+        if (rem>0) {
+            var totQ=skus.reduce(function(s,sk){return s+sm[sk].qty;},0);
+            skus.forEach(function(sk){
+                adds[sk]+=totQ>0 ? rem*(sm[sk].qty/totQ) : rem/skus.length;
+            });
+        }
+    } else {
+        // negative diff → deduct proportional to weight
+        var totW=skus.reduce(function(s,sk){return s+sm[sk].weight;},0);
+        skus.forEach(function(sk){
+            adds[sk]+=totW>0 ? diff*(sm[sk].weight/totW) : diff/skus.length;
+        });
+    }
+
+    var result={};
+    skus.forEach(function(sk){
+        var r=sm[sk];
+        var fKg=Math.max(0, r.weight+adds[sk]);
+        result[sk]={finalKg:fKg, finalAvg:r.qty>0?fKg/r.qty:0};
+    });
+    return result;
+}
 
 // ── parse dunnage from session notes ──────────────────────────────────
 function _monDunnage(sessions) {
