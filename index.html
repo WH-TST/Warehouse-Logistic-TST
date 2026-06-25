@@ -37732,10 +37732,10 @@ window.dmRefreshAll=async function(){
     var plans=allPlans.filter(function(p){
       return (driver.driver_id && p.driver_id===driver.driver_id)||(driver.driver_name && p.driver_transport===driver.driver_name);
     });
-    var done=plans.filter(function(p){var l=tripLogsMap[p.plan_id];return l&&l.status==='completed';}).length;
-    var activePlan=plans.find(function(p){var l=tripLogsMap[p.plan_id];return l&&l.status!=='completed';});
+    var done=plans.filter(function(p){var l=tripLogsMap[p.plan_id];return (l&&l.status==='completed')||p.status==='success';}).length;
+    var activePlan=plans.find(function(p){var l=tripLogsMap[p.plan_id];return p.status!=='success'&&(!l||l.status!=='completed');});
     var curLog=activePlan?tripLogsMap[activePlan.plan_id]:null;
-    var st=curLog?curLog.status:(plans.length?'idle':'off');
+    var st=(!activePlan&&plans.length)?'completed':(curLog?curLog.status:(plans.length?'idle':'off'));
     if(st!=='off')activeCount++;
     var stColors={
       off:{color:'#475569',label:'ไม่มีงานวันนี้',icon:'fa-moon',bg:'#1e293b',border:'#334155'},
@@ -38173,7 +38173,7 @@ function dmRenderPlanList(area){
     completed:{color:'#34d399',label:'เสร็จสิ้น',icon:'fa-check-circle',border:'#059669',btnBg:'#1e3a8a',btnLabel:'📋 ดูสรุป'}
   };
   var trucks=Array.from(new Set(plans.map(function(p){return p.truck_plate;}).filter(Boolean))).join(', ');
-  var done=plans.filter(function(p){var l=_dmTripLogs[p.plan_id];return l&&l.status==='completed';}).length;
+  var done=plans.filter(function(p){var l=_dmTripLogs[p.plan_id];return (l&&l.status==='completed')||p.status==='success';}).length;
   var html='<div style="background:#0f172a;min-height:100%;padding:16px;font-family:\'Segoe UI\',sans-serif;">';
   html+='<button onclick="_dmCurrentDriver=null;_dmTripPlan=null;dmRefreshAll();" style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:7px 14px;color:#94a3b8;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:12px;"><i class="fas fa-arrow-left" style="margin-right:6px;"></i>← ดูทุกคน</button>';
   html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:14px 16px;background:#1e293b;border-radius:16px;border:1px solid #334155;">'
