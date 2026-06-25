@@ -24856,70 +24856,133 @@ function _ldRenderMonitorTable(rows, orders) {
     var done = validRows2.filter(function(r){ return r.record_type!=='draft'; });
 
     // ── LIVE SECTION ──
+    function _thTime(iso){
+        if(!iso) return '—';
+        try{ return new Date(iso).toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',minute:'2-digit'}); }
+        catch(e){ return iso.slice(11,16); }
+    }
     var liveHtml = '';
     if (live.length) {
-        // group by order_id
         var liveByOrder = {};
         var orderIdx2 = {};
         (orders||[]).forEach(function(o){ orderIdx2[o.id] = o; });
         live.forEach(function(r){
             var k = r.order_id||'?';
             var ord = orderIdx2[r.order_id]||{};
-            if (!liveByOrder[k]) liveByOrder[k] = {staff_name:r.staff_name, plan_id:r.plan_id, order_no:ord.order_no, truck_plate:ord.truck_plate, customer_name:ord.customer_name, items:[]};
-            liveByOrder[k].items.push(r);
+            if (!liveByOrder[k]) liveByOrder[k] = {
+                order_no:ord.order_no, truck_plate:ord.truck_plate,
+                customer_name:ord.customer_name, plan_id:r.plan_id,
+                orderItems: ord.items||[], sessions:[]
+            };
+            liveByOrder[k].sessions.push(r);
         });
         liveHtml = '<div class="mb-4">'
-            +'<div class="flex items-center gap-2 mb-2">'
+            +'<div class="flex items-center gap-2 mb-3">'
                 +'<span class="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse block"></span>'
                 +'<span class="text-sm font-black text-rose-600 uppercase tracking-wider">กำลังโหลดอยู่ตอนนี้</span>'
             +'</div>'
             +Object.keys(liveByOrder).map(function(orderId){
                 var g = liveByOrder[orderId];
-                var totalWt  = g.items.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
-                var totalPcs = g.items.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
-                var tStart = g.items[0]&&g.items[0].start_time ? g.items[0].start_time.slice(11,16) : '—';
-                var orderLabel = g.order_no || g.plan_id || ('LD'+orderId.slice(0,8));
-                var truckLabel = g.truck_plate ? ' · 🚛 '+g.truck_plate : '';
-                var custLabel  = g.customer_name ? ' · '+g.customer_name : '';
-                return '<div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 mb-2">'
-                    +'<div class="flex items-center justify-between mb-3">'
+                var sess = g.sessions;
+                var orderLabel = g.order_no || g.plan_id || ('LD-'+orderId.slice(0,8));
+
+                // teams & staff (unique)
+                var staffSet = {}, teamSet = {};
+                sess.forEach(function(r){ if(r.staff_name) staffSet[r.staff_name]=1; if(r.team) teamSet[r.team]=1; });
+                var staffList = Object.keys(staffSet).join(', ') || '—';
+                var teamList  = Object.keys(teamSet).join(', ')  || '—';
+
+                // times
+                var startTimes = sess.map(function(r){ return r.start_time; }).filter(Boolean).sort();
+                var endTimes   = sess.map(function(r){ return r.end_time;   }).filter(Boolean).sort();
+                var tStart = startTimes.length ? _thTime(startTimes[0]) : '—';
+                var tEnd   = endTimes.length   ? _thTime(endTimes[endTimes.length-1]) : null;
+
+                // group sessions by sku
+                var sessBySku = {};
+                sess.forEach(function(r){
+                    var sk = r.sku||'?';
+                    if(!sessBySku[sk]) sessBySku[sk] = {qty:0, weight:0, sku:r.sku, product_name:r.product_name};
+                    sessBySku[sk].qty    += parseFloat(r.qty||0);
+                    sessBySku[sk].weight += parseFloat(r.weight||0);
+                });
+
+                // merge order items with sessions
+                var orderItemMap = {};
+                g.orderItems.forEach(function(it){ orderItemMap[it.sku||''] = it; });
+                var allSkus = Array.from(new Set(g.orderItems.map(function(it){return it.sku;}).concat(Object.keys(sessBySku))));
+
+                var totalActWt = 0, totalActPcs = 0, totalTgtWt = 0, totalTgtPcs = 0;
+                var itemRows = allSkus.map(function(sk){
+                    var oIt  = orderItemMap[sk]||{};
+                    var sIt  = sessBySku[sk]||{};
+                    var prod = _ldProductMap[sk]||{};
+                    var pName= prod.name || oIt.product_name || sIt.product_name || sk || '—';
+                    var tgtQ = parseFloat(oIt.qty||0), tgtW = parseFloat(oIt.target_weight||0);
+                    var actQ = sIt.qty||0, actW = sIt.weight||0;
+                    var kgPcs= actQ>0&&actW>0 ? (actW/actQ).toFixed(2) : '—';
+                    var minW = prod.min_w, maxW = prod.max_w;
+                    totalTgtPcs += tgtQ; totalTgtWt += tgtW;
+                    totalActPcs += actQ; totalActWt += actW;
+                    var overW = actW>0 && maxW && actW/actQ > maxW;
+                    var underW= actW>0 && minW && actW/actQ < minW;
+                    var kgColor= overW?'#dc2626': underW?'#d97706': '#7c3aed';
+                    return '<tr style="border-bottom:1px solid #ffe4e6;">'
+                        +'<td style="padding:8px 10px;">'
+                            +'<div style="font-size:12px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</div>'
+                            +'<div style="font-size:10px;color:#94a3b8;">'+_ldEsc(sk)+'</div>'
+                        +'</td>'
+                        +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtQ>0?tgtQ.toLocaleString()+' PCS':'—')+'</td>'
+                        +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtW>0?tgtW.toLocaleString()+' KG':'—')+'</td>'
+                        +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#0369a1;">'+(actQ>0?actQ.toLocaleString()+' PCS':'<span style="color:#cbd5e1;">—</span>')+'</td>'
+                        +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#059669;">'+(actW>0?actW.toLocaleString(undefined,{maximumFractionDigits:0})+' KG':'<span style="color:#cbd5e1;">—</span>')+'</td>'
+                        +'<td style="padding:8px 6px;text-align:center;font-size:12px;font-weight:900;color:'+kgColor+';">'
+                            +kgPcs+(kgPcs!=='—'?' kg/pcs':'')
+                            +(minW&&maxW?'<div style="font-size:9px;color:#94a3b8;font-weight:500;">'+minW+'–'+maxW+'</div>':'')
+                        +'</td>'
+                    +'</tr>';
+                }).join('');
+
+                return '<div style="background:#fff;border:2px solid #fda4af;border-radius:20px;overflow:hidden;margin-bottom:16px;">'
+                    // header bar
+                    +'<div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
                         +'<div>'
-                            +'<div class="font-black text-indigo-700 text-base font-mono">'+_ldEsc(orderLabel)+'</div>'
-                            +'<div class="text-xs text-slate-500">'+_ldEsc(g.staff_name||'—')+' · เริ่ม '+tStart+_ldEsc(truckLabel)+_ldEsc(custLabel)+'</div>'
+                            +'<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:.05em;">'+_ldEsc(orderLabel)+'</div>'
+                            +(g.customer_name?'<div style="font-size:12px;color:#fca5a5;margin-top:2px;"><i class="fas fa-building" style="margin-right:5px;"></i>'+_ldEsc(g.customer_name)+'</div>':'')
                         +'</div>'
-                        +'<div class="flex items-center gap-3">'
-                            +'<div class="text-right">'
-                                +'<div class="text-lg font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:1})+' KG</div>'
-                                +'<div class="text-sm font-black text-sky-700 font-mono">'+totalPcs.toLocaleString()+' PCS</div>'
-                            +'</div>'
+                        +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+                            +(g.truck_plate?'<div style="background:rgba(0,0,0,.3);border-radius:8px;padding:5px 12px;font-size:14px;font-weight:900;color:#fff;font-family:monospace;">🚛 '+_ldEsc(g.truck_plate)+'</div>':'')
                             +(_cu&&_cu.isAdmin
-                                ? '<button onclick="ldMonResetOrder(\''+orderId+'\',\''+_ldEsc(orderLabel)+'\')" style="background:#7f1d1d;border:1.5px solid #f87171;color:#fca5a5;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:900;cursor:pointer;" title="รีเซทข้อมูลการโหลด"><i class="fas fa-undo-alt mr-1"></i>รีเซท</button>'
+                                ? '<button onclick="ldMonResetOrder(\''+orderId+'\',\''+_ldEsc(orderLabel)+'\')" style="background:rgba(0,0,0,.4);border:1.5px solid #fca5a5;color:#fca5a5;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:900;cursor:pointer;"><i class="fas fa-undo-alt" style="margin-right:5px;"></i>รีเซท</button>'
                                 : '')
                         +'</div>'
                     +'</div>'
-                    +'<div class="space-y-1">'
-                    +g.items.map(function(r){
-                        var qty = parseFloat(r.qty||0), wt = parseFloat(r.weight||0);
-                        var pName = (_ldProductMap[r.sku]&&_ldProductMap[r.sku].name) || r.product_name || r.sku || '';
-                        var prod = _ldProductMap[r.sku]||{};
-                        var minW = prod.min_w, maxW = prod.max_w;
-                        var kgPcs = qty>0&&wt>0 ? (wt/qty).toFixed(2)+' kg/pcs' : '';
-                        var hasData = qty>0||wt>0;
-                        return '<div class="flex items-center justify-between rounded-xl px-3 py-2 border '+(hasData?'bg-white border-rose-100':'bg-rose-50/50 border-rose-100/50')+'">'
-                            +'<div>'
-                                +'<div class="text-xs font-bold '+(hasData?'text-slate-800':'text-slate-400')+'">'+_ldEsc(pName||'—')+'</div>'
-                                +(r.sku?'<div class="text-[10px] text-slate-400">'+_ldEsc(r.sku)+'</div>':'')
-                            +'</div>'
-                            +'<div class="flex gap-3 text-xs font-black items-center">'
-                                +(hasData
-                                    ? '<span class="text-sky-600">'+qty.toLocaleString()+' PCS</span>'
-                                      +'<span class="text-emerald-600">'+wt.toLocaleString(undefined,{maximumFractionDigits:1})+' KG</span>'
-                                      +(kgPcs?'<span class="text-purple-500">'+kgPcs+(minW&&maxW?'<span class="text-slate-400 font-normal"> ('+minW+'–'+maxW+')</span>':'')+'</span>':'')
-                                    : '<span class="text-slate-300">กำลังรอ...</span>')
-                            +'</div>'
-                        +'</div>';
-                    }).join('')
+                    // info row
+                    +'<div style="background:#fff5f5;padding:10px 18px;display:flex;gap:20px;flex-wrap:wrap;border-bottom:1px solid #ffe4e6;">'
+                        +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-users" style="color:#dc2626;margin-right:5px;"></i><b>ทีม:</b> '+_ldEsc(teamList)+' — '+_ldEsc(staffList)+'</div>'
+                        +'<div style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="color:#dc2626;margin-right:5px;"></i><b>เริ่ม:</b> '+tStart+(tEnd?' &nbsp;|&nbsp; <b>เสร็จ:</b> '+tEnd:'')+'</div>'
                     +'</div>'
+                    // items table
+                    +'<div style="overflow-x:auto;">'
+                    +'<table style="width:100%;border-collapse:collapse;min-width:500px;">'
+                        +'<thead><tr style="background:#fef2f2;border-bottom:2px solid #fda4af;">'
+                            +'<th style="padding:8px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:left;">สินค้า</th>'
+                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">ออเดอร์ PCS</th>'
+                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">ออเดอร์ KG</th>'
+                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#0369a1;text-align:center;">โหลดจริง PCS</th>'
+                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#059669;text-align:center;">โหลดจริง KG</th>'
+                            +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#7c3aed;text-align:center;">kg/pcs (ช่วง)</th>'
+                        +'</tr></thead>'
+                        +'<tbody style="background:#fff;">'+itemRows+'</tbody>'
+                        +'<tfoot><tr style="background:#fef2f2;border-top:2px solid #fda4af;">'
+                            +'<td style="padding:10px;font-size:12px;font-weight:900;color:#1e293b;">รวมทั้งหมด</td>'
+                            +'<td style="padding:10px;text-align:center;font-size:12px;font-weight:900;color:#475569;">'+(totalTgtPcs>0?totalTgtPcs.toLocaleString()+' PCS':'—')+'</td>'
+                            +'<td style="padding:10px;text-align:center;font-size:12px;font-weight:900;color:#475569;">'+(totalTgtWt>0?totalTgtWt.toLocaleString()+' KG':'—')+'</td>'
+                            +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#0369a1;">'+totalActPcs.toLocaleString()+' PCS</td>'
+                            +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#059669;">'+totalActWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG</td>'
+                            +'<td></td>'
+                        +'</tr></tfoot>'
+                    +'</table></div>'
                 +'</div>';
             }).join('')
         +'</div>';
