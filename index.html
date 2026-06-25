@@ -7546,7 +7546,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       <div>
         <div class="flex items-center justify-between mb-2">
           <label class="text-xs font-black text-slate-600">รายการสินค้า</label>
-          <button onclick="loAddItem()" class="text-xs font-black px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition flex items-center gap-1"><i class="fas fa-plus"></i> เพิ่มรายการ</button>
+          <div class="flex gap-2">
+            <button onclick="loPasteExcel()" class="text-xs font-black px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition flex items-center gap-1"><i class="fas fa-paste"></i> วางจาก Excel</button>
+            <button onclick="loAddItem()" class="text-xs font-black px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition flex items-center gap-1"><i class="fas fa-plus"></i> เพิ่มรายการ</button>
+          </div>
         </div>
         <div class="rounded-xl border border-slate-200 overflow-hidden">
           <table class="w-full text-xs">
@@ -25390,6 +25393,51 @@ window._loFetchProducts = async function() {
         drop.style.display = 'block';
     };
 })();
+
+window.loPasteExcel = function() {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = '<div style="background:#fff;border-radius:16px;padding:24px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
+        +'<div style="font-size:15px;font-weight:900;color:#1e293b;margin-bottom:6px;"><i class="fas fa-paste" style="color:#10b981;margin-right:6px;"></i>วางข้อมูลจาก Excel</div>'
+        +'<div style="font-size:11px;color:#64748b;margin-bottom:12px;">Copy 2 คอลัมน์จาก Excel: <b>SKU</b> และ <b>จำนวน</b> แล้ววางด้านล่าง</div>'
+        +'<textarea id="lo-paste-area" style="width:100%;height:160px;border:2px solid #c7d2fe;border-radius:10px;padding:10px;font-size:12px;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box;" placeholder="0RTG3001000&#9;1500&#10;0SQG2001400&#9;2400&#10;..."></textarea>'
+        +'<div style="display:flex;gap:10px;margin-top:12px;">'
+            +'<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-weight:900;font-size:13px;cursor:pointer;background:#fff;">ยกเลิก</button>'
+            +'<button onclick="loPasteExcelConfirm()" style="flex:2;padding:10px;background:#4f46e5;color:#fff;border:none;border-radius:10px;font-weight:900;font-size:13px;cursor:pointer;">นำเข้า</button>'
+        +'</div>'
+    +'</div>';
+    document.body.appendChild(overlay);
+    setTimeout(function(){ var ta=document.getElementById('lo-paste-area'); if(ta) ta.focus(); }, 100);
+};
+
+window.loPasteExcelConfirm = async function() {
+    var ta = document.getElementById('lo-paste-area');
+    if (!ta) return;
+    var lines = ta.value.trim().split('\n').filter(function(l){ return l.trim(); });
+    if (!lines.length) return;
+    var prods = await window._loFetchProducts();
+    var prodMap = {};
+    prods.forEach(function(p){ prodMap[p.sku.toLowerCase()] = p; });
+    // clear existing rows
+    document.getElementById('lo-m-items-tbody').innerHTML = '';
+    _loItemCount = 0;
+    lines.forEach(function(line) {
+        var parts = line.split('\t');
+        var sku = (parts[0]||'').trim();
+        var qty = parseFloat((parts[1]||'').trim().replace(/,/g,''))||0;
+        if (!sku) return;
+        var prod = prodMap[sku.toLowerCase()];
+        var wt = 0;
+        if (prod && qty > 0) {
+            var w = (prod.likely_w||0) > 0 ? prod.likely_w : ((prod.min_w||0)+(prod.max_w||0))/2;
+            if (w > 0) wt = Math.round(qty * w);
+        }
+        loAddItem({sku: sku, product_name: prod ? prod.name : sku, qty: qty, target_weight: wt});
+    });
+    loItemChanged();
+    var overlay = document.getElementById('lo-paste-area')?.closest('div[style*="fixed"]');
+    if (overlay) overlay.remove();
+};
 
 window.loAutoWt = function(n) {
     var skuEl = document.getElementById('lo-item-sku-'+n);
