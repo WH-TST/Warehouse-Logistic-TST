@@ -23897,9 +23897,49 @@ function _ldBuildForm(order) {
                 +'</table>'
             +'</div>'
         +'</div>'
-        // photo
-        +'<div style="background:#fff;border-radius:14px;border:1.5px solid #e2e8f0;padding:12px;">'
-            +'<div style="font-size:11px;font-weight:900;color:#64748b;margin-bottom:8px;letter-spacing:0.5px;">PHOTO</div>'
+        // QC section
+        +'<div style="background:#fff;border-radius:14px;border:2px solid #f59e0b;padding:14px;">'
+            +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
+                +'<i class="fas fa-clipboard-check" style="color:#d97706;font-size:14px;"></i>'
+                +'<span style="font-size:11px;font-weight:900;color:#92400e;letter-spacing:0.5px;text-transform:uppercase;">ตรวจสอบคุณภาพก่อนโหลด</span>'
+                +'<span style="font-size:10px;color:#dc2626;font-weight:700;margin-left:auto;">* ต้องครบทุกข้อ</span>'
+            +'</div>'
+            // checkboxes
+            +['ตรวจสภาพสินค้า — ไม่มีรอยแตก งอ หรือโก่งผิดปกติ',
+              'ตรวจสนิม — อยู่ในระดับที่ยอมรับได้',
+              'SKU และจำนวนถูกต้องตามออเดอร์',
+              'จัดเรียงไม่ปะปน SKU',
+              'มัด / รัดเรียบร้อย พร้อมโหลด'].map(function(label, i){
+                return '<label id="ldf-qc-lbl-'+oid+'-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;background:#fffbeb;border:1.5px solid #fde68a;margin-bottom:6px;" onclick="ldQcToggle(\''+oid+'\','+i+')">'
+                    +'<div id="ldf-qc-box-'+oid+'-'+i+'" style="width:22px;height:22px;border-radius:6px;border:2px solid #d97706;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;">'
+                        +'<i class="fas fa-check" style="font-size:12px;color:#fff;display:none;"></i>'
+                    +'</div>'
+                    +'<span style="font-size:12px;font-weight:700;color:#78350f;">'+label+'</span>'
+                +'</label>';
+            }).join('')
+            // dunnage
+            +'<div style="margin-top:10px;padding-top:10px;border-top:1.5px dashed #fde68a;">'
+                +'<div style="font-size:11px;font-weight:900;color:#92400e;margin-bottom:8px;">'
+                    +'<i class="fas fa-grip-lines" style="margin-right:5px;"></i>เหล็กรองบนรถ (Dunnage)'
+                +'</div>'
+                +'<div style="display:flex;gap:8px;">'
+                    +'<div style="flex:1;">'
+                        +'<div style="font-size:10px;font-weight:700;color:#78350f;margin-bottom:4px;">จำนวน (ท่อน)</div>'
+                        +'<input type="number" id="ldf-dunnage-pcs-'+oid+'" min="0" placeholder="0" style="width:100%;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:900;outline:none;background:#fffbeb;box-sizing:border-box;text-align:center;">'
+                    +'</div>'
+                    +'<div style="flex:1;">'
+                        +'<div style="font-size:10px;font-weight:700;color:#78350f;margin-bottom:4px;">น้ำหนัก (KG)</div>'
+                        +'<input type="number" id="ldf-dunnage-kg-'+oid+'" min="0" placeholder="0" style="width:100%;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:900;outline:none;background:#fffbeb;box-sizing:border-box;text-align:center;">'
+                    +'</div>'
+                +'</div>'
+            +'</div>'
+        +'</div>'
+        // photo (required)
+        +'<div id="ldf-photo-wrap-'+oid+'" style="background:#fff;border-radius:14px;border:2px solid #e2e8f0;padding:12px;">'
+            +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+                +'<span style="font-size:11px;font-weight:900;color:#64748b;letter-spacing:0.5px;">PHOTO</span>'
+                +'<span id="ldf-photo-req-'+oid+'" style="font-size:10px;font-weight:700;color:#dc2626;">* ต้องมีรูปอย่างน้อย 1 รูป</span>'
+            +'</div>'
             +'<input type="file" id="ldf-photo-input-'+oid+'" accept="image/*" capture="environment" multiple style="display:none;" onchange="ldCardHandlePhotos(this,\''+oid+'\')">'
             +'<div onclick="document.getElementById(\'ldf-photo-input-'+oid+'\').click()" style="border:2px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;cursor:pointer;">'
                 +'<i class="fas fa-camera" style="font-size:24px;color:#94a3b8;display:block;margin-bottom:6px;"></i>'
@@ -23915,6 +23955,26 @@ function _ldBuildForm(order) {
         +'</button>'
     +'</div>';
 }
+
+// QC checkbox toggle
+var _ldQcState = {}; // {oid: [bool x5]}
+window.ldQcToggle = function(oid, i) {
+    if (!_ldQcState[oid]) _ldQcState[oid] = [false,false,false,false,false];
+    _ldQcState[oid][i] = !_ldQcState[oid][i];
+    var checked = _ldQcState[oid][i];
+    var box = document.getElementById('ldf-qc-box-'+oid+'-'+i);
+    var lbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+i);
+    if (box) {
+        box.style.background = checked ? '#16a34a' : '#fff';
+        box.style.borderColor = checked ? '#16a34a' : '#d97706';
+        var icon = box.querySelector('i');
+        if (icon) icon.style.display = checked ? 'block' : 'none';
+    }
+    if (lbl) {
+        lbl.style.background = checked ? '#f0fdf4' : '#fffbeb';
+        lbl.style.borderColor = checked ? '#86efac' : '#fde68a';
+    }
+};
 
 var _ldCardStartTimes = {};
 var _ldDraftTimers    = {};   // debounce timers per order
@@ -24265,6 +24325,26 @@ window.ldCardSave = async function(oid) {
     var hasData = items.some(function(it){ return it.qty>0||it.weight>0; });
     if (!hasData) { showToast('กรุณากรอกข้อมูลอย่างน้อย 1 รายการ', true); return; }
 
+    // QC validation — all 5 checkboxes must be checked
+    var qcState = _ldQcState[oid] || [];
+    var qcLabels = ['ตรวจสภาพสินค้า','ตรวจสนิม','SKU และจำนวน','จัดเรียง SKU','มัด/รัด'];
+    for (var qi=0; qi<5; qi++) {
+        if (!qcState[qi]) {
+            showToast('⚠️ ยังไม่ได้ตรวจ: '+qcLabels[qi], true);
+            var lbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+qi);
+            if (lbl) { lbl.style.borderColor='#dc2626'; lbl.style.background='#fff1f2'; setTimeout(function(l){ l.style.borderColor='#fde68a'; l.style.background='#fffbeb'; }.bind(null,lbl),2000); }
+            return;
+        }
+    }
+
+    // Photo validation — at least 1 photo required
+    if (!(_ldCardPhotos[oid]||[]).length) {
+        showToast('⚠️ กรุณาถ่ายรูปสินค้าอย่างน้อย 1 รูป', true);
+        var pw = document.getElementById('ldf-photo-wrap-'+oid);
+        if (pw) { pw.style.borderColor='#dc2626'; setTimeout(function(){ pw.style.borderColor='#e2e8f0'; },2000); }
+        return;
+    }
+
     // get order for sku/product_name
     var {data: orderData} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
     var orderItems = orderData?.items||[];
@@ -24283,7 +24363,11 @@ window.ldCardSave = async function(oid) {
 
     var startIso = _ldCardStartTimes[oid]||null;
     var endIso   = new Date().toISOString();
-    var note     = document.getElementById('ldf-note-'+oid)?.value||'';
+    var userNote = document.getElementById('ldf-note-'+oid)?.value||'';
+    var dPcs = parseInt(document.getElementById('ldf-dunnage-pcs-'+oid)?.value||0)||0;
+    var dKg  = parseFloat(document.getElementById('ldf-dunnage-kg-'+oid)?.value||0)||0;
+    var dunnageNote = (dPcs>0||dKg>0) ? '[เหล็กรอง: '+dPcs+' ท่อน / '+dKg+' KG]' : '';
+    var note = [dunnageNote, userNote].filter(Boolean).join('\n');
 
     // upload photos
     var photoUrls = [];
@@ -24334,6 +24418,7 @@ window.ldCardSave = async function(oid) {
         showToast('✅ บันทึกการโหลดสำเร็จ');
         _ldActiveOrderId = null;
         delete _ldCardPhotos[oid];
+        delete _ldQcState[oid];
         _ldLoadOrderCards(today);
         _ldRefreshGlobalStats(today);
     } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
