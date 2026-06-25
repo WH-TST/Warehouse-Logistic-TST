@@ -25869,88 +25869,76 @@ function _ldComputeFinalWeights(sessions, diff) {
     var rem = diff;
 
     if (diff > 0) {
-        // ① below-min items — give 50% of gap toward min (stay below)
-        var belowMin = skus.filter(function(sk){
-            var p=_ldProductMap[sk]||{}; var r=sm[sk];
+        // ① bring below-min items up to MIN (full gap)
+        skus.filter(function(sk){
+            var p=_ldProductMap[sk]||{}, r=sm[sk];
             return p.min_w!=null && r.qty>0 && (r.weight/r.qty)<p.min_w;
-        });
-        belowMin.forEach(function(sk){
+        }).forEach(function(sk){
             if (rem<=0) return;
-            var r=sm[sk]; var p=_ldProductMap[sk]||{};
-            var gap=(p.min_w - r.weight/r.qty)*r.qty;
-            var give=Math.min(gap*0.5, rem);
+            var r=sm[sk], p=_ldProductMap[sk]||{};
+            var give=Math.min((p.min_w - r.weight/r.qty)*r.qty, rem);
             adds[sk]+=give; rem-=give;
         });
-        // ② within range but near min (bottom 30% of range) — boost but stay ≤ max
-        var nearMin = skus.filter(function(sk){
-            var p=_ldProductMap[sk]||{}; var r=sm[sk];
-            if (p.min_w==null||p.max_w==null||!r.qty) return false;
-            var avg=(r.weight+adds[sk])/r.qty;
-            return avg>=p.min_w && avg < p.min_w+(p.max_w-p.min_w)*0.3;
-        });
-        if (nearMin.length && rem>0) {
-            var share=rem/nearMin.length;
-            nearMin.forEach(function(sk){
-                if (rem<=0) return;
-                var r=sm[sk]; var p=_ldProductMap[sk]||{};
-                var curAvg=(r.weight+adds[sk])/r.qty;
-                var maxAdd=(p.max_w-curAvg)*r.qty;
-                var give=Math.min(share, maxAdd, rem);
-                adds[sk]+=give; rem-=give;
-            });
-        }
-        // ③ remaining → distribute proportionally by PCS
-        if (rem>0) {
-            var totQ=skus.reduce(function(s,sk){return s+sm[sk].qty;},0);
-            skus.forEach(function(sk){
-                adds[sk]+=totQ>0 ? rem*(sm[sk].qty/totQ) : rem/skus.length;
-            });
-        }
-    } else {
-        // negative diff — mirror of positive, protect below-min items
-        var rem2 = diff; // negative number
-        // ① above-max items first — deduct 50% of gap toward max (stay above max)
-        var aboveMax = skus.filter(function(sk){
-            var p=_ldProductMap[sk]||{}, r=sm[sk];
-            return p.max_w!=null && r.qty>0 && (r.weight/r.qty)>p.max_w;
-        });
-        aboveMax.forEach(function(sk){
-            if (rem2>=0) return;
-            var r=sm[sk], p=_ldProductMap[sk]||{};
-            var gap=((r.weight/r.qty)-p.max_w)*r.qty; // positive: how much over max
-            var take=Math.max(gap*0.5, rem2); // take up to 50% of over-max gap (rem2 is neg cap)
-            adds[sk]+=take; rem2-=take;
-        });
-        // ② within range but near max (top 30%) — deduct but stay ≥ min
-        var nearMax = skus.filter(function(sk){
-            var p=_ldProductMap[sk]||{}, r=sm[sk];
-            if (p.min_w==null||p.max_w==null||!r.qty) return false;
-            var avg=(r.weight+adds[sk])/r.qty;
-            return avg<=p.max_w && avg > p.max_w-(p.max_w-p.min_w)*0.3;
-        });
-        if (nearMax.length && rem2<0) {
-            var share2=rem2/nearMax.length;
-            nearMax.forEach(function(sk){
-                if (rem2>=0) return;
-                var r=sm[sk], p=_ldProductMap[sk]||{};
-                var curAvg=(r.weight+adds[sk])/r.qty;
-                var maxTake=(curAvg-p.min_w)*r.qty; // can deduct down to min
-                var take=Math.max(share2, -maxTake, rem2);
-                adds[sk]+=take; rem2-=take;
-            });
-        }
-        // ③ remaining → distribute proportionally by weight, skip below-min items
-        if (rem2<0) {
-            var eligible2=skus.filter(function(sk){
+        // ② distribute remaining proportionally by PCS, cap each item at MAX
+        var iter=0;
+        while (rem>0.01 && iter++<30) {
+            var elig=skus.filter(function(sk){
                 var p=_ldProductMap[sk]||{}, r=sm[sk];
                 if (!r.qty) return false;
-                return p.min_w==null || (r.weight/r.qty)>=p.min_w;
+                return p.max_w==null || (r.weight+adds[sk])/r.qty < p.max_w-0.0001;
             });
-            var pool2=eligible2.length?eligible2:skus;
-            var totWPool=pool2.reduce(function(s,sk){return s+sm[sk].weight;},0);
-            pool2.forEach(function(sk){
-                adds[sk]+=totWPool>0 ? rem2*(sm[sk].weight/totWPool) : rem2/pool2.length;
+            if (!elig.length) {
+                var tAll=skus.reduce(function(s,sk){return s+sm[sk].qty;},0);
+                skus.forEach(function(sk){adds[sk]+=tAll>0?rem*(sm[sk].qty/tAll):rem/skus.length;});
+                rem=0; break;
+            }
+            var tQ=elig.reduce(function(s,sk){return s+sm[sk].qty;},0);
+            var used=0;
+            elig.forEach(function(sk){
+                var p=_ldProductMap[sk]||{}, r=sm[sk];
+                var share=rem*(r.qty/tQ);
+                if (p.max_w!=null) share=Math.min(share, Math.max(0,(p.max_w-(r.weight+adds[sk])/r.qty)*r.qty));
+                adds[sk]+=share; used+=share;
             });
+            rem-=used;
+            if (used<0.001) break;
+        }
+    } else {
+        // negative diff
+        var rem2=diff;
+        // ① bring above-max items down to MAX (full gap)
+        skus.filter(function(sk){
+            var p=_ldProductMap[sk]||{}, r=sm[sk];
+            return p.max_w!=null && r.qty>0 && (r.weight/r.qty)>p.max_w;
+        }).forEach(function(sk){
+            if (rem2>=0) return;
+            var r=sm[sk], p=_ldProductMap[sk]||{};
+            var take=Math.max(-((r.weight/r.qty)-p.max_w)*r.qty, rem2);
+            adds[sk]+=take; rem2-=take;
+        });
+        // ② distribute remaining deduction proportionally by PCS, cap each item at MIN
+        var iter2=0;
+        while (rem2<-0.01 && iter2++<30) {
+            var elig2=skus.filter(function(sk){
+                var p=_ldProductMap[sk]||{}, r=sm[sk];
+                if (!r.qty) return false;
+                return p.min_w==null || (r.weight+adds[sk])/r.qty > p.min_w+0.0001;
+            });
+            if (!elig2.length) {
+                var tAll2=skus.reduce(function(s,sk){return s+sm[sk].qty;},0);
+                skus.forEach(function(sk){adds[sk]+=tAll2>0?rem2*(sm[sk].qty/tAll2):rem2/skus.length;});
+                rem2=0; break;
+            }
+            var tQ2=elig2.reduce(function(s,sk){return s+sm[sk].qty;},0);
+            var used2=0;
+            elig2.forEach(function(sk){
+                var p=_ldProductMap[sk]||{}, r=sm[sk];
+                var share=rem2*(r.qty/tQ2);
+                if (p.min_w!=null) share=Math.max(share, -Math.max(0,((r.weight+adds[sk])/r.qty-p.min_w)*r.qty));
+                adds[sk]+=share; used2+=share;
+            });
+            rem2-=used2;
+            if (Math.abs(used2)<0.001) break;
         }
     }
 
