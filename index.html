@@ -24849,33 +24849,41 @@ function _ldRenderMonitorTable(rows, orders) {
                 var totalWt  = g.items.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
                 var totalPcs = g.items.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
                 var tStart = g.items[0]&&g.items[0].start_time ? g.items[0].start_time.slice(11,16) : '—';
+                var orderLabel = g.plan_id||orderId.slice(0,8);
                 return '<div class="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 mb-2">'
                     +'<div class="flex items-center justify-between mb-3">'
                         +'<div>'
-                            +'<div class="font-black text-slate-800 text-base">'+_ldEsc(g.plan_id||orderId.slice(0,8))+'</div>'
+                            +'<div class="font-black text-slate-800 text-base">'+_ldEsc(orderLabel)+'</div>'
                             +'<div class="text-xs text-slate-500">'+_ldEsc(g.staff_name||'—')+' · เริ่ม '+tStart+'</div>'
                         +'</div>'
-                        +'<div class="text-right">'
-                            +'<div class="text-lg font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:1})+' KG</div>'
-                            +'<div class="text-sm font-black text-sky-700 font-mono">'+totalPcs.toLocaleString()+' PCS</div>'
+                        +'<div class="flex items-center gap-3">'
+                            +'<div class="text-right">'
+                                +'<div class="text-lg font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:1})+' KG</div>'
+                                +'<div class="text-sm font-black text-sky-700 font-mono">'+totalPcs.toLocaleString()+' PCS</div>'
+                            +'</div>'
+                            +(_cu&&_cu.isAdmin
+                                ? '<button onclick="ldMonResetOrder(\''+orderId+'\',\''+_ldEsc(orderLabel)+'\')" style="background:#7f1d1d;border:1.5px solid #f87171;color:#fca5a5;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:900;cursor:pointer;" title="รีเซทข้อมูลการโหลด"><i class="fas fa-undo-alt mr-1"></i>รีเซท</button>'
+                                : '')
                         +'</div>'
                     +'</div>'
                     +'<div class="space-y-1">'
                     +g.items.map(function(r){
                         var qty = parseFloat(r.qty||0), wt = parseFloat(r.weight||0);
-                        var pName = (r.product_name||r.sku||'').replace(/[฀-๿]+/g,'').trim();
+                        var pName = (_ldProductMap[r.sku]&&_ldProductMap[r.sku].name) || r.product_name || r.sku || '';
+                        var prod = _ldProductMap[r.sku]||{};
+                        var minW = prod.min_w, maxW = prod.max_w;
                         var kgPcs = qty>0&&wt>0 ? (wt/qty).toFixed(2)+' kg/pcs' : '';
                         var hasData = qty>0||wt>0;
                         return '<div class="flex items-center justify-between rounded-xl px-3 py-2 border '+(hasData?'bg-white border-rose-100':'bg-rose-50/50 border-rose-100/50')+'">'
                             +'<div>'
-                                +'<div class="text-xs font-bold '+(hasData?'text-slate-800':'text-slate-400')+'">'+_ldEsc(pName||r.sku||'—')+'</div>'
+                                +'<div class="text-xs font-bold '+(hasData?'text-slate-800':'text-slate-400')+'">'+_ldEsc(pName||'—')+'</div>'
                                 +(r.sku?'<div class="text-[10px] text-slate-400">'+_ldEsc(r.sku)+'</div>':'')
                             +'</div>'
-                            +'<div class="flex gap-3 text-xs font-black">'
+                            +'<div class="flex gap-3 text-xs font-black items-center">'
                                 +(hasData
                                     ? '<span class="text-sky-600">'+qty.toLocaleString()+' PCS</span>'
                                       +'<span class="text-emerald-600">'+wt.toLocaleString(undefined,{maximumFractionDigits:1})+' KG</span>'
-                                      +(kgPcs?'<span class="text-purple-500">'+kgPcs+'</span>':'')
+                                      +(kgPcs?'<span class="text-purple-500">'+kgPcs+(minW&&maxW?'<span class="text-slate-400 font-normal"> ('+minW+'–'+maxW+')</span>':'')+'</span>':'')
                                     : '<span class="text-slate-300">กำลังรอ...</span>')
                             +'</div>'
                         +'</div>';
