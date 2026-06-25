@@ -24886,11 +24886,20 @@ function _ldRenderMonitorTable(rows, orders) {
                 var sess = g.sessions;
                 var orderLabel = g.order_no || g.plan_id || ('LD-'+orderId.slice(0,8));
 
-                // teams & staff (unique)
-                var staffSet = {}, teamSet = {};
-                sess.forEach(function(r){ if(r.staff_name) staffSet[r.staff_name]=1; if(r.team) teamSet[r.team]=1; });
-                var staffList = Object.keys(staffSet).join(', ') || '—';
-                var teamList  = Object.keys(teamSet).join(', ')  || '—';
+                // teams & staff — all members of the team
+                var teamSet = {};
+                sess.forEach(function(r){ if(r.team) teamSet[r.team]=1; });
+                var teamList = Object.keys(teamSet).join(', ') || '—';
+                var allTeamMembers = (_ldStaffMaster||[]).filter(function(s){
+                    return s.team && teamSet[s.team];
+                }).map(function(s){ return s.name; });
+                // fallback: if no master data, use session staff names
+                if(!allTeamMembers.length){
+                    var staffSet2 = {};
+                    sess.forEach(function(r){ if(r.staff_name) staffSet2[r.staff_name]=1; });
+                    allTeamMembers = Object.keys(staffSet2);
+                }
+                var staffList = allTeamMembers.join(', ') || '—';
 
                 // times
                 var startTimes = sess.map(function(r){ return r.start_time; }).filter(Boolean).sort();
