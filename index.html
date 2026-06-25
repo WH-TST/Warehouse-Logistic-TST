@@ -24643,31 +24643,57 @@ function _ldSubscribeRealtime() {
         }).subscribe();
 }
 
-window.ldMonLoad = async function() {
-    var dateVal = document.getElementById('ld-mon-date')?.value;
+var _ldMonDate = '';
+async function _ldMonFetch(dateVal, showSpinner) {
     if (!dateVal) return;
     var wrap = document.getElementById('ld-mon-table-wrap');
-    if (wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
+    if (showSpinner && wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
         if (!Object.keys(_ldProductMap).length) await _ldLoadProductMap();
         var [{data:orders},{data:sessions}] = await Promise.all([
             window._sb.from('loading_orders').select('*').eq('order_date', dateVal),
             window._sb.from('loading_sessions').select('*').eq('plan_date', dateVal)
         ]);
-        var rows = sessions||[];
-        var ords = orders||[];
-        _ldRenderMonitorTable(rows, ords);
-        _ldRenderMonKpi(rows, ords);
+        _ldRenderMonitorTable(sessions||[], orders||[]);
+        _ldRenderMonKpi(sessions||[], orders||[]);
         var badge = document.getElementById('ld-mon-realtime-badge');
         if (badge) badge.classList.remove('hidden');
-        if (_ldMonSub) { try { _ldMonSub.unsubscribe(); } catch(e) {} }
-        _ldMonSub = window._sb.channel('loading-mon-'+dateVal)
-            .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions'}, function(){ ldMonLoad(); })
-            .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'},   function(){ ldMonLoad(); })
-            .subscribe();
     } catch(e) {
         if (wrap) wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">เกิดข้อผิดพลาด: '+(e?.message||String(e))+'</div>';
     }
+}
+
+function _ldMonSetupRt(dateVal) {
+    if (_ldMonSub) { try { window._sb.removeChannel(_ldMonSub); } catch(e) {} _ldMonSub = null; }
+    _ldMonSub = window._sb.channel('loading-mon-rt-v2')
+        .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions'}, function(){
+            var d = document.getElementById('ld-mon-date')?.value;
+            if (d) _ldMonFetch(d, false);
+        })
+        .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'}, function(){
+            var d = document.getElementById('ld-mon-date')?.value;
+            if (d) _ldMonFetch(d, false);
+        })
+        .subscribe();
+    // polling fallback ทุก 15 วินาที
+    if (window._ldMonPoll) clearInterval(window._ldMonPoll);
+    window._ldMonPoll = setInterval(function(){
+        var d = document.getElementById('ld-mon-date')?.value;
+        if (!d) return;
+        var wrap = document.getElementById('ld-mon-table-wrap');
+        if (!wrap || wrap.closest('.hidden')) return;
+        _ldMonFetch(d, false);
+    }, 15000);
+}
+
+window.ldMonLoad = async function() {
+    var dateVal = document.getElementById('ld-mon-date')?.value;
+    if (!dateVal) return;
+    if (_ldMonDate !== dateVal) {
+        _ldMonDate = dateVal;
+        _ldMonSetupRt(dateVal);
+    }
+    await _ldMonFetch(dateVal, true);
 };
 
 function _ldRenderMonitorTable(sessions, orders) {
