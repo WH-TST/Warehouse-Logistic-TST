@@ -40342,13 +40342,34 @@ var _trPendingSession = null;
 window.trShowCreate = async function(){
   document.getElementById('tr-create-card').classList.remove('hidden');
   document.getElementById('tr-date').value = new Date().toISOString().split('T')[0];
-  var {data} = await window._sb.from('driver_users').select('username,driver_name').eq('active',true).order('driver_name');
+  var [{data:drivers},{data:whStaff},{data:wmsUsers}] = await Promise.all([
+    window._sb.from('driver_users').select('username,driver_name').eq('active',true).order('driver_name'),
+    window._sb.from('logi_wh_staff').select('id,name,team,username').order('name'),
+    window._sb.from('wms_users').select('username,name').eq('active',true).order('name')
+  ]);
   var list = document.getElementById('tr-driver-list');
-  list.innerHTML = (data||[]).map(function(d){
+  function _cbRow(username, name, color){
     return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#334155;">'
-      +'<input type="checkbox" class="tr-drv-cb" value="'+d.username+'" data-name="'+(d.driver_name||d.username)+'" style="accent-color:#3b82f6;width:15px;height:15px;">'
-      +(d.driver_name||d.username)+'</label>';
-  }).join('');
+      +'<input type="checkbox" class="tr-drv-cb" value="'+username+'" data-name="'+name+'" style="accent-color:'+color+';width:15px;height:15px;">'
+      +name+'</label>';
+  }
+  function _groupHdr(label, color, icon){
+    return '<div style="grid-column:1/-1;font-size:11px;font-weight:900;color:'+color+';text-transform:uppercase;letter-spacing:.05em;padding:4px 0 2px;display:flex;align-items:center;gap:5px;"><i class="fas '+icon+'"></i>'+label+'</div>';
+  }
+  var html = '';
+  if((drivers||[]).length){
+    html += _groupHdr('คนขับ','#2563eb','fa-truck');
+    html += (drivers||[]).map(function(d){ return _cbRow(d.username, d.driver_name||d.username, '#2563eb'); }).join('');
+  }
+  if((whStaff||[]).length){
+    html += _groupHdr('พนักงานคลัง / โลจิสติกส์','#059669','fa-warehouse');
+    html += (whStaff||[]).map(function(d){ var n=d.name+(d.team?' ('+d.team+')':''); return _cbRow(d.username||String(d.id), n, '#059669'); }).join('');
+  }
+  if((wmsUsers||[]).length){
+    html += _groupHdr('พนักงานสำนักงาน','#7c3aed','fa-user-tie');
+    html += (wmsUsers||[]).map(function(d){ return _cbRow(d.username, d.name||d.username, '#7c3aed'); }).join('');
+  }
+  list.innerHTML = html;
 };
 window.trHideCreate = function(){ document.getElementById('tr-create-card').classList.add('hidden'); };
 window.trSelectAllDrivers = function(){ document.querySelectorAll('.tr-drv-cb').forEach(function(cb){ cb.checked=true; }); };
