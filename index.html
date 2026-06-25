@@ -7561,6 +7561,12 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         </div>
       </div>
 
+      <!-- Customer detail -->
+      <div>
+        <label class="block text-xs font-black text-slate-500 mb-1">รายละเอียดที่ลูกค้าต้องการ <span class="text-slate-300 font-normal">(ถ้ามี)</span></label>
+        <textarea id="lo-m-cust-detail" rows="2" placeholder="เช่น ต้องการให้มัดด้วยลวดเหล็ก, ส่งก่อน 10 โมง ฯลฯ" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none resize-none"></textarea>
+      </div>
+
       <!-- รถพ่วง toggle -->
       <div>
         <label class="flex items-center gap-3 cursor-pointer select-none">
@@ -7593,6 +7599,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                 <th class="px-3 py-2 text-left font-black text-slate-600">SKU / สินค้า</th>
                 <th class="px-3 py-2 text-right font-black text-slate-600 w-24">จำนวน (เส้น)</th>
                 <th class="px-3 py-2 text-right font-black text-slate-600 w-28">เป้าน.น. (กก.)</th>
+                <th class="px-3 py-2 text-center font-black text-slate-600 w-16">ตัดได้</th>
                 <th class="w-10"></th>
               </tr>
             </thead>
@@ -26270,6 +26277,7 @@ window.loNewOrder = function() {
     document.getElementById('lo-m-date').value  = today;
     document.getElementById('lo-m-truck').value = '';
     document.getElementById('lo-m-note').value  = '';
+    document.getElementById('lo-m-cust-detail').value = '';
     document.getElementById('lo-m-customer').value = '';
     document.getElementById('lo-m-order-no').value = '';
     document.getElementById('lo-m-items-tbody').innerHTML = '';
@@ -26290,7 +26298,10 @@ window.loEditOrder = async function(id) {
     _loSetModalMode(true);
     document.getElementById('lo-m-date').value     = data.order_date    || '';
     document.getElementById('lo-m-truck').value    = data.truck_plate   || '';
-    document.getElementById('lo-m-note').value     = data.note          || '';
+    var _rawNote = data.note || '';
+    var _cdMatch = _rawNote.match(/\[ลูกค้าต้องการ:\s*([\s\S]*?)\]/);
+    document.getElementById('lo-m-cust-detail').value = _cdMatch ? _cdMatch[1].trim() : '';
+    document.getElementById('lo-m-note').value     = _rawNote.replace(/\[ลูกค้าต้องการ:[\s\S]*?\]\n?/,'').trim();
     document.getElementById('lo-m-customer').value = data.customer_name || '';
     document.getElementById('lo-m-order-no').value = data.order_no      || '';
     document.getElementById('lo-m-items-tbody').innerHTML = '';
@@ -26501,6 +26512,7 @@ window.loAddItem = function(prefill) {
         '</td>'+
         '<td class="px-2 py-1.5 w-24"><input type="number" id="lo-item-qty-'+n+'" min="0" step="1" value="'+(prefill?.qty||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loAutoWt('+n+');loItemChanged()"></td>'+
         '<td class="px-2 py-1.5 w-28"><input type="number" id="lo-item-wt-'+n+'" min="0" step="0.01" value="'+(prefill?.target_weight||'')+'" placeholder="0" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs text-right font-black focus:outline-none focus:border-indigo-400" oninput="loItemChanged()"></td>'+
+        '<td class="px-2 py-1.5 text-center w-16"><input type="checkbox" id="lo-item-cut-'+n+'" '+(prefill?.can_cut?'checked':'')+' class="w-4 h-4 accent-indigo-600 cursor-pointer"></td>'+
         '<td class="px-2 py-1.5 text-center"><button onclick="loRemoveItem('+n+')" class="w-6 h-6 bg-rose-100 text-rose-500 rounded-lg text-[10px] hover:bg-rose-200 transition"><i class="fas fa-times"></i></button></td>';
     tbody.appendChild(tr);
     _loUpdateTotal();
@@ -26543,20 +26555,23 @@ window.loSaveOrder = async function() {
         var name = document.getElementById('lo-item-name-'+nStr)?.value.trim();
         var qty  = parseFloat(document.getElementById('lo-item-qty-'+nStr)?.value||0)||0;
         var wt   = parseFloat(document.getElementById('lo-item-wt-'+nStr)?.value||0)||0;
-        if (sku || qty || wt) items.push({sku:sku, product_name:name, qty:qty, target_weight:wt});
+        var cut  = !!(document.getElementById('lo-item-cut-'+nStr)?.checked);
+        if (sku || qty || wt) items.push({sku:sku, product_name:name, qty:qty, target_weight:wt, can_cut:cut});
     });
     if (!items.length) { showToast('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', true); return; }
 
     var orderNo      = document.getElementById('lo-m-order-no')?.value.trim();
     var custName     = document.getElementById('lo-m-customer')?.value.trim();
+    var custDetail   = (document.getElementById('lo-m-cust-detail')?.value||'').trim();
     var isTrailer    = !!(document.getElementById('lo-m-is-trailer')?.checked);
     var trailerPlate = (document.getElementById('lo-m-trailer-plate')?.value||'').trim();
+    var fullNote     = [custDetail ? '[ลูกค้าต้องการ: '+custDetail+']' : '', note].filter(Boolean).join('\n');
     var payload = {
         plan_id:        planId,
         order_date:     dateVal,
         truck_plate:    truck,
         items:          items,
-        note:           note,
+        note:           fullNote || null,
         customer_name:  custName      || null,
         order_no:       orderNo       || null,
         is_trailer:     isTrailer,
