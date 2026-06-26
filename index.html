@@ -3203,17 +3203,14 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       <table class="w-full text-sm border-collapse">
         <thead class="sticky top-0 z-10">
           <tr class="bg-slate-800 text-slate-300 text-[11px] font-black uppercase tracking-wider">
-            <th class="px-3 py-3 text-center whitespace-nowrap" style="width:100px">ทะเบียนรถ</th>
-            <th class="px-3 py-3 text-center" style="width:50px">เที่ยว</th>
-            <th class="px-3 py-3 text-left" style="width:130px">คนขับ</th>
-            <th class="px-3 py-3 text-left" style="width:120px">ประเภทงาน</th>
-            <th class="px-3 py-3 text-left" style="min-width:170px">ชื่อร้าน / ปลายทาง</th>
-            <th class="px-3 py-3 text-left" style="min-width:200px">รายการสินค้าต่อร้าน</th>
+            <th class="px-3 py-3 text-left whitespace-nowrap" style="width:120px">ทะเบียน / เที่ยว</th>
+            <th class="px-3 py-3 text-left" style="width:120px">คนขับ</th>
+            <th class="px-3 py-3 text-left" style="min-width:180px">จุดแวะ</th>
+            <th class="px-3 py-3 text-left" style="min-width:180px">รายการสินค้า</th>
             <th class="px-3 py-3 text-center" style="width:70px">จำนวน</th>
-            <th class="px-3 py-3 text-right" style="width:120px">น้ำหนัก ต่อรายการ</th>
+            <th class="px-3 py-3 text-right" style="width:110px">น้ำหนัก/รายการ</th>
             <th class="px-3 py-3 text-right" style="width:120px">น.น.รวม/เที่ยว</th>
-            <th class="px-3 py-3 text-center" style="width:80px">คลังสินค้า</th>
-            <th class="px-3 py-3 text-center" style="width:90px">หมายเหตุ/ด่วน</th>
+            <th class="px-3 py-3 text-center" style="width:90px">หมายเหตุ</th>
             <th class="px-3 py-3 text-center" style="width:80px">จัดการ</th>
           </tr>
         </thead>
@@ -18331,25 +18328,6 @@ window.renderLogisticList = function renderLogisticList() {
                 : p.trailerMode === 'full_trailer'
                 ? '<div class="inline-block text-[10px] bg-purple-100 text-purple-700 font-black px-2 py-0.5 rounded-full mt-0.5">ทั้งพ่วง</div>'
                 : '';
-            // PM + รถพ่วง: แสดงตาม pmTarget ที่บันทึกใน failReason
-            if (p.jobType === 'maintenance_pm') {
-                const truck = (LOGI_MASTER_CACHE?.trucks || []).find(tk => tk.plate === p.truckPlate);
-                const cp = truck?.childPlate;
-                if (cp) {
-                    const fr = p.failReason || '';
-                    if (fr.includes('[ซ่อมรถลูก]'))
-                        return `<span class="font-mono text-purple-700">${cp}</span>`
-                             + `<div class="text-[10px] text-purple-500 mt-0.5">🔗 ซ่อมรถลูก</div>`;
-                    if (fr.includes('[ซ่อมทั้งคู่]'))
-                        return `<span class="font-mono">${plate}</span>`
-                             + `<div class="text-[10px] text-rose-500 font-bold mt-0.5">+ ${cp}</div>`
-                             + `<div class="inline-block text-[10px] bg-rose-100 text-rose-600 font-black px-2 py-0.5 rounded-full mt-0.5">ซ่อมทั้งคู่</div>`;
-                    // [ซ่อมรถแม่] หรือไม่มี prefix
-                    return `<span class="font-mono">${plate}</span>`
-                         + `<div class="text-[10px] text-amber-500 mt-0.5">🚛 ซ่อมรถแม่</div>`;
-                }
-                return `<span class="font-mono">${plate}</span>`;
-            }
             if (p.isMother) {
                 const t = (LOGI_MASTER_CACHE?.trucks || []).find(tk => tk.plate === p.truckPlate);
                 const cp = t?.childPlate;
@@ -18361,121 +18339,90 @@ window.renderLogisticList = function renderLogisticList() {
                 + `<div class="text-[10px] text-purple-500 mt-0.5">⬆ รถลูก</div>`;
             return `<span class="font-mono">${plate}</span>` + trailerBadge;
         })();
-        const driver    = p.truckType === 'hire' ? '—' : (p.driverTransport || '—');
-        const trip      = p.truckType === 'hire' ? '—' : (p.tripNo || '—');
-        const wt        = p.totalWeight ? parseFloat(p.totalWeight).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00';
-        const isMaint   = p.jobType === 'maintenance_pm';
-        // ── Industrial Trip Board: status-tinted rows ──
-        const STATUS_STRIPE  = { planned:'#2563eb', inprogress:'#f59e0b', success:'#10b981', failed:'#ef4444', extra:'#8b5cf6' };
-        const STATUS_TINT_BG = { planned:'#eff6ff', inprogress:'#fffbeb', success:'#f0fdf4', failed:'#fef2f2', extra:'#faf5ff' };
-        const stripeColor  = STATUS_STRIPE[p.status]  || '#94a3b8';
-        const tintBase     = STATUS_TINT_BG[p.status] || '#f8fafc';
-        // Even trips: full tint, Odd trips: 50% lighter (mix toward white)
-        const rowBgColor   = tintBase;
-        const planBorderTop = '';
 
-        const jobStyles = {
-            sale_order:    'background:#e0f5e8;color:#1a6840;border-color:#80c898;',
-            transfer_fg:   'background:#ece8f8;color:#5030a0;border-color:#b898e0;',
-            transfer_semi: 'background:#e0e8f8;color:#2040a8;border-color:#80a0e0;',
-            maintenance_pm:'background:#fef3d8;color:#8c5c08;border-color:#e8c060;',
-        };
-        const jcStyle = jobStyles[p.jobType] || 'background:#eef1f6;color:#3a5070;border-color:#d4bfa8;';
+        const driver   = p.truckType === 'hire' ? '—' : (p.driverTransport || '—');
+        const trip     = p.truckType === 'hire' ? '—' : (p.tripNo || '—');
+        const wt       = p.totalWeight ? parseFloat(p.totalWeight).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00';
+
+        const STATUS_TINT_BG = { planned:'#eff6ff', inprogress:'#fffbeb', success:'#f0fdf4', failed:'#fef2f2', extra:'#faf5ff' };
+        const rowBgColor = STATUS_TINT_BG[p.status] || '#f8fafc';
+        const sepTop = 'border-top:2px solid #d1d5db;';
 
         const statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border whitespace-nowrap" style="${st.style || ''}"><span class="w-1.5 h-1.5 rounded-full" style="background:currentColor"></span>${st.label}</span>`;
 
-        // แถว -C (รถลูก): ไม่มีปุ่มจัดการ (จัดการผ่านแถวรถแม่)
-        // แสดงปุ่ม Fix สำหรับทุก -M full_trailer (re-split ปลอดภัย ไม่มีผลเสียถ้าข้อมูลถูกแล้ว)
         const _isOldTrailer = p.isMother && p.trailerMode === 'full_trailer';
         const _fixBtn = _isOldTrailer
-            ? `<button onclick="fixTrailerPlan('${p.id}')" title="ซ่อมข้อมูลรถพ่วงเก่า" class="w-full mt-1 px-2 py-1 rounded-lg bg-violet-50 border border-violet-300 text-violet-700 hover:bg-violet-600 hover:text-white transition text-[10px] font-black col-span-2 flex items-center justify-center gap-1"><i class="fas fa-wrench"></i> Fix แผนนี้</button>`
+            ? `<button onclick="fixTrailerPlan('${p.id}')" title="ซ่อมข้อมูลรถพ่วงเก่า" class="w-full mt-1 px-2 py-1 rounded-lg bg-violet-50 border border-violet-300 text-violet-700 hover:bg-violet-600 hover:text-white transition text-[10px] font-black flex items-center justify-center gap-1"><i class="fas fa-wrench"></i> Fix</button>`
             : '';
         const actionBtns = (p.isChild || p.id?.endsWith('-C'))
             ? `<div class="text-[10px] text-purple-300 text-center">—</div>`
-            : `<div class="grid grid-cols-2 gap-1">
-                    <button onclick="viewLogiPlan('${p.id}')" title="ดูรายละเอียด" class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white transition text-xs"><i class="fas fa-eye"></i></button>
-                    <button onclick="editLogiPlan('${p.id}')" title="แก้ไข" class="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>
-                    <button onclick="deleteLogiPlan('${p.id}')" title="${p.isMother ? 'ลบ (แม่+ลูกพร้อมกัน)' : 'ลบ'}" class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>
-                    <button onclick="printPreShipmentFromPlan('${p.id}')" title="พิมพ์ PRE-SHIPMENT" class="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 text-orange-500 hover:bg-orange-500 hover:text-white transition text-xs"><i class="fas fa-file-invoice"></i></button>
-                    <button onclick="viewTripResult('${p.id}')" title="ดูการส่ง (Driver App)" class="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-600 hover:text-white transition text-xs col-span-2"><i class="fas fa-route mr-1"></i>ดูการส่ง</button>
+            : `<div class="flex flex-col gap-1 items-center">
+                    <div class="flex gap-1">
+                        <button onclick="viewLogiPlan('${p.id}')" title="ดูรายละเอียด" class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white transition text-xs"><i class="fas fa-eye"></i></button>
+                        <button onclick="editLogiPlan('${p.id}')" title="แก้ไข" class="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="deleteLogiPlan('${p.id}')" title="${p.isMother ? 'ลบ (แม่+ลูก)' : 'ลบ'}" class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>
+                        <button onclick="printPreShipmentFromPlan('${p.id}')" title="พิมพ์ PRE-SHIPMENT" class="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 text-orange-500 hover:bg-orange-500 hover:text-white transition text-xs"><i class="fas fa-file-invoice"></i></button>
+                    </div>
+                    <button onclick="viewTripResult('${p.id}')" title="ดูการส่ง (Driver App)" class="w-full px-2 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-600 hover:text-white transition text-[10px] font-black flex items-center justify-center gap-1"><i class="fas fa-route mr-1"></i>ดูการส่ง</button>
                     ${_fixBtn}
                </div>`;
 
-        // Col 1-4: ทะเบียน / เที่ยว / คนขับ / ประเภทงาน — rowspan ทั้งเที่ยว, align top
-        const sepTop = 'border-top:2px solid #d1d5db;';
+        // col 1-2: truck+trip / driver — rowspan whole trip
         const leftCells = (rs) => `
-            <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-center align-top border-r border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
+            <td rowspan="${rs}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
                 <div class="font-black text-sm text-slate-800">${truckDisplay}</div>
                 <div class="text-[10px] text-slate-400 mt-0.5">${p.id}</div>
-            </td>
-            <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-center align-top border-r border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
-                <span class="font-black text-base text-slate-700 font-mono">${trip}</span>
+                <div class="text-xl font-black text-slate-600 font-mono mt-1">${trip}</div>
+                <div class="mt-1">${statusBadge}</div>
             </td>
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
                 <div class="text-xs font-semibold text-slate-700">${driver}</div>
-            </td>
-            <td rowspan="${rs}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
-                <span class="text-[10px] font-black px-2 py-0.5 rounded-full border uppercase inline-block mb-1 whitespace-nowrap" style="${jcStyle}">${LOGI_JOB_MAP[p.jobType] || p.jobType}</span>
-                <div>${statusBadge}</div>
             </td>`;
 
-        // Col 9: น.น.รวม/เที่ยว — rowspan ทั้งเที่ยว, align top
-        const weightCell = (rs, dist) => `
+        // col 7-9: น.น.รวม / หมายเหตุ / จัดการ — rowspan whole trip
+        const rightCells = (rs, dist) => `
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-right align-top border-l border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
                 <div class="text-sm font-black text-emerald-700 font-mono whitespace-nowrap">${wt}</div>
-                <div class="text-[9px] text-emerald-400 font-bold">Kg</div>
-                ${dist ? `<div class="text-[9px] text-slate-400 mt-1">${dist} Km</div>` : ''}
-            </td>`;
-
-        // Col 12: จัดการ — rowspan ทั้งเที่ยว, align top
-        const actionCell = (rs) => `
+                <div class="text-[9px] text-emerald-400 font-bold">กก.</div>
+                ${dist ? `<div class="text-[9px] text-slate-400 mt-1">${dist} กม.</div>` : ''}
+            </td>
+            <td rowspan="${rs}" class="px-2 py-2 text-center align-top border-l border-slate-100" style="vertical-align:top;${sepTop}background:${rowBgColor}">
+                ${(p.failReason && !p.failReason.startsWith('['))
+                    ? `<span class="text-[11px] font-bold text-rose-600 leading-snug">${p.failReason}</span>`
+                    : `<span class="text-slate-300 text-[11px]">—</span>`}
+            </td>
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-center align-top" style="vertical-align:top;${sepTop}background:${rowBgColor}">
                 ${actionBtns}
             </td>`;
 
-        // ── MAINTENANCE PM ──────────────────────────────────────────────────
-        if (isMaint) {
-            // PM: 4 left cols + 7 content cols + 1 action = 12 ✓
-            return [`<tr style="background:${rowBgColor}">
-                ${leftCells(1)}
-                <td colspan="7" class="px-4 pt-3 pb-2" style="border-top:2px solid #d1d5db">
-                    <div class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                        <div class="w-9 h-9 bg-amber-400 text-white rounded-xl flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-tools text-sm"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-[10px] font-black uppercase tracking-wider text-amber-500 mb-1">Maintenance PM</div>
-                            <div class="text-sm font-bold text-amber-900">${p.failReason || '—'}</div>
-                            <div class="flex flex-wrap gap-3 mt-1.5">
-                                ${p.truckPlate ? `<span class="text-xs text-amber-600"><i class="fas fa-truck mr-1"></i>${p.truckPlate}</span>` : ''}
-                            </div>
-                        </div>
-                        <div class="text-center flex-shrink-0 px-3">
-                            <div class="text-[9px] text-slate-400 font-semibold uppercase">น้ำหนัก</div>
-                            <div class="text-base font-black text-slate-300 mt-0.5">—</div>
-                        </div>
-                    </div>
-                </td>
-                ${actionCell(1)}
-            </tr>`];
-        }
+        // waypoint type helpers
+        const wpDotStyle = (s) => {
+            if (s.type === 'service_center') return 'background:#d97706;color:#fff;';
+            if (s.type === 'pickup')         return 'background:#4f46e5;color:#fff;';
+            if (s.type === 'transfer')       return 'background:#7c3aed;color:#fff;';
+            return 'background:#2a8a50;color:#fff;';
+        };
+        const wpTypeBadge = (s) => {
+            if (s.type === 'service_center') return '<span class="inline-block text-[10px] font-black px-2 py-0.5 rounded-full border" style="background:#fef3d8;color:#8c5c08;border-color:#e8c060;">แวะศูนย์</span>';
+            if (s.type === 'pickup')         return '<span class="inline-block text-[10px] font-black px-2 py-0.5 rounded-full border" style="background:#e8eaf8;color:#3040a0;border-color:#8090d8;">แวะรับของ</span>';
+            if (s.type === 'transfer')       return `<span class="inline-block text-[10px] font-black px-2 py-0.5 rounded-full border" style="background:#ece8f8;color:#5030a0;border-color:#b898e0;">ย้ายสินค้า · ${(s.subtype||'fg').toUpperCase()}</span>`;
+            return '<span class="inline-block text-[10px] font-black px-2 py-0.5 rounded-full border" style="background:#e0f5e8;color:#1a6840;border-color:#80c898;">ส่งลูกค้า</span>';
+        };
 
-        // ── SALE ORDER / TRANSFER ──────────────────────────────────────────
-        const isTransferJob = (p.jobType === 'transfer_fg' || p.jobType === 'transfer_semi');
-
-        // สำหรับรถพ่วง: กรอง items ตาม truck role
-        // กรณี -C plan ที่ shops ว่าง (old data) → ดึง child items จาก -M plan
-        var _rawShops0 = p.shops || [];
-        if (p.isChild && _rawShops0.length === 0) {
-            var _mPlan0 = list.find(function(q){ return q.id === ((p.pairId||p.id.replace(/-C$/,''))+'-M'); });
-            if (_mPlan0) {
-                _rawShops0 = (_mPlan0.shops||[]).map(function(s){
+        // ── shops (filter by trailer role) ──
+        var _rawShops = p.shops || [];
+        if (p.isChild && _rawShops.length === 0) {
+            var _mPlan = list.find(function(q){ return q.id === ((p.pairId||p.id.replace(/-C$/,''))+'-M'); });
+            if (_mPlan) {
+                _rawShops = (_mPlan.shops||[]).map(function(s){
                     var ci=(s.items||[]).filter(function(it){return it.truckLabel==='child';});
                     return ci.length>0 ? Object.assign({},s,{items:ci}) : null;
                 }).filter(Boolean);
             }
         }
-        const shops = _rawShops0.map(function(s){
+        const shops = _rawShops.map(function(s){
             if (!p.isMother && !p.isChild) return s;
             var allIt=s.items||[];
             var hasLbls=allIt.some(function(it){return it.truckLabel;});
@@ -18485,226 +18432,99 @@ window.renderLogisticList = function renderLogisticList() {
             });
             return Object.assign({},s,{items:kept});
         }).filter(function(s){ return !p.isChild||(s.items||[]).length>0; });
-        // งานย้าย: รวมทุก items จาก shops[0] มาแสดงตรงๆ (ไม่มีชั้น shop)
-        const transferItems = isTransferJob ? (shops.flatMap(s => s.items || [])) : [];
-        const totalRows = isTransferJob
-            ? Math.max(transferItems.length, 1)
-            : (shops.reduce((sum, s) => sum + Math.max((s.items||[]).length, 1), 0) || 1);
-        const firstDist = p.distance || '';
 
-        const shopAccents = [
-            { dotColor: '#2a8a50', textColor: '#1a6840' },
-            { dotColor: '#6040b8', textColor: '#5030a0' },
-            { dotColor: '#1a7ab0', textColor: '#1a5f8a' },
-            { dotColor: '#b04040', textColor: '#8c2020' },
-        ];
+        const totalRows = shops.reduce((sum, s) => sum + Math.max((s.items||[]).length, 1), 0) || 1;
+        const firstDist = p.distance || '';
 
         const rows = [];
         let isFirstPlanRow = true;
 
-        // ── TRANSFER: render แบบพิเศษ — แสดง ต้นทาง→ปลายทาง แทนชื่อร้าน ──
-        if (isTransferJob) {
-            // fallback: ถ้า whSource/whDest ว่าง ให้ parse จาก shops[0].shopName ("คลังA → คลังB")
-            const _snParts = ((shops[0] && shops[0].shopName) || '').split(' → ');
-            const whSrc  = p.whSource || p.warehouse || (_snParts[0] && _snParts[0].trim()) || '—';
-            const whDst  = p.whDest   || (_snParts[1] && _snParts[1].trim()) || '—';
-            const tRemark = (shops[0] && shops[0].remark) ? shops[0].remark : (p.transferRemark || p.failReason || '');
-            if (!p.totalWeight && transferItems.length > 0) {
-                p.totalWeight = transferItems.reduce((s, it) => s + (it.weight || 0), 0);
-            }
-            const itemsToRender = transferItems.length > 0 ? transferItems : [null];
-
-            itemsToRender.forEach((it, ii) => {
-                const pName = it ? (it.productName || (LOGI_PRODUCTS_MASTER||[]).find(pp=>pp.sku===it.sku)?.name || '') : '';
-                const itQty = it ? (it.qty||0).toLocaleString() : '—';
-                const itWt  = it ? (it.weight ? it.weight.toLocaleString(undefined,{minimumFractionDigits:2})+' กก.' : '—') : '—';
-                const itSku = it ? it.sku : '—';
-                const itemSep = ii > 0 ? 'border-t border-slate-100' : '';
-
-                let row = `<tr style="background:${rowBgColor}" class="hover:brightness-95 transition-colors">`;
-                if (isFirstPlanRow) row += leftCells(totalRows);
-
-                // Col 5: ต้นทาง→ปลายทาง (rowspan ทั้งเที่ยว)
-                if (isFirstPlanRow) {
-                    row += `
-                    <td rowspan="${totalRows}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200" style="vertical-align:top;border-top:2px solid #d1d5db">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-[11px] font-black text-violet-700 bg-violet-100 border border-violet-300 px-2 py-0.5 rounded-lg">${whSrc}</span>
-                            <i class="fas fa-arrow-right text-violet-400 text-xs"></i>
-                            <span class="text-[11px] font-black text-indigo-700 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded-lg">${whDst}</span>
-                        </div>
-                        <div class="text-[10px] text-violet-500 font-semibold mt-1"><i class="fas fa-building mr-1 opacity-70"></i>แผนกคลังสินค้า</div>
-                        ${tRemark ? `<div class="text-[10px] text-slate-400 mt-0.5 italic">${tRemark}</div>` : ''}
-                    </td>`;
-                }
-
-                // Col 6: รายการสินค้า
-                const tFirstBorderStyle = (ii === 0) ? `border-top:2px solid #d1d5db;` : '';
-                row += `<td class="px-3 py-2 border-r border-slate-100 ${itemSep}" style="${tFirstBorderStyle}">
-                    <div class="font-mono text-[10px] font-semibold text-indigo-400 tracking-wider">${itSku}</div>
-                    ${pName ? `<div class="text-xs font-black text-slate-800 leading-snug mt-0.5">${pName}</div>` : ''}
-                </td>`;
-
-                // Col 7: จำนวน
-                row += `<td class="px-3 py-2 text-center border-r border-slate-100 ${itemSep}" style="${tFirstBorderStyle}">
-                    <span class="text-xs font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded px-2 py-0.5">${itQty}</span>
-                </td>`;
-
-                // Col 8: น้ำหนักต่อรายการ
-                row += `<td class="px-3 py-2 text-right text-xs font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100 ${itemSep}" style="${tFirstBorderStyle}">${itWt}</td>`;
-
-                // Col 9: น.น.รวม/เที่ยว
-                if (isFirstPlanRow) row += weightCell(totalRows, firstDist);
-
-                // Col 10: คลังสินค้า (ต้นทาง)
-                if (isFirstPlanRow) {
-                    row += `<td rowspan="${totalRows}" class="px-2 py-2 text-center align-top border-r border-slate-100 text-[11px] font-bold text-violet-700" style="vertical-align:top">
-                        ${whSrc}
-                    </td>`;
-                }
-
-                // Col 11: หมายเหตุ
-                if (isFirstPlanRow) {
-                    row += `<td rowspan="${totalRows}" class="px-2 py-2 text-center align-top border-r border-slate-100 text-[10px] text-slate-500" style="vertical-align:top">
-                        ${tRemark || '—'}
-                    </td>`;
-                }
-
-                // Col 12: จัดการ
-                if (isFirstPlanRow) row += actionCell(totalRows);
-
-                row += `</tr>`;
-                rows.push(row);
-                isFirstPlanRow = false;
-            });
-
-            return rows;
-        }
-
-        // ── SALE ORDER: render ร้านค้า + สินค้า ──────────────────────────────
         shops.forEach((s, si) => {
-            // ── SERVICE CENTER WAYPOINT ──────────────────────────────────────
-            if (s.type === 'service_center') {
-                const shopSepClass2 = (si > 0) ? 'border-t border-dashed border-amber-200' : '';
-                let scRow = `<tr style="background:${rowBgColor}" class="hover:brightness-95 transition-colors">`;
-                if (isFirstPlanRow) scRow += leftCells(totalRows);
-                scRow += `
-                <td class="px-3 pt-2 pb-2 align-top border-r border-slate-200 ${shopSepClass2}" colspan="5" style="vertical-align:top${isFirstPlanRow ? ';border-top:2px solid #d1d5db' : ''}">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <span class="w-5 h-5 rounded-full bg-amber-400 text-white text-[10px] font-black flex items-center justify-center flex-shrink-0">${si + 1}</span>
-                        <i class="fas fa-wrench text-amber-500 text-xs"></i>
-                        <span class="font-bold text-xs text-amber-800">${s.shopName || 'ศูนย์ซ่อม'}</span>
-                        <span class="text-[10px] font-black px-2 py-0.5 rounded-full border" style="background:#fef3d8;color:#8c5c08;border-color:#e8c060;">แวะศูนย์</span>
-                        ${s.remark ? `<span class="text-[10px] text-slate-400 italic">${s.remark}</span>` : ''}
-                    </div>
-                </td>`;
-                if (isFirstPlanRow) scRow += weightCell(totalRows, firstDist);
-                if (isFirstPlanRow) {
-                    scRow += `<td rowspan="${totalRows}" class="px-2 py-2 text-center align-top border-r border-slate-100 text-[11px]" style="vertical-align:top">—</td>`;
-                    scRow += `<td rowspan="${totalRows}" class="px-2 py-2 text-center align-top border-r border-slate-100 text-[10px] text-slate-400" style="vertical-align:top">—</td>`;
-                    scRow += actionCell(totalRows);
-                }
-                scRow += `</tr>`;
-                rows.push(scRow);
-                isFirstPlanRow = false;
-                return;
-            }
+            const items    = s.items || [];
+            const shopRows = Math.max(items.length, 1);
+            const seq      = s.shopSeq != null ? s.shopSeq : si;
+            const dashed   = si > 0 ? 'border-top:1px dashed #d1d5db;' : '';
 
-            const items     = s.items || [];
-            const shopRows  = Math.max(items.length, 1);
-            const accent    = shopAccents[si % shopAccents.length];
-            const shopSepClass = (si > 0) ? 'border-t border-dashed border-slate-300' : '';
-            const warehouse = s.loadWarehouse || '—';
-            const remark    = s.remark || '';
+            // delivery shop status badge
+            let shopStatusBadge = '';
+            if (!s.type || s.type === 'delivery') {
+                const sv = (logiShopVisitsMap[p.id] || {})[seq];
+                const tl = logiTripLogMap[p.id] || {};
+                const allVisits = logiShopVisitsMap[p.id] || {};
+                const isNextShop = !sv && (tl.status === 'traveling' || tl.status === 'at_shop' || tl.status === 'returning') &&
+                    (p.shops || []).slice(0, seq).every((_,idx) => (allVisits[idx] || {}).arrived_at);
+                shopStatusBadge = sv && sv.departed_at
+                    ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#f0fdf4;color:#059669;border-color:#bbf7d0;">✓ ส่งแล้ว</span>`
+                    : sv && sv.arrived_at
+                    ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#fffbeb;color:#d97706;border-color:#fde68a;">📦 อยู่ที่ร้าน</span>`
+                    : isNextShop
+                    ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#eff6ff;color:#2563eb;border-color:#bfdbfe;">🚚 กำลังดำเนินการ</span>`
+                    : '';
+            }
 
             (items.length > 0 ? items : [null]).forEach((it, ii) => {
-                const pName  = it ? (it.productName || (LOGI_PRODUCTS_MASTER||[]).find(pp=>pp.sku===it.sku)?.name || '') : '';
-                const itQty  = it ? (it.qty||0).toLocaleString() : '—';
-                const itWt   = it ? (it.weight ? it.weight.toLocaleString(undefined,{minimumFractionDigits:2})+' กก.' : '—') : '—';
-                const itSku  = it ? it.sku : '—';
-                const isFirstItem = ii === 0;
+                const isFirstItem  = ii === 0;
+                const itemSep      = !isFirstItem ? 'border-top:0.5px solid #e2e8f0;' : '';
+                const firstBorder  = (isFirstPlanRow && isFirstItem) ? sepTop : '';
+                const pName = it ? (it.productName || (LOGI_PRODUCTS_MASTER||[]).find(pp=>pp.sku===it.sku)?.name || '') : '';
+                const itSku = it ? it.sku : '';
+                const itQty = it ? (it.qty||0).toLocaleString() : '—';
+                const itWt  = it ? (it.weight ? it.weight.toLocaleString(undefined,{minimumFractionDigits:2})+' กก.' : '—') : '—';
 
-                // border สำหรับ item row ที่ไม่ใช่แรกของร้าน
-                const itemSep = (!isFirstItem) ? 'border-t border-slate-100' : '';
-
-                const soFirstBorderStyle = (isFirstPlanRow && ii === 0) ? `border-top:2px solid #d1d5db;` : '';
                 let row = `<tr style="background:${rowBgColor}" class="hover:brightness-95 transition-colors">`;
-
-                // Col 1-4: left — เฉพาะแถวแรกของทั้งเที่ยว
                 if (isFirstPlanRow) row += leftCells(totalRows);
 
-                // Col 5: ชื่อร้าน — rowspan ต่อร้าน, align top
+                // ── col 3: จุดแวะ (rowspan per shop) ──
                 if (isFirstItem) {
-                    const shopSeqKey = s.shopSeq != null ? s.shopSeq : si;
-                    const sv = (logiShopVisitsMap[p.id] || {})[shopSeqKey];
-                    const tl = logiTripLogMap[p.id] || {};
-                    // หาร้านแรกที่ยังไม่มี arrived_at = ร้านที่กำลังเดินทางไป
-                    const allVisits = logiShopVisitsMap[p.id] || {};
-                    const isNextShop = !sv && (tl.status === 'traveling' || tl.status === 'at_shop' || tl.status === 'returning') &&
-                        (p.shops || []).slice(0, shopSeqKey).every((_,idx) => (allVisits[idx] || {}).arrived_at);
-                    const shopStatusBadge = sv && sv.departed_at
-                        ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#f0fdf4;color:#059669;border-color:#bbf7d0;">✓ ส่งแล้ว</span>`
-                        : sv && sv.arrived_at
-                        ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#fffbeb;color:#d97706;border-color:#fde68a;">📦 อยู่ที่ร้าน</span>`
-                        : isNextShop
-                        ? `<span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border mt-1" style="background:#eff6ff;color:#2563eb;border-color:#bfdbfe;">🚚 กำลังดำเนินการ</span>`
-                        : '';
+                    let wpBody = '';
+                    if (s.type === 'transfer') {
+                        const whs = s.whSource || (s.shopName||'').split(' → ')[0] || '—';
+                        const whd = s.whDest   || (s.shopName||'').split(' → ')[1] || '—';
+                        wpBody = `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                            <span style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:#ede9fe;color:#5b21b6;border:0.5px solid #c4b5fd;">${whs}</span>
+                            <i class="fas fa-arrow-right" style="font-size:11px;color:#94a3b8;"></i>
+                            <span style="display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:#e0e7ff;color:#3730a3;border:0.5px solid #a5b4fc;">${whd}</span>
+                        </div>`;
+                    } else if (s.type === 'service_center') {
+                        wpBody = `<div class="font-bold text-xs text-slate-800 mt-1">${s.shopName || 'ศูนย์ซ่อม'}</div>
+                            ${s.remark ? `<div class="text-[10px] text-slate-400 mt-0.5 italic">${s.remark}</div>` : ''}`;
+                    } else if (s.type === 'pickup') {
+                        wpBody = `<div class="font-bold text-xs text-slate-800 mt-1">${s.shopName || 'จุดรับของ'}</div>
+                            ${s.distance ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="fas fa-route mr-1"></i>${s.distance} กม.</div>` : ''}`;
+                    } else {
+                        wpBody = `<div class="font-bold text-xs text-slate-800 mt-1">${s.shopName || '—'}</div>
+                            ${s.sale ? `<div class="text-[10px] text-slate-500 mt-0.5"><i class="fas fa-user-tie mr-1 opacity-70"></i>${s.sale}</div>` : ''}
+                            ${s.distance ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="fas fa-route mr-1"></i>${s.distance} กม.</div>` : ''}
+                            ${shopStatusBadge}`;
+                    }
                     row += `
-                    <td rowspan="${shopRows}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200 ${shopSepClass}" style="vertical-align:top">
-                        <div class="flex items-start gap-2">
-                            <span class="w-5 h-5 rounded-full text-white text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5" style="background:${accent.dotColor};">${shopSeqKey + 1}</span>
+                    <td rowspan="${shopRows}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200" style="vertical-align:top;${dashed || firstBorder}">
+                        <div style="display:flex;align-items:flex-start;gap:8px;">
+                            <span style="width:20px;height:20px;border-radius:50%;${wpDotStyle(s)}display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;">${seq + 1}</span>
                             <div>
-                                <div class="font-bold text-xs text-slate-800 leading-snug">${s.shopName}</div>
-                                ${s.sale ? `<div class="text-[10px] font-semibold mt-0.5" style="color:${accent.textColor};"><i class="fas fa-user-tie mr-1 opacity-70"></i>${s.sale}</div>` : ''}
-                                ${s.distance ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="fas fa-route mr-1"></i>${s.distance} กม.</div>` : ''}
-                                ${shopStatusBadge}
+                                ${wpTypeBadge(s)}
+                                ${wpBody}
                             </div>
                         </div>
                     </td>`;
                 }
 
-                // Col 6: รายการสินค้า
-                row += `
-                    <td class="px-3 py-2 border-r border-slate-100 ${shopSepClass && isFirstItem ? shopSepClass : itemSep}" style="${soFirstBorderStyle}">
-                        <div class="font-mono text-[10px] font-semibold text-indigo-400 tracking-wider">${itSku}</div>
-                        ${pName ? `<div class="text-xs font-black text-slate-800 leading-snug mt-0.5">${pName}</div>` : ''}
-                    </td>`;
-
-                // Col 7: จำนวน
-                row += `
-                    <td class="px-3 py-2 text-center border-r border-slate-100 ${shopSepClass && isFirstItem ? shopSepClass : itemSep}" style="${soFirstBorderStyle}">
+                // ── col 4-6: รายการสินค้า / จำนวน / น้ำหนัก ──
+                if (s.type === 'service_center' && isFirstItem) {
+                    row += `<td colspan="3" class="px-3 py-2 text-xs text-slate-300 italic border-r border-slate-100" style="${firstBorder || dashed}">— ไม่มีรายการสินค้า —</td>`;
+                } else if (s.type !== 'service_center') {
+                    row += `
+                    <td class="px-3 py-2 border-r border-slate-100" style="${firstBorder || itemSep || dashed}">
+                        ${itSku ? `<div class="font-mono text-[10px] font-semibold text-indigo-400 tracking-wider">${itSku}</div>` : ''}
+                        ${pName ? `<div class="text-xs font-black text-slate-800 leading-snug mt-0.5">${pName}</div>` : '<div class="text-xs text-slate-300 italic">—</div>'}
+                    </td>
+                    <td class="px-3 py-2 text-center border-r border-slate-100" style="${firstBorder || itemSep || dashed}">
                         <span class="text-xs font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded px-2 py-0.5">${itQty}</span>
-                    </td>`;
-
-                // Col 8: น้ำหนักต่อรายการ
-                row += `
-                    <td class="px-3 py-2 text-right text-xs font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100 ${shopSepClass && isFirstItem ? shopSepClass : itemSep}" style="${soFirstBorderStyle}">${itWt}</td>`;
-
-                // Col 9: น.น.รวม/เที่ยว — เฉพาะแถวแรกของทั้งเที่ยว
-                if (isFirstPlanRow) row += weightCell(totalRows, firstDist);
-
-                // Col 10: คลังสินค้า — rowspan ต่อร้าน
-                if (isFirstItem) {
-                    row += `
-                    <td rowspan="${shopRows}" class="px-2 py-2 text-center align-top border-r border-slate-100 text-[11px] font-bold text-slate-600 ${shopSepClass}" style="vertical-align:top">
-                        <span class="inline-block bg-slate-100 border border-slate-200 rounded px-2 py-0.5">${warehouse}</span>
-                    </td>`;
+                    </td>
+                    <td class="px-3 py-2 text-right text-xs font-semibold text-slate-700 whitespace-nowrap border-r border-slate-100" style="${firstBorder || itemSep || dashed}">${itWt}</td>`;
                 }
 
-                // Col 11: หมายเหตุ — rowspan ต่อร้าน
-                if (isFirstItem) {
-                    row += `
-                    <td rowspan="${shopRows}" class="px-2 py-2 text-center align-top border-r border-slate-100 ${shopSepClass}" style="vertical-align:top">
-                        ${remark
-                          ? `<span class="text-[11px] font-bold text-rose-600 leading-snug">${remark}</span>`
-                          : `<span class="text-slate-300 text-[11px]">—</span>`
-                        }
-                    </td>`;
-                }
-
-                // Col 12: จัดการ — เฉพาะแถวแรกของทั้งเที่ยว
-                if (isFirstPlanRow) row += actionCell(totalRows);
-
+                if (isFirstPlanRow) row += rightCells(totalRows, firstDist);
                 row += `</tr>`;
                 rows.push(row);
                 isFirstPlanRow = false;
@@ -18712,7 +18532,6 @@ window.renderLogisticList = function renderLogisticList() {
         });
 
         if (rows.length === 0) {
-            // หา -M pair เพื่อดูว่ามีร้านค้าอยู่ที่แม่หรือไม่
             const _isChildPlan = p.isChild || (p.id||'').endsWith('-C');
             const _motherPlan = _isChildPlan
                 ? logiPlanList.find(function(q){ return q.id === ((p.pairId||p.id.replace(/-C$/,''))+'-M'); })
@@ -18721,17 +18540,13 @@ window.renderLogisticList = function renderLogisticList() {
             const _shopNamesFromMother = _motherShopCount > 0
                 ? (_motherPlan.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ')
                 : '';
-
-            // -C แสดง "mother_only" เฉพาะเมื่อแม่มีสินค้าและลูกไม่มี (ถอดพ่วง)
             const _emptyMsg = (_isChildPlan && _motherShopCount > 0)
                 ? `<span class="text-purple-400 font-semibold text-xs"><i class="fas fa-info-circle mr-1"></i>ถอดพ่วง — สินค้าอยู่รถแม่ทั้งหมด</span><span class="text-slate-400 ml-1 text-xs">(${_shopNamesFromMother})</span>`
-                : `<span class="text-slate-300 text-xs italic">ไม่มีรายการร้านค้า</span>`;
-
+                : `<span class="text-slate-300 text-xs italic">ไม่มีรายการ</span>`;
             rows.push(`<tr style="background:${rowBgColor}">
                 ${leftCells(1)}
-                <td colspan="7" class="px-3 py-3 text-center text-xs text-slate-300 italic" style="border-top:2px solid #d1d5db">${_emptyMsg}</td>
-                ${weightCell(1, '')}
-                ${actionCell(1)}
+                <td colspan="4" class="px-3 py-3 text-center text-xs text-slate-300 italic border-r border-slate-100" style="${sepTop}">${_emptyMsg}</td>
+                ${rightCells(1, '')}
             </tr>`);
         }
 
