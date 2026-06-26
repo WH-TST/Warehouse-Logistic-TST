@@ -23600,8 +23600,7 @@ function _ldRenderCards(orders) {
     });
 }
 
-var _LFT_COLS = 7; // recalculated dynamically — see _ldGetCols()
-function _ldGetCols(){ return window.innerWidth < 480 ? 2 : 7; }
+var _LFT_COLS = 7; // fixed — table scrolls horizontally on mobile
 var _ldOrderCols = {}; // per-order dynamic column count
 
 function _ldCalcItemCols(it) {
@@ -23779,8 +23778,190 @@ window.ldSpConfirm = async function(oid, itemCount) {
     } catch(e){ showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)),true); }
 };
 
+function _ldBuildFormMobile(order) {
+    var oid = order.id;
+    if (order.is_trailer && !order.trailer_split) return _ldBuildTrailerSplitScreen(order);
+    if (order.is_trailer && order.trailer_split && !_ldTrailerUnit[oid]) return _ldBuildTrailerPicker(order);
+    var items = order.items||[];
+    if (order.is_trailer && _ldTrailerUnit[oid]) {
+        var unit=_ldTrailerUnit[oid], split=order.trailer_split||{};
+        items = items.map(function(it){
+            var sp=split[it.sku]||{};
+            var pcs=unit==='mother'?(sp.mother_pcs||0):(sp.trailer_pcs||0);
+            var wt=unit==='mother'?(sp.mother_kg||0):(sp.trailer_kg||0);
+            return Object.assign({},it,{qty:pcs,target_weight:wt});
+        }).filter(function(it){return it.qty>0;});
+    }
+    function _lc(it){
+        var p=_ldProductMap[it.sku]||{},lpb=p.lpb||0,lpr=p.lpr||0,qty=parseFloat(it.qty)||0;
+        if(lpb>0&&lpr>0&&qty>0) return Math.ceil(Math.ceil(qty/lpb)/lpr);
+        return 4;
+    }
+    var maxL=items.reduce(function(m,it){return Math.max(m,_lc(it));},4);
+    _ldOrderCols[oid]=maxL;
+    var cu=window._cu||{}, uName=cu.name||cu.username||'';
+    var sRec=(_ldStaffMaster||[]).find(function(x){return x.name===cu.name||x.id===cu.username;});
+    var teamTxt=sRec?' · '+sRec.team:'';
+    var IW='width:100%;box-sizing:border-box;border:2px solid #bbf7d0;border-radius:8px;background:#fff;text-align:center;font-size:17px;font-weight:700;padding:12px 2px;outline:none;color:#15803d;-webkit-appearance:none;display:block;';
+    var IQ='width:100%;box-sizing:border-box;border:2px solid #bfdbfe;border-radius:8px;background:#fff;text-align:center;font-size:17px;font-weight:700;padding:12px 2px;outline:none;color:#1d4ed8;-webkit-appearance:none;display:block;';
+    var hdrCols='<th style="padding:8px 6px;font-size:10px;font-weight:900;color:#94a3b8;background:#1e293b;position:sticky;left:0;z-index:3;min-width:36px;"></th>';
+    for(var h=0;h<maxL;h++) hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:13px;font-weight:900;color:#fff;background:#1e293b;min-width:80px;">'+(h+1)+'</th>';
+    hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:900;color:#6ee7b7;background:#14532d;min-width:64px;">Total W</th>';
+    hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:900;color:#93c5fd;background:#1e3a5f;min-width:64px;">Total Pcs</th>';
+    hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:900;color:#c4b5fd;background:#2e1065;min-width:60px;">Avg</th>';
+    var itemRows=items.map(function(it,idx){
+        var pName=(it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+        var prod=_ldProductMap[it.sku]||{}, minW=prod.min_w, maxW=prod.max_w;
+        var rangeStr=(minW!=null&&maxW!=null)?'('+minW+' - '+maxW+')':'';
+        var lc=_lc(it);
+        var hdr='<tr style="background:#1e293b;">'
+            +'<td colspan="'+(1+maxL+3)+'" style="padding:8px 10px;">'
+                +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'
+                    +'<span style="font-size:14px;font-weight:900;color:#fff;">'+(idx+1)+'. '+_ldEsc(pName)+'</span>'
+                    +(rangeStr?'<span style="font-size:11px;color:#fbbf24;font-weight:700;">'+rangeStr+'</span>':'')
+                    +'<span style="font-size:12px;font-weight:900;color:#38bdf8;margin-left:auto;">'+(it.qty||0)+' PCS</span>'
+                +'</div>'
+                +(it.sku?'<div style="font-size:9px;color:#475569;margin-top:1px;">'+_ldEsc(it.sku)+'</div>':'')
+            +'</td>'
+        +'</tr>';
+        var kgR='<td style="padding:6px 5px;background:#f8fafc;font-size:12px;font-weight:900;color:#15803d;text-align:center;position:sticky;left:0;z-index:2;border-right:2px solid #e2e8f0;">Kg</td>';
+        var pcR='<td style="padding:6px 5px;background:#f8fafc;font-size:12px;font-weight:900;color:#1d4ed8;text-align:center;position:sticky;left:0;z-index:2;border-right:2px solid #e2e8f0;border-bottom:3px solid #cbd5e1;">Pcs</td>';
+        for(var c=0;c<maxL;c++){
+            var cId='ldf-lw-'+oid+'-'+idx+'-'+c;
+            var qId='ldf-lq-'+oid+'-'+idx+'-'+c;
+            var ev='ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')';
+            kgR+='<td style="padding:5px 4px;border-right:1px solid #f1f5f9;">'+(c<lc?'<input type="number" min="0" step="0.01" placeholder="kg" style="'+IW+'" id="'+cId+'" oninput="'+ev+'">':'<div style="text-align:center;color:#e2e8f0;font-size:11px;">—</div>')+'</td>';
+            pcR+='<td style="padding:5px 4px;border-right:1px solid #f1f5f9;border-bottom:3px solid #cbd5e1;">'+(c<lc?'<input type="number" min="0" step="1" placeholder="pcs" style="'+IQ+'" id="'+qId+'" oninput="'+ev+'">':'<div style="text-align:center;color:#e2e8f0;font-size:11px;">—</div>')+'</td>';
+        }
+        kgR+='<td rowspan="2" style="padding:6px 4px;background:#f0fdf4;text-align:center;border-left:2px solid #d1fae5;vertical-align:middle;">'
+            +'<div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:2px;">KG</div>'
+            +'<div id="ldf-actual-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#15803d;font-family:monospace;">—</div>'
+        +'</td>';
+        kgR+='<td rowspan="2" style="padding:6px 4px;background:#eff6ff;text-align:center;border-left:1px solid #bfdbfe;vertical-align:middle;">'
+            +'<div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:2px;">PCS</div>'
+            +'<div id="ldf-actual-qty-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#1d4ed8;font-family:monospace;">—</div>'
+        +'</td>';
+        kgR+='<td rowspan="2" style="padding:6px 4px;background:#faf5ff;text-align:center;border-left:1px solid #ddd6fe;vertical-align:middle;">'
+            +'<div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:2px;">Avg</div>'
+            +'<div id="ldf-actual-avg-'+oid+'-'+idx+'" style="font-size:15px;font-weight:900;color:#7c3aed;font-family:monospace;">—</div>'
+        +'</td>';
+        return hdr+'<tr>'+kgR+'</tr><tr>'+pcR+'</tr>';
+    }).join('');
+
+    return '<div style="padding:10px;background:#f0fdf4;display:flex;flex-direction:column;gap:10px;">'
+        +'<div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px 14px;border:1px solid #d1fae5;">'
+            +'<i class="fas fa-user-circle" style="color:#10b981;font-size:18px;"></i>'
+            +'<span style="font-size:14px;font-weight:900;color:#1e293b;">'+_ldEsc(uName)+_ldEsc(teamTxt)+'</span>'
+        +'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+            +'<div style="background:#fff;border-radius:12px;padding:12px;text-align:center;border:2px solid #d1fae5;">'
+                +'<div style="font-size:10px;font-weight:900;color:#10b981;margin-bottom:4px;">TOTAL WEIGHT</div>'
+                +'<div id="ldf-total-wt-'+oid+'" style="font-size:26px;font-weight:900;color:#047857;font-family:monospace;">0</div>'
+                +'<div style="font-size:10px;color:#64748b;">KG</div>'
+            +'</div>'
+            +'<div style="background:#fff;border-radius:12px;padding:12px;text-align:center;border:2px solid #bae6fd;">'
+                +'<div style="font-size:10px;font-weight:900;color:#0ea5e9;margin-bottom:4px;">TOTAL QTY</div>'
+                +'<div id="ldf-total-qty-'+oid+'" style="font-size:26px;font-weight:900;color:#0369a1;font-family:monospace;">0</div>'
+                +'<div style="font-size:10px;color:#64748b;">PCS</div>'
+            +'</div>'
+        +'</div>'
+        +'<div id="ldf-timer-bar-'+oid+'" style="background:#fff;border-radius:14px;border:2px solid #10b981;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">'
+            +'<div style="display:flex;align-items:center;gap:10px;">'
+                +'<i class="fas fa-stopwatch" style="color:#10b981;font-size:20px;"></i>'
+                +'<div>'
+                    +'<div id="ldf-timer-label-'+oid+'" style="font-size:9px;font-weight:900;color:#16a34a;text-transform:uppercase;">Loading</div>'
+                    +'<div id="ldf-elapsed-'+oid+'" style="font-size:24px;font-weight:900;color:#047857;font-family:monospace;line-height:1.1;">00:00</div>'
+                +'</div>'
+            +'</div>'
+            +'<button id="ldf-pause-btn-'+oid+'" onclick="ldPauseStart(\''+oid+'\')" style="background:#f59e0b;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:900;cursor:pointer;">'
+                +'<i class="fas fa-pause"></i> Break'
+            +'</button>'
+        +'</div>'
+        +'<div id="ldf-pause-panel-'+oid+'" style="display:none;background:#fffbeb;border-radius:14px;border:2px solid #f59e0b;padding:14px;">'
+            +'<div style="font-size:12px;font-weight:900;color:#92400e;margin-bottom:10px;"><i class="fas fa-camera" style="margin-right:6px;color:#d97706;"></i>Take photo before break <span style="color:#dc2626;">*</span></div>'
+            +'<input type="file" id="ldf-pause-photo-inp-'+oid+'" accept="image/*" capture="environment" style="display:none;" onchange="ldPauseHandlePhoto(this,\''+oid+'\')">'
+            +'<div onclick="document.getElementById(\'ldf-pause-photo-inp-'+oid+'\').click()" style="border:2px dashed #fcd34d;border-radius:10px;padding:14px;text-align:center;cursor:pointer;">'
+                +'<i class="fas fa-camera" style="font-size:20px;color:#d97706;display:block;margin-bottom:4px;"></i>'
+                +'<span style="font-size:11px;font-weight:700;color:#b45309;">Tap to take photo</span>'
+            +'</div>'
+            +'<div id="ldf-pause-prev-'+oid+'" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>'
+            +'<button id="ldf-pause-confirm-'+oid+'" onclick="ldPauseConfirm(\''+oid+'\')" disabled style="margin-top:10px;width:100%;padding:12px;background:#d1d5db;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:900;">'
+                +'<i class="fas fa-check"></i> Confirm Break'
+            +'</button>'
+        +'</div>'
+        +'<div id="ldf-resume-panel-'+oid+'" style="display:none;background:#fef3c7;border-radius:14px;border:2px solid #fbbf24;padding:16px;text-align:center;">'
+            +'<i class="fas fa-pause-circle" style="font-size:30px;color:#d97706;margin-bottom:8px;display:block;"></i>'
+            +'<div style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:4px;">On Break</div>'
+            +'<div style="font-size:11px;color:#b45309;margin-bottom:12px;">Work time so far: <b id="ldf-paused-so-far-'+oid+'">—</b></div>'
+            +'<button onclick="ldPauseResume(\''+oid+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:900;cursor:pointer;">'
+                +'<i class="fas fa-play"></i> Resume Loading'
+            +'</button>'
+        +'</div>'
+        // Mobile item table (transposed)
+        +'<div style="background:#fff;border-radius:14px;border:1.5px solid #e2e8f0;overflow:hidden;">'
+            +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'
+                +'<table style="border-collapse:collapse;width:100%;">'
+                    +'<thead><tr>'+hdrCols+'</tr></thead>'
+                    +'<tbody>'+itemRows+'</tbody>'
+                +'</table>'
+            +'</div>'
+        +'</div>'
+        // QC
+        +'<div style="background:#fff;border-radius:14px;border:2px solid #f59e0b;padding:14px;">'
+            +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
+                +'<i class="fas fa-clipboard-check" style="color:#d97706;font-size:14px;"></i>'
+                +'<span style="font-size:11px;font-weight:900;color:#92400e;text-transform:uppercase;">Quality Check</span>'
+                +'<span style="font-size:10px;color:#dc2626;font-weight:700;margin-left:auto;">* All required</span>'
+            +'</div>'
+            +['No cracks, bends or abnormal deformation',
+              'Rust — within acceptable level',
+              'SKU and quantity correct per order',
+              'Dunnage placed every 3 points per layer',
+              'Strapped / tied neatly, ready to load'].map(function(label,i){
+                return '<label id="ldf-qc-lbl-'+oid+'-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;background:#fffbeb;border:1.5px solid #fde68a;margin-bottom:6px;" onclick="ldQcToggle(\''+oid+'\','+i+')">'
+                    +'<div id="ldf-qc-box-'+oid+'-'+i+'" style="width:22px;height:22px;border-radius:6px;border:2px solid #d97706;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+                        +'<i class="fas fa-check" style="font-size:12px;color:#fff;display:none;"></i>'
+                    +'</div>'
+                    +'<span style="font-size:12px;font-weight:700;color:#78350f;">'+label+'</span>'
+                +'</label>';
+            }).join('')
+            +'<div style="margin-top:10px;padding-top:10px;border-top:1.5px dashed #fde68a;">'
+                +'<div style="font-size:11px;font-weight:900;color:#92400e;margin-bottom:8px;"><i class="fas fa-grip-lines" style="margin-right:5px;"></i>Dunnage Steel on Truck</div>'
+                +'<div style="display:flex;gap:8px;">'
+                    +'<div style="flex:1;">'
+                        +'<div style="font-size:10px;font-weight:700;color:#78350f;margin-bottom:4px;">Qty (pcs)</div>'
+                        +'<input type="number" id="ldf-dunnage-pcs-'+oid+'" min="0" placeholder="0" style="width:100%;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:900;outline:none;background:#fffbeb;box-sizing:border-box;text-align:center;">'
+                    +'</div>'
+                    +'<div style="flex:1;">'
+                        +'<div style="font-size:10px;font-weight:700;color:#78350f;margin-bottom:4px;">Weight (KG)</div>'
+                        +'<input type="number" id="ldf-dunnage-kg-'+oid+'" min="0" placeholder="0" style="width:100%;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:900;outline:none;background:#fffbeb;box-sizing:border-box;text-align:center;">'
+                    +'</div>'
+                +'</div>'
+            +'</div>'
+        +'</div>'
+        +'<div id="ldf-photo-wrap-'+oid+'" style="background:#fff;border-radius:14px;border:2px solid #e2e8f0;padding:12px;">'
+            +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+                +'<span style="font-size:11px;font-weight:900;color:#64748b;">PHOTO</span>'
+                +'<span id="ldf-photo-req-'+oid+'" style="font-size:10px;font-weight:700;color:#dc2626;">* At least 1 photo required</span>'
+            +'</div>'
+            +'<input type="file" id="ldf-photo-input-'+oid+'" accept="image/*" capture="environment" multiple style="display:none;" onchange="ldCardHandlePhotos(this,\''+oid+'\')">'
+            +'<div onclick="document.getElementById(\'ldf-photo-input-'+oid+'\').click()" style="border:2px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;cursor:pointer;">'
+                +'<i class="fas fa-camera" style="font-size:24px;color:#94a3b8;display:block;margin-bottom:6px;"></i>'
+                +'<span style="font-size:12px;font-weight:700;color:#94a3b8;">Tap to take photo</span>'
+            +'</div>'
+            +'<div id="ldf-photo-prev-'+oid+'" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>'
+        +'</div>'
+        +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="Note (optional)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;outline:none;resize:none;box-sizing:border-box;background:#fff;"></textarea>'
+        +'<button onclick="ldCardSave(\''+oid+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);">'
+            +'<i class="fas fa-save"></i> SAVE LOADING RECORD'
+        +'</button>'
+    +'</div>';
+}
+
 function _ldBuildForm(order) {
-    _LFT_COLS = _ldGetCols();
+    if (window.innerWidth < 480 && window.innerHeight > window.innerWidth) {
+        return _ldBuildFormMobile(order);
+    }
     var oid = order.id;
 
     // ── Trailer: no split yet → show split plan screen
