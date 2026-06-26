@@ -16512,6 +16512,78 @@ window.addLogiServiceCenter = function addLogiServiceCenter() {
 }
 
 // ── เพิ่มจุดแวะรับของ ──
+// ── Place autocomplete (pickup / transfer_drop) ────────────────────────────
+const WP_WAREHOUSES = ['FG-BP','FG-BB','Vendor1','RM','PD'];
+
+const _PLACE_BORDER = { indigo:'#a5b4fc', orange:'#fdba74' };
+const _PLACE_HOVER  = { indigo:'hover:bg-indigo-50', orange:'hover:bg-orange-50' };
+const _PLACE_TEXT   = { indigo:'text-indigo-700', orange:'text-orange-700' };
+
+window.filterLogiPlace = function filterLogiPlace(prefix, theme, idx) {
+    const inputId = `logi-${prefix}-name-${idx}`;
+    const dropId  = `logi-${prefix}-name-drop-${idx}`;
+    const input   = document.getElementById(inputId);
+    const drop    = document.getElementById(dropId);
+    if (!input || !drop) return;
+    const q = input.value.trim().toLowerCase();
+
+    // warehouses
+    const whMatches = WP_WAREHOUSES.filter(w => !q || w.toLowerCase().includes(q));
+    // shops
+    const shops = (LOGI_MASTER_CACHE?.shops || []);
+    const shMatches = q
+        ? shops.filter(s => s.id.toLowerCase().includes(q) || (s.name||'').toLowerCase().includes(q)).slice(0,30)
+        : shops.slice(0,20);
+
+    const hl = (txt) => {
+        if (!q) return txt;
+        return txt.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
+            m=>`<mark class="bg-yellow-200 rounded">${m}</mark>`);
+    };
+    const bdr = _PLACE_BORDER[theme]||'#a5b4fc';
+    const hov = _PLACE_HOVER[theme]||'hover:bg-indigo-50';
+    const txt = _PLACE_TEXT[theme]||'text-indigo-700';
+
+    let html = '';
+    if (whMatches.length) {
+        html += `<div class="px-3 py-1 text-[10px] font-black text-slate-400 uppercase bg-slate-50 border-b border-slate-100">คลังสินค้า</div>`;
+        html += whMatches.map(w =>
+            `<div class="px-4 py-2 cursor-pointer ${hov} border-b border-slate-100 last:border-0 flex items-center gap-2 transition-all"
+                  onmousedown="selectLogiPlace('${prefix}',${idx},'${w}')">
+                <i class="fas fa-warehouse text-xs ${txt}"></i>
+                <span class="font-black ${txt} text-sm">${hl(w)}</span>
+             </div>`
+        ).join('');
+    }
+    if (shMatches.length) {
+        html += `<div class="px-3 py-1 text-[10px] font-black text-slate-400 uppercase bg-slate-50 border-b border-slate-100 ${whMatches.length?'border-t border-slate-200':''}">ลูกค้า / ร้านค้า</div>`;
+        html += shMatches.map(s =>
+            `<div class="px-4 py-2 cursor-pointer ${hov} border-b border-slate-100 last:border-0 transition-all"
+                  onmousedown="selectLogiPlace('${prefix}',${idx},'${s.name||s.id}')">
+                <span class="font-black text-slate-500 text-xs">${hl(s.id)}</span>
+                <span class="text-slate-700 text-sm ml-1">— ${hl(s.name||'')}</span>
+             </div>`
+        ).join('');
+    }
+    if (!html) {
+        html = `<div class="px-4 py-3 text-slate-400 text-sm font-bold text-center">ไม่พบ — กด Enter เพื่อใช้ข้อความที่พิมพ์</div>`;
+    }
+    drop.innerHTML = html;
+    drop.classList.remove('hidden');
+};
+
+window.selectLogiPlace = function selectLogiPlace(prefix, idx, value) {
+    const input = document.getElementById(`logi-${prefix}-name-${idx}`);
+    const drop  = document.getElementById(`logi-${prefix}-name-drop-${idx}`);
+    if (input) input.value = value;
+    if (drop)  drop.classList.add('hidden');
+};
+
+window.closeLogiPlaceDrop = function closeLogiPlaceDrop(prefix, idx) {
+    const drop = document.getElementById(`logi-${prefix}-name-drop-${idx}`);
+    if (drop) drop.classList.add('hidden');
+};
+
 window.addLogiPickup = function addLogiPickup() {
     const idx = logiShopCounter++;
     logiShopList.push({ idx, type: 'pickup', items: [] });
@@ -16535,10 +16607,18 @@ window.addLogiPickup = function addLogiPickup() {
             </button>
         </div>
     </div>
-    <div>
+    <div class="relative">
         <label class="text-[10px] font-black text-indigo-600 uppercase mb-0.5 block">สถานที่รับของ <span class="text-rose-500">*</span></label>
-        <input type="text" id="logi-pu-name-${idx}" placeholder="เช่น โรงงาน A, คลังสินค้า XYZ..."
-               class="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400 transition-all">
+        <div class="relative">
+            <input type="text" id="logi-pu-name-${idx}" autocomplete="off"
+                   placeholder="พิมพ์ชื่อคลัง / ลูกค้า หรือพิมพ์อิสระ..."
+                   oninput="filterLogiPlace('pu','indigo',${idx})"
+                   onfocus="filterLogiPlace('pu','indigo',${idx})"
+                   onblur="setTimeout(()=>closeLogiPlaceDrop('pu',${idx}),200)"
+                   class="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400 transition-all pr-7">
+            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none"><i class="fas fa-search text-xs"></i></span>
+        </div>
+        <div id="logi-pu-name-drop-${idx}" class="hidden absolute z-50 w-full bg-white border-2 border-indigo-300 rounded-xl shadow-2xl max-h-56 overflow-y-auto mt-1"></div>
     </div>
     <div class="bg-indigo-100/60 rounded-lg p-2 space-y-2">
         <div class="flex justify-between items-center">
@@ -16829,8 +16909,16 @@ window.addLogiTransferDrop = function addLogiTransferDrop() {
     </div>
     <div>
         <label class="text-[10px] font-black text-orange-600 uppercase mb-0.5 block">ปลายทาง / คลังที่ส่ง <span class="text-rose-500">*</span></label>
-        <input type="text" id="logi-td-name-${idx}" placeholder="เช่น คลัง FG-BB บางบ่อ, โกดังนิคม..."
-               class="w-full bg-white border border-orange-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-orange-400 transition-all">
+        <div class="relative">
+            <input type="text" id="logi-td-name-${idx}" autocomplete="off"
+                   placeholder="พิมพ์ชื่อคลัง / ลูกค้า หรือพิมพ์อิสระ..."
+                   oninput="filterLogiPlace('td','orange',${idx})"
+                   onfocus="filterLogiPlace('td','orange',${idx})"
+                   onblur="setTimeout(()=>closeLogiPlaceDrop('td',${idx}),200)"
+                   class="w-full bg-white border border-orange-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-orange-400 transition-all pr-7">
+            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-orange-300 pointer-events-none"><i class="fas fa-search text-xs"></i></span>
+        </div>
+        <div id="logi-td-name-drop-${idx}" class="hidden absolute z-50 w-full bg-white border-2 border-orange-300 rounded-xl shadow-2xl max-h-56 overflow-y-auto mt-1"></div>
     </div>
     <div class="bg-orange-100/60 rounded-lg p-2 space-y-2">
         <div class="flex justify-between items-center">
