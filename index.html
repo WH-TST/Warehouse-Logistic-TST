@@ -40771,10 +40771,20 @@ window.trAckSubmit = async function(){
 var _origSW2 = window.switchView;
 if(_origSW2){ window.switchView=function(v){ _origSW2(v); if(v==='training') trLoadSessions(); }; }
 
+var _trRtSub = null;
 var _origDrvInit = window.drvInit;
 window.drvInit = function(u){
   _origDrvInit(u);
   setTimeout(function(){ trCheckDriverPending(u.username); }, 1500);
+  // Realtime: เด้ง popup ทันทีถ้า training_sessions เปลี่ยนเป็น active ขณะ login อยู่
+  if (_trRtSub) { try { window._sb.removeChannel(_trRtSub); } catch(e){} }
+  _trRtSub = window._sb.channel('tr-rt-'+u.username)
+    .on('postgres_changes', {event:'UPDATE', schema:'public', table:'training_sessions'}, function(payload){
+      if (payload.new && payload.new.status === 'active') {
+        trCheckDriverPending(u.username);
+      }
+    })
+    .subscribe();
 };
 
 })();
