@@ -23362,9 +23362,15 @@ window.editLogiPlan = function editLogiPlan(planId) {
     const _memMother = _memRows.find(r => r.isMother || r.id.endsWith('-M')) || _memRows.find(r => !r.isChild) || _memRows[0];
 
     if (_memMother) {
-        // ใช้ shops จากแม่เท่านั้น (shops มี items ครบทุก truckLabel อยู่แล้ว)
-        const _allShops = _memMother.shops || [];
-        const p = Object.assign({}, _memMother, { shops: _allShops });
+        // รวม items จากลูกกลับเข้า shops ของแม่ (match ด้วย shopId/shopName)
+        const _childRow = _memRows.find(r => r.isChild || r.id.endsWith('-C'));
+        const _mShops = (_memMother.shops || []).map(ms => {
+            const cs = (_childRow?.shops || []).find(x => (x.shopId && x.shopId === ms.shopId) || x.shopName === ms.shopName);
+            if (!cs) return ms;
+            const merged = [...(ms.items || []), ...(cs.items || [])];
+            return Object.assign({}, ms, { items: merged });
+        });
+        const p = Object.assign({}, _memMother, { shops: _mShops });
         _doPopulateEditForm(p);
     } else {
         // fallback: fetch จาก Supabase (กรณีเปิดจาก URL โดยตรงหรือ reload)
@@ -23379,7 +23385,12 @@ window.editLogiPlan = function editLogiPlan(planId) {
                 const rows = qr.data;
                 const motherRow = rows.find(r => r.is_mother || r.plan_id.endsWith('-M'))
                                || rows.find(r => !r.is_child) || rows[0];
-                const allShops = motherRow.shops || [];
+                const childRow2 = rows.find(r => r.is_child || r.plan_id.endsWith('-C'));
+                const allShops = (motherRow.shops || []).map(ms => {
+                    const cs = (childRow2?.shops || []).find(x => (x.shopId && x.shopId === ms.shopId) || x.shopName === ms.shopName);
+                    if (!cs) return ms;
+                    return Object.assign({}, ms, { items: [...(ms.items||[]), ...(cs.items||[])] });
+                });
                 const p = {
                     id: motherRow.plan_id, date: motherRow.plan_date,
                     jobType: motherRow.job_type, status: motherRow.status,
