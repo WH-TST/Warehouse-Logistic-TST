@@ -23439,19 +23439,24 @@ window.ldInit = function() {
 // re-render cards on orientation change so mobile/desktop layout switches
 (function(){
     var _ldResizeTmr = null;
-    function _ldOnResize(delay) {
-        clearTimeout(_ldResizeTmr);
-        _ldResizeTmr = setTimeout(function(){
-            var dateEl = document.getElementById('ld-date');
-            var ldContent = document.getElementById('view-loading-content');
-            if (dateEl && ldContent && !ldContent.classList.contains('hidden')) {
-                _ldLoadOrderCards(dateEl.value);
-            }
-        }, delay || 300);
+    function _ldDoRerender() {
+        var dateEl = document.getElementById('ld-date');
+        var ldContent = document.getElementById('view-loading-content');
+        if (dateEl && ldContent && !ldContent.classList.contains('hidden')) {
+            _ldLoadOrderCards(dateEl.value);
+        }
     }
-    window.addEventListener('resize', function(){ _ldOnResize(300); });
-    // orientationchange fires before resize on iOS — wait longer for dimensions to settle
-    window.addEventListener('orientationchange', function(){ _ldOnResize(500); });
+    var _ldResizeTmr2 = null;
+    function _ldOnResize() {
+        clearTimeout(_ldResizeTmr);
+        clearTimeout(_ldResizeTmr2);
+        // First pass — catches most devices
+        _ldResizeTmr = setTimeout(_ldDoRerender, 350);
+        // Second pass — catches slow Android / iOS
+        _ldResizeTmr2 = setTimeout(_ldDoRerender, 700);
+    }
+    window.addEventListener('resize', _ldOnResize);
+    window.addEventListener('orientationchange', _ldOnResize);
 })();
 
 // _whMode lives on window so whInit() (outside this IIFE) can set it before ldInit() runs
