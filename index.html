@@ -26365,6 +26365,7 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
   window._ldSubOrders          = _ldSubOrders;
   window._ldLoadStaffMaster    = _ldLoadStaffMaster;
   window._ldLoadProductMap     = _ldLoadProductMap;
+  window._ldRequestNotifPermission = _ldRequestNotifPermission;
 
   // If WH Staff logged in before this IIFE ran, boot now
   if (window._whMode && !window._whInitDone) {
@@ -37866,9 +37867,14 @@ window.viewTripResult = async function(planId) {
         <div id="wh-hd-team" style="color:#10b981;font-size:11px;font-weight:700;">Loading</div>
       </div>
     </div>
-    <button onclick="whLogout()" style="background:#1e293b;border:none;color:#94a3b8;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
-      <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
-    </button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button id="wh-notif-btn" onclick="whEnableNotif()" style="background:#1e293b;border:1.5px solid #334155;color:#94a3b8;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        <i class="fas fa-bell-slash"></i> แจ้งเตือน
+      </button>
+      <button onclick="whLogout()" style="background:#1e293b;border:none;color:#94a3b8;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+      </button>
+    </div>
   </div>
   <!-- Body: loading order cards injected here -->
   <div id="wh-screen-body">
@@ -39360,10 +39366,45 @@ window.whInit = async function(user, team) {
       if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#ef4444;font-weight:700;">โหลดไม่สำเร็จ กรุณารีเฟรช<br><small>'+String(e)+'</small></div>';
     }
   }
-  if (typeof _ldRequestNotifPermission === 'function') _ldRequestNotifPermission(user.username);
+  if (typeof window._ldRequestNotifPermission === 'function') window._ldRequestNotifPermission(user.username);
+  setTimeout(_whUpdateNotifBtn, 500);
   // Training realtime for WH Staff
   setTimeout(function(){ if (typeof trCheckDriverPending === 'function') trCheckDriverPending(user.username); }, 1500);
   if (typeof _trStartRt === 'function') _trStartRt(user.username);
+};
+
+function _whUpdateNotifBtn() {
+  var btn = document.getElementById('wh-notif-btn');
+  if (!btn) return;
+  var perm = ('Notification' in window) ? Notification.permission : 'denied';
+  if (perm === 'granted') {
+    btn.innerHTML = '<i class="fas fa-bell"></i> แจ้งเตือน';
+    btn.style.color = '#10b981';
+    btn.style.borderColor = '#10b981';
+  } else if (perm === 'denied') {
+    btn.innerHTML = '<i class="fas fa-bell-slash"></i> ถูกบล็อก';
+    btn.style.color = '#ef4444';
+    btn.style.borderColor = '#ef4444';
+  } else {
+    btn.innerHTML = '<i class="fas fa-bell-slash"></i> เปิดแจ้งเตือน';
+    btn.style.color = '#f59e0b';
+    btn.style.borderColor = '#f59e0b';
+  }
+}
+
+window.whEnableNotif = function() {
+  if (!('Notification' in window)) { alert('เบราเซอร์นี้ไม่รองรับการแจ้งเตือน'); return; }
+  if (Notification.permission === 'denied') {
+    alert('การแจ้งเตือนถูกบล็อกไว้\nกรุณาไปที่การตั้งค่าเบราเซอร์ → ไซต์นี้ → Notifications → Allow');
+    return;
+  }
+  var username = (window._cu && (window._cu.username || window._cu.name)) || 'wh';
+  Notification.requestPermission().then(function(perm) {
+    if (perm === 'granted') {
+      if (typeof window._ldRequestNotifPermission === 'function') window._ldRequestNotifPermission(username);
+    }
+    _whUpdateNotifBtn();
+  });
 };
 
 window.whLogout = function() {
