@@ -24828,10 +24828,48 @@ async function _ldRefreshGlobalStats(dateVal) {
 // ── Notification helpers ─────────────────────────────────────────
 var _ldKnownOrderIds = null;   // null = first load, Set after first load
 
-function _ldRequestNotifPermission() {
+var _VAPID_PUBLIC = 'BNdLqIxx-vQ3oAP2-oxI2CGMou6ZF2aEcz3fbRLMOo2643ABKG8sUi7515YfrUAJIcM9xxo5u8g_5n0LU8upcb0';
+
+function _ldUrlB64ToUint8(base64String) {
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = atob(base64);
+    var arr = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+}
+
+async function _ldRegisterPush(username) {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    try {
+        var reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        var existing = await reg.pushManager.getSubscription();
+        var sub = existing || await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: _ldUrlB64ToUint8(_VAPID_PUBLIC)
+        });
+        var key = sub.getKey('p256dh');
+        var auth = sub.getKey('auth');
+        var p256dh = btoa(String.fromCharCode(...new Uint8Array(key))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+        var authStr = btoa(String.fromCharCode(...new Uint8Array(auth))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+        await window._sb.from('push_subscriptions').upsert({
+            username: username || 'unknown',
+            endpoint: sub.endpoint,
+            p256dh: p256dh,
+            auth: authStr
+        }, { onConflict: 'endpoint' });
+    } catch(e) { console.warn('[Push]', e); }
+}
+
+function _ldRequestNotifPermission(username) {
     if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') {
-        Notification.requestPermission();
+    if (Notification.permission === 'granted') {
+        _ldRegisterPush(username);
+    } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then(function(perm) {
+            if (perm === 'granted') _ldRegisterPush(username);
+        });
     }
 }
 
@@ -24860,6 +24898,17 @@ function _ldPlayNewOrderSound() {
 function _ldNotifyNewOrder(order) {
     _ldPlayNewOrderSound();
     _ldShowOrderNotif(order);
+    // Send push to all subscribed devices (including closed browsers)
+    try {
+        var _items = order.items||[];
+        var _pbody = 'รถ '+(order.truck_plate||'—')+'  ·  '+_items.length+' รายการ';
+        fetch('https://lkuunmyrxugsoqwrvdby.supabase.co/functions/v1/send-push', {
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':'Bearer sb_publishable_V8AFghqrEUyFGBCDzKrmjw_5p36_5g9'},
+            body:JSON.stringify({title:'🚛 งานโหลดใหม่เข้ามา!', body:_pbody, tag:'ld-order-'+order.id})
+        }).catch(function(){});
+    } catch(e){}
+
     if (Notification.permission === 'granted') {
         try {
             var items = order.items||[];
@@ -39311,7 +39360,7 @@ window.whInit = async function(user, team) {
       if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#ef4444;font-weight:700;">โหลดไม่สำเร็จ กรุณารีเฟรช<br><small>'+String(e)+'</small></div>';
     }
   }
-  if (typeof _ldRequestNotifPermission === 'function') _ldRequestNotifPermission();
+  if (typeof _ldRequestNotifPermission === 'function') _ldRequestNotifPermission(user.username);
   // Training realtime for WH Staff
   setTimeout(function(){ if (typeof trCheckDriverPending === 'function') trCheckDriverPending(user.username); }, 1500);
   if (typeof _trStartRt === 'function') _trStartRt(user.username);
