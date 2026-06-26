@@ -39702,6 +39702,9 @@ async function drvInspectCheck(){
   // ถ้าทุกแผนเป็นแผนซ่อมรถ → ไม่ต้องตรวจสภาพ
   var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
   if(!hasDelivery)return;
+  // ถ้ามีแผนค้างคืน (overnight) ที่ออกรถไปแล้ว → ไม่ต้องตรวจสภาพซ้ำ
+  var hasActiveOvernight=_dPlans.some(function(p){return p._isOvernight&&_dTripLogs[p.plan_id];});
+  if(hasActiveOvernight)return;
   var today=new Date().toISOString().split('T')[0];
   var plate=(_dPlans[0]?.truck_plate)||'';
   var driverId=_dSess?.driver_id||'';
