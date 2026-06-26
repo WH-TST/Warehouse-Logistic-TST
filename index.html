@@ -8892,6 +8892,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
               <button onclick="addLogiPickup()" type="button" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-1.5 transition-all shadow-md">
                 <i class="fas fa-box"></i> แวะรับของ
               </button>
+              <button onclick="addLogiTransferDrop()" type="button" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl font-black text-sm flex items-center gap-1.5 transition-all shadow-md">
+                <i class="fas fa-dolly"></i> แวะส่งย้ายของ
+              </button>
             </div>
           </div>
 
@@ -16796,6 +16799,46 @@ window.addLogiPickup = function addLogiPickup() {
     updateLogiShopNumbers();
 }
 
+// ── เพิ่มจุดแวะส่งย้ายของ ──
+window.addLogiTransferDrop = function addLogiTransferDrop() {
+    const idx = logiShopCounter++;
+    logiShopList.push({ idx, type: 'transfer_drop', items: [] });
+    const container = document.getElementById('logi-shops-container');
+    const div = document.createElement('div');
+    div.id = `logi-shop-card-${idx}`;
+    div.className = 'bg-orange-50 border-2 border-orange-400 rounded-xl p-3 space-y-2 relative shadow-sm';
+    div.dataset.cardType = 'transfer_drop';
+    div.innerHTML = `
+    <div class="flex justify-between items-center">
+        <h5 class="font-black text-orange-700 flex items-center gap-1.5 text-sm">
+            <i class="fas fa-grip-vertical logi-drag-handle" style="color:#fdba74;cursor:grab;font-size:14px;" title="ลากเพื่อเรียงลำดับ"></i>
+            <span class="logi-shop-num w-5 h-5 bg-orange-500 text-white rounded-full flex items-center justify-center text-[10px] font-black">${idx + 1}</span>
+            <i class="fas fa-dolly text-orange-500 text-xs"></i> แวะส่งย้ายของ ลำดับที่ <span class="logi-shop-seq">${idx + 1}</span>
+        </h5>
+        <div class="flex items-center gap-1">
+            <button type="button" onclick="moveLogiCard('logi-shop-card-${idx}','up')" class="logi-move-up w-6 h-6 rounded bg-orange-100 border border-orange-300 text-orange-600 hover:bg-orange-500 hover:text-white transition text-xs disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนขึ้น"><i class="fas fa-chevron-up"></i></button>
+            <button type="button" onclick="moveLogiCard('logi-shop-card-${idx}','down')" class="logi-move-down w-6 h-6 rounded bg-orange-100 border border-orange-300 text-orange-600 hover:bg-orange-500 hover:text-white transition text-xs disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนลง"><i class="fas fa-chevron-down"></i></button>
+            <button onclick="removeLogiShop(${idx})" class="text-rose-400 hover:text-rose-600 font-black text-xs flex items-center gap-1 transition-all ml-1">
+                <i class="fas fa-trash-alt"></i> ลบ
+            </button>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>
+            <label class="text-[10px] font-black text-orange-600 uppercase mb-0.5 block">ปลายทาง / คลังที่ส่ง <span class="text-rose-500">*</span></label>
+            <input type="text" id="logi-td-name-${idx}" placeholder="เช่น คลัง FG-BB บางบ่อ, โกดังนิคม..."
+                   class="w-full bg-white border border-orange-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-orange-400 transition-all">
+        </div>
+        <div>
+            <label class="text-[10px] font-black text-orange-600 uppercase mb-0.5 block">รายการสินค้า / หมายเหตุ</label>
+            <input type="text" id="logi-td-remark-${idx}" placeholder="เช่น เหล็กเส้น 50 มัด, สินค้าล็อต A..."
+                   class="w-full bg-white border border-orange-200 rounded-lg px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-orange-400 transition-all">
+        </div>
+    </div>`;
+    container.appendChild(div);
+    updateLogiShopNumbers();
+}
+
 // ── เพิ่มการ์ดร้านค้าใหม่ ──
 window.addLogiShop = function addLogiShop() {
     const idx = logiShopCounter++;
@@ -17771,6 +17814,13 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 shops.push({ type: 'pickup', shopId: '_PICKUP_', shopName: puName || 'จุดรับของ', remark: puRemark, items: [], distance: 0, freeDistance: 0, truckLabel: '' });
                 return;
             }
+            // ── transfer_drop waypoint ──
+            if (card.dataset.cardType === 'transfer_drop') {
+                const tdName   = (document.getElementById(`logi-td-name-${shopIdxAttr}`)?.value || '').trim();
+                const tdRemark = (document.getElementById(`logi-td-remark-${shopIdxAttr}`)?.value || '').trim();
+                shops.push({ type: 'transfer_drop', shopId: '_TD_', shopName: tdName || 'จุดส่งย้ายของ', remark: tdRemark, items: [], distance: 0, freeDistance: 0, truckLabel: '' });
+                return;
+            }
             const shopSel     = document.getElementById(`logi-shop-sel-${shopIdxAttr}`);
             const distEl      = document.getElementById(`logi-shop-dist-${shopIdxAttr}`);
             const freeDistEl  = document.getElementById(`logi-shop-free-dist-${shopIdxAttr}`);
@@ -17843,7 +17893,7 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             });
         });
 
-        if (!isTransfer && (shops.length === 0 || shops.every(s => s.type === 'service_center' || s.type === 'pickup' || !s.shopId))) {
+        if (!isTransfer && (shops.length === 0 || shops.every(s => s.type === 'service_center' || s.type === 'pickup' || s.type === 'transfer_drop' || !s.shopId))) {
             return showToast('กรุณาเพิ่มและเลือกร้านค้าอย่างน้อย 1 ร้าน', true);
         }
         // Transfer: payload.shops ถูกตั้งไว้แล้วในบล็อก Transfer ด้านบน ไม่ต้อง overwrite
@@ -17918,8 +17968,8 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             // กรอง shops/items ตาม truckLabel เพื่อแยก mother/child plan ไม่ให้ซ้ำ
             const filterShopsForTruck = (shops, role) =>
                 (shops || []).map(s => {
-                    // service center / pickup waypoint: แวะทั้งขบวน → ใส่ใน mother เท่านั้น
-                    if (s.type === 'service_center' || s.type === 'pickup') return role === 'mother' ? s : null;
+                    // waypoints ทุกประเภท: แวะทั้งขบวน → ใส่ใน mother เท่านั้น
+                    if (s.type === 'service_center' || s.type === 'pickup' || s.type === 'transfer_drop') return role === 'mother' ? s : null;
                     if (s.truckLabel && s.truckLabel !== role) return null;
                     const filteredItems = (s.items || []).filter(it =>
                         role === 'mother'
@@ -40275,7 +40325,7 @@ function drvRenderPlanCards(plans){
       var isSC2=currentShop.type==='service_center';
       contextLine='<div style="background:#422006;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:14px;color:#fbbf24;font-weight:700;"><i class="fas '+(isSC2?'fa-wrench':'fa-store')+'" style="margin-right:6px;"></i>'+(isSC2?'อยู่ที่ศูนย์ซ่อม: ':'อยู่ที่: ')+drvEsc(currentShop.shopName||currentShop.shopId||'–')+'</div>';
     }
-    var routeText=shops.map(function(sh){return (sh.type==='service_center'?'🔧 ':sh.type==='pickup'?'📦 ':'')+drvEsc(sh.shopName||sh.shopId||'–');}).join(' → ');
+    var routeText=shops.map(function(sh){return (sh.type==='service_center'?'🔧 ':sh.type==='pickup'?'📦 ':sh.type==='transfer_drop'?'📤 ':'')+drvEsc(sh.shopName||sh.shopId||'–');}).join(' → ');
     var overnightBadge=p._isOvernight
       ?'<div style="background:linear-gradient(90deg,#1e3a5f,#0f172a);border:1px solid #334155;border-radius:10px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">'
         +'<span style="font-size:18px;">🌙</span>'
@@ -40582,7 +40632,7 @@ function drvRenderTimeline(){
   var log=_dTripLog;
   var st=log?log.status:'idle';
   var steps=[{label:'ออก',key:'start'}]
-    .concat(shops.map(function(sh,i){return{label:(sh.type==='service_center'?'🔧 '+(sh.shopName||'ศูนย์'):sh.type==='pickup'?'📦 '+(sh.shopName||'รับของ'):(sh.shopName||('ร้าน'+(i+1)))),key:'shop'+i,seq:i,isSC:sh.type==='service_center',isPU:sh.type==='pickup'};}))
+    .concat(shops.map(function(sh,i){return{label:(sh.type==='service_center'?'🔧 '+(sh.shopName||'ศูนย์'):sh.type==='pickup'?'📦 '+(sh.shopName||'รับของ'):sh.type==='transfer_drop'?'📤 '+(sh.shopName||'ส่งย้าย'):(sh.shopName||('ร้าน'+(i+1)))),key:'shop'+i,seq:i,isSC:sh.type==='service_center',isPU:sh.type==='pickup',isTD:sh.type==='transfer_drop'};}))
     .concat([{label:'กลับ',key:'end'}]);
   var html='<div style="display:inline-flex;align-items:center;gap:0;min-width:100%;padding-bottom:4px;">';
   steps.forEach(function(s,i){
@@ -40600,11 +40650,11 @@ function drvRenderTimeline(){
     }else{
       var sv=_dShopVisits[s.seq];
       var isDepart=sv&&sv.departed_at;var isArrive=sv&&sv.arrived_at&&!sv.departed_at;
-      dotColor=isDepart?'#34d399':isArrive?(s.isSC?'#f59e0b':'#fbbf24'):'#475569';
+      dotColor=isDepart?'#34d399':isArrive?(s.isSC?'#f59e0b':s.isTD?'#fb923c':'#fbbf24'):'#475569';
       dotBg=isDepart?'#064e3b':isArrive?'#422006':'#1e293b';
       icon=isDepart?'<i class="fas fa-check" style="font-size:9px;color:'+dotColor+';"></i>'
-          :isArrive?(s.isSC?'<i class="fas fa-wrench" style="font-size:9px;color:'+dotColor+';"></i>':'<i class="fas fa-circle" style="font-size:9px;color:'+dotColor+';"></i>')
-          :(s.isSC?'<i class="fas fa-wrench" style="font-size:9px;color:'+dotColor+';"></i>':'<span style="font-size:10px;font-weight:900;color:'+dotColor+';">'+i+'</span>');
+          :isArrive?(s.isSC?'<i class="fas fa-wrench" style="font-size:9px;color:'+dotColor+';"></i>':s.isTD?'<i class="fas fa-dolly" style="font-size:9px;color:'+dotColor+';"></i>':'<i class="fas fa-circle" style="font-size:9px;color:'+dotColor+';"></i>')
+          :(s.isSC?'<i class="fas fa-wrench" style="font-size:9px;color:'+dotColor+';"></i>':s.isTD?'<i class="fas fa-dolly" style="font-size:9px;color:'+dotColor+';"></i>':'<span style="font-size:10px;font-weight:900;color:'+dotColor+';">'+i+'</span>');
       lineColor=isDepart?'#34d399':'#334155';
     }
     html+='<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">'
@@ -40634,10 +40684,10 @@ function drvRenderIdle(){
   var shops=_dTripPlan?(_dTripPlan.shops||[]):[];
   if(shops.length>1&&(_dSelectedShopSeq===null||_dSelectedShopSeq===undefined)){
     var shopBtns=shops.map(function(sh,i){
-      var isSCBtn=sh.type==='service_center'; var isPUBtn=sh.type==='pickup';
-      return '<button onclick="drvSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid '+(isSCBtn?'#92400e':isPUBtn?'#3730a3':'#334155')+';border-radius:16px;padding:18px 20px;color:#fff;font-weight:700;font-size:18px;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;gap:14px;box-sizing:border-box;">'
-        +'<div style="width:40px;height:40px;border-radius:50%;background:'+(isSCBtn?'#422006':isPUBtn?'#1e1b4b':'#1e293b')+';display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:'+(isSCBtn?'#fbbf24':isPUBtn?'#a5b4fc':'#64748b')+';flex-shrink:0;">'+(isSCBtn?'🔧':isPUBtn?'📦':(i+1))+'</div>'
-        +'<div style="flex:1;">'+(isSCBtn?'<span style="font-size:12px;color:#f59e0b;font-weight:900;">แวะศูนย์ซ่อม</span><br>':isPUBtn?'<span style="font-size:12px;color:#a5b4fc;font-weight:900;">แวะรับของ</span><br>':'')+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
+      var isSCBtn=sh.type==='service_center'; var isPUBtn=sh.type==='pickup'; var isTDBtn=sh.type==='transfer_drop';
+      return '<button onclick="drvSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid '+(isSCBtn?'#92400e':isPUBtn?'#3730a3':isTDBtn?'#9a3412':'#334155')+';border-radius:16px;padding:18px 20px;color:#fff;font-weight:700;font-size:18px;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;gap:14px;box-sizing:border-box;">'
+        +'<div style="width:40px;height:40px;border-radius:50%;background:'+(isSCBtn?'#422006':isPUBtn?'#1e1b4b':isTDBtn?'#431407':'#1e293b')+';display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:'+(isSCBtn?'#fbbf24':isPUBtn?'#a5b4fc':isTDBtn?'#fb923c':'#64748b')+';flex-shrink:0;">'+(isSCBtn?'🔧':isPUBtn?'📦':isTDBtn?'📤':(i+1))+'</div>'
+        +'<div style="flex:1;">'+(isSCBtn?'<span style="font-size:12px;color:#f59e0b;font-weight:900;">แวะศูนย์ซ่อม</span><br>':isPUBtn?'<span style="font-size:12px;color:#a5b4fc;font-weight:900;">แวะรับของ</span><br>':isTDBtn?'<span style="font-size:12px;color:#fb923c;font-weight:900;">แวะส่งย้ายของ</span><br>':'')+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
         +'<i class="fas fa-chevron-right" style="color:#475569;font-size:16px;"></i></button>';
     }).join('');
     return '<div class="drv-fade-up"><div class="drv-card"><div style="font-size:15px;font-weight:900;color:#93c5fd;margin-bottom:16px;"><i class="fas fa-route" style="margin-right:6px;"></i>เลือกร้านที่จะไปก่อน</div>'+shopBtns+'</div></div>';
@@ -40661,28 +40711,28 @@ function drvRenderTraveling(){
     var remaining=shops.filter(function(sh,i){return !(_dShopVisits[i]&&_dShopVisits[i].departed_at);});
     var shopBtns=shops.map(function(sh,i){
       if(_dShopVisits[i]&&_dShopVisits[i].departed_at)return'';
-      var isSCTrv=sh.type==='service_center'; var isPUTrv=sh.type==='pickup';
-      return '<button onclick="drvSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid '+(isSCTrv?'#92400e':isPUTrv?'#3730a3':'#334155')+';border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;">'
-        +'<div style="width:32px;height:32px;border-radius:50%;background:'+(isSCTrv?'#422006':isPUTrv?'#1e1b4b':'#1e293b')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:'+(isSCTrv?'#fbbf24':isPUTrv?'#a5b4fc':'#64748b')+';flex-shrink:0;">'+(isSCTrv?'🔧':isPUTrv?'📦':(i+1))+'</div>'
-        +'<div style="flex:1;">'+(isSCTrv?'<span style="font-size:11px;color:#f59e0b;font-weight:900;">แวะศูนย์ซ่อม</span><br>':isPUTrv?'<span style="font-size:11px;color:#a5b4fc;font-weight:900;">แวะรับของ</span><br>':'')+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
+      var isSCTrv=sh.type==='service_center'; var isPUTrv=sh.type==='pickup'; var isTDTrv=sh.type==='transfer_drop';
+      return '<button onclick="drvSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid '+(isSCTrv?'#92400e':isPUTrv?'#3730a3':isTDTrv?'#9a3412':'#334155')+';border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;">'
+        +'<div style="width:32px;height:32px;border-radius:50%;background:'+(isSCTrv?'#422006':isPUTrv?'#1e1b4b':isTDTrv?'#431407':'#1e293b')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:'+(isSCTrv?'#fbbf24':isPUTrv?'#a5b4fc':isTDTrv?'#fb923c':'#64748b')+';flex-shrink:0;">'+(isSCTrv?'🔧':isPUTrv?'📦':isTDTrv?'📤':(i+1))+'</div>'
+        +'<div style="flex:1;">'+(isSCTrv?'<span style="font-size:11px;color:#f59e0b;font-weight:900;">แวะศูนย์ซ่อม</span><br>':isPUTrv?'<span style="font-size:11px;color:#a5b4fc;font-weight:900;">แวะรับของ</span><br>':isTDTrv?'<span style="font-size:11px;color:#fb923c;font-weight:900;">แวะส่งย้ายของ</span><br>':'')+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
         +'<i class="fas fa-chevron-right" style="color:#475569;font-size:12px;"></i></button>';
     }).join('');
     return '<div class="drv-fade-up"><div class="drv-card"><div style="font-size:11px;font-weight:900;color:#93c5fd;margin-bottom:14px;"><i class="fas fa-route" style="margin-right:6px;"></i>เลือกร้านถัดไปที่จะไป ('+remaining.length+' ร้านเหลือ)</div>'+shopBtns+'</div></div>';
   }
   var seq=_dSelectedShopSeq;var shop=shops[seq]||{};
-  var isSC=shop.type==='service_center'; var isPU=shop.type==='pickup';
+  var isSC=shop.type==='service_center'; var isPU=shop.type==='pickup'; var isTD=shop.type==='transfer_drop';
   var hasPhoto=!!_dCapturedPreviewUrl;
-  var photoHtml=(isSC||isPU)?'':hasPhoto
+  var photoHtml=(isSC||isPU||isTD)?'':hasPhoto
     ?'<div style="position:relative;margin-bottom:10px;"><img src="'+_dCapturedPreviewUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;"><div style="position:absolute;top:8px;right:8px;background:rgba(5,150,105,.92);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:900;color:#fff;"><i class="fas fa-check" style="margin-right:4px;"></i>ถ่ายแล้ว</div></div><button class="drv-btn-secondary" style="margin-bottom:12px;" onclick="drvOpenCamera()"><i class="fas fa-redo"></i> ถ่ายใหม่</button>'
     :'<button class="drv-btn-main" style="background:#d97706;margin-bottom:10px;" onclick="drvOpenCamera()"><i class="fas fa-camera"></i> ถ่ายรูปหลักฐาน (บังคับ)</button><div style="font-size:11px;color:#f59e0b;text-align:center;margin-bottom:12px;">⚠️ ต้องถ่ายรูปก่อนกดถึงร้าน</div>';
-  var canArrive=(isSC||isPU||hasPhoto||DRV_TEST_MODE||DRV_BYPASS_TIMER);
-  var arrBtnColor=isSC?'#d97706':isPU?'#4f46e5':'#059669';
-  var arrBtnIcon=isSC?'fa-wrench':isPU?'fa-box':'fa-store';
-  var arrBtnText=isSC?'ถึงศูนย์ซ่อมแล้ว':isPU?'ถึงจุดรับของแล้ว':'ถึง '+drvEsc(shop.shopName||shop.shopId||'ร้าน')+' แล้ว';
-  var travelBg=isPU?'#1e1b4b':'#1e3a8a'; var travelColor=isPU?'#a5b4fc':'#93c5fd';
+  var canArrive=(isSC||isPU||isTD||hasPhoto||DRV_TEST_MODE||DRV_BYPASS_TIMER);
+  var arrBtnColor=isSC?'#d97706':isPU?'#4f46e5':isTD?'#ea580c':'#059669';
+  var arrBtnIcon=isSC?'fa-wrench':isPU?'fa-box':isTD?'fa-dolly':'fa-store';
+  var arrBtnText=isSC?'ถึงศูนย์ซ่อมแล้ว':isPU?'ถึงจุดรับของแล้ว':isTD?'ถึงจุดส่งย้ายของแล้ว':'ถึง '+drvEsc(shop.shopName||shop.shopId||'ร้าน')+' แล้ว';
+  var travelBg=isPU?'#1e1b4b':isTD?'#431407':'#1e3a8a'; var travelColor=isPU?'#a5b4fc':isTD?'#fb923c':'#93c5fd';
   return '<div class="drv-fade-up">'
-    +'<div class="drv-card" style="border:2px solid '+(isPU?'#3730a3':'#1d4ed8')+'"><div style="font-size:13px;font-weight:900;color:'+travelColor+';margin-bottom:8px;"><i class="fas '+(isPU?'fa-box':'fa-truck-moving')+'" style="margin-right:6px;"></i>'+(isPU?'กำลังเดินทางไปรับของที่':'กำลังเดินทางไป')+'</div><div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:12px;">'+drvEsc(shop.shopName||shop.shopId||'–')+'</div>'+(isPU&&shop.remark?'<div style="font-size:13px;color:#a5b4fc;font-weight:700;">📦 '+drvEsc(shop.remark)+'</div>':'')+'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><span style="font-size:14px;color:#64748b;"><i class="fas fa-clock" style="margin-right:4px;"></i>เวลาที่ใช้เดินทาง</span><span id="drv-travel-elapsed" style="font-size:18px;font-weight:900;color:#fbbf24;">–</span></div></div>'
-    +'<div id="drv-travel-countdown-box" class="drv-card" style="background:'+travelBg+';text-align:center;padding:22px 14px;"><i class="fas '+(isPU?'fa-box':'fa-truck-moving')+'" style="font-size:32px;color:'+travelColor+';margin-bottom:12px;display:block;"></i><div style="font-size:17px;font-weight:900;color:#e2e8f0;margin-bottom:4px;">กำลังเดินทาง...</div><div style="font-size:13px;color:#64748b;margin-top:4px;">ฟอร์มบันทึกจะปรากฏเมื่อถึง'+(isPU?'จุดรับของ':'จุดส่ง')+'</div><span id="drv-travel-countdown" style="display:none;">–</span></div>'
+    +'<div class="drv-card" style="border:2px solid '+(isPU?'#3730a3':isTD?'#9a3412':'#1d4ed8')+'"><div style="font-size:13px;font-weight:900;color:'+travelColor+';margin-bottom:8px;"><i class="fas '+(isPU?'fa-box':isTD?'fa-dolly':'fa-truck-moving')+'" style="margin-right:6px;"></i>'+(isPU?'กำลังเดินทางไปรับของที่':isTD?'กำลังเดินทางไปส่งย้ายของที่':'กำลังเดินทางไป')+'</div><div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:12px;">'+drvEsc(shop.shopName||shop.shopId||'–')+'</div>'+(isPU&&shop.remark?'<div style="font-size:13px;color:#a5b4fc;font-weight:700;">📦 '+drvEsc(shop.remark)+'</div>':isTD&&shop.remark?'<div style="font-size:13px;color:#fb923c;font-weight:700;">📤 '+drvEsc(shop.remark)+'</div>':'')+'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><span style="font-size:14px;color:#64748b;"><i class="fas fa-clock" style="margin-right:4px;"></i>เวลาที่ใช้เดินทาง</span><span id="drv-travel-elapsed" style="font-size:18px;font-weight:900;color:#fbbf24;">–</span></div></div>'
+    +'<div id="drv-travel-countdown-box" class="drv-card" style="background:'+travelBg+';text-align:center;padding:22px 14px;"><i class="fas '+(isPU?'fa-box':isTD?'fa-dolly':'fa-truck-moving')+'" style="font-size:32px;color:'+travelColor+';margin-bottom:12px;display:block;"></i><div style="font-size:17px;font-weight:900;color:#e2e8f0;margin-bottom:4px;">กำลังเดินทาง...</div><div style="font-size:13px;color:#64748b;margin-top:4px;">ฟอร์มบันทึกจะปรากฏเมื่อถึง'+(isPU?'จุดรับของ':isTD?'จุดส่งย้าย':'จุดส่ง')+'</div><span id="drv-travel-countdown" style="display:none;">–</span></div>'
     +'<div id="drv-arrive-action-box" class="drv-card"><div style="font-size:15px;font-weight:900;color:#6ee7b7;margin-bottom:4px;"><i class="fas fa-tachometer-alt" style="margin-right:6px;"></i>กรอกเลขไมล์</div><div style="font-size:13px;color:#94a3b8;margin-bottom:10px;">ตอนถึง <span style="color:#fde68a;font-weight:700;">'+drvEsc(shop.shopName||shop.shopId||'ร้าน')+'</span></div><input id="drv-inp-mile-arr" type="number" inputmode="numeric" placeholder="เช่น 125060" class="drv-inp" style="margin-bottom:14px;">'+photoHtml+'<button id="drv-btn-arrive" class="drv-btn-main" style="background:'+arrBtnColor+';font-size:20px;" onclick="drvDoArriveAtShop()" '+(canArrive?'':'disabled')+'><i class="fas '+arrBtnIcon+'"></i> '+arrBtnText+'</button></div>'
     +'</div>';
 }
@@ -40727,7 +40777,7 @@ function drvTickReturnTimer(){
 function drvRenderAtShop(){
   var seq=_dSelectedShopSeq!==null&&_dSelectedShopSeq!==undefined?_dSelectedShopSeq:_dTripLog.current_shop_seq;
   var shops=_dTripPlan.shops||[];var shop=shops[seq]||{};var visit=_dShopVisits[seq]||{};
-  var isSCStop=shop.type==='service_center'; var isPUStop=shop.type==='pickup';
+  var isSCStop=shop.type==='service_center'; var isPUStop=shop.type==='pickup'; var isTDStop=shop.type==='transfer_drop';
   // SC stop
   if(isSCStop){
     var remainingSC=shops.filter(function(sh,i){return i!==seq&&!(_dShopVisits[i]&&_dShopVisits[i].departed_at);});
@@ -40742,6 +40792,22 @@ function drvRenderAtShop(){
       +(visit.arrived_at?'<div style="font-size:13px;color:#64748b;margin-bottom:6px;">ถึงเวลา '+drvFmtTime(visit.arrived_at)+'</div>':'')
       +'<div style="font-size:13px;color:#fbbf24;font-weight:700;"><i class="fas fa-clock" style="margin-right:5px;"></i>รอรับรถคืนจากช่าง</div></div>'
       +'<div class="drv-card">'+scNextBtn+'</div></div>';
+  }
+  // Transfer-drop stop
+  if(isTDStop){
+    var remainingTD=shops.filter(function(sh,i){return i!==seq&&!(_dShopVisits[i]&&_dShopVisits[i].departed_at);});
+    var isLastTD=remainingTD.length===0;
+    var tdNextBtn=isLastTD
+      ?'<button class="drv-btn-main" style="background:#7c3aed;" onclick="drvDoDepartShop()"><i class="fas fa-industry"></i> ส่งของเรียบร้อย — กลับบริษัท</button>'
+      :'<button class="drv-btn-main" style="background:#059669;" onclick="drvDoDepartShop()"><i class="fas fa-arrow-right"></i> ส่งของเรียบร้อย — ไปต่อ ('+remainingTD.length+' จุดเหลือ)</button>';
+    return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #ea580c;text-align:center;">'
+      +'<div style="font-size:36px;margin-bottom:8px;">📤</div>'
+      +'<div style="font-size:15px;font-weight:700;color:#fb923c;margin-bottom:4px;">คุณถึงจุดส่งย้ายของแล้ว</div>'
+      +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:4px;">'+drvEsc(shop.shopName||'จุดส่งย้ายของ')+'</div>'
+      +(shop.remark?'<div style="font-size:13px;color:#fb923c;font-weight:700;margin-bottom:6px;">📤 '+drvEsc(shop.remark)+'</div>':'')
+      +(visit.arrived_at?'<div style="font-size:13px;color:#64748b;margin-bottom:6px;">ถึงเวลา '+drvFmtTime(visit.arrived_at)+'</div>':'')
+      +'<div style="font-size:13px;color:#fb923c;font-weight:700;"><i class="fas fa-dolly" style="margin-right:5px;"></i>ขนถ่ายสินค้าให้เรียบร้อย</div></div>'
+      +'<div class="drv-card">'+tdNextBtn+'</div></div>';
   }
   // Pickup stop
   if(isPUStop){
@@ -40799,7 +40865,7 @@ function drvRenderAtShop(){
 }
 
 function drvRenderReturning(){
-  var _delvCnt=(_dTripPlan.shops||[]).filter(function(s){return s.type!=='service_center'&&s.type!=='pickup';}).length;
+  var _delvCnt=(_dTripPlan.shops||[]).filter(function(s){return s.type!=='service_center'&&s.type!=='pickup'&&s.type!=='transfer_drop';}).length;
   return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #7c3aed;"><div style="font-size:13px;font-weight:900;color:#a78bfa;margin-bottom:8px;"><i class="fas fa-route" style="margin-right:6px;"></i>กำลังกลับบริษัท</div><div style="font-size:20px;font-weight:900;color:#c4b5fd;margin-bottom:10px;">ส่งครบ '+_delvCnt+' ร้านแล้ว</div><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:14px;color:#64748b;"><i class="fas fa-clock" style="margin-right:4px;"></i>เวลาที่ใช้กลับ</span><span id="drv-return-elapsed" style="font-size:18px;font-weight:900;color:#fbbf24;">–</span></div></div>'
     +'<div id="drv-return-countdown-box" class="drv-card" style="background:#2d1b69;text-align:center;padding:22px 14px;"><i class="fas fa-road" style="font-size:32px;color:#a78bfa;margin-bottom:12px;display:block;"></i><div style="font-size:17px;font-weight:900;color:#e2e8f0;margin-bottom:4px;">กำลังเดินทางกลับบริษัท</div><div style="font-size:13px;color:#64748b;margin-top:4px;">ฟอร์มบันทึกจะปรากฏเมื่อถึงบริษัท</div><span id="drv-return-countdown" style="display:none;">–</span></div>'
     +'<div id="drv-finish-action-box" class="drv-card"><div style="font-size:15px;font-weight:900;color:#6ee7b7;margin-bottom:10px;"><i class="fas fa-tachometer-alt" style="margin-right:6px;"></i>กรอกเลขไมล์ที่หน้าปัดรถ</div><input id="drv-inp-mile-end" type="number" inputmode="numeric" placeholder="เช่น 125120" class="drv-inp" style="margin-bottom:10px;"><div style="font-size:13px;color:#64748b;text-align:center;margin-bottom:18px;"><i class="fas fa-map-marker-alt" style="color:#34d399;margin-right:4px;"></i>GPS จะถูกบันทึกอัตโนมัติ</div><button class="drv-btn-main" style="background:#7c3aed;" onclick="drvDoFinishTrip()"><i class="fas fa-flag-checkered"></i> ถึงบริษัท / จบงาน</button></div></div>';
@@ -40814,7 +40880,7 @@ function drvRenderCompleted(){
   return '<div class="drv-fade-up"><div class="drv-card" style="border:2px solid #059669;text-align:center;"><div style="font-size:40px;margin-bottom:8px;">🎉</div><div style="font-size:20px;font-weight:900;color:#34d399;">จบงานเรียบร้อย!</div></div>'
     +'<div class="drv-card"><div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">📊 สรุปการเดินทาง</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;"><div style="background:#0f172a;border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:900;color:#34d399;">'+(km!==null?km:'–')+'</div><div style="font-size:9px;color:#64748b;margin-top:2px;">กม.รวม</div></div><div style="background:#0f172a;border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:900;color:#34d399;">'+dur+'</div><div style="font-size:9px;color:#64748b;margin-top:2px;">เวลารวม</div></div><div style="background:#0f172a;border-radius:10px;padding:10px;text-align:center;"><div style="font-size:18px;font-weight:900;color:#34d399;">'+delivShops.length+'</div><div style="font-size:9px;color:#64748b;margin-top:2px;">ร้านที่ส่ง</div></div></div></div>'
     +'<div class="drv-card"><div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">📍 ประวัติการส่ง</div>'
-    +visits.map(function(v){var sh=shops[v.shop_seq]||{};var isSCv=sh.type==='service_center';var isPUv=sh.type==='pickup';return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);"><div style="width:28px;height:28px;border-radius:50%;background:'+(isSCv?'#422006':isPUv?'#1e1b4b':'#064e3b')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas '+(isSCv?'fa-wrench':isPUv?'fa-box':'fa-check')+'" style="font-size:10px;color:'+(isSCv?'#fbbf24':isPUv?'#a5b4fc':'#34d399')+'"></i></div><div style="flex:1;min-width:0;"><div style="font-weight:700;color:#e2e8f0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(isSCv?'🔧 ':isPUv?'📦 ':'')+drvEsc(sh.shopName||sh.shopId||v.shop_name||'–')+'</div><div style="font-size:11px;color:#64748b;margin-top:1px;">ถึง '+drvFmtTime(v.arrived_at)+' • ออก '+drvFmtTime(v.departed_at)+'</div></div>'+(v.photo_url?'<a href="'+v.photo_url+'" target="_blank"><img src="'+v.photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid #334155;"></a>':'<div style="width:44px;height:44px;border-radius:8px;background:#1e293b;display:flex;align-items:center;justify-content:center;"><i class="fas '+(isSCv?'fa-wrench':isPUv?'fa-box':'fa-image')+'" style="color:'+(isSCv?'#92400e':isPUv?'#3730a3':'#334155')+';font-size:16px;"></i></div>')+'</div>';}).join('')
+    +visits.map(function(v){var sh=shops[v.shop_seq]||{};var isSCv=sh.type==='service_center';var isPUv=sh.type==='pickup';var isTDv=sh.type==='transfer_drop';return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);"><div style="width:28px;height:28px;border-radius:50%;background:'+(isSCv?'#422006':isPUv?'#1e1b4b':isTDv?'#431407':'#064e3b')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas '+(isSCv?'fa-wrench':isPUv?'fa-box':isTDv?'fa-dolly':'fa-check')+'" style="font-size:10px;color:'+(isSCv?'#fbbf24':isPUv?'#a5b4fc':isTDv?'#fb923c':'#34d399')+'"></i></div><div style="flex:1;min-width:0;"><div style="font-weight:700;color:#e2e8f0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(isSCv?'🔧 ':isPUv?'📦 ':isTDv?'📤 ':'')+drvEsc(sh.shopName||sh.shopId||v.shop_name||'–')+'</div><div style="font-size:11px;color:#64748b;margin-top:1px;">ถึง '+drvFmtTime(v.arrived_at)+' • ออก '+drvFmtTime(v.departed_at)+'</div></div>'+(v.photo_url?'<a href="'+v.photo_url+'" target="_blank"><img src="'+v.photo_url+'" style="width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid #334155;"></a>':'<div style="width:44px;height:44px;border-radius:8px;background:#1e293b;display:flex;align-items:center;justify-content:center;"><i class="fas '+(isSCv?'fa-wrench':isPUv?'fa-box':isTDv?'fa-dolly':'fa-image')+'" style="color:'+(isSCv?'#92400e':isPUv?'#3730a3':isTDv?'#9a3412':'#334155')+';font-size:16px;"></i></div>')+'</div>';}).join('')
     +'</div></div>';
 }
 
