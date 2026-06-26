@@ -6047,9 +6047,31 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
     <!-- Form -->
     <div class="bg-white rounded-2xl shadow border border-slate-100 p-6 space-y-4">
       <h3 class="font-black text-slate-700 text-base flex items-center gap-2">
-        <i class="fas fa-exclamation-triangle text-amber-500"></i> ขออนุมัติปรับสภาพสินค้า
+        <i class="fas fa-file-signature text-blue-500"></i> ขออนุมัติ
       </h3>
 
+      <!-- ประเภทการขออนุมัติ -->
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase mb-2 block">ประเภทการขออนุมัติ</label>
+        <div class="flex flex-wrap gap-2" id="dmg-req-type-btns">
+          <button type="button" onclick="dmgSetReqType('damage')" id="dmg-rtype-damage"
+            class="px-4 py-2 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-700 text-sm font-black transition-all">
+            <i class="fas fa-exclamation-triangle mr-1"></i> ปรับสภาพสินค้า
+          </button>
+          <button type="button" onclick="dmgSetReqType('stock')" id="dmg-rtype-stock"
+            class="px-4 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-500 text-sm font-black transition-all">
+            <i class="fas fa-boxes mr-1"></i> ปรับสต็อกสินค้า
+          </button>
+          <button type="button" onclick="dmgSetReqType('other')" id="dmg-rtype-other"
+            class="px-4 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-500 text-sm font-black transition-all">
+            <i class="fas fa-ellipsis-h mr-1"></i> อื่นๆ
+          </button>
+        </div>
+        <input type="hidden" id="dmg-req-type" value="damage">
+      </div>
+
+      <!-- ── DAMAGE SECTION ── -->
+      <div id="dmg-section-damage">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วันที่</label>
@@ -6133,6 +6155,82 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         </div>
         <div id="dmg-photo-previews" class="flex flex-wrap gap-2 mt-3"></div>
       </div>
+
+      </div><!-- end dmg-section-damage -->
+
+      <!-- ── STOCK SECTION ── -->
+      <div id="dmg-section-stock" style="display:none;">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วันที่</label>
+            <input id="stock-date" type="date" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">คลัง</label>
+            <input id="stock-warehouse" type="text" placeholder="เช่น คลังบางปลา" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div style="position:relative;">
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">รหัสสินค้า (SKU)</label>
+            <input id="stock-sku" type="text" placeholder="เช่น 1.0RTG4001400" autocomplete="off"
+              oninput="dmgLookupSkuTo('stock-sku','stock-itemname','stock-sku-drop')"
+              onblur="setTimeout(function(){document.getElementById('stock-sku-drop').style.display='none'},200)"
+              class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <div id="stock-sku-drop" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;margin-top:4px;"></div>
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ชื่อสินค้า</label>
+            <input id="stock-itemname" type="text" placeholder="ดึงอัตโนมัติจาก SKU หรือกรอกเอง" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">จำนวนที่ขอปรับ</label>
+            <input id="stock-qty" type="number" placeholder="0" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">หน่วย</label>
+            <select id="stock-unit" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+              <option value="เส้น">เส้น</option>
+              <option value="มัด">มัด</option>
+              <option value="แผ่น">แผ่น</option>
+              <option value="ม้วน">ม้วน</option>
+              <option value="KG">KG</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ปรับจาก (จำนวนเดิม)</label>
+            <input id="stock-from" type="number" placeholder="0" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">ปรับเป็น (จำนวนใหม่)</label>
+            <input id="stock-to" type="number" placeholder="0" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div class="md:col-span-2">
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">สาเหตุการปรับสต็อก</label>
+            <textarea id="stock-reason" rows="2" placeholder="อธิบายสาเหตุที่ต้องปรับสต็อก..." class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+          </div>
+        </div>
+      </div><!-- end dmg-section-stock -->
+
+      <!-- ── OTHER SECTION ── -->
+      <div id="dmg-section-other" style="display:none;">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วันที่</label>
+            <input id="other-date" type="date" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">คลัง</label>
+            <input id="other-warehouse" type="text" placeholder="เช่น คลังบางปลา" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div class="md:col-span-2">
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">เรื่องที่ขออนุมัติ</label>
+            <input id="other-subject" type="text" placeholder="ระบุหัวข้อ..." class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div class="md:col-span-2">
+            <label class="text-xs font-black text-slate-500 uppercase mb-1 block">รายละเอียด</label>
+            <textarea id="other-detail" rows="4" placeholder="อธิบายรายละเอียดที่ขออนุมัติ..." class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+          </div>
+        </div>
+      </div><!-- end dmg-section-other -->
 
       <div class="flex gap-3 pt-2">
         <button onclick="dmgSendEmail()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-sm flex items-center gap-2 transition-all">
@@ -41058,6 +41156,54 @@ window.dmgSelectAction = function(btn, val){
   document.getElementById('dmg-action').value = val;
 };
 
+// ── Request type switcher ──────────────────────────────────────
+window.dmgSetReqType = function(type){
+  document.getElementById('dmg-req-type').value = type;
+  var types = ['damage','stock','other'];
+  types.forEach(function(t){
+    var btn = document.getElementById('dmg-rtype-'+t);
+    var sec = document.getElementById('dmg-section-'+t);
+    if(btn){
+      if(t === type){
+        btn.className='px-4 py-2 rounded-xl border-2 text-sm font-black transition-all '
+          +(t==='damage'?'border-amber-400 bg-amber-50 text-amber-700'
+          :t==='stock'?'border-blue-400 bg-blue-50 text-blue-700'
+          :'border-slate-400 bg-slate-100 text-slate-700');
+      } else {
+        btn.className='px-4 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-500 text-sm font-black transition-all';
+      }
+    }
+    if(sec) sec.style.display = (t === type) ? '' : 'none';
+  });
+};
+
+// generic SKU lookup helper
+window.dmgLookupSkuTo = async function(skuId, nameId, dropId){
+  var val = (document.getElementById(skuId).value||'');
+  var drop = document.getElementById(dropId);
+  if(!val || val.length < 2){ drop.style.display='none'; return; }
+  var q = val.trim().toLowerCase();
+  var {data} = await window._sb.from('products').select('sku,name')
+    .or('sku.ilike.%'+q+'%,name.ilike.%'+q+'%').limit(12);
+  if(!data||!data.length){ drop.style.display='none'; return; }
+  drop.innerHTML = data.map(function(p){
+    return '<div onclick="dmgPickSkuTo(''+p.sku.replace(/'/g,"\'")+"','"+skuId+"','"+nameId+"','"+dropId+'')" '
+      +'style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;transition:background .1s;" '
+      +'onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='#fff'">'
+      +'<div style="font-weight:700;font-size:13px;color:#1e293b;">'+p.sku+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:1px;">'+p.name+'</div>'
+      +'</div>';
+  }).join('');
+  drop.style.display='block';
+};
+window.dmgPickSkuTo = function(sku, skuId, nameId, dropId){
+  document.getElementById(skuId).value = sku;
+  document.getElementById(dropId).style.display='none';
+  window._sb.from('products').select('name').eq('sku',sku).maybeSingle().then(function(r){
+    if(r.data) document.getElementById(nameId).value = r.data.name||'';
+  });
+};
+
 window.dmgLookupSku = async function(val){
   var drop = document.getElementById('dmg-sku-drop');
   if(!val || val.length < 2){ drop.style.display='none'; return; }
@@ -41086,80 +41232,120 @@ window.dmgPickSku = function(sku){
 };
 
 window.dmgClearForm = function(){
-  ['dmg-sku','dmg-itemname','dmg-qty','dmg-desc','dmg-returned','dmg-action'].forEach(function(id){
-    var el = document.getElementById(id); if(el) el.value='';
-  });
-  document.getElementById('dmg-type-val').value='';
-  document.querySelectorAll('.dmg-type-btn,.dmg-action-btn').forEach(function(b){
-    b.classList.remove('border-amber-400','text-amber-600','bg-amber-50','border-blue-400','text-blue-600','bg-blue-50');
-    b.classList.add('border-slate-200','text-slate-600');
-  });
-  document.getElementById('dmg-date').value = new Date().toISOString().split('T')[0];
-  // clear photos
-  _dmgPhotos.forEach(function(p){ URL.revokeObjectURL(p.previewUrl); });
-  _dmgPhotos = [];
-  dmgRenderPhotoPreviews();
+  var reqType = document.getElementById('dmg-req-type').value||'damage';
+  if(reqType==='damage'){
+    ['dmg-sku','dmg-itemname','dmg-qty','dmg-desc','dmg-returned','dmg-action'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.value='';
+    });
+    document.getElementById('dmg-type-val').value='';
+    document.querySelectorAll('.dmg-type-btn,.dmg-action-btn').forEach(function(b){
+      b.classList.remove('border-amber-400','text-amber-600','bg-amber-50','border-blue-400','text-blue-600','bg-blue-50');
+      b.classList.add('border-slate-200','text-slate-600');
+    });
+    document.getElementById('dmg-date').value=new Date().toISOString().split('T')[0];
+    _dmgPhotos.forEach(function(p){URL.revokeObjectURL(p.previewUrl);}); _dmgPhotos=[];
+    dmgRenderPhotoPreviews();
+  } else if(reqType==='stock'){
+    ['stock-sku','stock-itemname','stock-qty','stock-from','stock-to','stock-reason'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.value='';
+    });
+    document.getElementById('stock-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('stock-warehouse').value='';
+  } else {
+    ['other-subject','other-detail','other-warehouse'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.value='';
+    });
+    document.getElementById('other-date').value=new Date().toISOString().split('T')[0];
+  }
 };
 
 window.dmgSendEmail = async function(){
   var recipient = Array.from(_dmgSelected).join(',');
-  var date      = (document.getElementById('dmg-date').value||'').trim();
-  var warehouse = (document.getElementById('dmg-warehouse').value||'').trim();
-  var sku       = (document.getElementById('dmg-sku').value||'').trim();
-  var itemname  = (document.getElementById('dmg-itemname').value||'').trim();
-  var qty       = (document.getElementById('dmg-qty').value||'').trim();
-  var unit      = (document.getElementById('dmg-unit').value||'');
-  var type      = (document.getElementById('dmg-type-val').value||'').trim();
-  var desc      = (document.getElementById('dmg-desc').value||'').trim();
-  var returned  = (document.getElementById('dmg-returned').value||'').trim();
-  var action    = (document.getElementById('dmg-action').value||'').trim();
-
   if(!recipient){ showToast('กรุณาตั้งค่าอีเมลผู้รับก่อน',true); return; }
-  if(!sku||!itemname||!qty||!type||!action){ showToast('กรุณากรอกข้อมูลให้ครบ (SKU, ชื่อสินค้า, จำนวน, ประเภท, Action)',true); return; }
+  var reqType = document.getElementById('dmg-req-type').value||'damage';
+  var subject='', body='', dbPayload=null;
 
-  // format วันที่ไทย
-  var d = new Date(date);
-  var thDate = date ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}) : date;
+  if(reqType==='damage'){
+    var date=(document.getElementById('dmg-date').value||'').trim();
+    var warehouse=(document.getElementById('dmg-warehouse').value||'').trim();
+    var sku=(document.getElementById('dmg-sku').value||'').trim();
+    var itemname=(document.getElementById('dmg-itemname').value||'').trim();
+    var qty=(document.getElementById('dmg-qty').value||'').trim();
+    var unit=(document.getElementById('dmg-unit').value||'');
+    var type=(document.getElementById('dmg-type-val').value||'').trim();
+    var desc=(document.getElementById('dmg-desc').value||'').trim();
+    var returned=(document.getElementById('dmg-returned').value||'').trim();
+    var action=(document.getElementById('dmg-action').value||'').trim();
+    if(!sku||!itemname||!qty||!type||!action){ showToast('กรุณากรอกข้อมูลให้ครบ',true); return; }
+    var d=new Date(date); var thDate=date?d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}):date;
+    subject='ขออนุมัติปรับสภาพสินค้า '+thDate;
+    body='ถึง ผู้อนุมัติ\n   ขออนุมัติปรับเปลี่ยนสภาพสินค้า ตามรายการดังนี้\n';
+    if(warehouse) body+='>> '+warehouse+'\n';
+    body+=sku+' '+itemname+'\nจำนวน '+qty+' '+unit;
+    if(type) body+=' ปัญหา'+type;
+    if(desc) body+=' '+desc;
+    if(returned) body+=' ตีคืนจาก '+returned;
+    body+='\n\n- '+action+'\n\nผู้แจ้ง: '+(window._currentUser||'');
+    if(_dmgPhotos.length){
+      showToast('กำลังอัพโหลดรูป...');
+      var prefix='dmg_'+(date||'').replace(/-/g,'')+'_'+sku.replace(/[^a-z0-9]/gi,'');
+      var photoUrls=await dmgUploadPhotos(prefix);
+      if(photoUrls.length) body+='\n\n📎 รูปภาพ:\n'+photoUrls.join('\n');
+    }
+    dbPayload={request_date:date||new Date().toISOString().split('T')[0], warehouse, item_sku:sku, item_name:itemname,
+      quantity:Number(qty)||0, unit, damage_type:type, damage_desc:desc,
+      returned_from:returned, action_requested:action, recipient_email:recipient,
+      request_type:'damage', created_by:window._currentUser||''};
 
-  var subject = encodeURIComponent('ขออนุมัติปรับสภาพสินค้า '+thDate);
-  var body = 'ถึง ผู้อนุมัติ\n';
-  body += '   ขออนุมัติปรับเปลี่ยนสภาพสินค้า ตามรายการดังนี้\n';
-  if(warehouse) body += '>>' + warehouse + '\n';
-  body += sku + ' ' + itemname + '\n';
-  body += 'จำนวน ' + qty + ' ' + unit;
-  if(type) body += ' ปัญหา' + type;
-  if(desc) body += ' ' + desc;
-  if(returned) body += ' ตีคืนจาก ' + returned;
-  body += '\n\n-' + action;
-  body += '\n\nผู้แจ้ง: ' + (window._currentUser||'');
+  } else if(reqType==='stock'){
+    var date=(document.getElementById('stock-date').value||'').trim();
+    var warehouse=(document.getElementById('stock-warehouse').value||'').trim();
+    var sku=(document.getElementById('stock-sku').value||'').trim();
+    var itemname=(document.getElementById('stock-itemname').value||'').trim();
+    var qty=(document.getElementById('stock-qty').value||'').trim();
+    var unit=(document.getElementById('stock-unit').value||'');
+    var fromQty=(document.getElementById('stock-from').value||'').trim();
+    var toQty=(document.getElementById('stock-to').value||'').trim();
+    var reason=(document.getElementById('stock-reason').value||'').trim();
+    if(!sku||!itemname||!reason){ showToast('กรุณากรอก SKU, ชื่อสินค้า และสาเหตุ',true); return; }
+    var d=new Date(date); var thDate=date?d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}):date;
+    subject='ขออนุมัติปรับสต็อกสินค้า '+thDate;
+    body='ถึง ผู้อนุมัติ\n   ขออนุมัติปรับสต็อกสินค้า ตามรายการดังนี้\n';
+    if(warehouse) body+='>> '+warehouse+'\n';
+    body+=sku+' '+itemname+'\n';
+    if(fromQty&&toQty) body+='ปรับจาก '+fromQty+' → '+toQty+' '+unit+'\n';
+    else if(qty) body+='จำนวน '+qty+' '+unit+'\n';
+    body+='สาเหตุ: '+reason+'\n\nผู้แจ้ง: '+(window._currentUser||'');
+    dbPayload={request_date:date||new Date().toISOString().split('T')[0], warehouse, item_sku:sku, item_name:itemname,
+      quantity:Number(qty)||0, unit, damage_desc:reason,
+      action_requested:'ปรับสต็อก '+fromQty+'→'+toQty, recipient_email:recipient,
+      request_type:'stock', created_by:window._currentUser||''};
 
-  // upload รูปก่อน
-  var photoUrls = [];
-  if(_dmgPhotos.length){
-    showToast('กำลังอัพโหลดรูป...');
-    var prefix = 'dmg_'+(date||'').replace(/-/g,'')+'_'+sku.replace(/[^a-z0-9]/gi,'');
-    photoUrls = await dmgUploadPhotos(prefix);
-    if(photoUrls.length) body += '\n\n📎 รูปภาพประกอบ:\n'+photoUrls.join('\n');
+  } else {
+    var date=(document.getElementById('other-date').value||'').trim();
+    var warehouse=(document.getElementById('other-warehouse').value||'').trim();
+    var subj=(document.getElementById('other-subject').value||'').trim();
+    var detail=(document.getElementById('other-detail').value||'').trim();
+    if(!subj||!detail){ showToast('กรุณากรอกเรื่องและรายละเอียด',true); return; }
+    var d=new Date(date); var thDate=date?d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'}):date;
+    subject=subj+' '+thDate;
+    body='ถึง ผู้อนุมัติ\n';
+    if(warehouse) body+='>> '+warehouse+'\n';
+    body+=detail+'\n\nผู้แจ้ง: '+(window._currentUser||'');
+    dbPayload={request_date:date||new Date().toISOString().split('T')[0], warehouse,
+      damage_desc:detail, action_requested:subj, recipient_email:recipient,
+      request_type:'other', created_by:window._currentUser||''};
   }
 
-  var mailto = 'mailto:'+encodeURIComponent(recipient)+'?subject='+subject+'&body='+encodeURIComponent(body);
-  window.open(mailto, '_blank');
-
-  // บันทึกลง Supabase
-  var {error} = await window._sb.from('damage_requests').insert({
-    request_date: date||new Date().toISOString().split('T')[0],
-    warehouse, item_sku: sku, item_name: itemname,
-    quantity: Number(qty)||0, unit,
-    damage_type: type, damage_desc: desc,
-    returned_from: returned, action_requested: action,
-    recipient_email: recipient,
-    created_by: window._currentUser||''
-  });
-  if(error){ showToast('เปิดเมลแล้ว แต่บันทึกไม่สำเร็จ: '+error.message,true); return; }
+  var mailto='mailto:'+encodeURIComponent(recipient)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  window.open(mailto,'_blank');
+  if(dbPayload){
+    var {error}=await window._sb.from('damage_requests').insert(dbPayload);
+    if(error){ showToast('เปิดเมลแล้ว แต่บันทึกไม่สำเร็จ: '+error.message,true); return; }
+  }
   showToast('เปิดเมลและบันทึกข้อมูลสำเร็จ ✅');
   dmgLoadHistory();
 };
-
 window.dmgLoadHistory = async function(){
   var tbody = document.getElementById('dmg-history-tbody');
   if(!tbody) return;
