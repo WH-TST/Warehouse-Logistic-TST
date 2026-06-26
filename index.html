@@ -16706,6 +16706,7 @@ window.addLogiServiceCenter = function addLogiServiceCenter() {
     div.innerHTML = `
     <div class="flex justify-between items-center">
         <h5 class="font-black text-amber-700 flex items-center gap-2">
+            <i class="fas fa-grip-vertical logi-drag-handle" style="color:#fbbf24;cursor:grab;font-size:16px;" title="ลากเพื่อเรียงลำดับ"></i>
             <span class="logi-shop-num w-7 h-7 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-black">${idx + 1}</span>
             <i class="fas fa-wrench text-amber-500"></i> แวะศูนย์ซ่อม ลำดับที่ <span class="logi-shop-seq">${idx + 1}</span>
         </h5>
@@ -16763,6 +16764,7 @@ function buildLogiShopCardHTML(idx) {
     return `
     <div class="flex justify-between items-center">
         <h5 class="font-black text-slate-700 flex items-center gap-2">
+            <i class="fas fa-grip-vertical logi-drag-handle" style="color:#cbd5e1;cursor:grab;font-size:16px;" title="ลากเพื่อเรียงลำดับ"></i>
             <span class="logi-shop-num w-7 h-7 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs font-black">${idx + 1}</span>
             ร้านค้าที่ <span class="logi-shop-seq">${idx + 1}</span>
         </h5>
@@ -17171,7 +17173,10 @@ function updateLogiShopNumbers() {
         const btnDown = card.querySelector('.logi-move-down');
         if (btnUp)   btnUp.disabled   = (i === 0);
         if (btnDown) btnDown.disabled = (i === cards.length - 1);
+        // draggable
+        card.setAttribute('draggable', 'true');
     });
+    initLogiDragSort();
 }
 
 window.moveLogiCard = function(cardId, dir) {
@@ -17184,6 +17189,65 @@ window.moveLogiCard = function(cardId, dir) {
         container.insertBefore(card.nextElementSibling, card);
     }
     updateLogiShopNumbers();
+}
+
+// ── Drag-and-drop sort ──────────────────────────────────────────────
+var _logiDragSrc = null;
+
+function initLogiDragSort() {
+    const container = document.getElementById('logi-shops-container');
+    if (!container) return;
+    container.querySelectorAll('div[id^="logi-shop-card-"]').forEach(function(card) {
+        if (card._logiDragBound) return; // already wired
+        card._logiDragBound = true;
+        card.addEventListener('dragstart', function(e) {
+            _logiDragSrc = card;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', card.id);
+            setTimeout(function(){ card.style.opacity = '0.4'; card.style.transform = 'scale(0.98)'; }, 0);
+        });
+        card.addEventListener('dragend', function() {
+            card.style.opacity = '';
+            card.style.transform = '';
+            container.querySelectorAll('div[id^="logi-shop-card-"]').forEach(function(c){
+                c.classList.remove('_logi-drag-over-top','_logi-drag-over-bot');
+                c.style.borderTop = '';
+                c.style.borderBottom = '';
+            });
+            _logiDragSrc = null;
+        });
+        card.addEventListener('dragover', function(e) {
+            if (!_logiDragSrc || _logiDragSrc === card) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const rect = card.getBoundingClientRect();
+            container.querySelectorAll('div[id^="logi-shop-card-"]').forEach(function(c){
+                c.style.borderTop = ''; c.style.borderBottom = '';
+            });
+            if (e.clientY < rect.top + rect.height / 2) {
+                card.style.borderTop = '3px solid #0ea5e9';
+            } else {
+                card.style.borderBottom = '3px solid #0ea5e9';
+            }
+        });
+        card.addEventListener('dragleave', function(e) {
+            if (!e.relatedTarget || !card.contains(e.relatedTarget)) {
+                card.style.borderTop = ''; card.style.borderBottom = '';
+            }
+        });
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (!_logiDragSrc || _logiDragSrc === card) return;
+            const rect = card.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                container.insertBefore(_logiDragSrc, card);
+            } else {
+                container.insertBefore(_logiDragSrc, card.nextSibling);
+            }
+            card.style.borderTop = ''; card.style.borderBottom = '';
+            updateLogiShopNumbers();
+        });
+    });
 }
 
 // ── เพิ่มแถวสินค้าในร้าน ──
