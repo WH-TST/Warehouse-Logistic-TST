@@ -7770,6 +7770,12 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <label style="font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;display:block;margin-bottom:4px;">มอนิเตอร์คนขับ</label>
         <div id="dm-status-line" style="font-size:13px;color:#059669;font-weight:700;">กำลังโหลด...</div>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button onclick="dmShiftDate(-1)" title="วันก่อน" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px 12px;color:#94a3b8;font-weight:700;font-size:13px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
+        <input type="date" id="dm-date-pick" onchange="dmSetDate(this.value)" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;outline:none;">
+        <button onclick="dmShiftDate(1)" title="วันถัดไป" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px 12px;color:#94a3b8;font-weight:700;font-size:13px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
+        <button onclick="dmSetDate(new Date().toISOString().split('T')[0])" style="background:#0f766e;border:none;border-radius:8px;padding:8px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;">วันนี้</button>
+      </div>
       <button onclick="dmRefreshAll()" style="background:#059669;border:none;border-radius:10px;padding:9px 16px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
         <i class="fas fa-sync-alt"></i> รีเฟรช
       </button>
@@ -38251,13 +38257,30 @@ function drvTick(){
 // DRIVER MONITOR — admin view
 // ══════════════════════════════════════════════════════════════
 var _dmDrivers=[];
+var _dmDate=null; // null = today
+
+window.dmSetDate=function(val){
+  _dmDate=val||null;
+  var pick=document.getElementById('dm-date-pick');
+  if(pick) pick.value=val||new Date().toISOString().split('T')[0];
+  _dmCurrentDriver=null;_dmTripPlan=null;
+  dmRefreshAll();
+};
+window.dmShiftDate=function(delta){
+  var base=_dmDate||new Date().toISOString().split('T')[0];
+  var d=new Date(base); d.setDate(d.getDate()+delta);
+  dmSetDate(d.toISOString().split('T')[0]);
+};
 
 window.dmRefreshAll=async function(silent){
   var area=document.getElementById('dm-area');
   var statusLine=document.getElementById('dm-status-line');
   if(!area)return;
   if(!silent) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
-  var today=new Date().toISOString().split('T')[0];
+  var today=_dmDate||new Date().toISOString().split('T')[0];
+  // sync date picker
+  var pick=document.getElementById('dm-date-pick');
+  if(pick&&!pick.value) pick.value=today;
   var drivers=_dmDrivers;
   if(!drivers.length){
     area.innerHTML='<div style="text-align:center;padding:80px 20px;color:#475569;"><p style="font-weight:700;font-size:15px;">ไม่มีข้อมูลคนขับ</p></div>';
@@ -38305,26 +38328,53 @@ window.dmRefreshAll=async function(silent){
     var sm=stColors[st]||stColors.off;
     var trucks=Array.from(new Set(plans.map(function(p){return p.truck_plate;}).filter(Boolean))).join(', ');
     var initials=driver.driver_name.charAt(0);
-    var shopInfo='';
-    if(curLog&&st==='at_shop'&&activePlan){
-      var shops=activePlan.shops||[];
-      var sv=svMap[activePlan.plan_id]||{};
-      var curShop=shops.find(function(s){var v=sv[s.seq];return v&&v.lat_arrival&&!v.lat_depart;});
-      if(curShop) shopInfo='<div style="font-size:11px;color:#fbbf24;margin-top:4px;">📍 '+dmEsc(curShop.name||'ร้านที่ '+curShop.seq)+'</div>';
+    // ── location context line ──
+    var ctxLine='';
+    if(activePlan){
+      var _shops=activePlan.shops||[];
+      var _sv=svMap[activePlan.plan_id]||{};
+      var _seq=curLog?curLog.current_shop_seq:0;
+      var _curSh=_shops[_seq]||_shops[0];
+      if(st==='at_shop'){
+        var _atSh=_shops.find(function(s){var v=_sv[s.seq];return v&&v.lat_arrival&&!v.lat_depart;});
+        if(_atSh) ctxLine='<div style="font-size:11px;color:#fbbf24;margin-top:3px;"><i class="fas fa-map-marker-alt" style="margin-right:4px;"></i>อยู่ที่: '+dmEsc(_atSh.shopName||_atSh.shopId||'–')+'</div>';
+      } else if(st==='traveling'&&_curSh){
+        ctxLine='<div style="font-size:11px;color:#60a5fa;margin-top:3px;"><i class="fas fa-truck-moving" style="margin-right:4px;"></i>กำลังไป: '+dmEsc(_curSh.shopName||_curSh.shopId||'–')+'</div>';
+      } else if(st==='returning'){
+        ctxLine='<div style="font-size:11px;color:#a78bfa;margin-top:3px;"><i class="fas fa-route" style="margin-right:4px;"></i>กำลังกลับบริษัท</div>';
+      } else if(st==='idle'&&_curSh){
+        ctxLine='<div style="font-size:11px;color:#94a3b8;margin-top:3px;"><i class="fas fa-flag" style="margin-right:4px;"></i>จุดแรก: '+dmEsc(_curSh.shopName||_curSh.shopId||'–')+'</div>';
+      }
     }
-    var maintBanner=maintPlan?'<div style="display:flex;align-items:center;gap:8px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:5px 10px;margin-top:6px;"><i class="fas fa-wrench" style="color:#fbbf24;font-size:11px;flex-shrink:0;"></i><span style="font-size:11px;color:#fde68a;font-weight:700;">มีคิวเข้าศูนย์ซ่อมวันนี้</span></div>':'';
+    // ── trip list minibar ──
+    var tripBar='';
+    if(plans.length){
+      tripBar='<div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;">';
+      plans.forEach(function(p,pi){
+        var _l=tripLogsMap[p.plan_id];
+        var _pst=(p.status==='success')?'completed':(_l?_l.status:'idle');
+        var _col={idle:'#475569',traveling:'#3b82f6',at_shop:'#f59e0b',returning:'#a78bfa',completed:'#34d399'}[_pst]||'#475569';
+        var _icon={idle:'fa-clock',traveling:'fa-truck-moving',at_shop:'fa-store',returning:'fa-route',completed:'fa-check'}[_pst]||'fa-clock';
+        var _shops=(p.shops||[]).filter(function(s){return s.type!=='service_center';});
+        var _label='เที่ยว '+(pi+1)+' · '+_shops.length+' จุด';
+        tripBar+='<div style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border:1px solid '+_col+';border-radius:20px;padding:3px 9px;font-size:10px;color:'+_col+';font-weight:700;cursor:pointer;" onclick="event.stopPropagation();dmOpenAllDriverTrip(\''+driver.username+'\');">'
+          +'<i class="fas '+_icon+'" style="font-size:9px;"></i>'+_label+'</div>';
+      });
+      tripBar+='</div>';
+    }
+    var maintBanner=maintPlan?'<div style="display:flex;align-items:center;gap:6px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:4px 8px;margin-top:6px;"><i class="fas fa-wrench" style="color:#fbbf24;font-size:10px;flex-shrink:0;"></i><span style="font-size:10px;color:#fde68a;font-weight:700;">มีคิวเข้าศูนย์ซ่อม</span></div>':'';
     html+='<div onclick="dmOpenAllDriverTrip(\''+driver.username+'\')" style="background:'+sm.bg+';border:1px solid '+sm.border+';border-radius:16px;padding:14px;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity=\'.85\'" onmouseout="this.style.opacity=\'1\'">'
-      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+      +'<div style="display:flex;align-items:flex-start;gap:10px;">'
       +'<div style="width:42px;height:42px;border-radius:12px;background:'+sm.border+';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;font-weight:900;color:'+sm.color+';">'+initials+'</div>'
       +'<div style="flex:1;min-width:0;">'
       +'<div style="font-weight:900;color:#fff;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+dmEsc(driver.driver_name)+'</div>'
-      +'<div style="font-size:11px;color:'+sm.color+';font-weight:700;margin-top:2px;"><i class="fas '+sm.icon+'" style="margin-right:5px;"></i>'+sm.label+'</div>'
-      +shopInfo+maintBanner
+      +'<div style="font-size:11px;color:'+sm.color+';font-weight:700;margin-top:1px;"><i class="fas '+sm.icon+'" style="margin-right:4px;"></i>'+sm.label+'</div>'
+      +ctxLine+maintBanner+tripBar
       +'</div>'
-      +'<div style="text-align:right;flex-shrink:0;">'
-      +'<div style="font-size:13px;font-weight:900;color:#fff;">'+done+'/'+plans.length+'</div>'
+      +'<div style="text-align:right;flex-shrink:0;padding-left:4px;">'
+      +'<div style="font-size:20px;font-weight:900;color:#fff;line-height:1;">'+done+'/'+plans.length+'</div>'
       +'<div style="font-size:10px;color:#64748b;font-weight:700;">เที่ยว</div>'
-      +(trucks?'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">🚛 '+dmEsc(trucks)+'</div>':'')
+      +(trucks?'<div style="font-size:10px;color:#94a3b8;margin-top:4px;">🚛 '+dmEsc(trucks)+'</div>':'')
       +'</div></div></div>';
   });
   html+='</div>';
@@ -38343,7 +38393,8 @@ window.dmOpenAllDriverTrip=async function(username,silent){
   var orParts=[];
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
-  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,shops,driver_transport,job_type').eq('plan_date',today);
+  var dateVal=_dmDate||new Date().toISOString().split('T')[0];
+  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,shops,driver_transport,job_type').eq('plan_date',dateVal);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
   _dmPlans=plans||[];
@@ -38766,28 +38817,48 @@ function dmRenderPlanList(area){
           +'</div>';
       }
 
-      // ── DELIVERY CARD (เดิม) ──────────────────────────────────────
+      // ── DELIVERY CARD ──────────────────────────────────────
       var m=statusMeta[st]||statusMeta.idle;
       var shops=p.shops||[];
+      var delivShops=shops.filter(function(s){return s.type!=='service_center';});
+      var sv=_dmSvMap[p.plan_id]||{};
       var seq=log?log.current_shop_seq:0;
-      var currentShop=shops[seq];
-      var routeText=shops.map(function(sh){return dmEsc(sh.shopName||sh.shopId||'–');}).join(' → ');
+      var currentShop=delivShops[seq]||delivShops[0];
+      // progress: count shops that have departed_at
+      var doneShops=delivShops.filter(function(s){var v=sv[s.seq];return v&&v.lat_depart;}).length;
+      var progressPct=delivShops.length?Math.round(doneShops/delivShops.length*100):0;
+      // context banner
       var ctx='';
       if(st==='traveling'&&currentShop)
-        ctx='<div style="background:#1e3a8a;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#93c5fd;font-weight:700;"><i class="fas fa-map-marker-alt" style="margin-right:5px;"></i>กำลังไป: '+dmEsc(currentShop.shopName||'–')+'</div>';
+        ctx='<div style="background:#1e3a8a;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#93c5fd;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-truck-moving"></i>กำลังไป: '+dmEsc(currentShop.shopName||currentShop.shopId||'–')+'</div>';
       else if(st==='at_shop'&&currentShop)
-        ctx='<div style="background:#422006;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#fbbf24;font-weight:700;"><i class="fas fa-store" style="margin-right:5px;"></i>อยู่ที่: '+dmEsc(currentShop.shopName||'–')+'</div>';
-      return '<div style="background:#1e293b;border:2px solid '+m.border+';border-radius:20px;padding:18px;margin-bottom:12px;">'
+        ctx='<div style="background:#422006;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#fbbf24;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-store"></i>อยู่ที่: '+dmEsc(currentShop.shopName||currentShop.shopId||'–')+'</div>';
+      else if(st==='returning')
+        ctx='<div style="background:#2e1f5e;border-radius:10px;padding:7px 12px;margin-bottom:10px;font-size:12px;color:#c4b5fd;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-route"></i>กำลังกลับบริษัท</div>';
+      // waypoint dots row
+      var dotRow='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">';
+      delivShops.forEach(function(s,si){
+        var v=sv[s.seq];
+        var isDone=v&&v.lat_depart;
+        var isCur=!isDone&&v&&v.lat_arrival;
+        var dotC=isDone?'#34d399':isCur?'#f59e0b':'#334155';
+        var typeIcon={service_center:'🔧',pickup:'📥',transfer:'🔄'}[s.type]||'📦';
+        dotRow+='<div title="'+dmEsc(s.shopName||s.shopId||'จุด '+(si+1))+'" style="display:inline-flex;align-items:center;gap:3px;background:'+(isDone?'rgba(52,211,153,.12)':isCur?'rgba(245,158,11,.15)':'rgba(51,65,85,.5)')+';border:1px solid '+dotC+';border-radius:20px;padding:2px 7px;font-size:10px;color:'+dotC+';font-weight:700;white-space:nowrap;">'
+          +typeIcon+' '+dmEsc((s.shopName||s.shopId||'').substring(0,12))+(isDone?' ✓':isCur?' ●':'')+'</div>';
+      });
+      dotRow+='</div>';
+      // progress bar
+      var progBar='<div style="background:#1e293b;border-radius:4px;height:4px;margin-bottom:12px;overflow:hidden;">'
+        +'<div style="height:100%;width:'+progressPct+'%;background:'+m.border+';border-radius:4px;transition:width .4s;"></div></div>';
+      return '<div style="background:#1e293b;border:2px solid '+m.border+';border-radius:20px;padding:16px;margin-bottom:12px;">'
         +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
         +'<div><div style="font-weight:900;color:#fff;font-size:16px;">เที่ยวที่ '+(pi+1)+'</div>'
-        +'<div style="font-size:11px;color:#64748b;margin-top:2px;">'+dmEsc(p.plan_id)+'</div></div>'
+        +'<div style="font-size:11px;color:#64748b;margin-top:1px;">'+dmEsc(p.plan_id)+' · 🚛 '+dmEsc(p.truck_plate||'–')+'</div></div>'
         +'<span style="font-size:11px;font-weight:900;color:'+m.color+';background:rgba(0,0,0,.3);padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
         +'<i class="fas '+m.icon+'" style="font-size:10px;"></i>'+m.label+'</span></div>'
-        +ctx
-        +'<div style="font-size:12px;color:#64748b;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
-        +'<i class="fas fa-map-signs" style="margin-right:5px;opacity:.6;"></i>'+routeText+'</div>'
-        +'<div style="font-size:12px;color:#94a3b8;margin-bottom:12px;"><i class="fas fa-truck" style="margin-right:5px;"></i>'+dmEsc(p.truck_plate||'–')+'</div>'
-        +'<button onclick="dmOpenTrip(\''+dmEsc(p.plan_id)+'\')" style="width:100%;background:'+m.btnBg+';border:none;border-radius:12px;padding:13px;color:#fff;font-weight:900;font-size:14px;cursor:pointer;">'+m.btnLabel+'</button>'
+        +ctx+dotRow+progBar
+        +'<div style="font-size:11px;color:#64748b;margin-bottom:10px;">ผ่านแล้ว '+doneShops+'/'+delivShops.length+' จุด</div>'
+        +'<button onclick="dmOpenTrip(\''+dmEsc(p.plan_id)+'\')" style="width:100%;background:'+m.btnBg+';border:none;border-radius:12px;padding:12px;color:#fff;font-weight:900;font-size:14px;cursor:pointer;">'+m.btnLabel+'</button>'
         +'</div>';
     }).join('');
   }
