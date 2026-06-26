@@ -23445,7 +23445,22 @@ window.ldInit = function() {
             var dateEl = document.getElementById('ld-date');
             var ldContent = document.getElementById('view-loading-content');
             if (dateEl && ldContent && !ldContent.classList.contains('hidden')) {
-                _ldLoadOrderCards(dateEl.value);
+                var openId = _ldActiveOrderId;
+                _ldLoadOrderCards(dateEl.value).then(function(){
+                    if (openId && _ldActiveOrderId === openId) {
+                        // Re-render the open card's form for new orientation
+                        var formEl = document.getElementById('ldf-form-'+openId);
+                        if (formEl) {
+                            var order = (_ldOrderCache||[]).find(function(o){return o.id===openId;});
+                            if (order) {
+                                formEl.innerHTML = _ldBuildForm(order);
+                                _ldRestoreDraftIds(openId).then(function(){
+                                    setTimeout(function(){ _ldDraftLoad(openId); _ldStartTimer(openId); }, 80);
+                                });
+                            }
+                        }
+                    }
+                });
             }
         }, 300);
     });
@@ -23588,9 +23603,10 @@ function _ldRenderCards(orders) {
             +(isActive ? '<div class="border-t-2 border-dashed border-emerald-200">'+formHtml+'</div>' : '')
         +'</div>';
     }).join('');
-    // After re-render — restore form values
+    // After re-render — restore form values and timer
     if (_ldActiveOrderId) {
-        setTimeout(function(){ _ldDraftLoad(_ldActiveOrderId); }, 80);
+        var _aidSnap = _ldActiveOrderId;
+        setTimeout(function(){ _ldDraftLoad(_aidSnap); _ldStartTimer(_aidSnap); }, 120);
     }
     Object.keys(_ldTrailerActive).forEach(function(oid){
         var ta = _ldTrailerActive[oid];
