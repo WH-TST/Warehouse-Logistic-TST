@@ -38823,8 +38823,14 @@ function dmRenderTimeline(){
   var el=document.getElementById('dm-timeline');if(!el)return;
   var shops=(_dmTripPlan&&_dmTripPlan.shops)||[];
   var st=_dmTripLog?_dmTripLog.status:'idle';
+  var _wpShortLabel=function(sh){
+    if(sh.type==='service_center') return '🔧 ศูนย์';
+    if(sh.type==='pickup')         return '📥 รับของ';
+    if(sh.type==='transfer')       return '🔄 ย้าย';
+    return sh.shopName||'ร้าน';
+  };
   var steps=[{label:'ออก'}]
-    .concat(shops.map(function(sh,i){return{label:sh.shopName||('ร้าน'+(i+1)),seq:i};}))
+    .concat(shops.map(function(sh,i){return{label:_wpShortLabel(sh),seq:i,type:sh.type};}))
     .concat([{label:'กลับ'}]);
   var html='<div style="display:inline-flex;align-items:center;gap:0;min-width:100%;padding-bottom:4px;">';
   steps.forEach(function(s,i){
@@ -38870,7 +38876,9 @@ function dmRenderIdle(){
   if(shops.length>1&&(_dmSelectedShopSeq===null||_dmSelectedShopSeq===undefined)){
     return '<div><div style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'
       +'<div style="font-size:11px;font-weight:900;color:#93c5fd;margin-bottom:14px;"><i class="fas fa-route" style="margin-right:6px;"></i>เลือกร้านที่จะไปก่อน</div>'
-      +shops.map(function(sh,i){return'<button onclick="dmSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;"><div style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#64748b;flex-shrink:0;">'+(i+1)+'</div><div style="flex:1;">'+dmEsc(sh.shopName||sh.shopId||'–')+'</div><i class="fas fa-chevron-right" style="color:#475569;font-size:12px;"></i></button>';}).join('')
+      +shops.map(function(sh,i){
+        var _ic=sh.type==='service_center'?'🔧':sh.type==='pickup'?'📥':sh.type==='transfer'?'🔄':'📦';
+        return'<button onclick="dmSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;"><div style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+_ic+'</div><div style="flex:1;"><div>'+dmEsc(sh.shopName||sh.shopId||'–')+'</div></div><i class="fas fa-chevron-right" style="color:#475569;font-size:12px;"></i></button>';}).join('')
       +'</div></div>';
   }
   var sel=(_dmSelectedShopSeq!==null&&_dmSelectedShopSeq!==undefined)?_dmSelectedShopSeq:0;
@@ -38893,7 +38901,10 @@ function dmRenderTraveling(){
     var remaining=shops.filter(function(sh,i){return !(_dmShopVisits[i]&&_dmShopVisits[i].departed_at);});
     return '<div><div style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'
       +'<div style="font-size:11px;font-weight:900;color:#93c5fd;margin-bottom:14px;"><i class="fas fa-route" style="margin-right:6px;"></i>เลือกร้านถัดไปที่จะไป ('+remaining.length+' ร้านเหลือ)</div>'
-      +shops.map(function(sh,i){if(_dmShopVisits[i]&&_dmShopVisits[i].departed_at)return'';return'<button onclick="dmSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;"><div style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#64748b;flex-shrink:0;">'+(i+1)+'</div><div style="flex:1;">'+dmEsc(sh.shopName||sh.shopId||'–')+'</div><i class="fas fa-chevron-right" style="color:#475569;font-size:12px;"></i></button>';}).join('')
+      +shops.map(function(sh,i){
+        if(_dmShopVisits[i]&&_dmShopVisits[i].departed_at)return'';
+        var _ic=sh.type==='service_center'?'🔧':sh.type==='pickup'?'📥':sh.type==='transfer'?'🔄':'📦';
+        return'<button onclick="dmSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid #334155;border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;"><div style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+_ic+'</div><div style="flex:1;"><div>'+dmEsc(sh.shopName||sh.shopId||'–')+'</div></div><i class="fas fa-chevron-right" style="color:#475569;font-size:12px;"></i></button>';}).join('')
       +'</div>'
       +'<button onclick="dmResetTrip()" style="width:100%;background:#1e293b;border:2px solid #334155;border-radius:16px;padding:14px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;"><i class="fas fa-undo"></i> รีเซ็ตสถานะ (Admin)</button>'
       +'</div>';
@@ -38931,12 +38942,29 @@ function dmRenderAtShop(){
     ?'<button onclick="dmDepartShop()" style="width:100%;border:none;border-radius:16px;padding:18px;color:#fff;font-weight:900;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;background:#7c3aed;margin-bottom:8px;"><i class="fas fa-industry"></i> กลับบริษัท</button>'
     :'<button onclick="dmDepartShop()" style="width:100%;border:none;border-radius:16px;padding:18px;color:#fff;font-weight:900;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;background:#059669;margin-bottom:8px;"><i class="fas fa-arrow-right"></i> ไปร้านถัดไป ('+remaining.length+' ร้านเหลือ)</button>';
   return '<div>'
-    +'<div style="background:#1e293b;border:2px solid #059669;border-radius:20px;padding:18px;margin-bottom:12px;text-align:center;">'
-    +'<div style="font-size:28px;margin-bottom:6px;">📦</div>'
-    +'<div style="font-size:16px;font-weight:900;color:#34d399;margin-bottom:4px;">ส่งของที่ร้านเรียบร้อย</div>'
-    +'<div style="font-size:18px;font-weight:900;color:#fff;">'+dmEsc(shop.shopName||shop.shopId||'–')+'</div>'
-    +(visit.arrived_at?'<div style="font-size:12px;color:#64748b;margin-top:4px;">ถึงเวลา '+dmFmtTime(visit.arrived_at)+'</div>':'')
-    +'</div>'
+    +(function(){
+      var ic='📦',label='ส่งของที่ร้านเรียบร้อย',col='#34d399',brd='#059669';
+      if(shop.type==='service_center'){ic='🔧';label='แวะศูนย์ซ่อม / ตรวจเช็ค';col='#fbbf24';brd='#d97706';}
+      else if(shop.type==='pickup'){ic='📥';label='รับของเรียบร้อย';col='#818cf8';brd='#4f46e5';}
+      else if(shop.type==='transfer'){ic='🔄';label='ย้ายสินค้าเรียบร้อย';col='#c084fc';brd='#7c3aed';}
+      var itemsHtml='';
+      var shopItems=(shop.items||[]).filter(function(it){return it.sku;});
+      if(shopItems.length){
+        itemsHtml='<div style="margin-top:10px;text-align:left;border-top:1px solid rgba(255,255,255,.08);padding-top:10px;">'
+          +'<div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:6px;">รายการสินค้า</div>'
+          +shopItems.map(function(it){return'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);">'
+            +'<span style="font-size:12px;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%;">'+dmEsc(it.productName||it.sku)+'</span>'
+            +'<span style="font-size:12px;font-weight:900;color:'+col+';flex-shrink:0;">'+it.qty+' เส้น</span></div>';}).join('')
+          +'</div>';
+      }
+      return '<div style="background:#1e293b;border:2px solid '+brd+';border-radius:20px;padding:18px;margin-bottom:12px;text-align:center;">'
+        +'<div style="font-size:28px;margin-bottom:6px;">'+ic+'</div>'
+        +'<div style="font-size:16px;font-weight:900;color:'+col+';margin-bottom:4px;">'+label+'</div>'
+        +'<div style="font-size:18px;font-weight:900;color:#fff;">'+dmEsc(shop.shopName||shop.shopId||'–')+'</div>'
+        +(visit.arrived_at?'<div style="font-size:12px;color:#64748b;margin-top:4px;">ถึงเวลา '+dmFmtTime(visit.arrived_at)+'</div>':'')
+        +itemsHtml
+        +'</div>';
+    })()
     +'<div style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'+nextBtn+'</div>'
     +'<button onclick="dmResetTrip()" style="width:100%;background:#1e293b;border:2px solid #334155;border-radius:16px;padding:14px;color:#94a3b8;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;"><i class="fas fa-undo"></i> รีเซ็ตสถานะ (Admin)</button>'
     +'</div>';
