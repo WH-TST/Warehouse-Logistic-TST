@@ -38856,19 +38856,36 @@ function dmRenderAction(){
   else if(st==='returning')el.innerHTML=dmRenderReturning();
   else if(st==='completed')el.innerHTML=dmRenderCompleted();
   // Admin: bypass timer — always show action boxes
-  if(st==='traveling'){var cdBox=document.getElementById('dm-travel-countdown');var actBox=document.getElementById('dm-arrive-action');if(cdBox)cdBox.style.display='none';if(actBox)actBox.style.display='block';}
-  if(st==='returning'){var cdBox=document.getElementById('dm-return-countdown');var finBox=document.getElementById('dm-finish-action');if(cdBox)cdBox.style.display='none';if(finBox)finBox.style.display='block';}
   if(st==='traveling'||st==='returning'){_dmTimerIv=setInterval(function(){dmTickTimer(st);},1000);dmTickTimer(st);}
 }
 
+var DM_TRAVEL_LOCK_SEC = 600; // 10 นาที
 function dmTickTimer(st){
   var log=_dmTripLog;if(!log||log.status!==st)return;
   var refTime=log.started_at;
   Object.values(_dmShopVisits).forEach(function(sv){if(sv.departed_at&&sv.departed_at>refTime)refTime=sv.departed_at;});
-  var elId=st==='traveling'?'dm-travel-elapsed':'dm-return-elapsed';
-  var elEl=document.getElementById(elId);if(!elEl)return;
   var elapsed=Math.floor((Date.now()-new Date(refTime).getTime())/1000);
-  elEl.textContent=Math.floor(elapsed/60)+' นาที '+String(elapsed%60).padStart(2,'0')+' วิ';
+  var isTrav=st==='traveling';
+  var msgEl=document.getElementById(isTrav?'dm-travel-msg':'dm-return-msg');
+  var actionEl=document.getElementById(isTrav?'dm-arrive-action':'dm-finish-action');
+  var unlocked=elapsed>=DM_TRAVEL_LOCK_SEC;
+  // ข้อความตามระยะ (ไม่บอกเวลา)
+  var msgs=[
+    [0,   '🙏 ขับรถดีๆ นะครับ ระวังความปลอดภัยด้วย'],
+    [120, '🚛 กำลังเดินทาง...'],
+    [300, '📍 ใกล้ถึงแล้ว เตรียมตัวได้เลย'],
+    [480, '🟡 เกือบถึงแล้ว...'],
+  ];
+  var msg=msgs[0][1];
+  for(var i=0;i<msgs.length;i++){if(elapsed>=msgs[i][0])msg=msgs[i][1];}
+  if(msgEl){
+    if(unlocked){msgEl.style.display='none';}
+    else{msgEl.style.display='block';msgEl.textContent=msg;}
+  }
+  if(actionEl){
+    if(unlocked&&actionEl.style.display==='none'){actionEl.style.display='block';}
+    else if(!unlocked){actionEl.style.display='none';}
+  }
 }
 
 function dmRenderIdle(){
@@ -38915,10 +38932,9 @@ function dmRenderTraveling(){
     +'<div style="background:#1e293b;border:2px solid #1d4ed8;border-radius:20px;padding:18px;margin-bottom:12px;">'
     +'<div style="font-size:10px;font-weight:900;color:#93c5fd;margin-bottom:6px;"><i class="fas fa-truck-moving" style="margin-right:5px;"></i>กำลังเดินทางไป</div>'
     +'<div style="font-size:20px;font-weight:900;color:#fff;margin-bottom:10px;">'+dmEsc(shop.shopName||shop.shopId||'–')+'</div>'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="margin-right:4px;"></i>เวลาที่ใช้เดินทาง</span>'
-    +'<span id="dm-travel-elapsed" style="font-size:14px;font-weight:900;color:#fbbf24;">–</span></div></div>'
-    +'<div id="dm-travel-countdown" style="display:none;"></div>'
-    +'<div id="dm-arrive-action" style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'
+    +'</div>'
+    +'<div id="dm-travel-msg" style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;text-align:center;font-size:15px;font-weight:900;color:#94a3b8;line-height:1.6;">🚛 กำลังเดินทาง...</div>'
+    +'<div id="dm-arrive-action" style="display:none;background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'
     +'<div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">ไมล์เมื่อถึงร้าน (หน้าปัดรถ)</div>'
     +'<input id="dm-mile-arr" type="number" inputmode="numeric" placeholder="เช่น 125060" style="width:100%;background:#0f172a;border:2px solid #334155;border-radius:14px;padding:14px 16px;color:#fff;font-weight:900;font-size:22px;text-align:center;outline:none;letter-spacing:.03em;box-sizing:border-box;margin-bottom:14px;">'
     +(_dmCapturedPreviewUrl
@@ -38978,8 +38994,8 @@ function dmRenderReturning(){
     +'<div style="font-size:16px;font-weight:900;color:#c4b5fd;margin-bottom:8px;">ส่งครบ '+shops.length+' ร้านแล้ว</div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#64748b;"><i class="fas fa-clock" style="margin-right:4px;"></i>เวลาที่ใช้กลับ</span>'
     +'<span id="dm-return-elapsed" style="font-size:14px;font-weight:900;color:#fbbf24;">–</span></div></div>'
-    +'<div id="dm-return-countdown" style="display:none;"></div>'
-    +'<div id="dm-finish-action" style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'
+    +'<div id="dm-return-msg" style="background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;text-align:center;font-size:15px;font-weight:900;color:#94a3b8;line-height:1.6;">🏁 กำลังกลับบริษัท...</div>'
+    +'<div id="dm-finish-action" style="display:none;background:#1e293b;border-radius:20px;padding:18px;margin-bottom:12px;">'
     +'<div style="font-size:10px;font-weight:900;color:#6ee7b7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">ไมล์เมื่อถึงบริษัท (หน้าปัดรถ)</div>'
     +'<input id="dm-mile-end" type="number" inputmode="numeric" placeholder="เช่น 125120" style="width:100%;background:#0f172a;border:2px solid #334155;border-radius:14px;padding:14px 16px;color:#fff;font-weight:900;font-size:22px;text-align:center;outline:none;letter-spacing:.03em;box-sizing:border-box;margin-bottom:8px;">'
     +'<div style="font-size:11px;color:#64748b;text-align:center;margin-bottom:16px;"><i class="fas fa-map-marker-alt" style="color:#34d399;margin-right:4px;"></i>GPS จะถูกบันทึกอัตโนมัติ</div>'
