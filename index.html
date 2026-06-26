@@ -22765,7 +22765,7 @@ function renderLogiCalendar() {
     // ── ขนาด cell ──
     const nDays = days.length;
     // ถ้ามีวันน้อย cell กว้างขึ้น, มากขึ้น cell แคบลง
-    const CELL_W      = nDays <= 7 ? 130 : nDays <= 14 ? 100 : nDays <= 21 ? 85 : 75;
+    const CELL_W      = nDays <= 7 ? 180 : nDays <= 14 ? 140 : nDays <= 21 ? 110 : 90;
     const TRUCK_W     = 130;
     const DAY_NAMES   = ['อา','จ','อ','พ','พฤ','ศ','ส'];
     const MONTH_TH    = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -22850,14 +22850,12 @@ function renderLogiCalendar() {
                 const totalDist = shops.reduce((sum,s) => sum + (parseFloat(s.distance)||0), 0);
                 const remarkTxt = shops.map(s=>s.remark).filter(r=>r&&r!=='—').join(', ')
                     || (p.failReason && !p.failReason.startsWith('[') ? p.failReason : '');
-                const _canDrag = p.status !== 'success';
                 const _esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
-                return `<div class="${st.bg} border-l-4 ${st.border} rounded-r-xl rounded-l-sm p-2 text-left w-full relative group transition-all
-                    ${_canDrag ? 'cursor-grab active:cursor-grabbing hover:shadow-md hover:brightness-95' : 'cursor-pointer hover:shadow-md hover:brightness-95'}"
+                return `<div class="${st.bg} border-l-4 ${st.border} rounded-r-xl rounded-l-sm p-2 text-left w-full relative group transition-all cursor-grab active:cursor-grabbing hover:shadow-md hover:brightness-95"
                     id="cal-badge-${p.id}"
-                    draggable="${_canDrag}"
-                    ondragstart="${_canDrag ? `calDragStart(event,'${_esc(p.id)}')` : ''}"
-                    ondragend="${_canDrag ? 'calDragEnd(event)' : ''}"
+                    draggable="true"
+                    ondragstart="calDragStart(event,'${_esc(p.id)}')"
+                    ondragend="calDragEnd(event)"
                     onclick="viewLogiPlan('${p.id}')">
                     <button onclick="event.stopPropagation();deleteLogiPlanFromCal('${p.id}')"
                         class="absolute top-1 right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[9px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-700 z-10 flex">
