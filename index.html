@@ -13721,6 +13721,7 @@ let blockingChartInstance = null;
     var _invdLikelyW = {}; // sku → likely_w
     var _invdStatus  = {}; // sku → status
     var _invdGroup   = {}; // sku → item_group
+    var _invdFGMap   = {}; // semi_item → {fg_code_1,fg_name_1,fg_code_2,fg_name_2}
     var _invdSort    = { col: null, dir: 1 };
     var _invdFilters = {};
     var _invdFilterExact = {};
@@ -13766,6 +13767,14 @@ let blockingChartInstance = null;
             _invdGroup[p.sku]   = p.item_group||'';
           });
         }
+        // fetch semi_fg_mapping for onhand_semi
+        if(_invdTable === 'onhand_semi'){
+          var fgmRes = await window._sb.from('semi_fg_mapping').select('semi_item,fg_code_1,fg_name_1,fg_code_2,fg_name_2');
+          _invdFGMap = {};
+          (fgmRes.data||[]).forEach(function(m){
+            _invdFGMap[m.semi_item] = m;
+          });
+        }
         var cols = _invdCols[_invdTable];
         var sortCol = isTransaction ? 'tst_pd_date' : 'item_number';
         var q = window._sb.from(_invdTable).select(cols.join(',')).order(sortCol,{ascending:false});
@@ -13805,10 +13814,16 @@ let blockingChartInstance = null;
       if(!thead) return;
       var cols = _invdCols[_invdTable]||[];
       var isFG = _invdTable === 'onhand_fg';
+      var isSEMI = _invdTable === 'onhand_semi';
       var extraCols = isFG ? [
         {key:'_est_weight', label:'EST. WEIGHT (KG)', bg:'#f5f3ff', color:'#7c3aed'},
         {key:'_status',     label:'STATUS',           bg:'#f0fdf4', color:'#15803d'},
         {key:'_group',      label:'GROUP',            bg:'#eef2ff', color:'#4338ca'}
+      ] : isSEMI ? [
+        {key:'_fg_code_1', label:'FG 1 (รหัส)', bg:'#fef3c7', color:'#92400e'},
+        {key:'_fg_name_1', label:'FG 1 (ชื่อ)',  bg:'#fef3c7', color:'#92400e'},
+        {key:'_fg_code_2', label:'FG 2 (รหัส)', bg:'#e0f2fe', color:'#0369a1'},
+        {key:'_fg_name_2', label:'FG 2 (ชื่อ)',  bg:'#e0f2fe', color:'#0369a1'}
       ] : [];
 
       var makeThStyle = function(key, bg) {
@@ -13892,6 +13907,7 @@ let blockingChartInstance = null;
       var q = (document.getElementById('invd-search').value||'').toLowerCase();
       var cols = _invdCols[_invdTable];
       var isFG = _invdTable === 'onhand_fg';
+      var isSEMI = _invdTable === 'onhand_semi';
       var filtered = _invdData.filter(function(r){
         if(q && !cols.some(function(c){ return String(r[c]||'').toLowerCase().includes(q); })) return false;
         for(var col in _invdFilters){
@@ -13978,6 +13994,14 @@ let blockingChartInstance = null;
               return '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="background:#f0fdf4">'+(st?'<span style="'+s+'font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;">'+st+'</span>':'<span style="color:#cbd5e1">—</span>')+'</td>';
             })() : '')
           + (isFG ? '<td class="px-3 py-1.5 text-xs whitespace-nowrap text-center font-bold text-indigo-700" style="background:#eef2ff">'+(_invdGroup[r.item_number]||'<span style="color:#cbd5e1">—</span>')+'</td>' : '')
+          + (isSEMI ? (function(){
+              var m = _invdFGMap[r.item_number] || {};
+              var c1 = m.fg_code_1||'', n1 = m.fg_name_1||'', c2 = m.fg_code_2||'', n2 = m.fg_name_2||'';
+              return '<td class="px-3 py-1.5 text-xs whitespace-nowrap font-mono font-bold" style="background:#fef3c7;color:#92400e">'+(c1||'<span style="color:#cbd5e1">—</span>')+'</td>'
+                   + '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="background:#fef3c7;color:#78350f">'+(n1||'<span style="color:#cbd5e1">—</span>')+'</td>'
+                   + '<td class="px-3 py-1.5 text-xs whitespace-nowrap font-mono font-bold" style="background:#e0f2fe;color:#0369a1">'+(c2||'<span style="color:#cbd5e1">—</span>')+'</td>'
+                   + '<td class="px-3 py-1.5 text-xs whitespace-nowrap" style="background:#e0f2fe;color:#0c4a6e">'+(n2||'<span style="color:#cbd5e1">—</span>')+'</td>';
+            })() : '')
           + '</tr>';
       }).join('') : '<tr><td colspan="20" class="text-center text-slate-400 py-8">ไม่พบข้อมูล</td></tr>';
     };
