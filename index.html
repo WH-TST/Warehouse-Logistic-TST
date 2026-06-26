@@ -23362,8 +23362,8 @@ window.editLogiPlan = function editLogiPlan(planId) {
     const _memMother = _memRows.find(r => r.isMother || r.id.endsWith('-M')) || _memRows.find(r => !r.isChild) || _memRows[0];
 
     if (_memMother) {
-        // รวม shops จากทุก row ใน memory (แม่+ลูก)
-        const _allShops = _memRows.flatMap(r => r.shops || []);
+        // ใช้ shops จากแม่เท่านั้น (shops มี items ครบทุก truckLabel อยู่แล้ว)
+        const _allShops = _memMother.shops || [];
         const p = Object.assign({}, _memMother, { shops: _allShops });
         _doPopulateEditForm(p);
     } else {
@@ -23379,7 +23379,7 @@ window.editLogiPlan = function editLogiPlan(planId) {
                 const rows = qr.data;
                 const motherRow = rows.find(r => r.is_mother || r.plan_id.endsWith('-M'))
                                || rows.find(r => !r.is_child) || rows[0];
-                const allShops = rows.flatMap(r => r.shops || []);
+                const allShops = motherRow.shops || [];
                 const p = {
                     id: motherRow.plan_id, date: motherRow.plan_date,
                     jobType: motherRow.job_type, status: motherRow.status,
