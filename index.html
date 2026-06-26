@@ -23797,54 +23797,81 @@ function _ldBuildFormMobile(order) {
         if(lpb>0&&lpr>0&&qty>0) return Math.ceil(Math.ceil(qty/lpb)/lpr);
         return 4;
     }
+    // maxL per-item (each item may have different lift count); global max for column header
     var maxL=items.reduce(function(m,it){return Math.max(m,_lc(it));},4);
     _ldOrderCols[oid]=maxL;
+    // +1 extra "buffer" column shown beyond each item's lift count
+    var dispCols=maxL+1;
     var cu=window._cu||{}, uName=cu.name||cu.username||'';
     var sRec=(_ldStaffMaster||[]).find(function(x){return x.name===cu.name||x.id===cu.username;});
     var teamTxt=sRec?' · '+sRec.team:'';
-    var IW='width:100%;box-sizing:border-box;border:2px solid #bbf7d0;border-radius:8px;background:#fff;text-align:center;font-size:17px;font-weight:700;padding:12px 2px;outline:none;color:#15803d;-webkit-appearance:none;display:block;';
-    var IQ='width:100%;box-sizing:border-box;border:2px solid #bfdbfe;border-radius:8px;background:#fff;text-align:center;font-size:17px;font-weight:700;padding:12px 2px;outline:none;color:#1d4ed8;-webkit-appearance:none;display:block;';
+    var IW='width:100%;box-sizing:border-box;border:2px solid #bbf7d0;border-radius:8px;background:#fff;text-align:center;font-size:16px;font-weight:700;padding:10px 2px;outline:none;color:#15803d;-webkit-appearance:none;display:block;';
+    var IQ='width:100%;box-sizing:border-box;border:2px solid #bfdbfe;border-radius:8px;background:#fff;text-align:center;font-size:16px;font-weight:700;padding:10px 2px;outline:none;color:#1d4ed8;-webkit-appearance:none;display:block;';
+    // Column header: label col + dispCols lift cols (no summary cols — those go in item header)
     var hdrCols='<th style="padding:8px 6px;font-size:10px;font-weight:900;color:#94a3b8;background:#1e293b;position:sticky;left:0;z-index:3;min-width:36px;"></th>';
-    for(var h=0;h<maxL;h++) hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:13px;font-weight:900;color:#fff;background:#1e293b;min-width:80px;">'+(h+1)+'</th>';
-    hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:900;color:#6ee7b7;background:#14532d;min-width:64px;">Total W</th>';
-    hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:900;color:#93c5fd;background:#1e3a5f;min-width:64px;">Total Pcs</th>';
-    hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:900;color:#c4b5fd;background:#2e1065;min-width:60px;">Avg</th>';
+    for(var h=0;h<dispCols;h++){
+        var isExtra=(h>=maxL);
+        hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:13px;font-weight:900;color:'+(isExtra?'#64748b':'#fff')+';background:'+(isExtra?'#334155':'#1e293b')+';min-width:80px;">'+(h+1)+(isExtra?' <span style="font-size:9px;color:#94a3b8;">(+)</span>':'')+'</th>';
+    }
     var itemRows=items.map(function(it,idx){
         var pName=(it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
         var prod=_ldProductMap[it.sku]||{}, minW=prod.min_w, maxW=prod.max_w;
-        var rangeStr=(minW!=null&&maxW!=null)?'('+minW+' - '+maxW+')':'';
+        var rangeStr=(minW!=null&&maxW!=null)?minW+' – '+maxW+' kg/pcs':'';
         var lc=_lc(it);
-        var hdr='<tr style="background:#1e293b;">'
-            +'<td colspan="'+(1+maxL+3)+'" style="padding:8px 10px;">'
-                +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'
-                    +'<span style="font-size:14px;font-weight:900;color:#fff;">'+(idx+1)+'. '+_ldEsc(pName)+'</span>'
-                    +(rangeStr?'<span style="font-size:11px;color:#fbbf24;font-weight:700;">'+rangeStr+'</span>':'')
-                    +'<span style="font-size:12px;font-weight:900;color:#38bdf8;margin-left:auto;">'+(it.qty||0)+' PCS</span>'
+        var tgtPcs=parseFloat(it.qty)||0;
+        var tgtKg=parseFloat(it.target_weight)||0;
+        // Header row: product name + range + TARGET (prominent) + live summary
+        var hdr='<tr style="background:#0f172a;">'
+            +'<td colspan="'+(1+dispCols)+'" style="padding:10px 12px;">'
+                // Product name line
+                +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
+                    +'<span style="font-size:13px;font-weight:900;color:#fff;">'+(idx+1)+'. '+_ldEsc(pName)+'</span>'
+                    +(it.sku?'<span style="font-size:9px;color:#64748b;background:#1e293b;border-radius:4px;padding:1px 5px;">'+_ldEsc(it.sku)+'</span>':'')
+                    +(rangeStr?'<span style="font-size:10px;color:#fbbf24;font-weight:700;margin-left:auto;">'+rangeStr+'</span>':'')
                 +'</div>'
-                +(it.sku?'<div style="font-size:9px;color:#475569;margin-top:1px;">'+_ldEsc(it.sku)+'</div>':'')
+                // Target + live summary row — same line
+                +'<div style="display:flex;align-items:stretch;gap:6px;">'
+                    // Target block (prominent)
+                    +'<div style="background:#1e3a5f;border-radius:8px;padding:6px 10px;text-align:center;flex:0 0 auto;">'
+                        +'<div style="font-size:9px;font-weight:900;color:#93c5fd;text-transform:uppercase;letter-spacing:.5px;">Target</div>'
+                        +'<div style="font-size:20px;font-weight:900;color:#38bdf8;font-family:monospace;line-height:1.1;">'+(tgtPcs||'—')+'</div>'
+                        +'<div style="font-size:9px;color:#60a5fa;">PCS</div>'
+                        +(tgtKg?'<div style="font-size:11px;font-weight:700;color:#7dd3fc;margin-top:1px;">'+tgtKg+' KG</div>':'')
+                    +'</div>'
+                    // Live summary: W / Pcs / Avg
+                    +'<div style="display:flex;flex:1;gap:4px;">'
+                        +'<div style="flex:1;background:#14532d;border-radius:8px;padding:6px 4px;text-align:center;">'
+                            +'<div style="font-size:9px;font-weight:900;color:#6ee7b7;text-transform:uppercase;">ขึ้นแล้ว</div>'
+                            +'<div id="ldf-actual-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#4ade80;font-family:monospace;line-height:1.1;">—</div>'
+                            +'<div style="font-size:9px;color:#86efac;">KG</div>'
+                        +'</div>'
+                        +'<div style="flex:1;background:#1e3a5f;border-radius:8px;padding:6px 4px;text-align:center;">'
+                            +'<div style="font-size:9px;font-weight:900;color:#93c5fd;text-transform:uppercase;">จำนวน</div>'
+                            +'<div id="ldf-actual-qty-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#60a5fa;font-family:monospace;line-height:1.1;">—</div>'
+                            +'<div style="font-size:9px;color:#93c5fd;">PCS</div>'
+                        +'</div>'
+                        +'<div style="flex:1;background:#2e1065;border-radius:8px;padding:6px 4px;text-align:center;">'
+                            +'<div style="font-size:9px;font-weight:900;color:#c4b5fd;text-transform:uppercase;">เฉลี่ย</div>'
+                            +'<div id="ldf-actual-avg-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#a78bfa;font-family:monospace;line-height:1.1;">—</div>'
+                            +'<div style="font-size:9px;color:#c4b5fd;">kg/pcs</div>'
+                        +'</div>'
+                    +'</div>'
+                +'</div>'
             +'</td>'
         +'</tr>';
         var kgR='<td style="padding:6px 5px;background:#f8fafc;font-size:12px;font-weight:900;color:#15803d;text-align:center;position:sticky;left:0;z-index:2;border-right:2px solid #e2e8f0;">Kg</td>';
         var pcR='<td style="padding:6px 5px;background:#f8fafc;font-size:12px;font-weight:900;color:#1d4ed8;text-align:center;position:sticky;left:0;z-index:2;border-right:2px solid #e2e8f0;border-bottom:3px solid #cbd5e1;">Pcs</td>';
-        for(var c=0;c<maxL;c++){
+        var ev='ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')';
+        for(var c=0;c<dispCols;c++){
             var cId='ldf-lw-'+oid+'-'+idx+'-'+c;
             var qId='ldf-lq-'+oid+'-'+idx+'-'+c;
-            var ev='ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')';
-            kgR+='<td style="padding:5px 4px;border-right:1px solid #f1f5f9;">'+(c<lc?'<input type="number" min="0" step="0.01" placeholder="kg" style="'+IW+'" id="'+cId+'" oninput="'+ev+'">':'<div style="text-align:center;color:#e2e8f0;font-size:11px;">—</div>')+'</td>';
-            pcR+='<td style="padding:5px 4px;border-right:1px solid #f1f5f9;border-bottom:3px solid #cbd5e1;">'+(c<lc?'<input type="number" min="0" step="1" placeholder="pcs" style="'+IQ+'" id="'+qId+'" oninput="'+ev+'">':'<div style="text-align:center;color:#e2e8f0;font-size:11px;">—</div>')+'</td>';
+            var active=(c<lc);
+            var isExtraCol=(c>=maxL);
+            var cellStyle='padding:5px 4px;border-right:1px solid #f1f5f9;'+(isExtraCol?'background:#f8fafc;':'')+';';
+            var cellStyleB=cellStyle+'border-bottom:3px solid #cbd5e1;';
+            kgR+='<td style="'+cellStyle+'">'+(active?'<input type="number" min="0" step="0.01" placeholder="kg" style="'+IW+(isExtraCol?'border-color:#e2e8f0;color:#94a3b8;':'')+'" id="'+cId+'" oninput="'+ev+'">':'<div style="text-align:center;color:#e2e8f0;font-size:11px;padding:10px 0;">—</div>')+'</td>';
+            pcR+='<td style="'+cellStyleB+'">'+(active?'<input type="number" min="0" step="1" placeholder="pcs" style="'+IQ+(isExtraCol?'border-color:#e2e8f0;color:#94a3b8;':'')+'" id="'+qId+'" oninput="'+ev+'">':'<div style="text-align:center;color:#e2e8f0;font-size:11px;padding:10px 0;">—</div>')+'</td>';
         }
-        kgR+='<td rowspan="2" style="padding:6px 4px;background:#f0fdf4;text-align:center;border-left:2px solid #d1fae5;vertical-align:middle;">'
-            +'<div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:2px;">KG</div>'
-            +'<div id="ldf-actual-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#15803d;font-family:monospace;">—</div>'
-        +'</td>';
-        kgR+='<td rowspan="2" style="padding:6px 4px;background:#eff6ff;text-align:center;border-left:1px solid #bfdbfe;vertical-align:middle;">'
-            +'<div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:2px;">PCS</div>'
-            +'<div id="ldf-actual-qty-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#1d4ed8;font-family:monospace;">—</div>'
-        +'</td>';
-        kgR+='<td rowspan="2" style="padding:6px 4px;background:#faf5ff;text-align:center;border-left:1px solid #ddd6fe;vertical-align:middle;">'
-            +'<div style="font-size:10px;font-weight:900;color:#64748b;margin-bottom:2px;">Avg</div>'
-            +'<div id="ldf-actual-avg-'+oid+'-'+idx+'" style="font-size:15px;font-weight:900;color:#7c3aed;font-family:monospace;">—</div>'
-        +'</td>';
         return hdr+'<tr>'+kgR+'</tr><tr>'+pcR+'</tr>';
     }).join('');
 
