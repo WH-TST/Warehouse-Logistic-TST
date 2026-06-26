@@ -16535,23 +16535,190 @@ window.addLogiPickup = function addLogiPickup() {
             </button>
         </div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <div>
-            <label class="text-[10px] font-black text-indigo-600 uppercase mb-0.5 block">สถานที่รับของ <span class="text-rose-500">*</span></label>
-            <input type="text" id="logi-pu-name-${idx}" placeholder="เช่น โรงงาน A, คลังสินค้า XYZ..."
-                   class="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400 transition-all">
+    <div>
+        <label class="text-[10px] font-black text-indigo-600 uppercase mb-0.5 block">สถานที่รับของ <span class="text-rose-500">*</span></label>
+        <input type="text" id="logi-pu-name-${idx}" placeholder="เช่น โรงงาน A, คลังสินค้า XYZ..."
+               class="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-indigo-400 transition-all">
+    </div>
+    <div class="bg-indigo-100/60 rounded-lg p-2 space-y-2">
+        <div class="flex justify-between items-center">
+            <span class="text-[10px] font-black text-indigo-700 uppercase">รายการสินค้าที่รับ</span>
+            <div class="flex gap-1">
+                <button type="button" onclick="openWpDump('logi-wp-items-${idx}','indigo')" class="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 px-2 py-1 rounded font-black hover:bg-amber-200"><i class="fas fa-paste mr-1"></i>Dump</button>
+                <button type="button" onclick="addWaypointItem('logi-wp-items-${idx}','indigo')" class="text-[10px] bg-indigo-600 text-white px-2 py-1 rounded font-black hover:bg-indigo-700"><i class="fas fa-plus mr-1"></i>เพิ่มรายการ</button>
+            </div>
         </div>
-        <div>
-            <label class="text-[10px] font-black text-indigo-600 uppercase mb-0.5 block">รายการที่รับ / หมายเหตุ</label>
-            <input type="text" id="logi-pu-remark-${idx}" placeholder="เช่น เหล็กข้ออ้อย 20 เส้น, เอกสารใบส่งของ..."
-                   class="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-indigo-400 transition-all">
-        </div>
+        <div id="logi-wp-items-${idx}" class="space-y-1"></div>
+        <div id="logi-wp-items-${idx}-empty" class="text-center text-indigo-300 text-xs py-1 font-bold">ยังไม่มีรายการ — กด เพิ่มรายการ</div>
     </div>`;
     container.appendChild(div);
     updateLogiShopNumbers();
 }
 
 // ── เพิ่มจุดแวะส่งย้ายของ ──
+
+
+// ── Waypoint item management ─────────────────────────────────────────────────
+let _wpItemCounter = 0;
+
+const WP_THEME_COLORS = {
+    indigo: { border:'#a5b4fc', focus:'border-indigo-400', sku:'#6366f1', wt:'#4f46e5', del:'bg-indigo-100 hover:bg-indigo-200 text-indigo-600' },
+    orange: { border:'#fdba74', focus:'border-orange-400', sku:'#ea580c', wt:'#c2410c', del:'bg-orange-100 hover:bg-orange-200 text-orange-600' },
+    violet: { border:'#c4b5fd', focus:'border-violet-400', sku:'#7c3aed', wt:'#5b21b6', del:'bg-violet-100 hover:bg-violet-200 text-violet-600' },
+};
+
+window.addWaypointItem = function addWaypointItem(containerId, theme, sku, qty) {
+    const container = document.getElementById(containerId);
+    const emptyEl   = document.getElementById(containerId + '-empty');
+    if (!container) return;
+    const c = WP_THEME_COLORS[theme] || WP_THEME_COLORS.violet;
+    const rowId = 'wp-item-' + (_wpItemCounter++);
+    const skuStr = sku || '';
+    const qtyStr = qty || '';
+    const product = (LOGI_PRODUCTS_MASTER || []).find(p => p.sku === skuStr.toUpperCase());
+    const nameStr = product ? product.name : '';
+    const wt = product ? ((parseFloat(qtyStr)||0)*(product.likelyW||0)).toFixed(2) : '0.00';
+
+    const row = document.createElement('div');
+    row.id = rowId;
+    row.className = 'grid gap-1 items-center bg-white rounded-lg border px-2 py-1.5';
+    row.style.cssText = `border-color:${c.border};grid-template-columns:2fr 3fr 1.2fr auto auto;`;
+    row.innerHTML = `
+        <div class="relative">
+            <input type="text" placeholder="รหัส/ชื่อ" value="${skuStr}" autocomplete="off"
+                   class="wp-item-sku w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-black text-slate-700 outline-none focus:${c.focus}"
+                   oninput="onWpSkuInput('${rowId}', this)"
+                   onfocus="onWpSkuInput('${rowId}', this)"
+                   onblur="setTimeout(()=>closeWpDrop('${rowId}'),200)">
+            <div id="${rowId}-drop" class="hidden absolute z-50 left-0 w-72 bg-white border-2 rounded-xl shadow-2xl max-h-48 overflow-y-auto mt-1" style="border-color:${c.border}"></div>
+        </div>
+        <div class="wp-item-name text-xs font-bold text-slate-500 truncate px-1" id="${rowId}-name" data-name="${nameStr}">${nameStr || '<span class="text-slate-300">—</span>'}</div>
+        <input type="number" placeholder="จำนวน" value="${qtyStr}" min="0"
+               class="wp-item-qty w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:${c.focus} text-center"
+               oninput="onWpQtyInput('${rowId}', this)">
+        <div class="wp-item-wt text-xs font-black text-right px-1 whitespace-nowrap" id="${rowId}-wt" style="color:${c.wt}">${wt}<span class="text-slate-400 font-normal"> กก.</span></div>
+        <button type="button" onclick="removeWpItem('${rowId}','${containerId}')"
+                class="w-6 h-6 ${c.del} rounded flex items-center justify-center text-xs flex-shrink-0">
+            <i class="fas fa-times"></i>
+        </button>`;
+    container.appendChild(row);
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (skuStr && product) onWpSkuChange(rowId, row.querySelector('.wp-item-sku'));
+};
+
+window.removeWpItem = function removeWpItem(rowId, containerId) {
+    const row = document.getElementById(rowId);
+    if (row) row.remove();
+    const container = document.getElementById(containerId);
+    const emptyEl = document.getElementById(containerId + '-empty');
+    if (emptyEl && container) emptyEl.classList.toggle('hidden', container.children.length > 0);
+};
+
+window.onWpSkuInput = function onWpSkuInput(rowId, input) {
+    const q = input.value.trim().toUpperCase();
+    const drop = document.getElementById(rowId + '-drop');
+    if (!drop) return;
+    const products = LOGI_PRODUCTS_MASTER || [];
+    const filtered = q ? products.filter(p => p.sku.includes(q) || (p.name||'').toUpperCase().includes(q)) : products;
+    const hi = t => q ? t.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), m=>`<mark class="bg-yellow-200 rounded">${m}</mark>`) : t;
+    drop.innerHTML = filtered.length === 0
+        ? '<div class="px-3 py-2 text-slate-400 text-xs font-bold">ไม่พบสินค้า</div>'
+        : filtered.slice(0,40).map(p =>
+            `<div class="px-3 py-2 cursor-pointer hover:bg-violet-50 border-b border-slate-100 last:border-0"
+                  onmousedown="selectWpProduct('${rowId}','${p.sku}')">
+               <span class="font-black text-violet-700 text-xs">${hi(p.sku)}</span>
+               <span class="text-slate-500 text-xs ml-1">— ${hi(p.name||'')}</span>
+             </div>`).join('');
+    drop.classList.remove('hidden');
+    onWpSkuChange(rowId, input);
+};
+
+window.selectWpProduct = function selectWpProduct(rowId, sku) {
+    const row = document.getElementById(rowId);
+    const input = row ? row.querySelector('.wp-item-sku') : null;
+    const drop = document.getElementById(rowId + '-drop');
+    if (input) { input.value = sku; onWpSkuChange(rowId, input); }
+    if (drop) drop.classList.add('hidden');
+};
+
+window.closeWpDrop = function closeWpDrop(rowId) {
+    const drop = document.getElementById(rowId + '-drop');
+    if (drop) drop.classList.add('hidden');
+};
+
+window.onWpSkuChange = function onWpSkuChange(rowId, input) {
+    const sku = input.value.trim().toUpperCase();
+    const product = (LOGI_PRODUCTS_MASTER || []).find(p => p.sku === sku);
+    const nameEl = document.getElementById(rowId + '-name');
+    const wtEl = document.getElementById(rowId + '-wt');
+    const row = document.getElementById(rowId);
+    const qtyEl = row ? row.querySelector('.wp-item-qty') : null;
+    if (nameEl) {
+        nameEl.innerHTML = product ? product.name : '<span class="text-slate-300">ไม่พบสินค้า</span>';
+        nameEl.dataset.name = product ? product.name : '';
+    }
+    if (wtEl && qtyEl) {
+        const wt = product ? ((parseFloat(qtyEl.value)||0)*(product.likelyW||0)).toFixed(2) : '0.00';
+        wtEl.innerHTML = `${wt}<span class="text-slate-400 font-normal"> กก.</span>`;
+    }
+};
+
+window.onWpQtyInput = function onWpQtyInput(rowId, input) {
+    const row = document.getElementById(rowId);
+    const skuEl = row ? row.querySelector('.wp-item-sku') : null;
+    const wtEl = document.getElementById(rowId + '-wt');
+    const sku = skuEl ? skuEl.value.trim().toUpperCase() : '';
+    const product = (LOGI_PRODUCTS_MASTER || []).find(p => p.sku === sku);
+    if (wtEl) {
+        const wt = product ? ((parseFloat(input.value)||0)*(product.likelyW||0)).toFixed(2) : '0.00';
+        wtEl.innerHTML = `${wt}<span class="text-slate-400 font-normal"> กก.</span>`;
+    }
+};
+
+// ── Dump รหัสสินค้าสำหรับ waypoint ──
+let _wpDumpTargetId = '';
+let _wpDumpTheme = '';
+window.openWpDump = function openWpDump(containerId, theme) {
+    _wpDumpTargetId = containerId;
+    _wpDumpTheme = theme;
+    // reuse existing dump modal (openTransferDump creates it)
+    openTransferDump();
+    // override confirm button to use waypoint handler
+    requestAnimationFrame(() => {
+        const confirmBtn = document.getElementById('logi-dump-confirm-btn');
+        if (confirmBtn) confirmBtn.onclick = confirmWpDump;
+    });
+};
+window.confirmWpDump = function confirmWpDump() {
+    const area = document.getElementById('logi-dump-textarea');
+    if (!area || !_wpDumpTargetId) return;
+    const text = area.value;
+    const parsed = parseTransferDumpText(text);
+    if (!parsed.length) { showToast('ไม่พบรหัสสินค้า กรุณาตรวจสอบ format', true); return; }
+    parsed.forEach(p => addWaypointItem(_wpDumpTargetId, _wpDumpTheme, p.sku, p.qty));
+    closeLogiDumpModal();
+    showToast('✅ Dump สำเร็จ ' + parsed.length + ' รายการ');
+};
+
+// ── รวบรวม items จาก waypoint container ──
+function collectWaypointItems(containerId) {
+    const items = [];
+    const container = document.getElementById(containerId);
+    if (!container) return items;
+    container.querySelectorAll('[id^="wp-item-"]').forEach(row => {
+        const skuEl = row.querySelector('.wp-item-sku');
+        const qtyEl = row.querySelector('.wp-item-qty');
+        const nameEl = row.querySelector('.wp-item-name');
+        const sku = skuEl?.value.trim().toUpperCase() || '';
+        const qty = parseFloat(qtyEl?.value) || 0;
+        if (!sku) return;
+        const prod = (LOGI_PRODUCTS_MASTER||[]).find(p=>p.sku===sku);
+        const name = prod?.name || nameEl?.dataset?.name || '';
+        const wpu = prod?.likelyW || 0;
+        items.push({ sku, productName: name, qty, weightPerUnit: wpu, weight: parseFloat((qty*wpu).toFixed(2)) });
+    });
+    return items;
+}
 
 // ── เพิ่ม waypoint ย้ายสินค้า (Transfer) ──────────────────────────────────────
 window.addLogiTransfer = function addLogiTransfer() {
@@ -16582,17 +16749,21 @@ window.addLogiTransfer = function addLogiTransfer() {
                 <input type="radio" name="logi-tr-type-${idx}" value="semi"> SEMI
             </label>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-            <div>
-                <label class="text-[10px] font-black text-violet-600 mb-0.5 block">ปลายทาง / คลังที่ส่ง <span class="text-rose-500">*</span></label>
-                <input type="text" id="logi-tr-dest-${idx}" placeholder="เช่น คลัง FG-BB บางบ่อ, โกดังนิคม..."
-                       class="w-full bg-white border border-violet-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-violet-500">
+        <div>
+            <label class="text-[10px] font-black text-violet-600 mb-0.5 block">ปลายทาง / คลังที่ส่ง <span class="text-rose-500">*</span></label>
+            <input type="text" id="logi-tr-dest-${idx}" placeholder="เช่น คลัง FG-BB บางบ่อ, โกดังนิคม..."
+                   class="w-full bg-white border border-violet-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-violet-500">
+        </div>
+        <div class="bg-violet-100/60 rounded-lg p-2 space-y-2">
+            <div class="flex justify-between items-center">
+                <span class="text-[10px] font-black text-violet-700 uppercase">รายการสินค้าที่ย้าย</span>
+                <div class="flex gap-1">
+                    <button type="button" onclick="openWpDump('logi-wp-items-${idx}','violet')" class="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 px-2 py-1 rounded font-black hover:bg-amber-200"><i class="fas fa-paste mr-1"></i>Dump</button>
+                    <button type="button" onclick="addWaypointItem('logi-wp-items-${idx}','violet')" class="text-[10px] bg-violet-600 text-white px-2 py-1 rounded font-black hover:bg-violet-700"><i class="fas fa-plus mr-1"></i>เพิ่มรายการ</button>
+                </div>
             </div>
-            <div>
-                <label class="text-[10px] font-black text-violet-600 mb-0.5 block">รายการสินค้า / หมายเหตุ</label>
-                <input type="text" id="logi-tr-remark-${idx}" placeholder="เช่น เหล็กเส้น 50 มัด, สินค้าล็อต A..."
-                       class="w-full bg-white border border-violet-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-violet-500">
-            </div>
+            <div id="logi-wp-items-${idx}" class="space-y-1"></div>
+            <div id="logi-wp-items-${idx}-empty" class="text-center text-violet-300 text-xs py-1 font-bold">ยังไม่มีรายการ — กด เพิ่มรายการ</div>
         </div>`;
     container.appendChild(div);
     // drag-and-drop
@@ -16634,17 +16805,21 @@ window.addLogiTransferDrop = function addLogiTransferDrop() {
             </button>
         </div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <div>
-            <label class="text-[10px] font-black text-orange-600 uppercase mb-0.5 block">ปลายทาง / คลังที่ส่ง <span class="text-rose-500">*</span></label>
-            <input type="text" id="logi-td-name-${idx}" placeholder="เช่น คลัง FG-BB บางบ่อ, โกดังนิคม..."
-                   class="w-full bg-white border border-orange-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-orange-400 transition-all">
+    <div>
+        <label class="text-[10px] font-black text-orange-600 uppercase mb-0.5 block">ปลายทาง / คลังที่ส่ง <span class="text-rose-500">*</span></label>
+        <input type="text" id="logi-td-name-${idx}" placeholder="เช่น คลัง FG-BB บางบ่อ, โกดังนิคม..."
+               class="w-full bg-white border border-orange-200 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 outline-none focus:border-orange-400 transition-all">
+    </div>
+    <div class="bg-orange-100/60 rounded-lg p-2 space-y-2">
+        <div class="flex justify-between items-center">
+            <span class="text-[10px] font-black text-orange-700 uppercase">รายการสินค้า</span>
+            <div class="flex gap-1">
+                <button type="button" onclick="openWpDump('logi-wp-items-${idx}','orange')" class="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 px-2 py-1 rounded font-black hover:bg-amber-200"><i class="fas fa-paste mr-1"></i>Dump</button>
+                <button type="button" onclick="addWaypointItem('logi-wp-items-${idx}','orange')" class="text-[10px] bg-orange-600 text-white px-2 py-1 rounded font-black hover:bg-orange-700"><i class="fas fa-plus mr-1"></i>เพิ่มรายการ</button>
+            </div>
         </div>
-        <div>
-            <label class="text-[10px] font-black text-orange-600 uppercase mb-0.5 block">รายการสินค้า / หมายเหตุ</label>
-            <input type="text" id="logi-td-remark-${idx}" placeholder="เช่น เหล็กเส้น 50 มัด, สินค้าล็อต A..."
-                   class="w-full bg-white border border-orange-200 rounded-lg px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-orange-400 transition-all">
-        </div>
+        <div id="logi-wp-items-${idx}" class="space-y-1"></div>
+        <div id="logi-wp-items-${idx}-empty" class="text-center text-orange-300 text-xs py-1 font-bold">ยังไม่มีรายการ — กด เพิ่มรายการ</div>
     </div>`;
     container.appendChild(div);
     updateLogiShopNumbers();
@@ -17566,10 +17741,10 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             const shopIdxAttr = card.id.replace('logi-shop-card-', '');
             // ── transfer waypoint (ย้ายสินค้า) ──
             if (card.dataset.cardType === 'transfer') {
-                const trDest   = (document.getElementById(`logi-tr-dest-${shopIdxAttr}`)?.value || '').trim();
-                const trRemark = (document.getElementById(`logi-tr-remark-${shopIdxAttr}`)?.value || '').trim();
+                const trDest    = (document.getElementById(`logi-tr-dest-${shopIdxAttr}`)?.value || '').trim();
                 const trSubtype = document.querySelector(`input[name="logi-tr-type-${shopIdxAttr}"]:checked`)?.value || 'fg';
-                shops.push({ type: 'transfer', subtype: trSubtype, shopId: '_TRANSFER_', shopName: trDest || 'คลังปลายทาง', remark: trRemark, items: [], distance: 0, freeDistance: 0, truckLabel: '' });
+                const trItems   = collectWaypointItems(`logi-wp-items-${shopIdxAttr}`);
+                shops.push({ type: 'transfer', subtype: trSubtype, shopId: '_TRANSFER_', shopName: trDest || 'คลังปลายทาง', remark: trItems.map(i=>i.productName||i.sku).join(', '), items: trItems, distance: 0, freeDistance: 0, truckLabel: '' });
                 return;
             }
             // ── service center waypoint ──
@@ -17581,16 +17756,16 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             }
             // ── pickup waypoint ──
             if (card.dataset.cardType === 'pickup') {
-                const puName   = (document.getElementById(`logi-pu-name-${shopIdxAttr}`)?.value || '').trim();
-                const puRemark = (document.getElementById(`logi-pu-remark-${shopIdxAttr}`)?.value || '').trim();
-                shops.push({ type: 'pickup', shopId: '_PICKUP_', shopName: puName || 'จุดรับของ', remark: puRemark, items: [], distance: 0, freeDistance: 0, truckLabel: '' });
+                const puName  = (document.getElementById(`logi-pu-name-${shopIdxAttr}`)?.value || '').trim();
+                const puItems = collectWaypointItems(`logi-wp-items-${shopIdxAttr}`);
+                shops.push({ type: 'pickup', shopId: '_PICKUP_', shopName: puName || 'จุดรับของ', remark: puItems.map(i=>i.productName||i.sku).join(', '), items: puItems, distance: 0, freeDistance: 0, truckLabel: '' });
                 return;
             }
             // ── transfer_drop waypoint ──
             if (card.dataset.cardType === 'transfer_drop') {
-                const tdName   = (document.getElementById(`logi-td-name-${shopIdxAttr}`)?.value || '').trim();
-                const tdRemark = (document.getElementById(`logi-td-remark-${shopIdxAttr}`)?.value || '').trim();
-                shops.push({ type: 'transfer_drop', shopId: '_TD_', shopName: tdName || 'จุดส่งย้ายของ', remark: tdRemark, items: [], distance: 0, freeDistance: 0, truckLabel: '' });
+                const tdName  = (document.getElementById(`logi-td-name-${shopIdxAttr}`)?.value || '').trim();
+                const tdItems = collectWaypointItems(`logi-wp-items-${shopIdxAttr}`);
+                shops.push({ type: 'transfer_drop', shopId: '_TD_', shopName: tdName || 'จุดส่งย้ายของ', remark: tdItems.map(i=>i.productName||i.sku).join(', '), items: tdItems, distance: 0, freeDistance: 0, truckLabel: '' });
                 return;
             }
             const shopSel     = document.getElementById(`logi-shop-sel-${shopIdxAttr}`);
@@ -23188,30 +23363,27 @@ window.editLogiPlan = function editLogiPlan(planId) {
                         addLogiPickup();
                         const cardIdx = logiShopCounter - 1;
                         const nameEl = document.getElementById(`logi-pu-name-${cardIdx}`);
-                        const remarkEl2 = document.getElementById(`logi-pu-remark-${cardIdx}`);
                         if (nameEl) nameEl.value = s.shopName || '';
-                        if (remarkEl2) remarkEl2.value = s.remark || '';
+                        (s.items || []).forEach(it => addWaypointItem(`logi-wp-items-${cardIdx}`, 'indigo', it.sku || '', it.qty || 0));
                         return;
                     }
                     if (s.type === 'transfer_drop') {
                         addLogiTransferDrop();
                         const cardIdx = logiShopCounter - 1;
                         const nameEl = document.getElementById(`logi-td-name-${cardIdx}`);
-                        const remarkEl2 = document.getElementById(`logi-td-remark-${cardIdx}`);
                         if (nameEl) nameEl.value = s.shopName || '';
-                        if (remarkEl2) remarkEl2.value = s.remark || '';
+                        (s.items || []).forEach(it => addWaypointItem(`logi-wp-items-${cardIdx}`, 'orange', it.sku || '', it.qty || 0));
                         return;
                     }
                     if (s.type === 'transfer') {
                         addLogiTransfer();
                         const cardIdx = logiShopCounter - 1;
                         const destEl2 = document.getElementById(`logi-tr-dest-${cardIdx}`);
-                        const remarkEl2 = document.getElementById(`logi-tr-remark-${cardIdx}`);
                         if (destEl2) destEl2.value = s.shopName || '';
-                        if (remarkEl2) remarkEl2.value = s.remark || '';
                         const subtype = s.subtype || 'fg';
                         const radio = document.querySelector(`input[name="logi-tr-type-${cardIdx}"][value="${subtype}"]`);
                         if (radio) radio.checked = true;
+                        (s.items || []).forEach(it => addWaypointItem(`logi-wp-items-${cardIdx}`, 'violet', it.sku || '', it.qty || 0));
                         return;
                     }
                     // ── delivery shop (default) ──
