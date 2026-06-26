@@ -23813,21 +23813,17 @@ function _ldBuildFormMobile(order) {
         if(lpb>0&&lpr>0&&qty>0) return Math.ceil(Math.ceil(qty/lpb)/lpr);
         return 4;
     }
-    // maxL = max lift count across items; dispCols per item = lc(item)+1 (one buffer)
     var maxL=items.reduce(function(m,it){return Math.max(m,_lc(it));},1);
-    var maxDisp=maxL+1; // widest item's dispCols — used for thead colspan consistency
     _ldOrderCols[oid]=maxL;
+    var CPR=4; // columns per row — fixed at 4 (fits portrait without scroll)
     var cu=window._cu||{}, uName=cu.name||cu.username||'';
     var sRec=(_ldStaffMaster||[]).find(function(x){return x.name===cu.name||x.id===cu.username;});
     var teamTxt=sRec?' · '+sRec.team:'';
     var IW='width:100%;box-sizing:border-box;border:2px solid #bbf7d0;border-radius:8px;background:#fff;text-align:center;font-size:16px;font-weight:700;padding:10px 2px;outline:none;color:#15803d;-webkit-appearance:none;display:block;';
     var IQ='width:100%;box-sizing:border-box;border:2px solid #bfdbfe;border-radius:8px;background:#fff;text-align:center;font-size:16px;font-weight:700;padding:10px 2px;outline:none;color:#1d4ed8;-webkit-appearance:none;display:block;';
-    // Column header: label col + maxDisp cols
-    var hdrCols='<th style="padding:8px 6px;font-size:10px;font-weight:900;color:#94a3b8;background:#1e293b;position:sticky;left:0;z-index:3;min-width:36px;"></th>';
-    for(var h=0;h<maxDisp;h++){
-        var isExtra=(h>=maxL);
-        hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:13px;font-weight:900;color:'+(isExtra?'#64748b':'#fff')+';background:'+(isExtra?'#334155':'#1e293b')+';min-width:80px;">'+(h+1)+(isExtra?' <span style="font-size:9px;color:#94a3b8;">(+)</span>':'')+'</th>';
-    }
+    // Fixed 5-col table: label + 4 data cols (no horizontal scroll)
+    var hdrCols='<th style="padding:8px 4px;background:#1e293b;width:36px;"></th>';
+    for(var h=0;h<CPR;h++) hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:13px;font-weight:900;color:#fff;background:#1e293b;">'+(h+1)+'</th>';
     var itemRows=items.map(function(it,idx){
         var pName=(it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
         var prod=_ldProductMap[it.sku]||{}, minW=prod.min_w, maxW=prod.max_w;
@@ -23835,10 +23831,10 @@ function _ldBuildFormMobile(order) {
         var lc=_lc(it);
         var tgtPcs=parseFloat(it.qty)||0;
         var tgtKg=parseFloat(it.target_weight)||0;
+        var itemDisp=Math.max(CPR, lc+1); // min 4, always +1 buffer
         // Header row: product name + range + TARGET (prominent) + live summary
-        var itemDisp=lc+1; // this item's columns: lc actual + 1 buffer
         var hdr='<tr style="background:#0f172a;">'
-            +'<td colspan="'+(1+maxDisp)+'" style="padding:10px 12px;">'
+            +'<td colspan="'+(1+CPR)+'" style="padding:10px 12px;">'
                 // Product name line
                 +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
                     +'<span style="font-size:13px;font-weight:900;color:#fff;">'+(idx+1)+'. '+_ldEsc(pName)+'</span>'
@@ -23875,25 +23871,36 @@ function _ldBuildFormMobile(order) {
                 +'</div>'
             +'</td>'
         +'</tr>';
-        var kgR='<td style="padding:6px 5px;background:#f8fafc;font-size:12px;font-weight:900;color:#15803d;text-align:center;position:sticky;left:0;z-index:2;border-right:2px solid #e2e8f0;">Kg</td>';
-        var pcR='<td style="padding:6px 5px;background:#f8fafc;font-size:12px;font-weight:900;color:#1d4ed8;text-align:center;position:sticky;left:0;z-index:2;border-right:2px solid #e2e8f0;border-bottom:3px solid #cbd5e1;">Pcs</td>';
         var ev='ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')';
-        for(var c=0;c<itemDisp;c++){
-            var cId='ldf-lw-'+oid+'-'+idx+'-'+c;
-            var qId='ldf-lq-'+oid+'-'+idx+'-'+c;
-            var active=(c<lc);
-            var isExtraCol=(c>=lc); // buffer col for this item
-            var cellStyle='padding:5px 4px;border-right:1px solid #f1f5f9;'+(isExtraCol?'background:#f8fafc;':'');
-            var cellStyleB=cellStyle+';border-bottom:3px solid #cbd5e1;';
-            kgR+='<td style="'+cellStyle+'">'+(active?'<input type="number" min="0" step="0.01" placeholder="kg" style="'+IW+'" id="'+cId+'" oninput="'+ev+'">':'<input type="number" min="0" step="0.01" placeholder="kg" style="'+IW+'border-color:#e2e8f0;color:#94a3b8;" id="'+cId+'" oninput="'+ev+'">')+'</td>';
-            pcR+='<td style="'+cellStyleB+'">'+(active?'<input type="number" min="0" step="1" placeholder="pcs" style="'+IQ+'" id="'+qId+'" oninput="'+ev+'">':'<input type="number" min="0" step="1" placeholder="pcs" style="'+IQ+'border-color:#e2e8f0;color:#94a3b8;" id="'+qId+'" oninput="'+ev+'">')+'</td>';
+        var inputRows='';
+        for(var grpStart=0;grpStart<itemDisp;grpStart+=CPR){
+            var grpEnd=Math.min(grpStart+CPR,itemDisp);
+            var isLastGrp=(grpEnd>=itemDisp);
+            var grpLabel=grpStart>0?'<span style="font-size:9px;color:#94a3b8;display:block;line-height:1;">'+(grpStart+1)+'–'+grpEnd+'</span>':'';
+            var kgR='<td style="padding:6px 3px;background:#f8fafc;font-size:12px;font-weight:900;color:#15803d;text-align:center;border-right:2px solid #e2e8f0;white-space:nowrap;">'+grpLabel+'Kg</td>';
+            var pcR='<td style="padding:6px 3px;background:#f8fafc;font-size:12px;font-weight:900;color:#1d4ed8;text-align:center;border-right:2px solid #e2e8f0;'+(isLastGrp?'border-bottom:3px solid #cbd5e1;':'')+'white-space:nowrap;">'+grpLabel+'Pcs</td>';
+            for(var c=grpStart;c<grpEnd;c++){
+                var cId='ldf-lw-'+oid+'-'+idx+'-'+c;
+                var qId='ldf-lq-'+oid+'-'+idx+'-'+c;
+                var isBuf=(c>=lc);
+                var cs='padding:4px 3px;'+(isLastGrp?'border-bottom:3px solid #cbd5e1;':'border-bottom:1px solid #f1f5f9;');
+                kgR+='<td style="'+cs+'"><input type="number" min="0" step="0.01" placeholder="kg" style="'+IW+(isBuf?'border-color:#d1d5db;color:#9ca3af;':'')+'" id="'+cId+'" oninput="'+ev+'"></td>';
+                pcR+='<td style="'+cs+'"><input type="number" min="0" step="1" placeholder="pcs" style="'+IQ+(isBuf?'border-color:#d1d5db;color:#9ca3af;':'')+'" id="'+qId+'" oninput="'+ev+'"></td>';
+            }
+            // Pad to CPR columns so table stays aligned
+            for(var c=grpEnd;c<grpStart+CPR;c++){
+                kgR+='<td style="background:#f1f5f9;"></td>';
+                pcR+='<td style="background:#f1f5f9;'+(isLastGrp?'border-bottom:3px solid #cbd5e1;':'')+'"></td>';
+            }
+            // Between groups: thin separator row showing next group numbers
+            var sepRow='';
+            if(!isLastGrp){
+                var nextEnd=Math.min(grpStart+CPR+CPR,itemDisp);
+                sepRow='<tr style="background:#1e293b;"><td colspan="'+(1+CPR)+'" style="padding:3px 10px;font-size:10px;font-weight:900;color:#64748b;text-align:center;">ช่องที่ '+(grpStart+CPR+1)+' – '+nextEnd+'</td></tr>';
+            }
+            inputRows+='<tr>'+kgR+'</tr><tr>'+pcR+'</tr>'+sepRow;
         }
-        // Pad remaining cols (if this item has fewer than maxDisp) with empty cells for table alignment
-        for(var c=itemDisp;c<maxDisp;c++){
-            kgR+='<td style="padding:5px 4px;background:#f1f5f9;"></td>';
-            pcR+='<td style="padding:5px 4px;background:#f1f5f9;border-bottom:3px solid #cbd5e1;"></td>';
-        }
-        return hdr+'<tr>'+kgR+'</tr><tr>'+pcR+'</tr>';
+        return hdr+inputRows;
     }).join('');
 
     return '<div style="padding:10px;background:#f0fdf4;display:flex;flex-direction:column;gap:10px;">'
@@ -23947,12 +23954,11 @@ function _ldBuildFormMobile(order) {
         +'</div>'
         // Mobile item table (transposed)
         +'<div style="background:#fff;border-radius:14px;border:1.5px solid #e2e8f0;overflow:hidden;">'
-            +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'
-                +'<table style="border-collapse:collapse;width:100%;">'
-                    +'<thead><tr>'+hdrCols+'</tr></thead>'
-                    +'<tbody>'+itemRows+'</tbody>'
-                +'</table>'
-            +'</div>'
+            +'<table style="border-collapse:collapse;width:100%;table-layout:fixed;">'
+                +'<colgroup><col style="width:36px;"><col><col><col><col></colgroup>'
+                +'<thead><tr>'+hdrCols+'</tr></thead>'
+                +'<tbody>'+itemRows+'</tbody>'
+            +'</table>'
         +'</div>'
         // QC
         +'<div style="background:#fff;border-radius:14px;border:2px solid #f59e0b;padding:14px;">'
