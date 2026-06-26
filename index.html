@@ -22819,82 +22819,75 @@ function renderLogiCalendar() {
             });
 
             const badges = plans.map(p => {
-                const st      = CAL_STATUS_STYLE[p.status] || { bg:'bg-slate-100', border:'border-slate-300', dot:'bg-slate-400', text:'text-slate-700', label:p.status };
-                const isMaint = p.jobType === 'maintenance_pm';
-                const trip    = p.truckType==='hire' ? 'รถจ้าง' : ('เที่ยว '+(p.tripNo||'—'));
-                const jobLabel = LOGI_JOB_MAP[p.jobType] || p.jobType;
-                const wt      = parseFloat(p.totalWeight||0).toLocaleString(undefined,{minimumFractionDigits:1});
-
-                // รวมข้อมูลร้านค้า
-                const shops   = p.shops || [];
-                const shopNames   = shops.map(s => s.shopName).filter(Boolean);
-                const totalDist   = shops.reduce((sum,s) => sum + (parseFloat(s.distance)||0), 0);
-                const remarks     = shops.map(s=>s.remark).filter(r=>r&&r!=='—').join(', ');
-
-                // แสดงชื่อร้าน (สูงสุด 2 บรรทัด)
-                const shopDisplay = isMaint
-                    ? (p.failReason || p.shopNames || '—')
-                    : (shopNames.length > 0 ? shopNames.join(' · ') : '—');
-
-                const distDisplay = isMaint ? '' : (totalDist > 0 ? totalDist.toLocaleString(undefined,{maximumFractionDigits:0})+' กม.' : '');
-                const remarkDisplay = isMaint ? (p.failReason||'') : remarks;
-
+                const st  = CAL_STATUS_STYLE[p.status] || { bg:'bg-slate-100', border:'border-slate-300', dot:'bg-slate-400', text:'text-slate-700', label:p.status };
+                const wt  = parseFloat(p.totalWeight||0).toLocaleString(undefined,{minimumFractionDigits:1});
+                const shops = p.shops || [];
+                const wpDotCss = (s) => {
+                    if (s.type === 'service_center') return 'background:#d97706;color:#fff;';
+                    if (s.type === 'pickup')         return 'background:#4f46e5;color:#fff;';
+                    if (s.type === 'transfer')       return 'background:#7c3aed;color:#fff;';
+                    return 'background:#2a8a50;color:#fff;';
+                };
+                const wpIcon = (s) => {
+                    if (s.type === 'service_center') return 'fa-wrench';
+                    if (s.type === 'pickup')         return 'fa-box';
+                    if (s.type === 'transfer')       return 'fa-exchange-alt';
+                    return 'fa-store';
+                };
+                const wpLabel = (s) => {
+                    if (s.type === 'transfer') {
+                        const src = s.whSource || (s.shopName||'').split(' → ')[0] || '—';
+                        const dst = s.whDest   || (s.shopName||'').split(' → ')[1] || '—';
+                        return `<span style="font-size:10px;font-weight:700;color:#5b21b6;">${src} → ${dst}</span> <span style="font-size:9px;color:#7c3aed;font-weight:600;">${(s.subtype||'fg').toUpperCase()}</span>`;
+                    }
+                    if (s.type === 'service_center') return `<span style="font-size:10px;font-weight:700;color:#92400e;">${s.shopName||'ศูนย์ซ่อม'}</span>`;
+                    if (s.type === 'pickup')         return `<span style="font-size:10px;font-weight:700;color:#3730a3;">${s.shopName||'จุดรับของ'}</span>`;
+                    const ic = (s.items||[]).filter(it => !it.truckLabel || it.truckLabel === 'mother').length || (s.items||[]).length;
+                    return `<span style="font-size:10px;font-weight:700;">${s.shopName||'—'}</span>`
+                         + (ic ? `<span style="font-size:9px;color:#64748b;margin-left:3px;">(${ic} SKU)</span>` : '')
+                         + (s.distance ? `<div style="font-size:9px;color:#94a3b8;">${s.distance} กม.</div>` : '');
+                };
+                const totalDist = shops.reduce((sum,s) => sum + (parseFloat(s.distance)||0), 0);
+                const remarkTxt = shops.map(s=>s.remark).filter(r=>r&&r!=='—').join(', ')
+                    || (p.failReason && !p.failReason.startsWith('[') ? p.failReason : '');
                 const _canDrag = p.status !== 'success';
                 const _esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
                 return `<div class="${st.bg} border-l-4 ${st.border} rounded-r-xl rounded-l-sm p-2 text-left w-full relative group transition-all
-                    ${_canDrag ? 'cursor-grab active:cursor-grabbing hover:shadow-lg hover:brightness-95' : 'cursor-pointer hover:shadow-lg hover:brightness-95'}"
+                    ${_canDrag ? 'cursor-grab active:cursor-grabbing hover:shadow-md hover:brightness-95' : 'cursor-pointer hover:shadow-md hover:brightness-95'}"
                     id="cal-badge-${p.id}"
                     draggable="${_canDrag}"
                     ondragstart="${_canDrag ? `calDragStart(event,'${_esc(p.id)}')` : ''}"
                     ondragend="${_canDrag ? 'calDragEnd(event)' : ''}"
                     onclick="viewLogiPlan('${p.id}')">
-
-                    <!-- ปุ่มลบ (แสดงเมื่อ hover) -->
                     <button onclick="event.stopPropagation();deleteLogiPlanFromCal('${p.id}')"
-                        title="ลบแผนนี้"
                         class="absolute top-1 right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[9px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-700 z-10 flex">
-                        <i class="fas fa-times"></i>
-                    </button>
-
-                    <!-- ประเภท + สถานะ -->
+                        <i class="fas fa-times"></i></button>
                     <div class="flex items-center justify-between gap-1 mb-1.5 pr-4">
-                        <span class="text-[9px] font-black uppercase tracking-wider ${st.text} opacity-80">${jobLabel}</span>
+                        <span class="text-[10px] font-black ${st.text}">เที่ยว ${p.tripNo||'—'}</span>
                         <span class="flex items-center gap-1 text-[9px] font-black ${st.text} bg-white/60 px-1.5 py-0.5 rounded-full border ${st.border}">
-                            <span class="w-1.5 h-1.5 rounded-full ${st.dot}"></span>${st.label}
-                        </span>
+                            <span class="w-1.5 h-1.5 rounded-full ${st.dot}"></span>${st.label}</span>
                     </div>
-
-                    <!-- คนขับ / บริษัทขนส่ง -->
                     ${p.driverTransport ? `<div class="flex items-center gap-1 mb-1.5">
-                        <i class="fas fa-user-circle text-[9px] ${st.text} opacity-70 flex-shrink-0"></i>
-                        <span class="text-[10px] font-black ${st.text} truncate">${p.driverTransport}</span>
-                        ${p.tripNo && p.truckType === 'company' ? `<span class="text-[9px] font-semibold text-slate-400 ml-auto flex-shrink-0">เที่ยว ${p.tripNo}</span>` : ''}
+                        <i class="fas fa-user-circle text-[9px] opacity-60 ${st.text} flex-shrink-0"></i>
+                        <span class="text-[10px] font-semibold ${st.text} truncate">${p.driverTransport}</span>
                     </div>` : ''}
-
-                    <!-- ชื่อร้าน / จุดหมาย — แสดงทุกร้าน -->
-                    <div class="mb-1 space-y-0.5">
-                        ${isMaint
-                            ? `<div class="flex items-start gap-1"><i class="fas fa-map-marker-alt text-[9px] ${st.text} opacity-60 mt-0.5 flex-shrink-0"></i><span class="text-[11px] font-black ${st.text} leading-tight">${shopDisplay}</span></div>`
-                            : shops.map((s,si) => `<div class="flex items-start gap-1">
-                                <span class="w-3 h-3 rounded-full bg-slate-400 text-white text-[7px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">${si+1}</span>
-                                <span class="text-[10px] font-bold ${st.text} leading-tight">${s.shopName||'—'}</span>
-                              </div>`).join('')
-                        }
+                    <div class="space-y-1 mb-1.5">
+                        ${shops.filter(s => !s.type || s.type !== 'transfer' || !s.whSource || true).map(s => `<div style="display:flex;align-items:flex-start;gap:5px;">
+                            <span style="width:14px;height:14px;border-radius:50%;${wpDotCss(s)}display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">
+                                <i class="fas ${wpIcon(s)}" style="font-size:7px;"></i></span>
+                            <div style="min-width:0;line-height:1.3;">${wpLabel(s)}</div>
+                        </div>`).join('')}
                     </div>
-
-                    <!-- ระยะทาง + น้ำหนัก -->
-                    <div class="flex items-center gap-2 mb-1">
-                        ${distDisplay ? `<span class="flex items-center gap-1 text-[10px] font-semibold text-slate-500"><i class="fas fa-route text-[8px]"></i>${distDisplay}</span>` : ''}
-                        <span class="flex items-center gap-1 text-[10px] font-semibold text-slate-500"><i class="fas fa-weight-hanging text-[8px]"></i>${wt} กก.</span>
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        ${totalDist > 0 ? `<span style="font-size:10px;color:#64748b;font-weight:600;"><i class="fas fa-route" style="font-size:8px;margin-right:2px;"></i>${totalDist.toLocaleString(undefined,{maximumFractionDigits:0})} กม.</span>` : ''}
+                        <span style="font-size:10px;color:#059669;font-weight:700;"><i class="fas fa-weight-hanging" style="font-size:8px;margin-right:2px;"></i>${wt} กก.</span>
+                        ${p.isMother ? `<span style="font-size:9px;font-weight:700;color:#7c3aed;background:#ede9fe;padding:1px 6px;border-radius:10px;border:0.5px solid #c4b5fd;">พ่วง</span>` : ''}
                     </div>
-
-                    <!-- หมายเหตุ -->
-                    ${remarkDisplay ? `<div class="flex items-center gap-1 mt-1 pt-1 border-t border-black/5">
-                        <i class="fas fa-comment-alt text-[8px] text-slate-400"></i>
-                        <span class="text-[9px] text-slate-500 truncate">${remarkDisplay}</span>
+                    ${remarkTxt ? `<div style="display:flex;align-items:center;gap:4px;margin-top:4px;padding-top:3px;border-top:1px solid rgba(0,0,0,.06);">
+                        <i class="fas fa-comment-alt" style="font-size:8px;color:#94a3b8;flex-shrink:0;"></i>
+                        <span style="font-size:9px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${remarkTxt}</span>
                     </div>` : ''}
-                </div>`;
-            }).join('');
+                </div>`}).join('');
 
             const _escT = truck.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
             return `<td style="width:${CELL_W}px;min-width:${CELL_W}px" class="px-1 py-1 border-r border-slate-100 align-top cal-drop-cell transition-all ${cellBg}"
