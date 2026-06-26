@@ -16750,9 +16750,13 @@ window.addLogiServiceCenter = function addLogiServiceCenter() {
             <span class="logi-shop-num w-7 h-7 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-black">${idx + 1}</span>
             <i class="fas fa-wrench text-amber-500"></i> แวะศูนย์ซ่อม ลำดับที่ <span class="logi-shop-seq">${idx + 1}</span>
         </h5>
-        <button onclick="removeLogiShop(${idx})" class="text-rose-400 hover:text-rose-600 font-black text-sm flex items-center gap-1 transition-all">
-            <i class="fas fa-trash-alt"></i> ลบ
-        </button>
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="moveLogiCard('logi-shop-card-${idx}','up')" class="logi-move-up w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-600 hover:bg-amber-500 hover:text-white transition text-xs disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนขึ้น"><i class="fas fa-chevron-up"></i></button>
+            <button type="button" onclick="moveLogiCard('logi-shop-card-${idx}','down')" class="logi-move-down w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-600 hover:bg-amber-500 hover:text-white transition text-xs disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนลง"><i class="fas fa-chevron-down"></i></button>
+            <button onclick="removeLogiShop(${idx})" class="text-rose-400 hover:text-rose-600 font-black text-sm flex items-center gap-1 transition-all">
+                <i class="fas fa-trash-alt"></i> ลบ
+            </button>
+        </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -16803,9 +16807,13 @@ function buildLogiShopCardHTML(idx) {
             <span class="logi-shop-num w-7 h-7 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs font-black">${idx + 1}</span>
             ร้านค้าที่ <span class="logi-shop-seq">${idx + 1}</span>
         </h5>
-        <button onclick="removeLogiShop(${idx})" class="text-rose-400 hover:text-rose-600 font-black text-sm flex items-center gap-1 transition-all">
-            <i class="fas fa-trash-alt"></i> ลบร้านนี้
-        </button>
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="moveLogiCard('logi-shop-card-${idx}','up')" class="logi-move-up w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 text-slate-500 hover:bg-slate-500 hover:text-white transition text-xs disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนขึ้น"><i class="fas fa-chevron-up"></i></button>
+            <button type="button" onclick="moveLogiCard('logi-shop-card-${idx}','down')" class="logi-move-down w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 text-slate-500 hover:bg-slate-500 hover:text-white transition text-xs disabled:opacity-30 disabled:cursor-not-allowed" title="เลื่อนลง"><i class="fas fa-chevron-down"></i></button>
+            <button onclick="removeLogiShop(${idx})" class="text-rose-400 hover:text-rose-600 font-black text-sm flex items-center gap-1 transition-all">
+                <i class="fas fa-trash-alt"></i> ลบร้านนี้
+            </button>
+        </div>
     </div>
 
     <!-- TRUCK ASSIGN BAR — แสดงเมื่อ full_trailer + หลายร้าน -->
@@ -17199,7 +17207,24 @@ function updateLogiShopNumbers() {
         const seqEl = card.querySelector('.logi-shop-seq');
         if (numEl) numEl.textContent = i + 1;
         if (seqEl) seqEl.textContent = i + 1;
+        // อัปเดตสถานะปุ่ม ↑ ↓
+        const btnUp   = card.querySelector('.logi-move-up');
+        const btnDown = card.querySelector('.logi-move-down');
+        if (btnUp)   btnUp.disabled   = (i === 0);
+        if (btnDown) btnDown.disabled = (i === cards.length - 1);
     });
+}
+
+window.moveLogiCard = function(cardId, dir) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    const container = card.parentElement;
+    if (dir === 'up' && card.previousElementSibling) {
+        container.insertBefore(card, card.previousElementSibling);
+    } else if (dir === 'down' && card.nextElementSibling) {
+        container.insertBefore(card.nextElementSibling, card);
+    }
+    updateLogiShopNumbers();
 }
 
 // ── เพิ่มแถวสินค้าในร้าน ──
