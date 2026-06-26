@@ -15859,16 +15859,22 @@ window.onLogiJobTypeChange = function onLogiJobTypeChange() {
         shopsSec.classList.add('hidden');
     }
 
-    // ซ่อน Trailer Mode section เมื่อเป็น PM (ไม่ต้องเลือกรูปแบบวิ่ง)
+    // ซ่อน Trailer Mode section เมื่อเป็น PM หรือ Transfer
     const trailerModeSec = document.getElementById('logi-trailer-mode-section');
     const trailerPlanner = document.getElementById('logi-trailer-planner');
     const pmTargetSec    = document.getElementById('logi-pm-target-section');
-    if (isPM) {
+    const returnDistWrap = document.getElementById('logi-return-dist-wrap');
+
+    if (isPM || isTransfer) {
         if (trailerModeSec) trailerModeSec.classList.add('hidden');
         if (trailerPlanner) trailerPlanner.classList.add('hidden');
         logiTrailerMode = null;
         logiChildAssignments = {};
         document.querySelectorAll('input[name="logi-trailer-mode"]').forEach(r => r.checked = false);
+    }
+
+    if (isPM) {
+        if (returnDistWrap) returnDistWrap.classList.add('hidden');
         // แสดง pm-target section ถ้าเลือกรถพ่วงอยู่
         const truckSel = document.getElementById('logi-truck-plate');
         const truckOpt = truckSel?.options[truckSel.selectedIndex];
@@ -15885,6 +15891,14 @@ window.onLogiJobTypeChange = function onLogiJobTypeChange() {
         document.querySelectorAll('input[name="logi-pm-target"]').forEach(r => r.checked = false);
         const noteEl = document.getElementById('logi-pm-target-note');
         if (noteEl) noteEl.classList.add('hidden');
+    }
+
+    if (isTransfer) {
+        if (returnDistWrap) returnDistWrap.classList.add('hidden');
+    }
+
+    if (!isPM && !isTransfer) {
+        if (returnDistWrap) returnDistWrap.classList.remove('hidden');
     }
 }
 
