@@ -33313,6 +33313,9 @@ async function _applySession(){
     var fv=_cu.isAdmin?'input':((_cu.perms||[])[0]||'input');
     if(typeof switchView==='function')switchView(fv);
   }
+  // Training realtime for WMS users
+  setTimeout(function(){ trCheckDriverPending(_cu.username); }, 1500);
+  if (typeof _trStartRt === 'function') _trStartRt(_cu.username);
 }
 
 window.openUserMgmt=function(){if(!_cu||!_cu.isAdmin)return;switchView('user-accounts');uaSwitchTab('wms');};
@@ -39286,6 +39289,9 @@ window.whInit = async function(user, team) {
     }
   }
   if (typeof _ldRequestNotifPermission === 'function') _ldRequestNotifPermission();
+  // Training realtime for WH Staff
+  setTimeout(function(){ if (typeof trCheckDriverPending === 'function') trCheckDriverPending(user.username); }, 1500);
+  if (typeof _trStartRt === 'function') _trStartRt(user.username);
 };
 
 window.whLogout = function() {
@@ -40772,19 +40778,22 @@ var _origSW2 = window.switchView;
 if(_origSW2){ window.switchView=function(v){ _origSW2(v); if(v==='training') trLoadSessions(); }; }
 
 var _trRtSub = null;
+function _trStartRt(username) {
+  if (!username) return;
+  if (_trRtSub) { try { window._sb.removeChannel(_trRtSub); } catch(e){} _trRtSub = null; }
+  _trRtSub = window._sb.channel('tr-rt-'+username)
+    .on('postgres_changes', {event:'UPDATE', schema:'public', table:'training_sessions'}, function(payload){
+      if (payload.new && payload.new.status === 'active') {
+        trCheckDriverPending(username);
+      }
+    })
+    .subscribe();
+}
 var _origDrvInit = window.drvInit;
 window.drvInit = function(u){
   _origDrvInit(u);
   setTimeout(function(){ trCheckDriverPending(u.username); }, 1500);
-  // Realtime: เด้ง popup ทันทีถ้า training_sessions เปลี่ยนเป็น active ขณะ login อยู่
-  if (_trRtSub) { try { window._sb.removeChannel(_trRtSub); } catch(e){} }
-  _trRtSub = window._sb.channel('tr-rt-'+u.username)
-    .on('postgres_changes', {event:'UPDATE', schema:'public', table:'training_sessions'}, function(payload){
-      if (payload.new && payload.new.status === 'active') {
-        trCheckDriverPending(u.username);
-      }
-    })
-    .subscribe();
+  _trStartRt(u.username);
 };
 
 })();
