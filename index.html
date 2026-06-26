@@ -38286,10 +38286,10 @@ window.dmRefreshAll=async function(silent){
     area.innerHTML='<div style="text-align:center;padding:80px 20px;color:#475569;"><p style="font-weight:700;font-size:15px;">ไม่มีข้อมูลคนขับ</p></div>';
     return;
   }
-  // Load all plans for today
+  // Load all plans for today — exclude child trailer plans
   var {data:allPlans}=await window._sb.from('logistic_plans')
-    .select('plan_id,plan_date,status,truck_plate,shops,driver_transport,driver_id,job_type')
-    .eq('plan_date',today);
+    .select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,driver_id,job_type,is_child,is_mother')
+    .eq('plan_date',today).eq('is_child',false);
   allPlans=allPlans||[];
   var allPlanIds=allPlans.map(function(p){return p.plan_id;});
   var tripLogsMap={}, svMap={};
@@ -38394,7 +38394,7 @@ window.dmOpenAllDriverTrip=async function(username,silent){
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
   var dateVal=_dmDate||new Date().toISOString().split('T')[0];
-  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,shops,driver_transport,job_type').eq('plan_date',dateVal);
+  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother').eq('plan_date',dateVal).eq('is_child',false);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
   _dmPlans=plans||[];
@@ -38750,8 +38750,8 @@ window.dmSelectDriver=async function(){
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
   var q=window._sb.from('logistic_plans')
-    .select('plan_id,plan_date,status,truck_plate,shops,driver_transport,job_type')
-    .eq('plan_date',today);
+    .select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother')
+    .eq('plan_date',today).eq('is_child',false);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
   _dmPlans=plans||[];
