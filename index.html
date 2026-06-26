@@ -33436,7 +33436,8 @@ async function _sbLoadUsers(){
   if(res.error){ console.error('[WMS] _sbLoadUsers error:',res.error.message); return null; }
   return (res.data||[]).map(function(r){
     return { username:r.username, pwHash:r.password, name:r.name||'', role:r.role||'',
-             isAdmin:r.is_admin||false, perms:r.perms||[], active:r.active!==false };
+             isAdmin:r.is_admin||false, perms:r.perms||[], active:r.active!==false,
+             bypass_timer:r.bypass_timer||false };
   });
 }
 
@@ -33444,6 +33445,7 @@ async function _sbUpsertUser(u){
   return window._sb.from('wms_users').upsert({
     username:u.username, password:u.pwHash||'', name:u.name||'', role:u.role||'',
     is_admin:u.isAdmin||false, perms:u.perms||[], active:u.active!==false,
+    bypass_timer:u.bypass_timer||false,
     updated_at: new Date().toISOString()
   }, { onConflict:'username' });
 }
@@ -33492,7 +33494,7 @@ window.doLogin = async function(){
   var user = null;
   if(res.data){
     var r=res.data;
-    user={username:r.username,pwHash:r.password,name:r.name||'',role:r.role||'',isAdmin:r.is_admin||false,perms:r.perms||[],active:true};
+    user={username:r.username,pwHash:r.password,name:r.name||'',role:r.role||'',isAdmin:r.is_admin||false,perms:r.perms||[],active:true,bypass_timer:r.bypass_timer||false};
   }
   // fallback cache (กรณี offline)
   if(!user){
@@ -33523,7 +33525,9 @@ window.doLogin = async function(){
     }
     err.textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';err.classList.remove('hidden');document.getElementById('login-password').value='';return;
   }
-  _cu=user;_saveSess(user);window._currentUser=user.name||user.username;_applySession();
+  _cu=user;_saveSess(user);window._currentUser=user.name||user.username;
+  if(user.isAdmin||user.bypass_timer) DRV_BYPASS_TIMER=true;
+  _applySession();
 };
 
 window.doLogout=function(){
@@ -33613,7 +33617,8 @@ window.umRefreshList = async function(){
       +'<div style="color:white;font-weight:900;font-size:14px;">'+u.username+(u.isAdmin?' <span style="color:#fbbf24;font-size:10px;">ADMIN</span>':' ')+'</div>'
       +'<div style="color:#94a3b8;font-size:12px;">'+(u.name||'—')+' · '+(u.role||'—')+'</div>'
       +'<div style="color:#475569;font-size:11px;">'+(u.isAdmin?'เข้าได้ทุกหน้า':((u.perms||[]).length+' หน้า'))+'</div></div>'
-      +'<div style="display:flex;gap:8px;flex-shrink:0;">'
+      +'<div style="display:flex;gap:8px;flex-shrink:0;align-items:center;">'
+      +'<button onclick="wmsToggleTimer(\''+u.username+'\','+!!(u.bypass_timer)+')" title="'+(u.bypass_timer?'ปิดสิทธิ์ข้ามล็อค':'เปิดสิทธิ์ข้ามล็อค')+'" style="background:'+(u.bypass_timer?'rgba(16,185,129,0.2)':'rgba(100,116,139,0.2)')+';color:'+(u.bypass_timer?'#34d399':'#64748b')+';border:1px solid '+(u.bypass_timer?'#34d399':'#334155')+';padding:5px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;" title="bypass lock"><i class="fas fa-'+(u.bypass_timer?'unlock':'lock')+'"></i></button>'
       +'<button onclick="umOpenEdit(this.dataset.u)" data-u="'+u.username+'" style="background:#334155;color:#cbd5e1;border:none;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;"><i class="fas fa-edit"></i></button>'
       +del+'</div></div>';
   }
@@ -33669,6 +33674,17 @@ window.umSaveEdit = async function(){
   document.getElementById('um-edit-modal').classList.add('hidden');
   await umRefreshList();
   showToast('✅ บันทึกสำเร็จ');
+};
+
+window.wmsToggleTimer = async function(un, cur){
+  var newVal = !cur;
+  var res = await window._sb.from('wms_users').update({bypass_timer:newVal}).eq('username',un);
+  if(res.error){showToast('❌ '+res.error.message,true);return;}
+  var c=_usersCache.find(function(u){return u.username===un;});
+  if(c) c.bypass_timer=newVal;
+  if(_cu&&_cu.username===un){ _cu.bypass_timer=newVal; DRV_BYPASS_TIMER=newVal; }
+  await umRefreshList();
+  showToast(newVal?'🔓 '+un+' ข้ามล็อคเวลาได้แล้ว':'🔒 '+un+' ใช้ล็อคเวลาตามปกติ');
 };
 
 window.umDeleteUser = async function(un){
