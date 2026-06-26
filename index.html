@@ -17801,6 +17801,8 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             // กรอง shops/items ตาม truckLabel เพื่อแยก mother/child plan ไม่ให้ซ้ำ
             const filterShopsForTruck = (shops, role) =>
                 (shops || []).map(s => {
+                    // service center waypoint: แวะทั้งขบวน → ใส่ใน mother เท่านั้น
+                    if (s.type === 'service_center') return role === 'mother' ? s : null;
                     if (s.truckLabel && s.truckLabel !== role) return null;
                     const filteredItems = (s.items || []).filter(it =>
                         role === 'mother'
