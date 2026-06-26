@@ -38094,9 +38094,11 @@ window.dmRefreshAll=async function(silent){
   var activeCount=0;
   var html='<div style="padding:16px;font-family:\'Segoe UI\',sans-serif;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">';
   drivers.forEach(function(driver){
-    var plans=allPlans.filter(function(p){
+    var allDriverPlans=allPlans.filter(function(p){
       return (driver.driver_id && p.driver_id===driver.driver_id)||(driver.driver_name && p.driver_transport===driver.driver_name);
     });
+    var maintPlan=allDriverPlans.find(function(p){return p.job_type==='maintenance_pm';});
+    var plans=allDriverPlans.filter(function(p){return p.job_type!=='maintenance_pm';});
     var done=plans.filter(function(p){var l=tripLogsMap[p.plan_id];return (l&&l.status==='completed')||p.status==='success';}).length;
     var activePlan=plans.find(function(p){var l=tripLogsMap[p.plan_id];return p.status!=='success'&&(!l||l.status!=='completed');});
     var curLog=activePlan?tripLogsMap[activePlan.plan_id]:null;
@@ -38120,13 +38122,14 @@ window.dmRefreshAll=async function(silent){
       var curShop=shops.find(function(s){var v=sv[s.seq];return v&&v.lat_arrival&&!v.lat_depart;});
       if(curShop) shopInfo='<div style="font-size:11px;color:#fbbf24;margin-top:4px;">📍 '+dmEsc(curShop.name||'ร้านที่ '+curShop.seq)+'</div>';
     }
+    var maintBanner=maintPlan?'<div style="display:flex;align-items:center;gap:8px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:5px 10px;margin-top:6px;"><i class="fas fa-wrench" style="color:#fbbf24;font-size:11px;flex-shrink:0;"></i><span style="font-size:11px;color:#fde68a;font-weight:700;">มีคิวเข้าศูนย์ซ่อมวันนี้</span></div>':'';
     html+='<div onclick="dmOpenAllDriverTrip(\''+driver.username+'\')" style="background:'+sm.bg+';border:1px solid '+sm.border+';border-radius:16px;padding:14px;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity=\'.85\'" onmouseout="this.style.opacity=\'1\'">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
       +'<div style="width:42px;height:42px;border-radius:12px;background:'+sm.border+';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;font-weight:900;color:'+sm.color+';">'+initials+'</div>'
       +'<div style="flex:1;min-width:0;">'
       +'<div style="font-weight:900;color:#fff;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+dmEsc(driver.driver_name)+'</div>'
       +'<div style="font-size:11px;color:'+sm.color+';font-weight:700;margin-top:2px;"><i class="fas '+sm.icon+'" style="margin-right:5px;"></i>'+sm.label+'</div>'
-      +shopInfo
+      +shopInfo+maintBanner
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0;">'
       +'<div style="font-size:13px;font-weight:900;color:#fff;">'+done+'/'+plans.length+'</div>'
