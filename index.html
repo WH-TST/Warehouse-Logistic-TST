@@ -18085,11 +18085,9 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 whSource:        payload.whSource        || '',
                 whDest:          payload.whDest          || '',
                 transferRemark:  payload.transferRemark  || '',
-                shops:           isTrailerSplit ? filterShopsForTruck(payload.shops, 'mother') : (payload.shops || []),
-                shopNames:       (isTrailerSplit ? filterShopsForTruck(payload.shops, 'mother') : (payload.shops || [])).map(s => s.shopName).filter(Boolean).join(', '),
-                totalWeight:     isTrailerSplit
-                                    ? filterShopsForTruck(payload.shops, 'mother').reduce((s, sh) => s + (sh.items||[]).reduce((ss, it) => ss + (parseFloat(it.weight)||0), 0), 0)
-                                    : (payload.totalWeight || 0),
+                shops:           payload.shops || [],
+                shopNames:       (payload.shops || []).map(s => s.shopName).filter(Boolean).join(', '),
+                totalWeight:     payload.totalWeight || 0,
             };
 
             if (isUpdate) {
@@ -23362,15 +23360,8 @@ window.editLogiPlan = function editLogiPlan(planId) {
     const _memMother = _memRows.find(r => r.isMother || r.id.endsWith('-M')) || _memRows.find(r => !r.isChild) || _memRows[0];
 
     if (_memMother) {
-        // รวม items จากลูกกลับเข้า shops ของแม่ (match ด้วย shopId/shopName)
-        const _childRow = _memRows.find(r => r.isChild || r.id.endsWith('-C'));
-        const _mShops = (_memMother.shops || []).map(ms => {
-            const cs = (_childRow?.shops || []).find(x => (x.shopId && x.shopId === ms.shopId) || x.shopName === ms.shopName);
-            if (!cs) return ms;
-            const merged = [...(ms.items || []), ...(cs.items || [])];
-            return Object.assign({}, ms, { items: merged });
-        });
-        const p = Object.assign({}, _memMother, { shops: _mShops });
+        // แม่เก็บ shops เต็ม (ทุก truckLabel) — ใช้ตรงได้เลย
+        const p = Object.assign({}, _memMother, { shops: _memMother.shops || [] });
         _doPopulateEditForm(p);
     } else {
         // fallback: fetch จาก Supabase (กรณีเปิดจาก URL โดยตรงหรือ reload)
@@ -23385,12 +23376,7 @@ window.editLogiPlan = function editLogiPlan(planId) {
                 const rows = qr.data;
                 const motherRow = rows.find(r => r.is_mother || r.plan_id.endsWith('-M'))
                                || rows.find(r => !r.is_child) || rows[0];
-                const childRow2 = rows.find(r => r.is_child || r.plan_id.endsWith('-C'));
-                const allShops = (motherRow.shops || []).map(ms => {
-                    const cs = (childRow2?.shops || []).find(x => (x.shopId && x.shopId === ms.shopId) || x.shopName === ms.shopName);
-                    if (!cs) return ms;
-                    return Object.assign({}, ms, { items: [...(ms.items||[]), ...(cs.items||[])] });
-                });
+                const allShops = motherRow.shops || [];
                 const p = {
                     id: motherRow.plan_id, date: motherRow.plan_date,
                     jobType: motherRow.job_type, status: motherRow.status,
