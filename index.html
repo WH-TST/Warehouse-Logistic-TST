@@ -16741,18 +16741,40 @@ window.addLogiTransfer = function addLogiTransfer() {
                 <button type="button" onclick="removeLogiShop(${idx})" class="w-6 h-6 bg-rose-100 hover:bg-rose-200 text-rose-600 rounded-lg flex items-center justify-center text-xs"><i class="fas fa-trash"></i></button>
             </div>
         </div>
-        <div class="flex gap-3">
-            <label class="flex items-center gap-1.5 cursor-pointer bg-white border-2 border-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 text-xs has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50 has-[:checked]:text-violet-700">
-                <input type="radio" name="logi-tr-type-${idx}" value="fg" checked> FG
-            </label>
-            <label class="flex items-center gap-1.5 cursor-pointer bg-white border-2 border-slate-200 px-3 py-1.5 rounded-lg font-black text-slate-700 text-xs has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700">
-                <input type="radio" name="logi-tr-type-${idx}" value="semi"> SEMI
-            </label>
-        </div>
-        <div>
-            <label class="text-[10px] font-black text-violet-600 mb-0.5 block">ปลายทาง / คลังที่ส่ง <span class="text-rose-500">*</span></label>
-            <input type="text" id="logi-tr-dest-${idx}" placeholder="เช่น คลัง FG-BB บางบ่อ, โกดังนิคม..."
-                   class="w-full bg-white border border-violet-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-violet-500">
+        <div class="grid grid-cols-3 gap-2 items-end">
+            <div>
+                <label class="text-[10px] font-black text-violet-600 mb-0.5 block">ประเภท</label>
+                <div class="flex gap-1.5">
+                    <label class="flex items-center gap-1 cursor-pointer bg-white border-2 border-slate-200 px-2 py-1.5 rounded-lg font-black text-slate-700 text-xs has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50 has-[:checked]:text-violet-700">
+                        <input type="radio" name="logi-tr-type-${idx}" value="fg" checked> FG
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer bg-white border-2 border-slate-200 px-2 py-1.5 rounded-lg font-black text-slate-700 text-xs has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700">
+                        <input type="radio" name="logi-tr-type-${idx}" value="semi"> SEMI
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label class="text-[10px] font-black text-violet-600 mb-0.5 block">ต้นทาง <span class="text-rose-500">*</span></label>
+                <select id="logi-tr-src-${idx}" class="w-full bg-white border border-violet-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-violet-500 cursor-pointer">
+                    <option value="">-- เลือกต้นทาง --</option>
+                    <option value="FG-BP">FG-BP</option>
+                    <option value="FG-BB">FG-BB</option>
+                    <option value="Vendor1">Vendor1</option>
+                    <option value="RM">RM</option>
+                    <option value="PD">PD</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-[10px] font-black text-violet-600 mb-0.5 block">ปลายทาง <span class="text-rose-500">*</span></label>
+                <select id="logi-tr-dest-${idx}" class="w-full bg-white border border-violet-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-violet-500 cursor-pointer">
+                    <option value="">-- เลือกปลายทาง --</option>
+                    <option value="FG-BP">FG-BP</option>
+                    <option value="FG-BB">FG-BB</option>
+                    <option value="Vendor1">Vendor1</option>
+                    <option value="RM">RM</option>
+                    <option value="PD">PD</option>
+                </select>
+            </div>
         </div>
         <div class="bg-violet-100/60 rounded-lg p-2 space-y-2">
             <div class="flex justify-between items-center">
@@ -17741,10 +17763,14 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             const shopIdxAttr = card.id.replace('logi-shop-card-', '');
             // ── transfer waypoint (ย้ายสินค้า) ──
             if (card.dataset.cardType === 'transfer') {
+                const trSrc     = (document.getElementById(`logi-tr-src-${shopIdxAttr}`)?.value || '').trim();
                 const trDest    = (document.getElementById(`logi-tr-dest-${shopIdxAttr}`)?.value || '').trim();
                 const trSubtype = document.querySelector(`input[name="logi-tr-type-${shopIdxAttr}"]:checked`)?.value || 'fg';
                 const trItems   = collectWaypointItems(`logi-wp-items-${shopIdxAttr}`);
-                shops.push({ type: 'transfer', subtype: trSubtype, shopId: '_TRANSFER_', shopName: trDest || 'คลังปลายทาง', remark: trItems.map(i=>i.productName||i.sku).join(', '), items: trItems, distance: 0, freeDistance: 0, truckLabel: '' });
+                if (!trSrc) return showToast('กรุณาเลือกคลังต้นทางสำหรับงานย้ายสินค้า', true);
+                if (!trDest) return showToast('กรุณาเลือกคลังปลายทางสำหรับงานย้ายสินค้า', true);
+                const shopName = trSrc + ' → ' + trDest;
+                shops.push({ type: 'transfer', subtype: trSubtype, shopId: '_TRANSFER_', shopName, whSource: trSrc, whDest: trDest, remark: trItems.map(i=>i.productName||i.sku).join(', '), items: trItems, distance: 0, freeDistance: 0, truckLabel: '' });
                 return;
             }
             // ── service center waypoint ──
@@ -23378,8 +23404,10 @@ window.editLogiPlan = function editLogiPlan(planId) {
                     if (s.type === 'transfer') {
                         addLogiTransfer();
                         const cardIdx = logiShopCounter - 1;
+                        const srcEl2  = document.getElementById(`logi-tr-src-${cardIdx}`);
                         const destEl2 = document.getElementById(`logi-tr-dest-${cardIdx}`);
-                        if (destEl2) destEl2.value = s.shopName || '';
+                        if (srcEl2)  srcEl2.value  = s.whSource || '';
+                        if (destEl2) destEl2.value = s.whDest   || '';
                         const subtype = s.subtype || 'fg';
                         const radio = document.querySelector(`input[name="logi-tr-type-${cardIdx}"][value="${subtype}"]`);
                         if (radio) radio.checked = true;
