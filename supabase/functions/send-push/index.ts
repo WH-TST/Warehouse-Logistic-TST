@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const VAPID_PUBLIC  = 'BNdLqIxx-vQ3oAP2-oxI2CGMou6ZF2aEcz3fbRLMOo2643ABKG8sUi7515YfrUAJIcM9xxo5u8g_5n0LU8upcb0';
+const VAPID_PUBLIC  = 'BFCwOnOaj3iOEfWntYQuOySXIefcvbkAXBw1Fnih8WH3f7z36s0Dwwv0VxQp0l__bor2-FVEukyNinlJ7vleV-w';
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY')!;
 const VAPID_SUBJECT = 'mailto:s.chakkarin@tstandardsteel.com';
 
