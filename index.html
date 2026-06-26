@@ -23353,8 +23353,27 @@ window.editLogiPlan = function editLogiPlan(planId) {
     const _memMother = _memRows.find(r => r.isMother || r.id.endsWith('-M')) || _memRows.find(r => !r.isChild) || _memRows[0];
 
     if (_memMother) {
-        // แม่เก็บ shops เต็ม (ทุก truckLabel) — ใช้ตรงได้เลย
-        const p = Object.assign({}, _memMother, { shops: _memMother.shops || [] });
+        // ตรวจว่า mother plan มี child items ครบ (new-style save)
+        const _memChild = _memRows.find(r => r.isChild || r.id.endsWith('-C'));
+        let fullShops = _memMother.shops || [];
+        const hasChildItems = fullShops.some(s => (s.items||[]).some(it => it.truckLabel === 'child'));
+        if (!hasChildItems && _memChild) {
+            // backward compat: merge child plan items into mother shops by shopId
+            const childShops = _memChild.shops || [];
+            fullShops = fullShops.map(ms => {
+                const cs = childShops.find(s => s.shopId === ms.shopId);
+                if (!cs) return ms;
+                const childItems = (cs.items||[]).map(it => Object.assign({}, it, { truckLabel: 'child' }));
+                return Object.assign({}, ms, { items: (ms.items||[]).concat(childItems) });
+            });
+            // shops in child that aren't in mother (different shopId)
+            childShops.forEach(cs => {
+                if (!fullShops.find(ms => ms.shopId === cs.shopId)) {
+                    fullShops.push(Object.assign({}, cs, { items: (cs.items||[]).map(it => Object.assign({}, it, { truckLabel: 'child' })) }));
+                }
+            });
+        }
+        const p = Object.assign({}, _memMother, { shops: fullShops });
         _doPopulateEditForm(p);
     } else {
         // fallback: fetch จาก Supabase (กรณีเปิดจาก URL โดยตรงหรือ reload)
@@ -23369,7 +23388,23 @@ window.editLogiPlan = function editLogiPlan(planId) {
                 const rows = qr.data;
                 const motherRow = rows.find(r => r.is_mother || r.plan_id.endsWith('-M'))
                                || rows.find(r => !r.is_child) || rows[0];
-                const allShops = motherRow.shops || [];
+                const childRow2 = rows.find(r => r.is_child || r.plan_id.endsWith('-C'));
+                let allShops = motherRow.shops || [];
+                // backward compat: merge child plan items if mother doesn't have child-labeled items
+                const _hasChildItems = allShops.some(s => (s.items||[]).some(it => it.truckLabel === 'child'));
+                if (!_hasChildItems && childRow2) {
+                    const childShops2 = childRow2.shops || [];
+                    allShops = allShops.map(ms => {
+                        const cs = childShops2.find(s => s.shopId === ms.shopId);
+                        if (!cs) return ms;
+                        const cItems = (cs.items||[]).map(it => Object.assign({}, it, { truckLabel: 'child' }));
+                        return Object.assign({}, ms, { items: (ms.items||[]).concat(cItems) });
+                    });
+                    childShops2.forEach(cs => {
+                        if (!allShops.find(ms => ms.shopId === cs.shopId))
+                            allShops.push(Object.assign({}, cs, { items: (cs.items||[]).map(it => Object.assign({}, it, { truckLabel: 'child' })) }));
+                    });
+                }
                 const p = {
                     id: motherRow.plan_id, date: motherRow.plan_date,
                     jobType: motherRow.job_type, status: motherRow.status,
