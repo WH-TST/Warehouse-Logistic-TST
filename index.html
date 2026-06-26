@@ -23428,7 +23428,6 @@ window.ldInit = function() {
     var dm = document.getElementById('ld-mon-date');
     if (d) d.value = today;
     if (dm && !dm.value) dm.value = today;
-    // แสดงวันที่ในรูปแบบไทย
     var dispEl = document.getElementById('ld-today-display');
     if (dispEl) dispEl.textContent = new Date().toLocaleDateString('th-TH', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
     _ldLoadStaffMaster();
@@ -23437,6 +23436,20 @@ window.ldInit = function() {
     _ldSubOrders();
     _ldRefreshGlobalStats(today);
 };
+// re-render cards on orientation change so column count updates
+(function(){
+    var _ldResizeTmr = null;
+    window.addEventListener('resize', function(){
+        clearTimeout(_ldResizeTmr);
+        _ldResizeTmr = setTimeout(function(){
+            var dateEl = document.getElementById('ld-date');
+            var ldContent = document.getElementById('view-loading-content');
+            if (dateEl && ldContent && !ldContent.classList.contains('hidden')) {
+                _ldLoadOrderCards(dateEl.value);
+            }
+        }, 300);
+    });
+})();
 
 // _whMode lives on window so whInit() (outside this IIFE) can set it before ldInit() runs
 if (typeof window._whMode === 'undefined') window._whMode = false;
@@ -23587,7 +23600,8 @@ function _ldRenderCards(orders) {
     });
 }
 
-var _LFT_COLS = window.innerWidth < 480 ? 2 : 7; // lift columns per row (responsive)
+var _LFT_COLS = 7; // recalculated dynamically — see _ldGetCols()
+function _ldGetCols(){ return window.innerWidth < 480 ? 2 : 7; }
 var _ldOrderCols = {}; // per-order dynamic column count
 
 function _ldCalcItemCols(it) {
@@ -23766,6 +23780,7 @@ window.ldSpConfirm = async function(oid, itemCount) {
 };
 
 function _ldBuildForm(order) {
+    _LFT_COLS = _ldGetCols();
     var oid = order.id;
 
     // ── Trailer: no split yet → show split plan screen
