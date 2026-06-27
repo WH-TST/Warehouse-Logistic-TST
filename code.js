@@ -19,7 +19,7 @@ function _handleApiPost(e) {
     var allowedActions = [
       'getWarehouseAnalyticsData','getSpaceAnalysisData','getPlanByDate',
       'saveCalculationToNewSheet','calculatePrintTagList','savePrintTagLog',
-      'getAllProductsForDropdown','autoLogInventoryDaily',
+      'autoLogInventoryDaily',
       'getFGDashboardSummary','getFGRecheckList',
       'getSafetyStockData','saveSafetyStockData',
       'importInventoryData','uploadOverdueData',
@@ -30,11 +30,9 @@ function _handleApiPost(e) {
       'updateDriverEventRow','getDriverEventLog',
       'getStaffEventLog','saveStaffEventRow',
       'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
-      'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPIByDate',
-      'analyzeZoneCapacity',
+      'saveKPIResult',
       'getZoneStock','syncZoneStockFromInventory',
       'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
-      'getSaleAndCustomerList','getSOLinesByCustomer',
       'saveAuditLog','getAuditLog',
       'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
       'setupInventorySheets',
@@ -194,7 +192,7 @@ function doGet(e) {
         var fnNames = [
           'getWarehouseAnalyticsData','getSpaceAnalysisData','getPlanByDate',
           'saveCalculationToNewSheet','calculatePrintTagList','savePrintTagLog',
-          'getAllProductsForDropdown','autoLogInventoryDaily',
+          'autoLogInventoryDaily',
           'getFGDashboardSummary','getFGRecheckList',
           'getSafetyStockData','saveSafetyStockData',
           'importInventoryData','uploadOverdueData',
@@ -205,11 +203,9 @@ function doGet(e) {
           'updateDriverEventRow','getDriverEventLog',
           'getStaffEventLog','saveStaffEventRow',
           'saveStaffEventRows','updateStaffEventFixed','deleteStaffEventRow',
-          'saveKPIResult','getKpiWHLGData','getKpiWHLGHistory','saveKpiWHLG','saveInventoryKPI','getInventoryKPIByDate',
-          'analyzeZoneCapacity',
+          'saveKPIResult',
           'getZoneStock','syncZoneStockFromInventory',
           'probeSOSheet','validateSOLines','saveTruckDispatch','getTruckDispatchLog',
-      'getSaleAndCustomerList','getSOLinesByCustomer',
           'saveAuditLog','getAuditLog',
           'getSKUCountHistory','saveReCheckLog','saveReCheckLogBulk',
           'setupInventorySheets',
@@ -352,16 +348,6 @@ function getHolidays() {
   }
 }
 
-/**
- * คำนวณ Normalized Capacity จากคอลัมน์ F
- */
-function getNormalizedF(sumColF) {
-  if (sumColF <= 7.5) return 7.5;
-  if (sumColF <= 10) return 10;
-  if (sumColF <= 11) return 11;  
-  if (sumColF <= 13) return 13;
-  return 23.5; 
-}
 
 /**
  * ฟังก์ชันเช็ควันทำงาน
@@ -372,46 +358,6 @@ function isWorkDay(date, holidayList) {
   return !holidayList.includes(formatted);
 }
 
-/**
- * คำนวณวันเวลาที่คาดว่าจะเสร็จ (Finish Time)
- */
-function calculateN(startDateStr, F_normal, totalUsedHrs) {
-  try {
-    if (totalUsedHrs <= 0) return null;
-
-    const holidays = getHolidays();
-    const [d, m, y] = startDateStr.split('/');
-    let currentDate = new Date(y, m - 1, d, 8, 0, 0);
-    if (isNaN(currentDate.getTime())) return null;
-    let remainingHrs = totalUsedHrs;
-
-    while (remainingHrs > F_normal) {
-      if (isWorkDay(currentDate, holidays)) {
-        remainingHrs -= F_normal;
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(8, 0, 0, 0);
-    }
-
-    while (!isWorkDay(currentDate, holidays)) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate.setHours(8, 0, 0, 0);
-    }
-
-    let finishTime = new Date(currentDate);
-    let addMinutes = remainingHrs * 60;
-
-    if (remainingHrs > 4) {
-      addMinutes += 60;
-    }
-
-    finishTime.setMinutes(finishTime.getMinutes() + Math.round(addMinutes));
-    return finishTime;
-  } catch (e) {
-    Logger.log('❌ calculateN error: ' + e.message);
-    return null;
-  }
-}
 /**
  * ✅ บันทึกข้อมูลและจัดการแปลงค่าวันที่ (Physical Date) ให้เป็น Date Object
  */
@@ -519,40 +465,7 @@ function parseDateValue(dateVal) {
   return isNaN(timestamp) ? new Date(0) : new Date(timestamp);
 }
 
-// บังคับ parse M/D/YYYY เสมอ — ไม่ขึ้นกับ format ของ Google Sheet
-// ใช้สำหรับ col I (Physical date) ใน Transection
-function parseMDYDate(val) {
-  if (val instanceof Date) return val; // GAS ส่ง Date object มาตรง → ใช้เลย
-  const str = String(val || '').trim();
-  if (!str) return new Date(0);
-  if (str.includes('/')) {
-    const parts = str.split(' ')[0].split('/'); // ตัด time portion ถ้ามี
-    if (parts.length === 3) {
-      const m = parseInt(parts[0]); // เดือน
-      const d = parseInt(parts[1]); // วัน
-      const y = parseInt(parts[2]); // ปี
-      if (!isNaN(m) && !isNaN(d) && !isNaN(y)) return new Date(y, m - 1, d);
-    }
-  }
-  return parseDateValue(val); // fallback กรณีรูปแบบอื่น
-}
 
-// บังคับ parse D/M/YYYY เสมอ — สำหรับคอลัมน์ที่รู้แน่ว่าเป็น Thai format (วัน/เดือน/ปี)
-function parseDMYDate(val) {
-  if (val instanceof Date) return val;
-  const str = String(val || '').trim();
-  if (!str) return new Date(0);
-  if (str.includes('/')) {
-    const parts = str.split(' ')[0].split('/');
-    if (parts.length === 3) {
-      const d = parseInt(parts[0]); // วัน
-      const m = parseInt(parts[1]); // เดือน
-      const y = parseInt(parts[2]); // ปี
-      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) return new Date(y, m - 1, d);
-    }
-  }
-  return parseDateValue(val); // fallback
-}
 
 function getProductMap() {
   return _withCache('productMap', 600, function() {
@@ -709,24 +622,6 @@ function saveCalculationToNewSheet(calculationData) {
   }
 }
 
-function getPreviousWorkDay(selectedDateStr) {
-  try {
-    const holidays = getHolidays();
-    const selected = new Date(selectedDateStr);
-    if (isNaN(selected.getTime())) return { success: false, message: 'วันที่ไม่ถูกต้อง' };
-    let prevDate = new Date(selected);
-    prevDate.setDate(prevDate.getDate() - 1);
-
-    while (prevDate.getDay() === 0 || holidays.includes(Utilities.formatDate(prevDate, "GMT+7", "yyyy-MM-dd"))) {
-      prevDate.setDate(prevDate.getDate() - 1);
-    }
-
-    return Utilities.formatDate(prevDate, "GMT+7", "yyyy-MM-dd");
-  } catch (e) {
-    Logger.log('❌ getPreviousWorkDay error: ' + e.message);
-    return { success: false, message: e.message };
-  }
-}
 /**
  * ✅ เพิ่ม Logging ใน calculatePrintTagList()
  */
@@ -860,66 +755,7 @@ function getPrintedQtyExcludeDate(excludeDateStr) {
     return {}; 
   }
 }
-/**
- * ดึงยอดเส้นที่ผลิตจริงสะสม จากชีต 'FG report'
- * โครงสร้างชีต:
- *   Col A (index 0): Date (yyyyMMdd เช่น 20260302)
- *   Col B (index 1): Item Number (SKU)
- *   Col C (index 2): Product Name
- *   Col D (index 3): A = จำนวนเส้นผลิตจริง
- *   Col E (index 4): Hold
- * เงื่อนไข: รวมเฉพาะแถวที่วันที่ >= วันเริ่มระบบ (13/01/2026) AND < วันที่เลือก
- */
-function getActualLinesExcludeDate(excludeDateStr) {
-  try {
-    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(FG_REPORT_SHEET);
 
-    if (!sheet || sheet.getLastRow() < 2) {
-      Logger.log("⚠️ FG report Sheet ว่างเปล่า หรือชีตไม่เจอ (ชีตที่หา: '" + FG_REPORT_SHEET + "')");
-      return {};
-    }
-
-    const data   = sheet.getDataRange().getValues();
-    const result = {};
-
-    Logger.log("📋 FG report Header: " + JSON.stringify(data[0]));
-    if (data.length > 1) Logger.log("📋 FG report Row 1 sample: " + JSON.stringify(data[1]));
-
-    // วันที่เลือก (ไม่รวมวันนี้)
-    const excludeDate = new Date(excludeDateStr);
-    excludeDate.setHours(0, 0, 0, 0);
-
-    // วันเริ่มระบบ 13/01/2026
-    const systemStartDate = new Date(2026, 0, 13);
-    systemStartDate.setHours(0, 0, 0, 0);
-
-    Logger.log("🔍 FG report Actual Usage Range:");
-    Logger.log("  - Start (>=): " + systemStartDate.toISOString().split('T')[0]);
-    Logger.log("  - Stop  (<) : " + excludeDate.toISOString().split('T')[0]);
-
-    for (let i = 1; i < data.length; i++) {
-      const rowDate = parseDateValue(data[i][0]); // Col A: Date (yyyyMMdd)
-      if (!rowDate) continue;
-      rowDate.setHours(0, 0, 0, 0);
-
-      const isAfterSystemStart = rowDate.getTime() >= systemStartDate.getTime();
-      const isBeforeExclude    = rowDate.getTime() <  excludeDate.getTime();
-      if (!isAfterSystemStart || !isBeforeExclude) continue;
-
-      const sku  = String(data[i][1] || '').trim(); // Col B: Item Number
-      const qty  = Number(data[i][3]) || 0;          // Col D: A (จำนวนเส้นผลิตจริง)
-      if (sku && qty > 0) result[sku] = (result[sku] || 0) + qty;
-    }
-
-    Logger.log("  - Total SKU Found: " + Object.keys(result).length);
-    return result;
-
-  } catch (e) {
-    Logger.log("❌ Error getActualLinesExcludeDate: " + e.message);
-    return {};
-  }
-}
 // ── Tag System Start Date (PropertiesService) ─────────────────────────────────
 function getTagSystemStartDate() {
   try {
@@ -1001,53 +837,7 @@ function getActualLinesFromDynamic(excludeDateStr) {
   }
 }
 
-function getPrintedQtyCumulative(untilDateStr) {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(PRINT_TAG_LOG_SHEET);
-    if (!sheet || sheet.getLastRow() < 2) return {};
-    
-    const data = sheet.getDataRange().getValues();
-    const result = {};
-    const untilDate = new Date(untilDateStr);
-    
-    for (let i = 1; i < data.length; i++) {
-      const logDate = parseDateValue(data[i][1]); 
-      if (logDate <= untilDate) {
-        const pid = String(data[i][2] || "").trim(); 
-        const bundles = Number(data[i][3]) || 0;     
-        result[pid] = (result[pid] || 0) + bundles;
-      }
-    }
-    return result;
-  } catch (e) { 
-    return {}; 
-  }
-}
 
-function getActualLinesCumulative(untilDateStr) {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(PRODUCTION_FG_SHEET);
-    if (!sheet || sheet.getLastRow() < 2) return {};
-    
-    const data = sheet.getDataRange().getValues();
-    const result = {};
-    const untilDate = new Date(untilDateStr);
-    
-    for (let i = 1; i < data.length; i++) {
-      const rowDate = parseDateValue(data[i][0]);
-      if (rowDate <= untilDate) {
-        const pid = String(data[i][1] || "").trim();
-        const lines = Number(data[i][4]) || 0;      
-        result[pid] = (result[pid] || 0) + lines;
-      }
-    }
-    return result;
-  } catch (e) {
-    return {};
-  }
-}
 /**
  * ✅ แก้ไข getPlanLinesByDate() - เพิ่ม Logging และรองรับ Date Format
  */
@@ -1136,26 +926,6 @@ function savePrintTagLog(printData) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-function getStandardCMap() {
-  return _withCache('stdCMap', 600, function() {
-    try {
-      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('Standard-C');
-      if (!sheet || sheet.getLastRow() < 2) return {};
-      const data = sheet.getDataRange().getValues();
-      const map = {};
-      for (let i = 1; i < data.length; i++) {
-        if (!data[i][0]) continue;
-        map[String(data[i][0]).trim()] = {
-          productSize: data[i][1] || '',
-          wStd: data[i][2] || '',
-          wMinMax: data[i][3] || ''
-        };
-      }
-      return map;
-    } catch (e) { return {}; }
-  });
-}
 /**
  * ✅ ฟังก์ชันหลักดึงข้อมูล Analytics ครบวงจร (รวม Blocking Trend)
  */
@@ -1379,53 +1149,7 @@ function getDeliveryTypeData(startDate, endDate) {
 }
 
 // ── Debug: เช็คชื่อลูกค้าระหว่าง Logistic_Plan กับ Transection ต่อวัน ──
-/**
- * ✅ ฟังก์ชันใหม่: ดึงสินค้า 20 อันดับแรกที่มีน้ำหนักสุทธิคงเหลือมากที่สุด
- * เพื่อนำไปแสดงในตารางสินค้าเร่งระบาย
- */
-function getTopStockItems() {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(INVENTORY_FG_SHEET);
-    const productMap = getProductMap();
-    
-    if (!sheet || sheet.getLastRow() < 2) return [];
-    
-    const data = sheet.getDataRange().getValues();
-    const items = [];
-    
-    // Structure: A=Code, B=InvLines, C=InvWeight, D=ResLines, E=ResWeight
-    for (let i = 1; i < data.length; i++) {
-      const sku = String(data[i][0] || "").trim();
-      if(!sku) continue;
-      
-      const invW = parseFloat(data[i][2]) || 0; // Col C: Inventory Weight
-      const resW = parseFloat(data[i][4]) || 0; // Col E: Reserved Weight
-      const netW = invW - resW;
-      
-      // เลือกเฉพาะที่มีของเหลือ (Net Weight > 0)
-      if (netW > 0) {
-        items.push({
-          code: sku,
-          name: productMap[sku] ? productMap[sku].name : 'Unknown Product',
-          invW: invW,
-          resW: resW,
-          netW: netW
-        });
-      }
-    }
-    
-    // เรียงลำดับตาม Net Weight จากมากไปน้อย
-    items.sort((a, b) => b.netW - a.netW);
-    
-    // ตัดมาแค่ 20 อันดับแรก
-    return items.slice(0, 20);
-    
-  } catch(e) {
-    Logger.log("❌ Error getTopStockItems: " + e.message);
-    return [];
-  }
-}
+
 
 /**
  * ✅ ดึงข้อมูล Inventory Trend ตามช่วงวันที่ (แก้ไข: ใช้ parseDateValue เพื่อความแม่นยำ)
@@ -1619,66 +1343,6 @@ function autoLogInventoryDaily(targetDate) {
   }
 }
 
-function getRecentInventoryLogs() {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const logSheet = ss.getSheetByName(INVENTORY_DAILY_LOG_SHEET);
-    
-    if (!logSheet || logSheet.getLastRow() < 2) {
-      return { success: false, message: "ไม่มีข้อมูล Log" };
-    }
-    
-    const lastRow = logSheet.getLastRow();
-    const startRow = Math.max(2, lastRow - 6); 
-    const data = logSheet.getRange(startRow, 1, lastRow - startRow + 1, 9).getValues();
-    
-    const logs = data.map(row => ({
-      date: row[0],
-      time: row[1],
-      totalSKU: row[2],
-      totalLines: row[3],
-      totalWeight: row[4],
-      reservedLines: row[5],
-      reservedWeight: row[6],
-      netLines: row[7],
-      netWeight: row[8]
-    }));
-    
-    return { success: true, logs: logs };
-    
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
-/**
- * ✅ ดึงรายชื่อสินค้าทั้งหมดสำหรับ Dropdown งานแทรก
- */
-function getAllProductsForDropdown() {
-  return _withCache('allProductsDropdown', 600, function() {
-    try {
-      const productMap = getProductMap();
-      const extMap = getExternalProductMap();
-      const qcMap = getQCStandardMap();
-      const list = [];
-      Object.keys(productMap).forEach(id => {
-        const p = productMap[id];
-        const ext = extMap[id] || {};
-        const qc = qcMap[id] || {};
-        list.push({
-          id: id,
-          name: p.name,
-          productSize: ext.productSize || '-',
-          wStd: qc.wStd || '-',
-          wMinMax: qc.wMinMax || '-',
-          linesPerBundle: p.linesPerBundle || 1,
-          pcsPerBundle: ext.pcsPerBundle || p.pcsPerBundle || 1
-        });
-      });
-      list.sort((a, b) => a.id.localeCompare(b.id));
-      return list;
-    } catch (e) { return []; }
-  });
-}
 /**
  * ✅ ดึงวันที่ผลิตล่าสุดของแต่ละ SKU จาก Sheet "Production FG"
  * Column A = วันที่ผลิต (รูปแบบ dd/MM/yyyy เช่น 22/01/2026)
@@ -1951,90 +1615,7 @@ function getOnHandAvailableItems(ss) {
     }
   };
 }
-/**
- * วิเคราะห์พื้นที่คลังสินค้า 3 รูปแบบ
- */
-function getComprehensiveSpaceAnalysis() {
-  try {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const reserveSheet = ss.getSheetByName('Overdue Reservations');
-  const invSheet = ss.getSheetByName('Inventory FG');
-  const productMap = getProductMap(); // ดึงชื่อสินค้าจากชีต Product
 
-  if (!reserveSheet || !invSheet) return { success: false, message: "Sheet data missing" };
-
-  const reserveData = reserveSheet.getDataRange().getValues();
-  const invData = invSheet.getDataRange().getValues();
-  const today = new Date();
-  today.setHours(0,0,0,0);
-
-  // 1. สร้าง Map สำหรับ Inventory (Col F = Lines)
-  const invMap = {};
-  for (let i = 1; i < invData.length; i++) {
-    const sku = String(invData[i][0]).trim();
-    invMap[sku] = {
-      lines: parseFloat(invData[i][1]) || 0, // Inventory Lines
-      weight: parseFloat(invData[i][2]) || 0,
-      available: parseFloat(invData[i][5]) || 0 // Col F: สินค้าพร้อมส่ง
-    };
-  }
-
-  const analysis = {
-    reserved: [], // จองแล้วไม่ส่ง
-    pending: [],  // ออเดอร์มี ของพร้อม แต่ไม่จอง
-    blind: []     // ผลิตเยอะแต่ไม่มีออเดอร์
-  };
-
-  const skuWithOrders = new Set();
-
-  // วนลูปข้อมูลจอง
-  for (let i = 1; i < reserveData.length; i++) {
-    const row = reserveData[i];
-    const sku = String(row[3]).trim();
-    const refType = String(row[8]).trim(); // Col I: Reference type (แก้ไขจาก row[7])
-    const qty = Math.abs(parseFloat(row[10]) || 0);
-    skuWithOrders.add(sku);
-
-    // --- เงื่อนไข 1: Reserved physical > 5 วัน ---
-    if (refType === "Reserved physical" && qty > 0) {
-      const dateRaw = row[1];
-      const reserveDate = dateRaw instanceof Date ? dateRaw : new Date(dateRaw);
-      const diffDays = Math.floor((today - reserveDate) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays >= 5) {
-        analysis.reserved.push({
-          shop: row[5], sku: sku, name: row[4], qty: qty, days: diffDays, weight: row[12]
-        });
-      }
-    }
-
-    // --- เงื่อนไข 2: On order และ ของในคลัง (Col F) > 500 ---
-    if (refType === "On order" && qty > 0) {
-      const invInfo = invMap[sku] || { available: 0 };
-      if (invInfo.available >= 500) {
-        analysis.pending.push({
-          shop: row[5], sku: sku, name: row[4], orderQty: qty, invAvail: invInfo.available
-        });
-      }
-    }
-  }
-
-  // --- เงื่อนไข 3: Blind Production (มีของเยอะแต่ไม่มีออเดอร์เลย) ---
-  for (let sku in invMap) {
-    if (!skuWithOrders.has(sku) && invMap[sku].lines > 0) {
-      analysis.blind.push({
-        sku: sku, name: productMap[sku] ? productMap[sku].name : "Unknown", 
-        qty: invMap[sku].lines, weight: invMap[sku].weight
-      });
-    }
-  }
-
-  return { success: true, data: analysis };
-  } catch (e) {
-    Logger.log('❌ getComprehensiveSpaceAnalysis error: ' + e.message);
-    return { success: false, message: e.toString() };
-  }
-}
 /**
  * วิเคราะห์ข้อมูลพื้นที่คลังตาม 3 ความต้องการหลัก
  * ปรับปรุง: เพิ่มเงื่อนไขตรวจสอบ Column H (Index 7) ต้องเป็น "Sales order" สำหรับรายการจองค้าง
@@ -2289,42 +1870,6 @@ function recordInventoryBlockingDaily() {
  * 🆕 ฟังก์ชันบันทึกด้วยตนเอง (Manual Trigger) - เรียกจากหน้าเว็บได้
  */
 
-/**
- * 🆕 ดึงข้อมูล Log ย้อนหลัง สำหรับแสดงผลในหน้าเว็บ
- */
-function getInventoryBlockingLog(limit = 30) {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const logSheet = ss.getSheetByName(INVENTORY_BLOCKING_LOG_SHEET);
-    
-    if (!logSheet || logSheet.getLastRow() < 2) {
-      return { success: false, message: 'ยังไม่มีข้อมูล Log' };
-    }
-    
-    const data = logSheet.getDataRange().getValues();
-    const logs = [];
-    
-    // ดึงข้อมูลย้อนหลัง (ไม่รวม header)
-    const startRow = Math.max(1, data.length - limit);
-    
-    for (let i = startRow; i < data.length; i++) {
-      logs.push({
-        date: data[i][0],
-        sku: data[i][1],
-        lines: data[i][2],
-        weight: data[i][3]
-      });
-    }
-    
-    // เรียงจากใหม่ไปเก่า
-    logs.reverse();
-    
-    return { success: true, data: logs };
-    
-  } catch (e) {
-    return { success: false, message: e.toString() };
-  }
-}
 
 /**
  * 🆕 ลบ Trigger (ใช้เมื่อต้องการยกเลิกการบันทึกอัตโนมัติ)
@@ -2397,60 +1942,6 @@ function getInventoryBlockingTrend(startDate, endDate) {
 const TRANSACTION_FG_SHEET = 'Transection FG';
 const DAILY_CYCLE_COUNT_FG_SHEET = 'Daily Cycle Count FG';
 
-/**
- * ดึงรายการสินค้าจากชีต Counting (ยอดระบบ)
- * + เส้นต่อมัด → ดึงจากชีต Product Col C
- */
-function getCountingProductList() {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    
-    // ดึง linesPerBundle จากชีต Product Col C
-    const productSheet = ss.getSheetByName('Product');
-    const lpbMap = {};
-    const nameMap = {};
-    if (productSheet && productSheet.getLastRow() >= 2) {
-      const productData = productSheet.getDataRange().getValues();
-      for (let i = 1; i < productData.length; i++) {
-        const sku = String(productData[i][0] || '').trim();
-        if (!sku) continue;
-        lpbMap[sku] = Number(productData[i][2]) || 10; // Col C: เส้นต่อมัด
-        nameMap[sku] = String(productData[i][1] || '').trim(); // Col B: ชื่อสินค้า
-      }
-    }
-    
-    const countingSheet = ss.getSheetByName('Counting');
-    
-    if (!countingSheet || countingSheet.getLastRow() < 2) {
-      return { success: false, message: 'ไม่พบข้อมูลในชีต Counting' };
-    }
-    
-    const data = countingSheet.getDataRange().getValues();
-    const products = [];
-    const seen = new Set();
-    
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      if (!row[0]) continue;
-      
-      const sku = String(row[0]).trim();
-      if (seen.has(sku)) continue;
-      seen.add(sku);
-      
-      products.push({
-        sku: sku,
-        name: nameMap[sku] || String(row[1] || '').trim(), // ชื่อจาก Product sheet ก่อน ถ้าไม่มีใช้จาก Counting
-        linesPerBundle: lpbMap[sku] || 10,                 // เส้นต่อมัดจาก Product Col C
-        systemQty: Number(row[3]) || 0                     // Col D: ยอดระบบ (เส้น) ใน Counting
-      });
-    }
-    
-    return { success: true, products: products };
-    
-  } catch (e) {
-    return { success: false, message: e.toString() };
-  }
-}
 
 /**
  * getFGProductList — ดึงรายการสินค้าจากชีต Product
@@ -2458,85 +1949,11 @@ function getCountingProductList() {
  * รวม SUM ทุก batch ของ SKU เดียวกัน
  */
 
-/**
- * ✅ ฟังก์ชันใหม่: ดึงยอดผลิตจาก Transection FG ตามวันที่ cycleDate
- * เงื่อนไข: Col G (Index 6) = 'Production', Col L (Index 11) = 'Received'
- *           Col T (Index 19) = วันที่ตรงกับ cycleDate
- * คืนค่า: { sku: totalLines }
- */
-function getProductionByDate(cycleDate) {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('Transection FG');
-    if (!sheet || sheet.getLastRow() < 2) {
-      Logger.log("⚠️ ไม่พบชีต Transection FG หรือยังไม่มีข้อมูล");
-      return {};
-    }
-
-    const data = sheet.getDataRange().getValues();
-    const result = {};
-
-    const targetDate = new Date(cycleDate + 'T00:00:00');
-    const tY = targetDate.getFullYear();
-    const tM = targetDate.getMonth();
-    const tD = targetDate.getDate();
-
-    Logger.log("🔍 getProductionByDate: cycleDate = " + cycleDate + " (Y=" + tY + " M=" + (tM+1) + " D=" + tD + ")");
-
-    for (let i = 1; i < data.length; i++) {
-      const ref     = String(data[i][6]  || '').trim().toLowerCase(); // Col G
-      const receipt = String(data[i][11] || '').trim().toLowerCase(); // Col L
-      if (ref !== 'production' || receipt !== 'received') continue;
-
-      // Col T (Index 19) = Transection Date (เพิ่มเมื่อบันทึก)
-      const rawDate = data[i][19];
-      let rowDate = rawDate instanceof Date ? rawDate : new Date(rawDate);
-      if (isNaN(rowDate.getTime())) continue;
-      if (rowDate.getFullYear() !== tY || rowDate.getMonth() !== tM || rowDate.getDate() !== tD) continue;
-
-      const sku = String(data[i][4] || '').trim();  // Col E = Item number
-      const qty = Math.abs(parseFloat(data[i][7]) || 0); // Col H = CW quantity
-
-      if (sku && qty > 0) {
-        result[sku] = (result[sku] || 0) + qty;
-      }
-    }
-
-    Logger.log("✅ getProductionByDate: พบ " + Object.keys(result).length + " SKU");
-    return result;
-
-  } catch (e) {
-    Logger.log("❌ getProductionByDate error: " + e.message);
-    return {};
-  }
-}
 
 /**
  * ดึงข้อมูล Product List และ System Stock สำหรับ FG Cycle Count
  */
-/**
- * ดึงยอด Hold สะสมจากชีต Overdue Reservations
- */
-function getSystemHoldMap() {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('Overdue Reservations');
-    const holdMap = {};
-    if (!sheet || sheet.getLastRow() < 2) return holdMap;
-    
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      const sku = String(data[i][3] || "").trim(); // Col D
-      const refType = String(data[i][7] || "").trim(); // Col H
-      const qtyLines = Math.abs(parseFloat(data[i][10])) || 0; // Col K
-      
-      if (refType === "Inventory blocking" && sku) {
-        holdMap[sku] = (holdMap[sku] || 0) + qtyLines;
-      }
-    }
-    return holdMap;
-  } catch (e) { return {}; }
-}
+
 /**
  * ✅ บันทึกผล KPI ลงชีต "KPI Log"
  * รองรับทั้ง FG และ SEMI
@@ -3246,30 +2663,6 @@ const DAILY_CYCLE_SEMI_SHT = 'Daily Cycle Count SEMI';
 
 // ─── Private Helper Functions ───────────────────────────────────────────────
 
-/**
- * _getSemiMaster — ดึงข้อมูล SEMI จากชีต "SEMI SOON FG"
- * Column: A=SEMI Code, B=Raw Material Name, C=FG1 Code, D=FG1 Name, E=FG2 Code, F=FG2 Name
- */
-function _getSemiMaster(ss) {
-  const sheet = ss.getSheetByName(SEMI_MASTER_SHEET);
-  if (!sheet || sheet.getLastRow() < 2) return [];
-  const data   = sheet.getDataRange().getValues();
-  const result = [];
-  for (let i = 1; i < data.length; i++) {
-    const row    = data[i];
-    const semiSku = String(row[0] || '').trim();
-    if (!semiSku) continue;
-    result.push({
-      semiSku:  semiSku,
-      semiName: String(row[1] || '').trim(),
-      fg1Sku:   String(row[2] || '').trim(),
-      fg1Name:  String(row[3] || '').trim(),
-      fg2Sku:   String(row[4] || '').trim(),
-      fg2Name:  String(row[5] || '').trim()
-    });
-  }
-  return result;
-}
 
 /**
  * getSemiMasterList
@@ -3277,65 +2670,7 @@ function _getSemiMaster(ss) {
  * ใช้สำหรับ modal เพิ่มรายการ SEMI ด้วยมือในหน้าเทียบ
  */
 
-/**
- * _getSemiSystemQty — นับแถวใน "ON-HAND SEMI" แยกตาม SEMI Code (Col A)
- * ยอดระบบ = จำนวนแถวที่มี SEMI Code นั้นๆ
- */
-function _getSemiSystemQty(ss) {
-  const sheet  = ss.getSheetByName(ONHAND_SEMI_SHEET);
-  const qtyMap = {};
-  if (!sheet || sheet.getLastRow() < 2) return qtyMap;
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    const sku = String(data[i][0] || '').trim();
-    if (!sku) continue;
-    qtyMap[sku] = (qtyMap[sku] || 0) + 1;
-  }
-  return qtyMap;
-}
 
-/**
- * _getLatestSemiCycle — ดึงผลการ Audit ล่าสุดต่อ SEMI Code จาก "Daily Cycle Count SEMI"
- * Header ชีต: [บันทึกเมื่อ(0) | วันที่Cycle(1) | SEMI Code(2) | ชื่อSEMI(3) |
- *              FG1 Code(4) | FG1 Name(5) | FG2 Code(6) | FG2 Name(7) |
- *              SYSTEM(8) | QTY FG1(9) | QTY FG2(10) | TOTAL(11) | DIFF(12) | หมายเหตุ(13)]
- * คืนค่า Map: { semiCode → { qtyFg1, qtyFg2, total, cycleDateStr } }
- */
-function _getLatestSemiCycle(ss) {
-  const sheet      = ss.getSheetByName(DAILY_CYCLE_SEMI_SHT);
-  const latestMap  = {};
-  if (!sheet || sheet.getLastRow() < 2) return latestMap;
-
-  const data = sheet.getDataRange().getValues();
-  // วนจากบนลงล่าง — record ล่าสุดจะ overwrite record เก่า (เพราะ append ต่อท้ายชีต)
-  for (let i = 1; i < data.length; i++) {
-    const row    = data[i];
-    const sku    = String(row[2] || '').trim();
-    if (!sku) continue;
-
-    // Parse วันที่ Cycle
-    const cd     = row[1];
-    let cdStr    = '-';
-    if (cd instanceof Date && !isNaN(cd)) {
-      cdStr = Utilities.formatDate(cd, 'GMT+7', 'dd/MM/yyyy');
-    } else if (cd) {
-      cdStr = String(cd).substring(0, 10);
-    }
-
-    // QTY FG1 (Col 9), QTY FG2 (Col 10), TOTAL (Col 11)
-    const qty1  = row[9]  !== '' && row[9]  !== null ? parseFloat(row[9])  : null;
-    const qty2  = row[10] !== '' && row[10] !== null ? parseFloat(row[10]) : null;
-    const total = row[11] !== '' && row[11] !== null ? parseFloat(row[11]) : null;
-
-    latestMap[sku] = {
-      qtyFg1:       qty1,
-      qtyFg2:       qty2,
-      total:        total,
-      cycleDateStr: cdStr
-    };
-  }
-  return latestMap;
-}
 /**
  * บันทึกข้อมูล Movement ของ SEMI ลงในชีต Transection SEMI
  * และเตรียมข้อมูลสำหรับการเทียบสต๊อก
@@ -4315,30 +3650,6 @@ function saveDriverActivityRow(payload) {
 
 // ── บันทึกหลายแถวพร้อมกัน (จากคนรถ) ─────────────────────────────────────
 
-// ════════════════════════════════════════════════════════════════════════
-// migrateDriverActivityLogToSupabase — ดึงข้อมูลทั้งหมดจากชีต Driver_Activity_Log
-// แล้ว insert เข้า Supabase ตาราง driver_activity_log ทีละ 500 แถว
-// รันจาก Apps Script editor ครั้งเดียว ไม่ต้อง deploy
-// ════════════════════════════════════════════════════════════════════════
-
-function _sbInsertDriverBatch(batch) {
-  var res = UrlFetchApp.fetch(SB_URL + '/rest/v1/driver_activity_log', {
-    method: 'POST',
-    headers: {
-      'apikey':        SB_KEY,
-      'Authorization': 'Bearer ' + SB_KEY,
-      'Content-Type':  'application/json',
-      'Prefer':        'return=minimal'
-    },
-    payload: JSON.stringify(batch),
-    muteHttpExceptions: true
-  });
-  if (res.getResponseCode() >= 300) {
-    Logger.log('❌ Error: ' + res.getContentText());
-  } else {
-    Logger.log('✅ inserted ' + batch.length + ' rows');
-  }
-}
 
 // ════════════════════════════════════════════════════════════════════════
 // getLogisticPlanSummary — สรุป ส่งสำเร็จ/ไม่สำเร็จ จากชีต Logistic_Plan จริง
@@ -4684,25 +3995,6 @@ function getGpsActivityLog(params) {
   } catch(err) { return { success: false, message: err.message }; }
 }
 
-// ── อัปเดตแถวใน GPS_Activity_Log ─────────────────────────────────────────
-function updateGpsActivityRow(params) {
-  try {
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName(GPS_ACTIVITY_SHEET);
-    if (!sheet) return { success: false, message: 'ไม่พบ Sheet' };
-    var rowNum = parseInt(params.rowNum);
-    if (isNaN(rowNum) || rowNum < 2) return { success: false, message: 'rowNum ไม่ถูกต้อง' };
-    var p = params;
-    var dist=parseFloat(p.distance)||'', fuel=parseFloat(p.fuelUsed)||'';
-    var eff=(dist&&fuel)?Math.round((dist/fuel)*100)/100:(p.fuelEff||'');
-    var now = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm:ss');
-    var newRow=[p.deviceId||'',p.truck||'',p.vehicleName||'',p.driver||'',
-      p.date||'',p.timeStart||'',p.timeEnd||'',p.engineRunTime||'',p.idleStr||'',p.travelTime||'',
-      dist,p.avgSpeed||'',p.maxSpeed||'',fuel,p.idleMin||'',p.engineMin||'',eff,now];
-    sheet.getRange(rowNum,1,1,newRow.length).setValues([newRow]);
-    return { success: true };
-  } catch(err) { return { success: false, message: err.message }; }
-}
 
 // ── ลบแถวใน GPS_Activity_Log ─────────────────────────────────────────────
 
@@ -5192,456 +4484,8 @@ function saveSafetyStockData(rows) {
 // KPI WAREHOUSE & LOGISTIC — Supervisor Dashboard
 // ════════════════════════════════════════════════════════════════════════
 
-/**
- * ดึงข้อมูล KPI อัตโนมัติสำหรับช่วงวันที่ที่เลือก
- * แหล่งข้อมูล:
- *   1. WH_Activity_Log       → ประสิทธิภาพการโหลดสินค้า
- *   2. Inventory_Blocking_Log → ไม่มีพื้นที่วางสินค้า
- *   3. Daily Cycle Count FG  → Checker FG %, Inventory Control
- * @param {string} startDateStr  - yyyy-MM-dd
- * @param {string} endDateStr    - yyyy-MM-dd
- */
-function getKpiWHLGData(startDateStr, endDateStr) {
-  try {
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    var start = new Date(startDateStr); start.setHours(0,0,0,0);
-    var end   = new Date(endDateStr);   end.setHours(23,59,59,999);
 
-    // ── Helper: Median ──────────────────────────────────────────────────
-    function median(arr) {
-      if (!arr.length) return null;
-      var sorted = arr.slice().sort(function(a, b) { return a - b; });
-      var mid = Math.floor(sorted.length / 2);
-      return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-    }
-
-    // ── 1. WH_Activity_Log → ประสิทธิภาพการโหลด ────────────────────────
-    // สูตรใหม่: MPI÷WPU = นาที/KG (normalize ด้วยน้ำหนักต่อรายการ → ยุติธรรมกว่า)
-    // Penalty: โหลดสินค้าผิด -15/ครั้ง, เคลมสินค้า -10/ครั้ง
-    // Col A(0)=ประเภท, Col B(1)=วันที่, Col K(10)=นาที/รายการ, Col L(11)=น้ำหนักต่อหน่วย(A)
-    var whaSheet = ss.getSheetByName(WH_ACTIVITY_SHEET);
-    var whaMap      = {}; // key yyyy-MM-dd → { wpuList, mpiList, wrongCount, claimCount }
-    var truckMap    = {}; // key 'yyyy-MM-dd|plate' → { plate, date, mpiPerKgList }
-    // แยก median baseline ตามกลุ่มน้ำหนัก เพื่อให้ยุติธรรมกับรถหนัก/เบาต่างกัน
-    var allMpiPerKgA = []; // กลุ่ม A: < 3,000 KG
-    var allMpiPerKgB = []; // กลุ่ม B: 3,000–8,000 KG
-    var allMpiPerKgC = []; // กลุ่ม C: 8,000–16,000 KG
-    var allMpiPerKgD = []; // กลุ่ม D: > 16,000 KG
-
-    if (whaSheet && whaSheet.getLastRow() >= 2) {
-      var whaData = whaSheet.getDataRange().getValues();
-      for (var i = 1; i < whaData.length; i++) {
-        var rowType = String(whaData[i][0] || '');
-        var wd = parseDateValue(whaData[i][1]);
-        if (!wd) continue;
-        var wKey = Utilities.formatDate(wd, 'GMT+7', 'yyyy-MM-dd');
-        if (!whaMap[wKey]) whaMap[wKey] = { wpuList: [], mpiList: [], wrongCount: 0, claimCount: 0, dmgLoadCount: 0, dmgStoreCount: 0 };
-
-        if (rowType === 'โหลดสินค้าผิด') {
-          whaMap[wKey].wrongCount++;
-          continue;
-        }
-        if (rowType === 'เคลมสินค้า') {
-          whaMap[wKey].claimCount++;
-          continue;
-        }
-        if (rowType === 'สินค้าเสียหาย-การโหลด') {
-          whaMap[wKey].dmgLoadCount++;
-          continue;
-        }
-        if (rowType === 'สินค้าเสียหาย-การเก็บ') {
-          whaMap[wKey].dmgStoreCount++;
-          continue;
-        }
-        if (rowType !== 'บันทึกการโหลด') continue;
-
-        var wpu = parseFloat(String(whaData[i][11]).replace(/,/g,''));
-        var mpi = parseFloat(String(whaData[i][10]).replace(/,/g,''));
-        if (isNaN(wpu) || wpu <= 0) continue;
-        if (isNaN(mpi) || mpi <= 0) continue;
-
-        whaMap[wKey].wpuList.push(wpu);
-        whaMap[wKey].mpiList.push(mpi);
-        var mpkg = mpi / wpu; // นาที/KG per trip
-        if      (wpu < 3000)   allMpiPerKgA.push(mpkg);
-        else if (wpu <= 8000)  allMpiPerKgB.push(mpkg);
-        else if (wpu <= 16000) allMpiPerKgC.push(mpkg);
-        else                   allMpiPerKgD.push(mpkg);
-
-        // Per-truck map (Col U index 20 = ทะเบียนรถ, optional)
-        var rowTruck = String(whaData[i][20] || '').trim();
-        if (rowTruck) {
-          var tKey = wKey + '|' + rowTruck;
-          if (!truckMap[tKey]) truckMap[tKey] = { plate: rowTruck, date: wKey, mpiPerKgList: [] };
-          truckMap[tKey].mpiPerKgList.push(mpi / wpu);
-        }
-      }
-    }
-
-    // Median นาที/KG แยกตามกลุ่มน้ำหนัก (historical baseline ที่ยุติธรรมกว่า)
-    var medianA = median(allMpiPerKgA); // < 3,000 KG
-    var medianB = median(allMpiPerKgB); // 3,000–8,000 KG
-    var medianC = median(allMpiPerKgC); // 8,000–16,000 KG
-    var medianD = median(allMpiPerKgD); // > 16,000 KG
-    // ถ้ากลุ่มใดไม่มีข้อมูลพอ ให้ fallback ไปใช้ median รวมทุกกลุ่ม
-    var medianAll = median(allMpiPerKgA.concat(allMpiPerKgB).concat(allMpiPerKgC).concat(allMpiPerKgD));
-    function getGroupMedian(wpu) {
-      if (wpu < 3000)   return medianA || medianAll;
-      if (wpu <= 8000)  return medianB || medianAll;
-      if (wpu <= 16000) return medianC || medianAll;
-      return medianD || medianAll;
-    }
-
-    // ── 2. Sheet Plan → planMinutes ต่อวัน (SUM prodTimeDay Col F × 60) ──
-    // Col A(0)=วันที่(yyyyMMdd), Col F(5)=prodTimeDay(ชั่วโมง)
-    var planSheet = ss.getSheetByName(PLAN_SHEET_NAME);
-    var planMap   = {}; // key yyyy-MM-dd → totalMinutes
-    if (planSheet && planSheet.getLastRow() >= 2) {
-      var planData = planSheet.getDataRange().getValues();
-      for (var j = 1; j < planData.length; j++) {
-        var pDateRaw = String(planData[j][0] || '').trim();
-        if (!pDateRaw || pDateRaw.length < 8) continue;
-        // yyyyMMdd → yyyy-MM-dd
-        var pKey = pDateRaw.substring(0,4) + '-' + pDateRaw.substring(4,6) + '-' + pDateRaw.substring(6,8);
-        var prodHrs = parseFloat(String(planData[j][5]).replace(/,/g,'')) || 0;
-        planMap[pKey] = (planMap[pKey] || 0) + prodHrs;
-      }
-      // แปลงชั่วโมง → นาที
-      Object.keys(planMap).forEach(function(k) { planMap[k] = Math.round(planMap[k] * 60); });
-    }
-
-    // ── 3. Inv Control (%) = (totalLines - adjustedLines) / totalLines × 100 ──
-    // 3a. Inventory_Log_Daily → totalLinesMap per วัน
-    // Col A(0)=วันที่, Col D(3)=จำนวน SKU (เส้น) — last row per date wins
-    var invLogSheet   = ss.getSheetByName(INVENTORY_DAILY_LOG_SHEET);
-    var totalLinesMap = {}; // key yyyy-MM-dd → totalLines
-    if (invLogSheet && invLogSheet.getLastRow() >= 2) {
-      var ilData = invLogSheet.getDataRange().getValues();
-      for (var il = 1; il < ilData.length; il++) {
-        var ilD = parseDateValue(ilData[il][0]); // Col A(0) = วันที่
-        if (!ilD) continue;
-        var ilKey   = Utilities.formatDate(ilD, 'GMT+7', 'yyyy-MM-dd');
-        var ilLines = parseFloat(String(ilData[il][3]).replace(/,/g,'')) || 0; // Col D(3)
-        totalLinesMap[ilKey] = ilLines; // last row per date wins
-      }
-    }
-
-    // 3b. Transection FG → adjustedLinesMap
-    // กรอง Col G(6)="Counting", กลุ่มตาม Col N(13)=Number
-    // นับเฉพาะ Number ที่มีแถวเดียวต่อวัน, Col H(7)=เส้น, Col T(19)=วันที่
-    var transFGSheet    = ss.getSheetByName('Transection FG');
-    var adjustedLinesMap = {}; // key yyyy-MM-dd → adjustedLines
-    if (transFGSheet && transFGSheet.getLastRow() >= 2) {
-      var tfData     = transFGSheet.getDataRange().getValues();
-      var tfGroupMap = {}; // key "yyyy-MM-dd|Number" → { dateKey, lines[], count }
-      for (var tf = 1; tf < tfData.length; tf++) {
-        var tfRef = String(tfData[tf][6] || '').trim(); // Col G(6) = Reference
-        if (tfRef !== 'Counting') continue;
-        var tfD = parseDateValue(tfData[tf][19]); // Col T(19) = วันที่
-        if (!tfD) continue;
-        var tfDateKey  = Utilities.formatDate(tfD, 'GMT+7', 'yyyy-MM-dd');
-        var tfNum      = String(tfData[tf][13] || '').trim(); // Col N(13) = Number
-        var tfLines    = Math.abs(parseFloat(String(tfData[tf][7]).replace(/,/g,'')) || 0); // Col H(7) ใช้ค่าสัมบูรณ์
-        var tfGroupKey = tfDateKey + '|' + tfNum;
-        if (!tfGroupMap[tfGroupKey]) tfGroupMap[tfGroupKey] = { dateKey: tfDateKey, lines: [], count: 0 };
-        tfGroupMap[tfGroupKey].lines.push(tfLines);
-        tfGroupMap[tfGroupKey].count++;
-      }
-      // นับเฉพาะ Number ที่มี 1 แถว (count > 1 → ไม่นับ)
-      var tfKeys = Object.keys(tfGroupMap);
-      for (var tg = 0; tg < tfKeys.length; tg++) {
-        var grp = tfGroupMap[tfKeys[tg]];
-        if (grp.count === 1) {
-          adjustedLinesMap[grp.dateKey] = (adjustedLinesMap[grp.dateKey] || 0) + grp.lines[0];
-        }
-      }
-    }
-
-    // ── 4. KPI Log → Checker(%), PRD KPI(%), tL, dL สำหรับ FG และ SEMI ──
-    // Col A(0)=บันทึกเมื่อ, B(1)=วันที่Cycle, C(2)=ประเภท
-    // ดึงจาก Inventory KPI Log (โครงสร้างใหม่ 21 คอลัมน์)
-    // Col B(1)=วันที่นับ, Col D(3)=ประเภท, Col Q(16)=Checker KPI%, Col T(19)=Prod KPI%, Col U(20)=Final Adjust%
-    var kpiLogSheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
-    var kpiLogMap   = {}; // key yyyy-MM-dd → { FG: {checker,prd,finalAdj}, SEMI: {checker,prd,finalAdj} }
-    if (kpiLogSheet && kpiLogSheet.getLastRow() >= 2) {
-      var kpiLogData = kpiLogSheet.getDataRange().getValues();
-      for (var p = 1; p < kpiLogData.length; p++) {
-        var kRaw = kpiLogData[p][1]; // Col B = วันที่นับ
-        if (!kRaw) continue;
-        var kKey     = kRaw instanceof Date
-          ? Utilities.formatDate(kRaw, 'GMT+7', 'yyyy-MM-dd') : String(kRaw);
-        var kType    = String(kpiLogData[p][3] || '').trim();  // Col D = ประเภท (FG/SEMI)
-        var kChecker = parseFloat(String(kpiLogData[p][16]).replace(/,/g,'')); // Col Q = Checker KPI%
-        var kPrd     = parseFloat(String(kpiLogData[p][19]).replace(/,/g,'')); // Col T = Prod KPI%
-        var kFinalAdj= parseFloat(String(kpiLogData[p][20]).replace(/,/g,'')); // Col U = Final Adjust%
-        if (isNaN(kChecker) && isNaN(kPrd) && isNaN(kFinalAdj)) continue;
-        if (!kpiLogMap[kKey]) kpiLogMap[kKey] = {};
-        kpiLogMap[kKey][kType] = { checker: kChecker, prd: kPrd, finalAdj: kFinalAdj };
-      }
-    }
-
-    // ── สร้าง result วนทีละวัน ─────────────────────────────────────────
-    var result = [];
-    var cur    = new Date(start);
-    while (cur <= end) {
-      var key    = Utilities.formatDate(cur, 'GMT+7', 'yyyy-MM-dd');
-      var wha         = whaMap[key] || null;
-      var planMinutes = planMap[key] !== undefined ? planMap[key] : null;
-
-      // คำนวณ efficiency จาก WH_Activity_Log
-      var efficiency    = null;
-      var effStep1      = null;
-      var accuracyScore = null;
-      var wpuActual     = null;
-      var mpiActual     = null;
-      var wrongCount    = wha ? (wha.wrongCount || 0) : 0;
-      var claimCount    = wha ? (wha.claimCount || 0) : 0;
-
-      if (wha && wha.wpuList.length > 0 && medianAll) {
-        // wpuActual / mpiActual = ค่าเฉลี่ย (ใช้แสดงผลในตาราง เท่านั้น)
-        wpuActual = wha.wpuList.reduce(function(a,b){return a+b;},0) / wha.wpuList.length;
-        mpiActual = wha.mpiList.reduce(function(a,b){return a+b;},0) / wha.mpiList.length;
-
-        // ── Step 1: Efficiency Score (เปรียบกับ median ของกลุ่มน้ำหนักเดียวกัน) ──
-        var effList = [];
-        for (var t = 0; t < wha.wpuList.length; t++) {
-          var wpu_t = wha.wpuList[t];
-          var mpi_t = wha.mpiList[t];
-          if (wpu_t > 0 && mpi_t > 0) {
-            var groupMedian = getGroupMedian(wpu_t);
-            if (!groupMedian) continue;
-            var mpiPerKg_t = mpi_t / wpu_t;
-            // เร็วกว่า median ของกลุ่มเดียวกัน → คะแนนสูง, cap ที่ 100
-            var speedScore = Math.min(100, (groupMedian / mpiPerKg_t) * 100);
-            effList.push(speedScore);
-          }
-        }
-
-        if (effList.length > 0) {
-          effStep1 = effList.reduce(function(a,b){return a+b;},0) / effList.length;
-
-          // ── Step 2: Accuracy Score (แยกออกจาก speed — ไม่ผิด ไม่เคลม) ──
-          accuracyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
-
-          // ── Step 3: รวม Load Score = Efficiency(60%) + Accuracy(40%) ──
-          efficiency = Math.round((effStep1 * 0.6 + accuracyScore * 0.4) * 10) / 10;
-        }
-      } else if (wha && (wrongCount > 0 || claimCount > 0)) {
-        // ไม่มี trip data แต่มีความผิดพลาด → คำนวณจาก Accuracy เพียงอย่างเดียว
-        accuracyScore = Math.max(0, 100 - wrongCount * 15 - claimCount * 10);
-        efficiency    = Math.round(accuracyScore * 10) / 10;
-      }
-
-      // ดึงค่าจาก Inventory KPI Log
-      var kpiLog          = kpiLogMap[key] || {};
-      var kpiFG           = kpiLog['FG']   || {};
-      var kpiSEMI         = kpiLog['SEMI'] || {};
-      var checkerFGPct    = !isNaN(kpiFG.checker)    ? Math.round(kpiFG.checker    * 10) / 10 : null;
-      var checkerSEMIPct  = !isNaN(kpiSEMI.checker)  ? Math.round(kpiSEMI.checker  * 10) / 10 : null;
-      var finalAdjFGPct   = !isNaN(kpiFG.finalAdj)   ? Math.round(kpiFG.finalAdj   * 10) / 10 : null;
-      var finalAdjSEMIPct = !isNaN(kpiSEMI.finalAdj) ? Math.round(kpiSEMI.finalAdj * 10) / 10 : null;
-      var prdKPIFG        = !isNaN(kpiFG.prd)        ? Math.round(kpiFG.prd        * 10) / 10 : null;
-      var prdKPISEMI      = !isNaN(kpiSEMI.prd)      ? Math.round(kpiSEMI.prd      * 10) / 10 : null;
-
-      // คำนวณ Damage KPI จาก WH_Activity_Log
-      var dmgLoadCount  = wha ? (wha.dmgLoadCount  || 0) : 0;
-      var dmgStoreCount = wha ? (wha.dmgStoreCount || 0) : 0;
-      var scoreLoad     = Math.max(0, 100 - dmgLoadCount  * 20);
-      var scoreStore    = Math.max(0, 100 - dmgStoreCount * 10);
-      // ถ่วงน้ำหนัก 0.6 (โหลด) + 0.4 (เก็บ)
-      var damagePct     = Math.round((scoreLoad * 0.6 + scoreStore * 0.4) * 10) / 10;
-
-      var planHours = (planMinutes !== null) ? Math.round((planMinutes / 60) * 10) / 10 : null;
-
-      // Per-truck efficiency สำหรับวันนี้
-      var truckScores = [];
-      Object.keys(truckMap).forEach(function(tKey) {
-        var tm = truckMap[tKey];
-        if (tm.date !== key) return;
-        if (!medianAll || !tm.mpiPerKgList.length) return;
-        var effList_t = tm.mpiPerKgList.map(function(v) {
-          return Math.min(100, (medianAll / v) * 100);
-        });
-        var avgEff_t = effList_t.reduce(function(a, b) { return a + b; }, 0) / effList_t.length;
-        truckScores.push({
-          plate:      tm.plate,
-          efficiency: Math.round(avgEff_t * 10) / 10,
-          tripCount:  tm.mpiPerKgList.length
-        });
-      });
-
-      result.push({
-        date:             key,
-        efficiency:       efficiency,        // → Load Score (%) pre-calc ด้วย 60/40
-        effStep1:         effStep1 !== null ? Math.round(effStep1 * 10) / 10 : null,      // → Speed component
-        accuracyScore:    accuracyScore !== null ? Math.round(accuracyScore * 10) / 10 : null, // → Accuracy component
-        checkerFGPct:     checkerFGPct,      // → FG Checker (%)
-        checkerSEMIPct:   checkerSEMIPct,    // → SEMI Checker (%)
-        finalAdjFGPct:    finalAdjFGPct,     // → Final Adj FG (%) จาก Inventory KPI Log
-        finalAdjSEMIPct:  finalAdjSEMIPct,   // → Final Adj SEMI (%) จาก Inventory KPI Log
-        scoreLoad:        scoreLoad,         // → Loading damage component (pre-calc)
-        scoreStore:       scoreStore,        // → Storage damage component (pre-calc)
-        damagePct:        damagePct,         // → Damage Score (%) pre-calc ด้วย 60/40
-        prdKPIFG:         prdKPIFG,          // → Data Err FG (%)
-        prdKPISEMI:       prdKPISEMI,        // → Data Err SEMI (%)
-        planHours:        planHours,         // → แผนชั่วโมง (แสดงใน Space Breakdown)
-        planMinutes:      planMinutes,       // → แผนนาที (ใช้คำนวณ Space Breakdown KPI)
-        truckScores:      truckScores,       // → per-truck efficiency [{ plate, efficiency, tripCount }]
-      });
-      cur.setDate(cur.getDate() + 1);
-    }
-
-    return { success: true, data: result };
-  } catch(e) {
-    Logger.log('❌ getKpiWHLGData error: ' + e.message);
-    return { success: false, message: e.toString() };
-  }
-}
-
-/**
- * บันทึกหรืออัปเดต KPI 1 วัน ลงชีต Master KPI WH&LG
- * @param {Object} row - { date(dd/MM/yyyy), efficiency, wpuActual, mpiActual, wpuMedian, mpiMedian,
- *                         loadCount, blockingCount, invControlCount, checkerFGPct,
- *                         damage, checkerSemi, safety }
- */
-function saveKpiWHLG(row) {
-  try {
-    var ss         = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var SHEET_NAME = 'Master KPI WH&LG';
-    var sheet      = ss.getSheetByName(SHEET_NAME);
-
-    var headers = [
-      'วันที่บันทึก',
-      'วันที่ข้อมูล',
-      'FG Checker (%)',
-      'SEMI Checker (%)',
-      'Final Adj FG (%)',
-      'Final Adj SEMI (%)',
-      'Space Breakdown (%)',
-      'Load Score (%)',
-      'Damage Score (%)',
-      'Data Err FG (%)',
-      'Data Err SEMI (%)',
-    ];
-
-    // สร้างชีตใหม่ถ้ายังไม่มี หรือ reset ถ้า header ไม่ตรง (format เก่า)
-    var needReset = false;
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEET_NAME);
-      needReset = true;
-    } else {
-      // ตรวจ header row: col A ต้องเป็น 'วันที่บันทึก'
-      var firstCell = String(sheet.getRange(1, 1).getValue() || '').trim();
-      if (firstCell !== 'วันที่บันทึก') needReset = true;
-    }
-    if (needReset) {
-      sheet.clearContents();
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      sheet.getRange(1, 1, 1, headers.length)
-        .setFontWeight('bold')
-        .setBackground('#f59e0b')
-        .setFontColor('#1e293b');
-      sheet.setFrozenRows(1);
-      // ลบคอลัมน์ส่วนเกินถ้ามี
-      if (sheet.getMaxColumns() > headers.length) {
-        sheet.deleteColumns(headers.length + 1, sheet.getMaxColumns() - headers.length);
-      }
-    }
-
-    var _v = function(v) { return (v !== null && v !== undefined) ? v : ''; };
-    var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm:ss');
-    var newRow = [
-      nowStr,                    // 0: วันที่บันทึก
-      row.date || '',            // 1: วันที่ข้อมูล
-      _v(row.checkerFGPct),      // 2: FG Checker (%)
-      _v(row.checkerSEMIPct),    // 3: SEMI Checker (%)
-      _v(row.finalAdjFG),        // 4: Final Adj FG (%)
-      _v(row.finalAdjSEMI),      // 5: Final Adj SEMI (%)
-      _v(row.spaceBreakdown),    // 6: Space Breakdown (%)
-      _v(row.loadScore),         // 7: Load Score (%)
-      _v(row.damageScore),       // 8: Damage Score (%)
-      _v(row.dataErrFG),         // 9: Data Err FG (%)
-      _v(row.dataErrSEMI),       // 10: Data Err SEMI (%)
-    ];
-
-    // ตรวจสอบว่ามีข้อมูลวันนั้นอยู่แล้วหรือไม่ (อัปเดตถ้ามี — เปรียบเทียบกับ col B = วันที่ข้อมูล)
-    var lastRow  = sheet.getLastRow();
-    var updated  = false;
-    if (lastRow >= 2) {
-      var existing = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-      for (var i = 0; i < existing.length; i++) {
-        var cellDate = existing[i][1] instanceof Date
-          ? Utilities.formatDate(existing[i][1], 'GMT+7', 'dd/MM/yyyy')
-          : String(existing[i][1] || '').trim();
-        if (cellDate === row.date) {
-          sheet.getRange(i + 2, 1, 1, newRow.length).setValues([newRow]);
-          updated = true;
-          break;
-        }
-      }
-    }
-    if (!updated) sheet.appendRow(newRow);
-
-    // Format แถวที่บันทึก
-    var targetRow = updated
-      ? (function(){ var d=sheet.getRange(2,1,sheet.getLastRow()-1,2).getValues(); for(var x=0;x<d.length;x++){var c=d[x][1] instanceof Date?Utilities.formatDate(d[x][1],'GMT+7','dd/MM/yyyy'):String(d[x][1]||'').trim(); if(c===row.date)return x+2;} return sheet.getLastRow(); })()
-      : sheet.getLastRow();
-    sheet.getRange(targetRow, 1, 1, newRow.length).setBackground('#d1fae5');
-
-    return { success: true, message: 'บันทึก KPI วันที่ ' + row.date + ' สำเร็จ' };
-  } catch(e) {
-    Logger.log('❌ saveKpiWHLG error: ' + e.message);
-    return { success: false, message: e.toString() };
-  }
-}
-
-/**
- * โหลดข้อมูล KPI ที่บันทึกไว้แล้วจาก Master KPI WH&LG
- * @param {string} startDateStr - yyyy-MM-dd
- * @param {string} endDateStr   - yyyy-MM-dd
- */
-function getKpiWHLGHistory(startDateStr, endDateStr) {
-  try {
-    var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName('Master KPI WH&LG');
-    if (!sheet || sheet.getLastRow() < 2) return { success: true, data: [] };
-
-    var start = new Date(startDateStr); start.setHours(0,0,0,0);
-    var end   = new Date(endDateStr);   end.setHours(23,59,59,999);
-
-    var data   = sheet.getDataRange().getValues();
-    var result = [];
-    var _pf = function(v) { return (v !== '' && v !== null && v !== undefined) ? parseFloat(v) : null; };
-    for (var i = 1; i < data.length; i++) {
-      // Col A(0)=วันที่บันทึก(timestamp), Col B(1)=วันที่ข้อมูล
-      var rowDateRaw = data[i][1];
-      var rowDate    = parseDateValue(rowDateRaw);
-      if (!rowDate || rowDate < start || rowDate > end) continue;
-      var ddmmyyyy = Utilities.formatDate(rowDate, 'GMT+7', 'dd/MM/yyyy');
-      // Columns:
-      //  0=วันที่บันทึก  1=วันที่ข้อมูล  2=FGChecker  3=SEMIChecker
-      //  4=FinalAdjFG    5=FinalAdjSEMI  6=SpaceBreakdown
-      //  7=LoadScore     8=DamageScore   9=DataErrFG  10=DataErrSEMI
-      result.push({
-        date:           ddmmyyyy,
-        checkerFGPct:   _pf(data[i][2]),
-        checkerSEMIPct: _pf(data[i][3]),
-        finalAdjFG:     _pf(data[i][4]),
-        finalAdjSEMI:   _pf(data[i][5]),
-        spaceBreakdown: _pf(data[i][6]),
-        loadScore:      _pf(data[i][7]),
-        damageScore:    _pf(data[i][8]),
-        dataErrFG:      _pf(data[i][9]),
-        dataErrSEMI:    _pf(data[i][10]),
-      });
-    }
-    return { success: true, data: result };
-  } catch(e) {
-    Logger.log('❌ getKpiWHLGHistory error: ' + e.message);
-    return { success: false, message: e.toString() };
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // saveBatchLogisticPlans(plansArray)
@@ -6187,145 +5031,7 @@ function _getOrCreateInvKPISheet(ss) {
   return sheet;
 }
 
-function saveInventoryKPI(data) {
-  try {
-    const ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet   = _getOrCreateInvKPISheet(ss);
-    const now     = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-    const n       = v => (v !== null && v !== undefined) ? Number(v) : 0;
-    const dateStr = data.countDate || '';
-    const empId   = data.employeeId || '';
-    const pctFmt  = '0.0"%"';
 
-    // สร้างแถวสำหรับแต่ละประเภท
-    function buildRow(type, d, finalAdjust) {
-      const isF = type === 'FG';
-      return [
-        now, dateStr, empId, type,
-        n(d.totalSKU),
-        isF ? n(d.totalPCS)       : n(d.totalBand),
-        n(d.prodSKU),
-        isF ? n(d.prodPCS)        : n(d.prodBand),
-        n(d.checkerErrSKU),
-        isF ? n(d.checkerErrPCS)  : n(d.checkerErrBand),
-        n(d.prodErrSKU),
-        isF ? n(d.prodErrPCS)     : n(d.prodErrBand),
-        n(d.weightSKU) || 40,
-        isF ? (n(d.weightPCS) || 60)  : (n(d.weightBand) || 60),
-        n(d.checkerSKUpct),
-        isF ? n(d.checkerPCSpct)  : n(d.checkerBandpct),
-        n(d.checkerKPI),
-        n(d.prodSKUpct),
-        isF ? n(d.prodPCSpct)     : n(d.prodBandpct),
-        n(d.prodKPI),
-        n(finalAdjust)
-      ];
-    }
-
-    // แปลง Date object หรือ string → "yyyy-MM-dd"
-    function _normDate(v) {
-      return v instanceof Date
-        ? Utilities.formatDate(v, 'GMT+7', 'yyyy-MM-dd')
-        : String(v);
-    }
-
-    // Upsert: ค้นหาแถวตาม date + type
-    function upsertRow(type, rowData) {
-      let rowIdx = -1;
-      if (dateStr && sheet.getLastRow() > 1) {
-        const vals = sheet.getRange(2, 2, sheet.getLastRow() - 1, 3).getValues(); // col B,C,D
-        for (var i = 0; i < vals.length; i++) {
-          if (_normDate(vals[i][0]) === dateStr && String(vals[i][2]) === type) {
-            rowIdx = i + 2; break;
-          }
-        }
-      }
-      if (rowIdx > 0) {
-        sheet.getRange(rowIdx, 1, 1, rowData.length).setValues([rowData]);
-      } else {
-        sheet.appendRow(rowData);
-        rowIdx = sheet.getLastRow();
-      }
-      // ใส่ % format คอลัมน์ 13-21 (Weight% ถึง Final Adjust%)
-      sheet.getRange(rowIdx, 13, 1, 9).setNumberFormat(pctFmt);
-      return rowIdx;
-    }
-
-    const saveType = data.saveType; // 'FG', 'SEMI', or undefined (both)
-    const fg   = data.fg   || {};
-    const semi = data.semi || {};
-    if (!saveType || saveType === 'FG')   upsertRow('FG',   buildRow('FG',   fg,   data.finalAdjustFG));
-    if (!saveType || saveType === 'SEMI') upsertRow('SEMI', buildRow('SEMI', semi, data.finalAdjustSEMI));
-
-    saveAuditLog('Inventory KPI', 'SAVE',
-      'วันที่นับ: ' + dateStr + ' | พนักงาน: ' + empId +
-      (saveType === 'FG'   ? ' | FG Checker: '   + n(fg.checkerKPI).toFixed(1)   + '%' : '') +
-      (saveType === 'SEMI' ? ' | SEMI Checker: ' + n(semi.checkerKPI).toFixed(1) + '%' : '') +
-      (!saveType ? ' | FG: ' + n(fg.checkerKPI).toFixed(1) + '% | SEMI: ' + n(semi.checkerKPI).toFixed(1) + '%' : ''),
-      'success');
-
-    return { success: true, message: 'บันทึกข้อมูลเรียบร้อย (' + (saveType || 'FG + SEMI') + ')' };
-  } catch (e) {
-    return { success: false, message: e.toString() };
-  }
-}
-
-function getInventoryKPIByDate(dateStr) {
-  try {
-    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(INVENTORY_KPI_LOG_SHEET);
-    if (!sheet || sheet.getLastRow() < 2) return { success: true, data: null };
-
-    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, INV_KPI_HEADERS.length).getValues();
-    let fgRow = null, semiRow = null, empId = '';
-
-    function _normDate(v) {
-      return v instanceof Date
-        ? Utilities.formatDate(v, 'GMT+7', 'yyyy-MM-dd')
-        : String(v);
-    }
-    for (var i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (_normDate(r[1]) !== dateStr) continue;
-      empId = empId || String(r[2]);
-      const type = String(r[3]);
-      // r[4]=SKU, r[5]=หน่วย, r[6]=prodSKU, r[7]=prodUnit,
-      // r[8]=checkerErrSKU, r[9]=checkerErrUnit, r[10]=prodErrSKU, r[11]=prodErrUnit,
-      // r[12]=wSKU, r[13]=wUnit, r[14]=checkerSKUpct, r[15]=checkerUnitpct, r[16]=checkerKPI,
-      // r[17]=prodSKUpct, r[18]=prodUnitpct, r[19]=prodKPI, r[20]=finalAdjust
-      if (type === 'FG') {
-        fgRow = {
-          totalSKU: r[4], totalPCS: r[5], prodSKU: r[6], prodPCS: r[7],
-          checkerErrSKU: r[8], checkerErrPCS: r[9], prodErrSKU: r[10], prodErrPCS: r[11],
-          weightSKU: r[12], weightPCS: r[13],
-          checkerSKUpct: r[14], checkerPCSpct: r[15], checkerKPI: r[16],
-          prodSKUpct: r[17], prodPCSpct: r[18], prodKPI: r[19],
-          finalAdjust: r[20]
-        };
-      } else if (type === 'SEMI') {
-        semiRow = {
-          totalSKU: r[4], totalBand: r[5], prodSKU: r[6], prodBand: r[7],
-          checkerErrSKU: r[8], checkerErrBand: r[9], prodErrSKU: r[10], prodErrBand: r[11],
-          weightSKU: r[12], weightBand: r[13],
-          checkerSKUpct: r[14], checkerBandpct: r[15], checkerKPI: r[16],
-          prodSKUpct: r[17], prodBandpct: r[18], prodKPI: r[19],
-          finalAdjust: r[20]
-        };
-      }
-    }
-
-    if (!fgRow && !semiRow) return { success: true, data: null };
-    return { success: true, data: {
-      countDate: dateStr, employeeId: empId,
-      fg:   fgRow,
-      semi: semiRow,
-      finalAdjustFG:   fgRow   ? fgRow.finalAdjust   : null,
-      finalAdjustSEMI: semiRow ? semiRow.finalAdjust  : null
-    }};
-  } catch (e) {
-    return { success: false, message: e.toString() };
-  }
-}
 
 
 // ══════════════════════════════════════════════════════════════
@@ -6924,46 +5630,6 @@ function runSupabaseSync() {
 // ══════════════════════════════════════════════════════════════════════
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-function _updateZoneStockForMove(ss, fromZone, toZone, sku, skuName, totalPCS, pcsPerBundle, bw, bh) {
-  try {
-    var sheet = _getOrCreateZoneStockSheet(ss);
-    var now   = Utilities.formatDate(new Date(), 'GMT+7', 'dd/MM/yyyy HH:mm');
-    var rows  = sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,8).getValues() : [];
-
-    var fromRowIdx = -1, toRowIdx = -1;
-    for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i][0]).trim()===fromZone && String(rows[i][1]).trim()===sku) fromRowIdx = i+2;
-      if (String(rows[i][0]).trim()===toZone   && String(rows[i][1]).trim()===sku) toRowIdx   = i+2;
-    }
-
-    // ดึง bw/bh จาก fromZone ถ้ามี (มิติจริงจากกอง)
-    var useBw = bw||0, useBh = bh||0, usePpb = pcsPerBundle||1;
-    if (fromRowIdx > 0) {
-      var fd = sheet.getRange(fromRowIdx,1,1,8).getValues()[0];
-      useBw  = Number(fd[5])||bw||0;
-      useBh  = Number(fd[6])||bh||0;
-      usePpb = Number(fd[4])||pcsPerBundle||1;
-      var newPcs = Math.max(0, Number(fd[3]) - totalPCS);
-      sheet.getRange(fromRowIdx,4).setValue(newPcs);
-      sheet.getRange(fromRowIdx,8).setValue(now);
-    }
-
-    if (toRowIdx > 0) {
-      var td = sheet.getRange(toRowIdx,1,1,8).getValues()[0];
-      sheet.getRange(toRowIdx,4).setValue(Number(td[3]) + totalPCS);
-      if (!Number(td[5]) && useBw) sheet.getRange(toRowIdx,6).setValue(useBw);
-      if (!Number(td[6]) && useBh) sheet.getRange(toRowIdx,7).setValue(useBh);
-      sheet.getRange(toRowIdx,8).setValue(now);
-    } else {
-      // สร้าง row ใหม่ใน toZone
-      sheet.appendRow([toZone, sku, skuName, totalPCS, usePpb, useBw, useBh, now]);
-    }
-  } catch(e) {
-    Logger.log('_updateZoneStockForMove error: ' + e.toString());
-  }
-}
 
 
 
@@ -7071,27 +5737,6 @@ function _loadSOData() {
   }
 }
 
-// ── ดึง Sale list + Customer ──────────────────────────────────
-function getSaleAndCustomerList() {
-  try {
-    var soMap = _loadSOData();
-    var salesSet = {};
-    Object.values(soMap).forEach(function(so) {
-      if (so.salesTaker) {
-        if (!salesSet[so.salesTaker]) salesSet[so.salesTaker] = {};
-        // ใช้ deliveryName (ชื่อลูกค้า) แทน company code
-        var displayName = so.deliveryName || so.company;
-        salesSet[so.salesTaker][displayName] = true;
-      }
-    });
-    var result = Object.keys(salesSet).sort().map(function(s) {
-      return { sale: s, customers: Object.keys(salesSet[s]).sort() };
-    });
-    return { success: true, sales: result };
-  } catch(e) {
-    return { success: false, message: e.toString() };
-  }
-}
 
 // ── ดึง SO lines กรองตาม Sale + Customer ─────────────────────
 function getSOLinesByCustomer(params) {
@@ -7268,37 +5913,6 @@ function _getLineGroupId() {
   return PropertiesService.getScriptProperties().getProperty('LINE_GROUP_ID') || '';
 }
 
-// รันครั้งเดียวจาก GAS Editor เพื่อตั้งค่า token
-
-function sendLineMessage(message) {
-  try {
-    var token   = _getLineToken();
-    var groupId = _getLineGroupId();
-    if (!token || !groupId) {
-      Logger.log('⚠️ LINE not configured — token:' + !!token + ' groupId:' + !!groupId);
-      return { success: false, message: 'LINE not configured' };
-    }
-    var options = {
-      method: 'post',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': 'Bearer ' + token
-      },
-      payload: JSON.stringify({
-        to: groupId,
-        messages: [{ type: 'text', text: message }]
-      }),
-      muteHttpExceptions: true
-    };
-    var res  = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', options);
-    var code = res.getResponseCode();
-    Logger.log('LINE push → HTTP ' + code + ' ' + res.getContentText());
-    return { success: code === 200 };
-  } catch(e) {
-    Logger.log('❌ sendLineMessage: ' + e.toString());
-    return { success: false, message: e.toString() };
-  }
-}
 
 // รับ Webhook จาก LINE → auto-capture Group ID
 function _handleLineWebhook(payload) {
@@ -7334,21 +5948,6 @@ function _handleLineWebhook(payload) {
 // =====================================================================
 var WH_WORK_ORDER_SHEET = 'WH_Work_Orders';
 
-function _getOrCreateWorkOrderSheet(ss) {
-  var sheet = ss.getSheetByName(WH_WORK_ORDER_SHEET);
-  if (!sheet) {
-    sheet = ss.insertSheet(WH_WORK_ORDER_SHEET);
-    var hdr = ['OrderID','CreatedAt','CreatedBy','Zone','SKU','SKUName',
-               'Bundles','ToZone','Reason','DueDate','Status','AssignedTo','UpdatedAt','Note'];
-    sheet.getRange(1,1,1,hdr.length).setValues([hdr]);
-    sheet.getRange(1,1,1,hdr.length).setBackground('#1e293b').setFontColor('#94a3b8').setFontWeight('bold');
-    sheet.setFrozenRows(1);
-    [110,140,100,70,120,200,70,80,200,100,110,120,140,200].forEach(function(w,i){
-      sheet.setColumnWidth(i+1, w);
-    });
-  }
-  return sheet;
-}
 
 
 
@@ -7521,151 +6120,6 @@ function getZoneStockSummary(params) {
   }
 }
 
-/**
- * calcSmartMoveRecommendations — คำนวณ SKU ที่ควรย้าย
- * หลักการ "ย้ายน้อย แต่ได้พื้นที่มาก"
- *   Efficiency = bundleWidth / bundlesToDropOneColumn
- *   เลือก SKU ที่มี Efficiency สูงสุดก่อน
- */
-function calcSmartMoveRecommendations(params) {
-  try {
-    var threshold = (params && params.threshold) ? Number(params.threshold) : 85;
-    var month = params && params.month ? Number(params.month) : new Date().getMonth()+1;
-    var year  = params && params.year  ? Number(params.year)  : new Date().getFullYear();
-
-    var WM_ZONE_CONFIG_DATA = {
-      'P4': [830,830,1330], 'P1': [1650,1600,1300],
-      'C5': [500,2100,300,300], 'P2': [500,1000,1300], 'P3': [700,700,700,250,250]
-    };
-    var RE_ZONE_CONFIG = {
-      'C4': 1500, 'RE-C5': 900, 'RE4': 1200, 'RE1': 900
-    };
-
-    var stockData = getZoneStockSummary({ month: month, year: year });
-    if (!stockData.success) return { success: false, message: stockData.message };
-    var zones = stockData.zones;
-
-    // คำนวณ usedWidth ต่อโซน
-    function calcZoneWidth(zoneId) {
-      var totalW = 0;
-      var cols   = WM_ZONE_CONFIG_DATA[zoneId];
-      if (cols) totalW = cols.reduce(function(s,w){return s+w;},0);
-      else if (RE_ZONE_CONFIG[zoneId]) totalW = RE_ZONE_CONFIG[zoneId];
-      if (!totalW) return null;
-
-      var usedW = 0;
-      Object.keys(zones[zoneId]||{}).forEach(function(sku) {
-        var s = zones[zoneId][sku];
-        if (!s.bw || !s.bh || s.bundles <= 0) return;
-        var maxL = Math.max(1, Math.floor(420/s.bh));
-        var minB = Math.min(3, s.bundles);
-        var c    = Math.max(minB, Math.ceil(s.bundles/maxL));
-        usedW   += c * s.bw;
-      });
-      return { totalW: totalW, usedW: usedW, pct: Math.min(100, Math.round(usedW/totalW*100)) };
-    }
-
-    // หา RE zones ที่มีพื้นที่ว่าง
-    function findBestDestination(excludeZone) {
-      var best = null; var bestFree = 0;
-      Object.keys(RE_ZONE_CONFIG).forEach(function(z) {
-        if (z === excludeZone) return;
-        var w = calcZoneWidth(z);
-        var free = w ? (w.totalW - w.usedW) : RE_ZONE_CONFIG[z];
-        if (free > bestFree) { bestFree = free; best = z; }
-      });
-      return best || 'C4';
-    }
-
-    var recommendations = [];
-
-    Object.keys(WM_ZONE_CONFIG_DATA).forEach(function(zoneId) {
-      var w = calcZoneWidth(zoneId);
-      if (!w || w.pct < threshold) return;
-
-      var excessW = w.usedW - w.totalW * threshold / 100;
-      if (excessW <= 0) return;
-
-      // คำนวณ efficiency ต่อ SKU
-      var candidates = [];
-      Object.keys(zones[zoneId]||{}).forEach(function(sku) {
-        var s = zones[zoneId][sku];
-        if (!s.bw || !s.bh || s.bundles <= 0) return;
-        var maxL = Math.max(1, Math.floor(420/s.bh));
-        var minB = Math.min(3, s.bundles);
-        var curCols = Math.max(minB, Math.ceil(s.bundles/maxL));
-
-        // จำนวนมัดที่ต้องย้ายเพื่อลด 1 column
-        var bundlesAtOneLessCol = (curCols-1) > 0 ? (curCols-1) * maxL : 0;
-        var bundlesToDrop1Col   = s.bundles - bundlesAtOneLessCol;
-        if (bundlesToDrop1Col <= 0 || curCols <= 1) return;
-
-        var widthFreedPerMove = s.bw; // ลด 1 col = ได้ bundleWidth กลับมา
-        var efficiency = s.bw / bundlesToDrop1Col; // cm freed per bundle moved
-
-        candidates.push({
-          sku: sku, skuName: s.skuName,
-          bundles: s.bundles, availableBundles: s.availableBundles,
-          bw: s.bw, bh: s.bh, maxLayers: maxL,
-          curCols: curCols,
-          bundlesToDrop1Col: bundlesToDrop1Col,
-          widthFreedPerCol: s.bw,
-          efficiency: efficiency
-        });
-      });
-
-      // เรียง Efficiency สูงสุดก่อน
-      candidates.sort(function(a,b){ return b.efficiency - a.efficiency; });
-
-      // เลือก SKU ย้ายจนพื้นที่พอ
-      var movedWidth = 0;
-      var moves = [];
-      candidates.forEach(function(c) {
-        if (movedWidth >= excessW) return;
-        // คำนวณว่าต้องย้ายกี่คอลัมน์
-        var colsToMove = Math.ceil((excessW - movedWidth) / c.bw);
-        var bundlesToMove = colsToMove * c.bundlesToDrop1Col;
-        // ไม่เกิน availableBundles (ไม่ย้ายของที่จะส่งมอบ)
-        bundlesToMove = Math.min(bundlesToMove, c.availableBundles);
-        if (bundlesToMove <= 0) return;
-
-        var actualWidthFreed = Math.floor(bundlesToMove / c.bundlesToDrop1Col) * c.bw;
-        movedWidth += actualWidthFreed;
-
-        moves.push({
-          zone: zoneId,
-          sku: c.sku,
-          skuName: c.skuName,
-          bundlesToMove: bundlesToMove,
-          toZone: findBestDestination(zoneId),
-          widthFreedCm: actualWidthFreed,
-          efficiency: Math.round(c.efficiency*100)/100,
-          currentBundles: c.bundles,
-          availableBundles: c.availableBundles,
-          reason: 'Zone ' + zoneId + ' ใช้งาน ' + w.pct + '% (เกิน ' + threshold + '%)'
-        });
-      });
-
-      recommendations = recommendations.concat(moves);
-    });
-
-    return {
-      success: true,
-      recommendations: recommendations,
-      threshold: threshold,
-      zoneStatus: (function(){
-        var s = {};
-        Object.keys(WM_ZONE_CONFIG_DATA).forEach(function(z){
-          var w = calcZoneWidth(z);
-          if (w) s[z] = w;
-        });
-        return s;
-      })()
-    };
-  } catch(e) {
-    return { success: false, message: e.toString() };
-  }
-}
 
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -7827,19 +6281,6 @@ var WMS_USER_HEADERS = [
   'Active',     // G  TRUE/FALSE
 ];
 
-function _getOrCreateUsersSheet(ss) {
-  var sheet = ss.getSheetByName(WMS_USERS_SHEET);
-  if (!sheet) {
-    sheet = ss.insertSheet(WMS_USERS_SHEET);
-    var hr = sheet.getRange(1, 1, 1, WMS_USER_HEADERS.length);
-    hr.setValues([WMS_USER_HEADERS]);
-    hr.setFontWeight('bold').setBackground('#1e293b').setFontColor('#f8fafc');
-    sheet.setFrozenRows(1);
-    // ซ่อนชีตนี้ไม่ให้เห็นใน tab
-    sheet.hideSheet();
-  }
-  return sheet;
-}
 
 
 
@@ -7881,506 +6322,6 @@ function loGetOrderHistory(limitRows) {
   }
 }
 
-// =====================================================================
-// analyzeZoneCapacity — วิเคราะห์พื้นที่คลัง 7 ขั้นตอน
-// ขั้น 1: แผนผลิตวันนี้ (เครื่อง/ชม./SKU/มัด)
-// ขั้น 2: แผนล่วงหน้า 3 วัน
-// ขั้น 3: ระบุ SKU ผลิตต่อเนื่อง
-// ขั้น 4: สต็อคปัจจุบัน + ฐานวาง
-// ขั้น 5: พื้นที่ว่างจริง
-// ขั้น 6: เทียบแผน vs พื้นที่
-// ขั้น 7: สรุปงาน
-// =====================================================================
-function analyzeZoneCapacity(params) {
-  try {
-    var dateStr = (params && params.date) ? params.date
-                  : Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd');
-
-    var ZONE_WIDTHS = {
-      'P4':[830,830,1330],'P1':[1650,1600,1300],
-      'C5':[500,2100,300,300],'P2':[500,1000,1300],'P3':[700,700,700,250,250],
-      'C4':[1330,1330,1330],'RE4':[500],'RE-C5':[2100,2100],'RE1':[850]
-    };
-    var MACHINE_ZONE = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
-    var THRESHOLD = 70;
-
-    // --- Helpers ---
-    function stackInfo(bundles, bw, bh) {
-      if (!bw || !bh || bundles <= 0) return null;
-      var maxL = Math.max(1, Math.floor(420 / bh));
-      var cols, layers;
-      if (bundles <= 3) {
-        cols = 1; layers = bundles;
-        if (layers > maxL) { cols = Math.ceil(bundles / maxL); layers = Math.ceil(bundles / cols); }
-      } else if (bundles <= 9) {
-        cols = 2; layers = Math.ceil(bundles / cols);
-        if (layers > maxL) { cols = Math.ceil(bundles / maxL); layers = Math.ceil(bundles / cols); }
-      } else {
-        cols = Math.max(3, Math.ceil(bundles / maxL));
-        layers = Math.ceil(bundles / cols);
-      }
-      return { cols: cols, layers: layers, usedWidthCm: cols * bw };
-    }
-
-    // yyyymmdd string → Date object (GMT+7)
-    function parseYMD(s) {
-      var y = parseInt(s.substring(0,4)), mo = parseInt(s.substring(5,7))-1, d = parseInt(s.substring(8,10));
-      return new Date(y, mo, d);
-    }
-    // Date → yyyy-MM-dd
-    function fmtYMD(dt) {
-      var y = dt.getFullYear(), m = dt.getMonth()+1, d = dt.getDate();
-      return y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
-    }
-    // Get next N working days after dateStr
-    function nextWorkDays(fromStr, n, holidays) {
-      var days = [], dt = parseYMD(fromStr);
-      var hSet = {};
-      holidays.forEach(function(h){ hSet[h] = true; });
-      while (days.length < n) {
-        dt = new Date(dt.getTime() + 86400000);
-        var dow = dt.getDay();
-        if (dow === 0) continue; // อาทิตย์
-        var s = fmtYMD(dt);
-        var ds = s.replace(/-/g,'').substring(2); // ddMMyyyy? No — just check full date
-        if (hSet[s]) continue;
-        days.push(s);
-      }
-      return days;
-    }
-
-    // Load product names + ppb directly from Product sheet (ss = SPREADSHEET_ID, same sheet)
-    var localProductNames = {};
-    var localProductPpb   = {};
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    try {
-      var lpSheet = ss.getSheetByName('Product');
-      if (lpSheet && lpSheet.getLastRow() >= 2) {
-        var lpRows = lpSheet.getRange(2, 1, lpSheet.getLastRow() - 1, 3).getValues();
-        lpRows.forEach(function(r) {
-          var sku = String(r[0] || '').trim();
-          if (!sku) return;
-          localProductNames[sku] = String(r[1] || '');
-          localProductPpb[sku]   = Number(r[2]) || 1;
-        });
-      }
-    } catch(e) {}
-
-    // =============================================
-    // ขั้น 1+2: ดึงแผนผลิต วันนี้ + 3 วันล่วงหน้า (จาก Production Block)
-    // =============================================
-    var extMap = getExternalProductMap();
-    var holidays = getHolidays(); // string array
-
-    var aheadDays = nextWorkDays(dateStr, 3, holidays);
-    var allDays   = [dateStr].concat(aheadDays); // [today, d+1, d+2, d+3]
-
-    // ดึง Production Block สำหรับทุกเดือนที่เกี่ยวข้อง
-    var prodBlockCache = {}; // "yyyy-M" → machines array
-    function getProdBlockForMonth(y, m) {
-      var key = y + '-' + m;
-      if (!prodBlockCache[key]) {
-        var res = getProductionPlanData({ month: m, year: y });
-        prodBlockCache[key] = (res.success && res.machines) ? res.machines : [];
-      }
-      return prodBlockCache[key];
-    }
-
-    // สร้าง dayPlan จาก Production Block
-    // dayPlan[dateStr] = array of enriched row objects per zone
-    var dayPlan = {};
-    allDays.forEach(function(day) {
-      var dt = parseYMD(day);
-      var machines = getProdBlockForMonth(dt.getFullYear(), dt.getMonth() + 1);
-      var enriched = [];
-      machines.forEach(function(mach) {
-        var machId = String(mach.machineId || '').toUpperCase().replace(/\s/g,'');
-        var zoneId = MACHINE_ZONE[machId] || machId;
-        if (!ZONE_WIDTHS[zoneId]) return;
-        var machHrs = Number((mach.pdTime || {})[day] || 0);
-        (mach.products || []).forEach(function(p) {
-          var qty = Number((p.daily || {})[day] || 0);
-          if (qty <= 0) return;
-          var sku = String(p.sku || '');
-          if (!sku) return;
-          var ext = extMap[sku] || {};
-          var ppb = Number(p.pcsPerBundle || ext.pcsPerBundle || 1) || 1;
-          var bw  = Number(p.bundleWidth  || ext.bundleWidth  || 0);
-          var bh  = Number(p.bundleHeight || ext.bundleHeight || 0);
-          var bndls = Math.ceil(qty / ppb);
-          if (bndls <= 0) return;
-          enriched.push({
-            zoneId: zoneId, machineId: machId,
-            sku: sku, skuName: localProductNames[sku] || sku,
-            shift: '-',
-            plannedBundles: bndls,
-            linesQty: qty,
-            machHrs: machHrs, itemHrs: 0,
-            bw: bw, bh: bh, ppb: ppb
-          });
-        });
-      });
-      dayPlan[day] = enriched;
-    });
-
-    // =============================================
-    // ขั้น 3: ระบุ SKU ที่ผลิตต่อเนื่อง (> 1 วัน)
-    // =============================================
-    // skuDayCount[zoneId][sku] = จำนวนวันที่ปรากฏ
-    var skuDayCount = {};
-    allDays.forEach(function(day) {
-      dayPlan[day].forEach(function(r) {
-        if (!skuDayCount[r.zoneId]) skuDayCount[r.zoneId] = {};
-        skuDayCount[r.zoneId][r.sku] = (skuDayCount[r.zoneId][r.sku] || 0) + 1;
-      });
-    });
-
-    // aggregate per zone per sku for each day
-    function aggregateByZoneSku(rows) {
-      var out = {}; // zoneId → { sku → {bundles,bw,bh,ppb,skuName,machHrs,itemHrs,shifts} }
-      rows.forEach(function(r) {
-        if (!out[r.zoneId]) out[r.zoneId] = {};
-        if (!out[r.zoneId][r.sku]) {
-          out[r.zoneId][r.sku] = {
-            bundles:0, bw:r.bw, bh:r.bh, ppb:r.ppb,
-            skuName:r.skuName, machHrs:0, itemHrs:0, shifts:[]
-          };
-        }
-        var e = out[r.zoneId][r.sku];
-        e.bundles  += r.plannedBundles;
-        e.machHrs   = Math.max(e.machHrs, r.machHrs); // ใช้ค่า max ของ shift
-        e.itemHrs  += r.itemHrs;
-        if (r.shift && e.shifts.indexOf(r.shift) < 0) e.shifts.push(r.shift);
-      });
-      return out;
-    }
-
-    var todayByZone  = aggregateByZoneSku(dayPlan[dateStr]);
-    var aheadByZone  = {}; // zoneId → sku → accumulated bundles (3 วัน)
-    aheadDays.forEach(function(day) {
-      var agg = aggregateByZoneSku(dayPlan[day]);
-      Object.keys(agg).forEach(function(z) {
-        if (!aheadByZone[z]) aheadByZone[z] = {};
-        Object.keys(agg[z]).forEach(function(sku) {
-          if (!aheadByZone[z][sku]) {
-            aheadByZone[z][sku] = { bundles:0, bw:agg[z][sku].bw, bh:agg[z][sku].bh,
-                                    ppb:agg[z][sku].ppb, skuName:agg[z][sku].skuName };
-          }
-          aheadByZone[z][sku].bundles += agg[z][sku].bundles;
-        });
-      });
-    });
-
-    // =============================================
-    // ขั้น 4: สต็อคปัจจุบัน — อ่านจาก On-hand sheet โดยตรง (real-time)
-    // =============================================
-    // 4: อ่าน ZoneStock sheet (pre-built by syncZoneStockFromInventory trigger)
-    var zoneStock = {};
-    var zsRes = getZoneStock();
-    if (zsRes.success && zsRes.data) zoneStock = zsRes.data;
-
-    // 4b: homeZone2 จาก Production Block (ใช้ cache ที่โหลดไว้แล้ว) สำหรับ delivery deduction
-    var homeZone2 = {};
-    var MZONE2 = {'P1':'P1','P2':'P2','P3':'P3','P4':'P4','C5':'C5'};
-    var skuMachines2 = {};
-    var dt0 = parseYMD(dateStr);
-    var allMachs2 = getProdBlockForMonth(dt0.getFullYear(), dt0.getMonth() + 1);
-    allMachs2.forEach(function(m) {
-      var mid = String(m.machineId || '').toUpperCase().replace(/\s/g, '');
-      (m.products || []).forEach(function(p) {
-        if (!p.sku) return;
-        if (!skuMachines2[p.sku]) skuMachines2[p.sku] = [];
-        if (skuMachines2[p.sku].indexOf(mid) < 0) skuMachines2[p.sku].push(mid);
-      });
-    });
-    Object.keys(skuMachines2).forEach(function(sku) {
-      var mList = skuMachines2[sku];
-      homeZone2[sku] = MZONE2[mList[0]] || mList[0];
-    });
-    // ถ้า ZoneStock มี SKU ที่รู้ zone อยู่แล้ว ใช้ zone นั้นเป็น homeZone2 ถ้ายังไม่มี
-    Object.keys(zoneStock).forEach(function(zone) {
-      Object.keys(zoneStock[zone]).forEach(function(sku) {
-        if (!homeZone2[sku]) homeZone2[sku] = zone;
-      });
-    });
-
-    // =============================================
-    // ขั้น 6+7: เทียบ และสรุปงาน (per zone)
-    // =============================================
-    var delivBySku = {};
-    try {
-      var delivRes = getDeliveryPlanByDate({ daysAhead: 14 });
-      if (delivRes.success && delivRes.bySkuDate) {
-        Object.keys(delivRes.bySkuDate).forEach(function(sku) {
-          var tot = 0;
-          var bd = delivRes.bySkuDate[sku];
-          Object.keys(bd).forEach(function(d){ tot += Number(bd[d]||0); });
-          if (tot > 0) delivBySku[sku] = tot;
-        });
-      }
-    } catch(e2) {}
-
-    // หักยอดส่งมอบ: home zone ก่อน แล้วค่อยไป zone ปลายทาง
-    // ทำบน zoneStock copy เพื่อให้ stockDetails สะท้อนยอดหลังหัก
-    var delivedPcsPerZoneSku = {}; // zone→sku→pcs ที่ถูกหัก (ใช้แสดง hasDelivery)
-    Object.keys(delivBySku).forEach(function(sku) {
-      var remaining = Number(delivBySku[sku] || 0);
-      if (remaining <= 0) return;
-      var home = homeZone2[sku];
-      // หัก home zone ก่อน
-      if (home && zoneStock[home] && zoneStock[home][sku] && zoneStock[home][sku].pcs > 0) {
-        var take = Math.min(remaining, zoneStock[home][sku].pcs);
-        zoneStock[home][sku].pcs -= take;
-        remaining -= take;
-        if (!delivedPcsPerZoneSku[home]) delivedPcsPerZoneSku[home] = {};
-        delivedPcsPerZoneSku[home][sku] = (delivedPcsPerZoneSku[home][sku] || 0) + take;
-      }
-      // ถ้ายังขาด → หักจาก zone อื่นที่มีสินค้านั้น
-      if (remaining > 0) {
-        Object.keys(zoneStock).forEach(function(zone) {
-          if (remaining <= 0 || zone === home) return;
-          if (!zoneStock[zone][sku] || zoneStock[zone][sku].pcs <= 0) return;
-          var take2 = Math.min(remaining, zoneStock[zone][sku].pcs);
-          zoneStock[zone][sku].pcs -= take2;
-          remaining -= take2;
-          if (!delivedPcsPerZoneSku[zone]) delivedPcsPerZoneSku[zone] = {};
-          delivedPcsPerZoneSku[zone][sku] = (delivedPcsPerZoneSku[zone][sku] || 0) + take2;
-        });
-      }
-    });
-
-    var results = [];
-
-    Object.keys(ZONE_WIDTHS).forEach(function(zoneId) {
-      var totalW = ZONE_WIDTHS[zoneId].reduce(function(s,w){ return s+w; }, 0);
-
-      // ขั้น 4: current stock (หลังหักส่งมอบแล้ว)
-      var stockSkus    = zoneStock[zoneId] || {};
-      var currentUsedW = 0;
-      var stockDetails = [];
-      Object.keys(stockSkus).forEach(function(sku) {
-        var d   = stockSkus[sku];
-        var ext = extMap[sku] || {};
-        var bw  = Number(d.bw || ext.bundleWidth  || 0);
-        var bh  = Number(d.bh || ext.bundleHeight || 0);
-        var ppb = Number(d.pcsPerBundle || ext.pcsPerBundle || 1) || 1;
-        if (!bw || !bh || !d.pcs) return;
-        var bundles = Math.ceil(Number(d.pcs) / ppb);
-        if (bundles <= 0) return;
-        var info = stackInfo(bundles, bw, bh);
-        if (!info) return;
-        currentUsedW += info.usedWidthCm;
-        var hasDelivery = !!((delivedPcsPerZoneSku[zoneId] || {})[sku]);
-        stockDetails.push({
-          sku: sku, skuName: localProductNames[sku] || d.skuName || sku,
-          pcs: d.pcs, bundles: bundles, availBundles: bundles,
-          bw: bw, bh: bh, ppb: ppb,
-          optCols: info.cols, usedWidthCm: info.usedWidthCm,
-          hasDelivery: hasDelivery,
-          efficiency: info.usedWidthCm / bundles
-        });
-      });
-
-      // today incoming
-      var todayIncoming  = todayByZone[zoneId]  || {};
-      var todayUsedW     = 0;
-      var todayList      = [];
-      Object.keys(todayIncoming).forEach(function(sku) {
-        var d = todayIncoming[sku];
-        if (!d.bw || !d.bh) return;
-        var info = stackInfo(d.bundles, d.bw, d.bh);
-        if (!info) return;
-        todayUsedW += info.usedWidthCm;
-        todayList.push({
-          sku: sku, skuName: localProductNames[sku] || d.skuName || sku, bundles: d.bundles,
-          usedWidthCm: info.usedWidthCm, cols: info.cols,
-          machHrs: d.machHrs, itemHrs: d.itemHrs, shifts: d.shifts
-        });
-      });
-
-      // ahead incoming (3 วัน)
-      var aheadIncoming = aheadByZone[zoneId] || {};
-      var aheadUsedW    = 0;
-      var aheadList     = [];
-      // per-day breakdown (รวม usedWidthCm ต่อ row และ dayUsedCm รวมต่อวัน)
-      var aheadBreakdown = aheadDays.map(function(day) {
-        var agg = aggregateByZoneSku(dayPlan[day]);
-        var rows = [];
-        var dayUsedW = 0;
-        Object.keys(agg[zoneId] || {}).forEach(function(sku) {
-          var d = agg[zoneId][sku];
-          var info = (!d.bw || !d.bh) ? null : stackInfo(d.bundles, d.bw, d.bh);
-          var usedW = info ? info.usedWidthCm : 0;
-          dayUsedW += usedW;
-          rows.push({ sku:sku, skuName:localProductNames[sku]||d.skuName||sku, bundles:d.bundles,
-                      machHrs:d.machHrs, usedWidthCm: Math.round(usedW) });
-        });
-        return { date: day, rows: rows, dayUsedCm: Math.round(dayUsedW) };
-      });
-      Object.keys(aheadIncoming).forEach(function(sku) {
-        var d = aheadIncoming[sku];
-        if (!d.bw || !d.bh) return;
-        var info = stackInfo(d.bundles, d.bw, d.bh);
-        if (!info) return;
-        aheadUsedW += info.usedWidthCm;
-        aheadList.push({ sku:sku, skuName:localProductNames[sku]||d.skuName||sku, bundles:d.bundles, usedWidthCm:info.usedWidthCm });
-      });
-
-      // ขั้น 3: continuous SKUs ในโซนนี้
-      var continuousSkus = [];
-      var zDayCount = skuDayCount[zoneId] || {};
-      Object.keys(zDayCount).forEach(function(sku) {
-        if (zDayCount[sku] > 1) {
-          var totalB = 0;
-          allDays.forEach(function(day) {
-            var agg = aggregateByZoneSku(dayPlan[day]);
-            totalB += ((agg[zoneId] || {})[sku] || {}).bundles || 0;
-          });
-          var ext = extMap[sku] || {};
-          continuousSkus.push({
-            sku: sku,
-            skuName: localProductNames[sku] || sku,
-            daysCount: zDayCount[sku],
-            totalBundles: totalB
-          });
-        }
-      });
-
-      // ขั้น 5: พื้นที่ว่างจริง
-      var projectedUsedW = currentUsedW + todayUsedW + aheadUsedW;
-      var freeSpaceCm    = Math.max(0, totalW - projectedUsedW);
-      var currentPct     = totalW > 0 ? Math.min(100, Math.round(currentUsedW   / totalW * 100)) : 0;
-      var todayPct       = totalW > 0 ? Math.min(100, Math.round((currentUsedW + todayUsedW) / totalW * 100)) : 0;
-      var projectedPct   = totalW > 0 ? Math.min(100, Math.round(projectedUsedW / totalW * 100)) : 0;
-      var needCm         = Math.max(0, projectedUsedW - totalW * (THRESHOLD / 100));
-
-      // ขั้น 7: สรุปงาน (suggestions)
-      var suggestions = [];
-      if (needCm > 0) {
-        // ยุบกอง: SKU ที่มีสต็อคอยู่ + มีเข้าวันนี้ → รวมกองใหม่
-        stockDetails.forEach(function(s) {
-          var inc = todayIncoming[s.sku];
-          if (!inc || inc.bundles <= 0) return;
-          var totalB = s.bundles + inc.bundles;
-          var combined = stackInfo(totalB, s.bw, s.bh);
-          if (!combined) return;
-          var separate = (stackInfo(s.bundles,s.bw,s.bh)||{usedWidthCm:0}).usedWidthCm
-                       + (stackInfo(inc.bundles,s.bw,s.bh)||{usedWidthCm:0}).usedWidthCm;
-          var savedCm = Math.max(0, separate - combined.usedWidthCm);
-          suggestions.push({
-            type: 'ยุบกอง',
-            sku: s.sku, skuName: s.skuName,
-            currentBundles: s.bundles, incomingBundles: inc.bundles, totalBundles: totalB,
-            optCols: combined.cols, savedWidthCm: savedCm, hasDelivery: s.hasDelivery,
-            note: 'จัดกองรวม '+s.bundles+'+'+inc.bundles+' = '+totalB+' มัด → '+combined.cols+' ฐาน'
-          });
-        });
-
-        // ย้ายน้อยได้มาก: เรียง efficiency สูงสุดก่อน
-        var freed = 0;
-        var candidates = stockDetails
-          .filter(function(s){ return s.availBundles > 0 && s.efficiency > 0 && !todayIncoming[s.sku]; })
-          .sort(function(a,b){ return b.efficiency - a.efficiency; });
-        candidates.forEach(function(s) {
-          if (freed >= needCm) return;
-          var maxL      = Math.max(1, Math.floor(420 / s.bh));
-          var remaining = needCm - freed;
-          var colsNeeded = Math.ceil(remaining / s.bw);
-          var bndlsMove  = Math.min(s.availBundles, colsNeeded * maxL);
-          if (bndlsMove <= 0) return;
-          var freedThis = Math.ceil(bndlsMove / maxL) * s.bw;
-          suggestions.push({
-            type: 'ย้ายสินค้า',
-            sku: s.sku, skuName: s.skuName,
-            bundlesToMove: bndlsMove, currentBundles: s.bundles,
-            availBundles: s.availBundles, hasDelivery: s.hasDelivery,
-            freedCm: freedThis,
-            efficiency: Math.round(s.efficiency * 10) / 10,
-            note: 'ย้าย '+bndlsMove+' มัด ได้พื้นที่คืน '+(freedThis/100).toFixed(2)+' ม.'
-          });
-          freed += freedThis;
-        });
-      }
-
-      // ── คาดการณ์การเต็มรายวัน (dayProgression) ──
-      // สร้าง timeline: ตอนนี้ → วันนี้ → D+1 → D+2 → D+3
-      var dayProgression = [];
-      var cumUsed = currentUsedW;
-      // จุดเริ่ม: ตอนนี้ (ก่อนผลิตวันนี้)
-      dayProgression.push({
-        label: 'ตอนนี้', date: dateStr,
-        usedCm: Math.round(cumUsed),
-        pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0
-      });
-      // หลังผลิตวันนี้
-      cumUsed += todayUsedW;
-      dayProgression.push({
-        label: 'วันนี้', date: dateStr,
-        usedCm: Math.round(cumUsed),
-        pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0,
-        addedCm: Math.round(todayUsedW)
-      });
-      // D+1, D+2, D+3
-      aheadBreakdown.forEach(function(bd) {
-        cumUsed += bd.dayUsedCm;
-        dayProgression.push({
-          label: fmtYMD ? bd.date.substring(5).replace('-','/') : bd.date,
-          date: bd.date,
-          usedCm: Math.round(cumUsed),
-          pct: totalW > 0 ? Math.min(100, Math.round(cumUsed / totalW * 100)) : 0,
-          addedCm: bd.dayUsedCm
-        });
-      });
-      // หาวันแรกที่เต็ม (>= THRESHOLD)
-      var fullOnDate = null;
-      for (var pi = 1; pi < dayProgression.length; pi++) {
-        if (dayProgression[pi].pct >= THRESHOLD) {
-          fullOnDate = dayProgression[pi].date;
-          break;
-        }
-      }
-
-      results.push({
-        zoneId: zoneId,
-        totalWidthCm: totalW,
-        // ขั้น 4
-        currentUsedCm: Math.round(currentUsedW),
-        currentPct: currentPct,
-        stockDetails: stockDetails,
-        // ขั้น 1 (วันนี้)
-        todayUsedCm: Math.round(todayUsedW),
-        todayPct: todayPct,
-        todayList: todayList,
-        // ขั้น 2 (3 วันล่วงหน้า)
-        aheadUsedCm: Math.round(aheadUsedW),
-        aheadList: aheadList,
-        aheadBreakdown: aheadBreakdown,
-        // ขั้น 3
-        continuousSkus: continuousSkus,
-        // ขั้น 5
-        freeSpaceCm: Math.round(freeSpaceCm),
-        // ขั้น 6
-        projectedUsedCm: Math.round(projectedUsedW),
-        projectedPct: projectedPct,
-        needsAction: projectedPct >= THRESHOLD,
-        neededCm: Math.round(needCm),
-        // คาดการณ์การเต็ม
-        dayProgression: dayProgression,
-        fullOnDate: fullOnDate,
-        // ขั้น 7
-        suggestions: suggestions
-      });
-    });
-
-    return {
-      success: true, date: dateStr,
-      aheadDays: aheadDays,
-      zones: results
-    };
-  } catch(e) {
-    return { success: false, message: e.toString() };
-  }
-}
 
 // ============================================================
 // Migrate GPS_Activity_Log → Supabase gps_activity_log
@@ -8667,60 +6608,6 @@ function getProductionPlanByDate(dateStr, spreadsheetId) {
   return { success: true, machines: machines, hours: machineHours, dateStr: dateStr };
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// MIGRATE KPI WH&LG → Supabase kpi_wh_log
-// รันครั้งเดียวใน GAS Editor: เลือก migrateKpiWHToSupabase แล้วกด Run
-// ════════════════════════════════════════════════════════════════════════
-function migrateKpiWHToSupabase() {
-  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName('Master KPI WH&LG');
-  if (!sheet || sheet.getLastRow() < 2) {
-    Logger.log('❌ ไม่พบ sheet หรือไม่มีข้อมูล');
-    return;
-  }
-
-  var data = sheet.getDataRange().getValues();
-  var rows = [];
-  var _pf  = function(v) { return (v !== '' && v !== null && v !== undefined) ? parseFloat(v) : null; };
-
-  for (var i = 1; i < data.length; i++) {
-    var rawDate = data[i][1];
-    if (!rawDate) continue;
-    var d = parseDateValue(rawDate);
-    if (!d) continue;
-    var iso = Utilities.formatDate(d, 'GMT+7', 'yyyy-MM-dd');
-    var createdRaw = data[i][0];
-    var createdAt  = createdRaw instanceof Date
-      ? Utilities.formatDate(createdRaw, 'GMT+7', "yyyy-MM-dd'T'HH:mm:ss+07:00")
-      : null;
-
-    rows.push({
-      cycle_date:      iso,
-      checker_fg:      _pf(data[i][2]),
-      checker_semi:    _pf(data[i][3]),
-      final_adj_fg:    _pf(data[i][4]),
-      final_adj_semi:  _pf(data[i][5]),
-      space_breakdown: _pf(data[i][6]),
-      load_score:      _pf(data[i][7]),
-      damage_score:    _pf(data[i][8]),
-      data_err_fg:     _pf(data[i][9]),
-      data_err_semi:   _pf(data[i][10]),
-      created_at:      createdAt
-    });
-  }
-
-  if (rows.length === 0) { Logger.log('ไม่มีข้อมูลที่จะ migrate'); return; }
-
-  // upsert ทีละ 50 แถว
-  var batchSize = 50, total = rows.length, ok = 0;
-  for (var s = 0; s < total; s += batchSize) {
-    var batch = rows.slice(s, s + batchSize);
-    var resp  = _sbFetch('POST', 'kpi_wh_log?on_conflict=cycle_date', batch);
-    Logger.log('batch ' + (s/batchSize+1) + ': ' + JSON.stringify(resp));
-    ok += batch.length;
-  }
-  Logger.log('✅ migrate เสร็จ ' + ok + '/' + total + ' แถว');
-}
 
 // ── ส่งข้อมูล KPI WH&LG ไปยัง Google Sheet DailyOperation ──────────────────
 var KPI_WH_SHEET_ID   = '1Q8U4Ar2GvXChnOE7Ip2_Pxy0rvnkwPI2K8scLpXbT1I';
