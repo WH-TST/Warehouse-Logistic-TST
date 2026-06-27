@@ -23828,19 +23828,31 @@ function _ldRenderCards(orders) {
             : '';
         var canToggle = _rv!=='pending_review' && _rv!=='rejected';
 
-        return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 '+stColor+' shadow-sm overflow-hidden transition-all">'
-            +'<div '+(canToggle?'onclick="ldToggleCard(\''+o.id+'\')" ':'')+' class="px-4 py-3 flex items-center justify-between '+(canToggle?'cursor-pointer select-none active:bg-slate-50':'')+'">'
-                +'<div class="flex items-center gap-3">'
-                    +'<div class="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
-                    +'<div>'
-                        +'<div class="font-black text-slate-800 text-base">'+(o.truck_plate||'—')+'</div>'
-                        +'<div style="font-size:13px;font-weight:900;color:#cbd5e1;margin-top:2px;font-family:monospace;">'+totalQty.toLocaleString()+' <span style="font-size:11px;font-weight:700;">PCS</span> &nbsp;/&nbsp; '+totalWt.toLocaleString()+' <span style="font-size:11px;font-weight:700;">KG</span></div>'
+        var _iconBg = _rv==='rejected'?'linear-gradient(135deg,#7f1d1d,#dc2626)':_rv==='pending_review'?'linear-gradient(135deg,#4c1d95,#7c3aed)':isActive?'linear-gradient(135deg,#0369a1,#0ea5e9)':'linear-gradient(135deg,#1e293b,#334155)';
+        var _accentBar = _rv==='rejected'?'#ef4444':_rv==='pending_review'?'#7c3aed':isActive?'#0ea5e9':'#64748b';
+        return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all" style="border-left:4px solid '+_accentBar+';">'
+            +'<div '+(canToggle?'onclick="ldToggleCard(\''+o.id+'\')" ':'')+' style="padding:12px 14px 12px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;'+(canToggle?'cursor:pointer;':'')+'">'
+                // Left: icon + info
+                +'<div style="display:flex;align-items:center;gap:12px;min-width:0;">'
+                    +'<div style="width:42px;height:42px;border-radius:12px;background:'+_iconBg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.18);">'
+                    +'<i class="fas fa-truck" style="color:#fff;font-size:16px;"></i></div>'
+                    +'<div style="min-width:0;">'
+                        +'<div style="font-size:16px;font-weight:900;color:#0f172a;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(o.truck_plate||'—')+'</div>'
+                        +(o.customer_name?'<div style="font-size:11px;font-weight:700;color:#64748b;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_ldEsc(o.customer_name)+'</div>':'')
+                        +'<div style="display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap;">'
+                            +'<span style="display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;font-size:11px;font-weight:800;color:#334155;font-family:monospace;"><i class="fas fa-layer-group" style="font-size:9px;color:#94a3b8;"></i>'+totalQty.toLocaleString()+' PCS</span>'
+                            +'<span style="display:inline-flex;align-items:center;gap:3px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 7px;font-size:11px;font-weight:800;color:#15803d;font-family:monospace;"><i class="fas fa-weight-hanging" style="font-size:9px;color:#86efac;"></i>'+Math.round(totalWt).toLocaleString()+' KG</span>'
+                        +'</div>'
                     +'</div>'
                 +'</div>'
-                +'<div class="flex items-center gap-2">'+stBadge+(canToggle?'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i>':'')+'</div>'
+                // Right: badge + chevron
+                +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'
+                    +stBadge
+                    +(canToggle?'<i class="fas fa-chevron-'+(isActive?'up':'down')+'" style="color:#cbd5e1;font-size:11px;margin-left:2px;"></i>':'')
+                +'</div>'
             +'</div>'
             +pendingBanner+rejBanner
-            +(showForm ? '<div class="border-t-2 border-dashed '+(isActive?'border-emerald-200':'border-rose-200')+'">'+formHtml+'</div>' : '')
+            +(showForm ? '<div style="border-top:2px dashed '+(isActive?'#a7f3d0':'#fecaca')+';">'+formHtml+'</div>' : '')
         +'</div>';
     }).join('');
     // After re-render — restore form values and timer
