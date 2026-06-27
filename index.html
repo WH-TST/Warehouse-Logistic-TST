@@ -10514,98 +10514,77 @@ function _mergeFlowData(monthlyResults, startStr, endStr) {
 
 window.loadAnalytics = async function loadAnalytics() {
     const start = document.getElementById('analytics-start');
-    const end = document.getElementById('analytics-end');
+    const end   = document.getElementById('analytics-end');
+    if (!start?.value || !end?.value) return showToast('กรุณาระบุช่วงวันที่', true);
 
-    if(!start || !end || !start.value || !end.value)
-        return showToast("กรุณาระบุช่วงวันที่", true);
+    showToast('กำลังโหลดข้อมูล Analytics...');
+    window._pendingOutbound = null;
 
-    showToast("กำลังโหลดข้อมูล Analytics...");
-    window._pendingOutbound = undefined;
+    const startVal = start.value, endVal = end.value;
 
-    var startVal = start.value, endVal = end.value;
-    var monthKeys = _monthKeysInRange(startVal, endVal);
+    try {
+        // ── ดึง transection_fg + onhand_fg พร้อมกัน ──
+        const [txRes, ohRes] = await Promise.all([
+            window._sb.from('transection_fg')
+                .select('tst_pd_date,reference,cw_quantity,quantity')
+                .gte('tst_pd_date', startVal)
+                .lte('tst_pd_date', endVal),
+            window._sb.from('onhand_fg')
+                .select('cw_quantity,quantity')
+        ]);
 
-    // ── ดึง flow + delivery cache จาก Supabase พร้อมกันทุกเดือน ──
-    var flowPromises   = monthKeys.map(function(k) { return _sbGetAnalyticsCache('analytics_flow_' + k); });
-    var delivPromises  = monthKeys.map(function(k) { return _sbGetAnalyticsCache('analytics_delivery_' + k); });
+        if (txRes.error) throw txRes.error;
 
-    var [flowResults, delivResults] = await Promise.all([
-        Promise.all(flowPromises),
-        Promise.all(delivPromises)
-    ]);
+        // ── aggregate รายวัน ──
+        const dailyMap = {}; // date → { inKg, inLines, outKg, outLines }
+        let totalInKg = 0, totalInLines = 0, totalOutKg = 0, totalOutLines = 0;
 
-    var hasCache = flowResults.some(function(r) { return r && r.success; });
-
-    if (hasCache) {
-        // ── ใช้ข้อมูลจาก Supabase cache ──
-        var flowData = _mergeFlowData(flowResults.filter(Boolean), startVal, endVal);
-        renderAnalyticsDashboard({
-            ...flowData,
-            totalInWeight: flowData.inWeight || 0,
-            totalInLines: flowData.inLines || 0,
-            totalOutWeight: 0,
-            totalOutLines: 0,
-            totalInventoryWeight: flowData.invWeight || 0,
-            totalInventoryLines: flowData.invLines || 0,
-            inventoryTrendDates: flowData.inventoryTrendDates || [],
-            inventoryTrendLines: flowData.inventoryTrendLines || [],
-            inventoryTrendWeight: flowData.inventoryTrendWeight || [],
-            urgentStockList: []
+        (txRes.data || []).forEach(function(r) {
+            const d   = r.tst_pd_date;
+            const ref = (r.reference || '').trim().toLowerCase();
+            const kg  = Math.abs(parseFloat(r.quantity)    || 0);
+            const ln  = Math.abs(parseFloat(r.cw_quantity) || 0);
+            if (!dailyMap[d]) dailyMap[d] = { inKg:0, inLines:0, outKg:0, outLines:0 };
+            if (ref === 'production') {
+                dailyMap[d].inKg   += kg; dailyMap[d].inLines += ln;
+                totalInKg += kg; totalInLines += ln;
+            } else if (ref === 'sales order') {
+                dailyMap[d].outKg   += kg; dailyMap[d].outLines += ln;
+                totalOutKg += kg; totalOutLines += ln;
+            }
         });
-        showToast("โหลดข้อมูล Analytics สำเร็จ (cache)");
 
-        var hasDeliv = delivResults.some(function(r) { return r && r.success; });
-        if (hasDeliv) {
-            var delivMerged = { success: true, outWeight: 0, outLines: 0,
-                ownDeliveryWeight: 0, ownDeliveryLines: 0, pickupWeight: 0, pickupLines: 0,
-                dates: [], dailyOwnDelivery: [], dailyPickup: [], dailyOutbound: [] };
-            delivResults.filter(Boolean).forEach(function(r) {
-                if (!r || !r.success) return;
-                delivMerged.outWeight        += r.outWeight        || 0;
-                delivMerged.outLines         += r.outLines         || 0;
-                delivMerged.ownDeliveryWeight += r.ownDeliveryWeight || 0;
-                delivMerged.ownDeliveryLines  += r.ownDeliveryLines  || 0;
-                delivMerged.pickupWeight      += r.pickupWeight      || 0;
-                delivMerged.pickupLines       += r.pickupLines       || 0;
-                delivMerged.dates             = delivMerged.dates.concat(r.dates || []);
-                delivMerged.dailyOwnDelivery  = delivMerged.dailyOwnDelivery.concat(r.dailyOwnDelivery || []);
-                delivMerged.dailyPickup       = delivMerged.dailyPickup.concat(r.dailyPickup || []);
-                delivMerged.dailyOutbound     = delivMerged.dailyOutbound.concat(r.dailyOutbound || []);
-            });
-            _renderDeliverySection(delivMerged);
-            showToast("โหลดข้อมูล Analytics + Delivery สำเร็จ");
-        }
-    } else {
-        // ── fallback: GAS (ถ้า cache ยังไม่มี) ──
-        showToast("ยังไม่มี cache — กำลังโหลดจาก GAS...");
-        google.script.run
-            .withSuccessHandler(function(data) {
-                if (data.success) {
-                    renderAnalyticsDashboard({
-                        ...data,
-                        totalInWeight: data.inWeight || 0, totalInLines: data.inLines || 0,
-                        totalOutWeight: data.outWeight || 0, totalOutLines: data.outLines || 0,
-                        totalInventoryWeight: data.invWeight || 0, totalInventoryLines: data.invLines || 0,
-                        inventoryTrendDates: data.inventoryTrendDates || [],
-                        inventoryTrendLines: data.inventoryTrendLines || [],
-                        inventoryTrendWeight: data.inventoryTrendWeight || [],
-                        urgentStockList: data.urgentStockList || []
-                    });
-                    showToast("โหลดข้อมูล Analytics สำเร็จ");
-                } else { showToast("Error: " + data.message, true); }
-            })
-            .withFailureHandler(function(err) { showToast("เกิดข้อผิดพลาด: " + err.message, true); })
-            .getWarehouseAnalyticsData(startVal, endVal);
+        // ── build date arrays ──
+        const dates        = Object.keys(dailyMap).sort();
+        const dateLabels   = dates.map(function(d){ var p=d.split('-'); return p[2]+'/'+p[1]; });
+        const dailyInbound = dates.map(function(d){ return dailyMap[d].inKg; });
+        const dailyOutbound= dates.map(function(d){ return dailyMap[d].outKg; });
 
-        google.script.run
-            .withSuccessHandler(function(delivData) {
-                if (delivData && delivData.success) {
-                    _renderDeliverySection(delivData);
-                    showToast("โหลดข้อมูล Analytics + Delivery สำเร็จ");
-                }
-            })
-            .withFailureHandler(function(err) { console.error("Delivery error:", err); })
-            .getDeliveryTypeData(startVal, endVal);
+        // ── current inventory จาก onhand_fg ──
+        let invKg = 0, invLines = 0;
+        (ohRes.data || []).forEach(function(r) {
+            invKg   += Math.abs(parseFloat(r.quantity)    || 0);
+            invLines += Math.abs(parseFloat(r.cw_quantity) || 0);
+        });
+
+        // ── render ──
+        window._analyticsInWeight = totalInKg;
+        window._analyticsInLines  = totalInLines;
+
+        renderAnalyticsDashboard({
+            totalInWeight: totalInKg, totalInLines: totalInLines,
+            totalInventoryWeight: invKg, totalInventoryLines: invLines,
+            dates: dateLabels, dailyInbound, dailyOutbound,
+        });
+
+        _renderDeliverySection({
+            outWeight: totalOutKg, outLines: totalOutLines,
+            dailyOutbound, dates: dateLabels,
+        });
+
+        showToast('โหลดข้อมูล Analytics สำเร็จ (' + (txRes.data||[]).length.toLocaleString() + ' รายการ)');
+    } catch(e) {
+        showToast('เกิดข้อผิดพลาด: ' + (e.message || String(e)), true);
     }
 }
 
