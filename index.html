@@ -7597,6 +7597,18 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         </table>
       </div>
     </div>
+
+    <!-- ── Review Panel ── -->
+    <div id="ld-review-panel">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:4px;height:24px;background:linear-gradient(180deg,#7c3aed,#4c1d95);border-radius:4px;"></div>
+        <div style="font-size:15px;font-weight:900;color:#1e293b;">รอตรวจสอบจากจัดส่ง</div>
+        <span id="ld-review-count" style="background:#7c3aed;color:#fff;font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;"></span>
+      </div>
+      <div id="ld-review-list" class="space-y-3">
+        <div class="text-center py-8 text-slate-400 text-sm font-bold">ไม่มีงานรอตรวจสอบ</div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -23673,7 +23685,9 @@ async function _ldLoadOrderCards(dateVal) {
     if (!wrap) return;
     try {
         var {data} = await window._sb.from('loading_orders').select('*')
-            .eq('order_date', dateVal).in('status',['pending','in_progress']).order('created_at');
+            .eq('order_date', dateVal)
+            .or('status.in.(pending,in_progress),review_status.eq.pending_review,review_status.eq.rejected')
+            .order('created_at');
         _ldRenderCards(data||[]);
     } catch(e) {
         wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">โหลดไม่สำเร็จ: '+(e?.message||'')+'</div>';
@@ -23691,9 +23705,14 @@ function _ldRenderCards(orders) {
         var items = o.items||[];
         var totalWt  = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
         var totalQty = items.reduce(function(a,i){ return a+(parseFloat(i.qty)||0); },0);
+        var _rv = o.review_status||'';
         var isActive = _ldActiveOrderId === o.id;
-        var stColor  = o.status==='in_progress' ? 'border-sky-400' : 'border-amber-400';
-        var stBadge  = o.status==='in_progress'
+        var stColor = _rv==='rejected'?'border-rose-500':_rv==='pending_review'?'border-violet-400':o.status==='in_progress'?'border-sky-400':'border-amber-400';
+        var stBadge = _rv==='rejected'
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-400">❌ ตีกลับ</span>'
+            : _rv==='pending_review'
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse block"></span>รอตรวจสอบ</span>'
+            : o.status==='in_progress'
             ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-700 border border-sky-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse block"></span>กำลังโหลด</span>'
             : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">รอโหลด</span>';
         var itemList = items.map(function(it,idx){
@@ -23781,10 +23800,36 @@ function _ldRenderCards(orders) {
 
         // ── Normal (non-trailer) order
         var isActive = _ldActiveOrderId === o.id;
-        var formHtml = isActive ? _ldBuildForm(o) : '';
+        // pending_review: frozen — no form; rejected: always show pre-filled form; others: normal toggle
+        var showForm = _rv==='rejected' || (_rv!=='pending_review' && isActive);
+        var formHtml = showForm ? _ldBuildForm(o) : '';
+
+        var rejBanner = '';
+        if (_rv==='rejected') {
+            var _rType = o.rejection_reason_type;
+            var _rMsg = _rType===1
+                ? '⚖️ ส่วนต่างตราชั่งใหญ่ห่างกันเกินกำหนด'
+                : _rType===2
+                ? '📏 น้ำหนักไม่อยู่ในช่วง / ไม่มีการประสานงานมาทางจัดส่ง'
+                : '❌ ตีกลับ';
+            rejBanner = '<div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:10px 16px;border-bottom:2px solid #fca5a5;">'
+                +'<div style="font-size:12px;font-weight:900;color:#fff;display:flex;align-items:center;gap:6px;">'
+                +'<i class="fas fa-exclamation-circle"></i> ตีกลับ — '+_rMsg+'</div>'
+                +(o.rejection_note?'<div style="font-size:11px;color:#fca5a5;margin-top:3px;">'+_ldEsc(o.rejection_note)+'</div>':'')
+                +'<div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px;">กรุณาตรวจสอบและโหลดใหม่อีกครั้ง</div>'
+                +'</div>';
+        }
+        var pendingBanner = _rv==='pending_review'
+            ? '<div style="background:linear-gradient(135deg,#4c1d95,#7c3aed);padding:12px 16px;display:flex;align-items:center;gap:10px;">'
+              +'<i class="fas fa-hourglass-half" style="color:#c4b5fd;font-size:16px;"></i>'
+              +'<div><div style="font-size:13px;font-weight:900;color:#fff;">รอการตรวจสอบจากฝั่งจัดส่ง</div>'
+              +'<div style="font-size:11px;color:#c4b5fd;margin-top:2px;">ข้อมูลที่บันทึกไปแล้วอยู่ระหว่างตรวจสอบ</div></div>'
+              +'</div>'
+            : '';
+        var canToggle = _rv!=='pending_review' && _rv!=='rejected';
 
         return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 '+stColor+' shadow-sm overflow-hidden transition-all">'
-            +'<div onclick="ldToggleCard(\''+o.id+'\')" class="px-4 py-3 flex items-center justify-between cursor-pointer select-none active:bg-slate-50">'
+            +'<div '+(canToggle?'onclick="ldToggleCard(\''+o.id+'\')" ':'')+' class="px-4 py-3 flex items-center justify-between '+(canToggle?'cursor-pointer select-none active:bg-slate-50':'')+'">'
                 +'<div class="flex items-center gap-3">'
                     +'<div class="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center"><i class="fas fa-truck text-sm"></i></div>'
                     +'<div>'
@@ -23792,9 +23837,10 @@ function _ldRenderCards(orders) {
                         +'<div style="font-size:13px;font-weight:900;color:#cbd5e1;margin-top:2px;font-family:monospace;">'+totalQty.toLocaleString()+' <span style="font-size:11px;font-weight:700;">PCS</span> &nbsp;/&nbsp; '+totalWt.toLocaleString()+' <span style="font-size:11px;font-weight:700;">KG</span></div>'
                     +'</div>'
                 +'</div>'
-                +'<div class="flex items-center gap-2">'+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
+                +'<div class="flex items-center gap-2">'+stBadge+(canToggle?'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i>':'')+'</div>'
             +'</div>'
-            +(isActive ? '<div class="border-t-2 border-dashed border-emerald-200">'+formHtml+'</div>' : '')
+            +pendingBanner+rejBanner
+            +(showForm ? '<div class="border-t-2 border-dashed '+(isActive?'border-emerald-200':'border-rose-200')+'">'+formHtml+'</div>' : '')
         +'</div>';
     }).join('');
     // After re-render — restore form values and timer
@@ -25002,7 +25048,7 @@ window.ldCardSave = async function(oid) {
         // mark order done if all items have data
         var allFilled = items.every(function(it){ return it.qty>0||it.weight>0; });
         if (allFilled) {
-            await window._sb.from('loading_orders').update({status:'done', updated_at:new Date().toISOString()}).eq('id',oid);
+            await window._sb.from('loading_orders').update({status:'done', review_status:'pending_review', updated_at:new Date().toISOString()}).eq('id',oid);
         }
         _ldDraftClear(oid);
         if (_ldElapsedTmr[segKey]) { clearInterval(_ldElapsedTmr[segKey]); delete _ldElapsedTmr[segKey]; }
@@ -25773,6 +25819,7 @@ window.ldMonLoad = async function() {
         _ldMonSetupRt(dateVal);
     }
     await _ldMonFetch(dateVal, true);
+    if (typeof window._ldLoadReviewPanel === 'function') window._ldLoadReviewPanel();
 };
 
 function _ldRenderMonitorTable(sessions, orders) {
@@ -26604,6 +26651,97 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
   window._ldLoadStaffMaster    = _ldLoadStaffMaster;
   window._ldLoadProductMap     = _ldLoadProductMap;
   window._ldRequestNotifPermission = _ldRequestNotifPermission;
+
+  async function _ldLoadReviewPanel() {
+      var panel = document.getElementById('ld-review-list');
+      var countEl = document.getElementById('ld-review-count');
+      if (!panel) return;
+      var dateVal = document.getElementById('ld-mon-date')?.value;
+      if (!dateVal) { panel.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm font-bold">เลือกวันที่ก่อน</div>'; return; }
+      var {data} = await window._sb.from('loading_orders').select('*')
+          .eq('order_date', dateVal).eq('review_status','pending_review').order('created_at');
+      var orders = data||[];
+      if (countEl) { countEl.textContent = orders.length||''; countEl.style.display = orders.length?'':'none'; }
+      if (!orders.length) { panel.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm font-bold">ไม่มีงานรอตรวจสอบ</div>'; return; }
+      panel.innerHTML = orders.map(function(o) {
+          var items = o.items||[];
+          var totalQty = items.reduce(function(a,i){ return a+(parseFloat(i.qty)||0); },0);
+          var totalWt  = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
+          var scaleDiff = o.scale_diff != null ? (parseFloat(o.scale_diff)||0) : null;
+          var diffHtml = scaleDiff!=null
+              ? '<span style="font-size:11px;font-weight:700;color:'+(Math.abs(scaleDiff)>50?'#dc2626':'#16a34a')+';">ส่วนต่าง: '+(scaleDiff>=0?'+':'')+scaleDiff.toLocaleString()+' KG</span>'
+              : '';
+          var label = _ldEsc((o.order_no||'')+(o.truck_plate?' · '+o.truck_plate:'')+(o.customer_name?' · '+o.customer_name:''));
+          return '<div style="background:#fff;border-radius:16px;border:2px solid #7c3aed;overflow:hidden;box-shadow:0 2px 8px rgba(124,58,237,.1);">'
+              +'<div style="background:linear-gradient(135deg,#4c1d95,#7c3aed);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">'
+              +'<div>'
+              +'<div style="font-size:14px;font-weight:900;color:#fff;">'+label+'</div>'
+              +'<div style="font-size:11px;color:#c4b5fd;margin-top:2px;font-family:monospace;">'+totalQty.toLocaleString()+' PCS / '+Math.round(totalWt).toLocaleString()+' KG '+(diffHtml)+'</div>'
+              +'</div>'
+              +'<i class="fas fa-hourglass-half" style="color:#c4b5fd;font-size:20px;"></i>'
+              +'</div>'
+              +'<div style="padding:12px 16px;display:flex;gap:8px;">'
+              +'<button onclick="ldRejectOrder(\''+o.id+'\',\''+label+'\')" style="flex:1;padding:10px;border-radius:10px;border:2px solid #fca5a5;background:#fff5f5;color:#dc2626;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-times-circle" style="margin-right:5px;"></i>ตีกลับ</button>'
+              +'<button onclick="ldApproveOrder(\''+o.id+'\')" style="flex:1;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-check-circle" style="margin-right:5px;"></i>อนุมัติ</button>'
+              +'</div>'
+              +'</div>';
+      }).join('');
+  }
+  window._ldLoadReviewPanel = _ldLoadReviewPanel;
+
+  window.ldApproveOrder = async function(oid) {
+      if (!confirm('ยืนยันอนุมัติ — การโหลดผ่านการตรวจสอบ?')) return;
+      var {error} = await window._sb.from('loading_orders').update({
+          review_status:'approved', reviewed_by:(window._cu&&window._cu.name)||'admin', reviewed_at:new Date().toISOString()
+      }).eq('id',oid);
+      if (error) { showToast('❌ '+error.message,true); return; }
+      showToast('✅ อนุมัติสำเร็จ');
+      var d = document.getElementById('ld-mon-date')?.value;
+      if (d) { _ldMonFetch(d,false); if(window._ldLoadOrderCards) window._ldLoadOrderCards(d); }
+      _ldLoadReviewPanel();
+  };
+
+  window.ldRejectOrder = function(oid, orderLabel) {
+      var modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+      modal.dataset.ldRej = '1';
+      modal.innerHTML = '<div style="background:#fff;border-radius:20px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);">'
+          +'<div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:16px 20px;">'
+          +'<div style="font-size:16px;font-weight:900;color:#fff;">❌ ตีกลับงาน</div>'
+          +'<div style="font-size:12px;color:#fca5a5;margin-top:2px;">'+orderLabel+'</div></div>'
+          +'<div style="padding:20px;">'
+          +'<div style="font-size:12px;font-weight:900;color:#374151;margin-bottom:10px;">เหตุผลที่ไม่ผ่าน:</div>'
+          +'<label id="ld-rej-lbl-1" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;cursor:pointer;padding:10px;border:2px solid #fca5a5;border-radius:10px;background:#fff5f5;">'
+          +'<input type="radio" name="ld-rej-type" value="1" checked style="margin-top:2px;flex-shrink:0;accent-color:#dc2626;" onchange="document.getElementById(\'ld-rej-lbl-1\').style.borderColor=\'#fca5a5\';document.getElementById(\'ld-rej-lbl-2\').style.borderColor=\'#e5e7eb\';">'
+          +'<span style="font-size:12px;font-weight:700;color:#374151;">⚖️ ส่วนต่างรวมระหว่างหน้างาน กับตราชั่งใหญ่ห่างกันเกินกำหนด</span></label>'
+          +'<label id="ld-rej-lbl-2" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;cursor:pointer;padding:10px;border:2px solid #e5e7eb;border-radius:10px;">'
+          +'<input type="radio" name="ld-rej-type" value="2" style="margin-top:2px;flex-shrink:0;accent-color:#dc2626;" onchange="document.getElementById(\'ld-rej-lbl-2\').style.borderColor=\'#fca5a5\';document.getElementById(\'ld-rej-lbl-1\').style.borderColor=\'#e5e7eb\';">'
+          +'<span style="font-size:12px;font-weight:700;color:#374151;">📏 น้ำหนักไม่อยู่ในช่วง และไม่มีการประสานงานมาทางจัดส่ง</span></label>'
+          +'<textarea id="ld-rej-note" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)" rows="2" style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;resize:none;outline:none;box-sizing:border-box;"></textarea>'
+          +'<div style="display:flex;gap:8px;margin-top:14px;">'
+          +'<button onclick="document.querySelector(\'[data-ld-rej]\').remove()" style="flex:1;padding:10px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;color:#64748b;font-weight:700;font-size:13px;cursor:pointer;">ยกเลิก</button>'
+          +'<button onclick="ldRejectConfirm(\''+oid+'\')" style="flex:2;padding:10px;border-radius:10px;border:none;background:#dc2626;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-times-circle" style="margin-right:6px;"></i>ยืนยันตีกลับ</button>'
+          +'</div></div></div>';
+      document.body.appendChild(modal);
+      modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  };
+
+  window.ldRejectConfirm = async function(oid) {
+      var typeEl = document.querySelector('input[name="ld-rej-type"]:checked');
+      var type = typeEl ? parseInt(typeEl.value) : 1;
+      var note = (document.getElementById('ld-rej-note')?.value||'').trim();
+      var modal = document.querySelector('[data-ld-rej]');
+      if (modal) modal.remove();
+      var {error} = await window._sb.from('loading_orders').update({
+          review_status:'rejected', rejection_reason_type:type, rejection_note:note,
+          reviewed_by:(window._cu&&window._cu.name)||'admin', reviewed_at:new Date().toISOString()
+      }).eq('id',oid);
+      if (error) { showToast('❌ '+error.message,true); return; }
+      showToast('↩️ ตีกลับงานเรียบร้อย');
+      var d = document.getElementById('ld-mon-date')?.value;
+      if (d) { _ldMonFetch(d,false); if(window._ldLoadOrderCards) window._ldLoadOrderCards(d); }
+      _ldLoadReviewPanel();
+  };
 
   // If WH Staff logged in before this IIFE ran, boot now
   if (window._whMode && !window._whInitDone) {
