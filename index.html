@@ -25532,8 +25532,8 @@ window.ldLoadPlans = async function() {
     sel.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
     try {
         var {data} = await window._sb.from('logistic_plans')
-            .select('plan_id,truck_plate,child_plate,driver_transport,shops,total_weight,is_child,job_type')
-            .eq('plan_date',dateVal).order('plan_id');
+            .select('plan_id,plan_date,truck_plate,child_plate,driver_transport,shops,total_weight,is_child,job_type,status')
+            .gte('plan_date',dateVal).in('status',['planned','inprogress']).order('plan_date').order('plan_id');
         // กรองออก: แผนรถลูก + แผน maintenance_pm (ไม่มีสินค้าโหลด)
         var plans = (data||[]).filter(function(r){ return !r.is_child && r.job_type !== 'maintenance_pm'; });
         sel.innerHTML = '<option value="">-- เลือกแผน หรือ กรอกเอง --</option>';
@@ -25542,9 +25542,10 @@ window.ldLoadPlans = async function() {
             var deliveryShops = (p.shops||[]).filter(function(s){ return !s.type || s.type === 'delivery'; });
             var names = deliveryShops.map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
             var label = p.truck_plate || p.driver_transport || '—';
+            var dateDisp = (p.plan_date||'').slice(5).replace('-','/'); // MM/DD → แสดงสั้น
             var opt = document.createElement('option');
             opt.value = p.plan_id;
-            opt.textContent = p.plan_id + ' | ' + label + ' | ' + names.slice(0,40);
+            opt.textContent = '[' + dateDisp + '] ' + p.plan_id + ' | ' + label + ' | ' + names.slice(0,35);
             opt._planData = p;
             sel.appendChild(opt);
         });
