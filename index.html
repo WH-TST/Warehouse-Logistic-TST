@@ -23855,6 +23855,43 @@ function _ldRenderCards(orders) {
             setTimeout(function(){ _ldDraftLoad(oid); }, 80);
         }
     });
+    // Restore rejected orders — pre-fill form from previously saved done sessions
+    orders.forEach(function(o){
+        if ((o.review_status||'')==='rejected') {
+            _ldRestoreRejectedForm(o.id, o.items||[]);
+        }
+    });
+}
+
+async function _ldRestoreRejectedForm(oid, orderItems) {
+    try {
+        // Fetch most recent done sessions for this order
+        var {data:done} = await window._sb.from('loading_sessions')
+            .select('sku,qty,weight,lifts')
+            .eq('order_id', oid)
+            .neq('record_type', 'draft')
+            .order('created_at', {ascending:false});
+        if (!done || !done.length) return;
+        // Build sku → session map (latest per sku)
+        var skuMap = {};
+        done.forEach(function(r){ if (!skuMap[r.sku]) skuMap[r.sku] = r; });
+        // Populate _ldDraftDBCache so _ldDraftLoad picks it up
+        if (!_ldDraftDBCache[oid]) _ldDraftDBCache[oid] = {};
+        orderItems.forEach(function(oi, iIdx){
+            var r = skuMap[oi.sku];
+            if (!r) return;
+            // If lifts array exists, use it directly
+            if (r.lifts && r.lifts.length) {
+                _ldDraftDBCache[oid][iIdx] = r.lifts;
+            } else if ((parseFloat(r.weight)||0) > 0) {
+                // Fallback: single lift from total weight/qty
+                _ldDraftDBCache[oid][iIdx] = [{lift_no:1, weight:r.weight, qty:r.qty}];
+            }
+        });
+        // Also clear any stale localStorage draft so DB cache takes over
+        try { localStorage.removeItem('ld_draft_'+oid); } catch(e){}
+        setTimeout(function(){ _ldDraftLoad(oid); }, 150);
+    } catch(e){}
 }
 
 var _LFT_COLS = 7; // fixed — table scrolls horizontally on mobile
