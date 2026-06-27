@@ -25135,13 +25135,24 @@ function _ldNotifyNewOrder(order) {
 
     if (Notification.permission === 'granted') {
         try {
-            var items = order.items||[];
-            var n = new Notification('🚛 งานโหลดใหม่เข้ามา!', {
-                body: 'รถ ' + (order.truck_plate||'—') + '  ·  ' + items.length + ' รายการสินค้า',
-                tag: 'ld-order-' + order.id,
-                renotify: true
-            });
-            n.onclick = function(){ window.focus(); n.close(); };
+            var _items = (order.items||[]);
+            var _body = 'รถ '+(order.truck_plate||'—')+'  ·  '+_items.length+' รายการสินค้า';
+            var _tag  = 'ld-order-'+order.id;
+            var _opts = { body:_body, tag:_tag, renotify:true, requireInteraction:true,
+                          vibrate:[200,100,200,100,200], silent:false };
+            // ใช้ Service Worker showNotification — ดังได้แม้ Chrome minimize
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(function(reg){
+                    reg.showNotification('🚛 งานโหลดใหม่เข้ามา!', _opts);
+                }).catch(function(){
+                    // fallback: main-thread notification
+                    var n = new Notification('🚛 งานโหลดใหม่เข้ามา!', _opts);
+                    n.onclick = function(){ window.focus(); n.close(); };
+                });
+            } else {
+                var n = new Notification('🚛 งานโหลดใหม่เข้ามา!', _opts);
+                n.onclick = function(){ window.focus(); n.close(); };
+            }
         } catch(e){}
     }
 }
