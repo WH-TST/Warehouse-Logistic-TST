@@ -10518,74 +10518,75 @@ window.loadAnalytics = async function loadAnalytics() {
     if (!start?.value || !end?.value) return showToast('กรุณาระบุช่วงวันที่', true);
 
     showToast('กำลังโหลดข้อมูล Analytics...');
-    window._pendingOutbound = null;
+    window._pendingOutbound = undefined;
 
     const startVal = start.value, endVal = end.value;
 
     try {
-        // ── ดึง transection_fg + onhand_fg พร้อมกัน ──
+        // ── INBOUND + INVENTORY: ดึงตรงจาก Supabase ──
         const [txRes, ohRes] = await Promise.all([
             window._sb.from('transection_fg')
                 .select('tst_pd_date,reference,cw_quantity,quantity')
                 .gte('tst_pd_date', startVal)
-                .lte('tst_pd_date', endVal),
+                .lte('tst_pd_date', endVal)
+                .eq('reference', 'Production'),
             window._sb.from('onhand_fg')
                 .select('cw_quantity,quantity')
         ]);
 
         if (txRes.error) throw txRes.error;
 
-        // ── aggregate รายวัน ──
-        const dailyMap = {}; // date → { inKg, inLines, outKg, outLines }
-        let totalInKg = 0, totalInLines = 0, totalOutKg = 0, totalOutLines = 0;
-
+        // aggregate inbound รายวัน
+        const dailyInMap = {};
+        let totalInKg = 0, totalInLines = 0;
         (txRes.data || []).forEach(function(r) {
-            const d   = r.tst_pd_date;
-            const ref = (r.reference || '').trim().toLowerCase();
-            const kg  = Math.abs(parseFloat(r.quantity)    || 0);
-            const ln  = Math.abs(parseFloat(r.cw_quantity) || 0);
-            if (!dailyMap[d]) dailyMap[d] = { inKg:0, inLines:0, outKg:0, outLines:0 };
-            if (ref === 'production') {
-                dailyMap[d].inKg   += kg; dailyMap[d].inLines += ln;
-                totalInKg += kg; totalInLines += ln;
-            } else if (ref === 'sales order') {
-                dailyMap[d].outKg   += kg; dailyMap[d].outLines += ln;
-                totalOutKg += kg; totalOutLines += ln;
-            }
+            const d  = r.tst_pd_date;
+            const kg = Math.abs(parseFloat(r.quantity)    || 0);
+            const ln = Math.abs(parseFloat(r.cw_quantity) || 0);
+            if (!dailyInMap[d]) dailyInMap[d] = { kg:0, lines:0 };
+            dailyInMap[d].kg    += kg;
+            dailyInMap[d].lines += ln;
+            totalInKg    += kg;
+            totalInLines += ln;
         });
 
-        // ── build date arrays ──
-        const dates        = Object.keys(dailyMap).sort();
-        const dateLabels   = dates.map(function(d){ var p=d.split('-'); return p[2]+'/'+p[1]; });
-        const dailyInbound = dates.map(function(d){ return dailyMap[d].inKg; });
-        const dailyOutbound= dates.map(function(d){ return dailyMap[d].outKg; });
+        const inDates      = Object.keys(dailyInMap).sort();
+        const inDateLabels = inDates.map(function(d){ var p=d.split('-'); return p[2]+'/'+p[1]; });
+        const dailyInbound = inDates.map(function(d){ return dailyInMap[d].kg; });
 
-        // ── current inventory จาก onhand_fg ──
+        // current inventory จาก onhand_fg
         let invKg = 0, invLines = 0;
         (ohRes.data || []).forEach(function(r) {
-            invKg   += Math.abs(parseFloat(r.quantity)    || 0);
+            invKg    += Math.abs(parseFloat(r.quantity)    || 0);
             invLines += Math.abs(parseFloat(r.cw_quantity) || 0);
         });
 
-        // ── render ──
         window._analyticsInWeight = totalInKg;
         window._analyticsInLines  = totalInLines;
 
         renderAnalyticsDashboard({
             totalInWeight: totalInKg, totalInLines: totalInLines,
             totalInventoryWeight: invKg, totalInventoryLines: invLines,
-            dates: dateLabels, dailyInbound, dailyOutbound,
+            dates: inDateLabels, dailyInbound, dailyOutbound: [],
         });
 
-        _renderDeliverySection({
-            outWeight: totalOutKg, outLines: totalOutLines,
-            dailyOutbound, dates: dateLabels,
-        });
-
-        showToast('โหลดข้อมูล Analytics สำเร็จ (' + (txRes.data||[]).length.toLocaleString() + ' รายการ)');
+        showToast('โหลด Inbound สำเร็จ (' + (txRes.data||[]).length.toLocaleString() + ' รายการ) — กำลังโหลด Outbound...');
     } catch(e) {
-        showToast('เกิดข้อผิดพลาด: ' + (e.message || String(e)), true);
+        showToast('เกิดข้อผิดพลาด (Inbound): ' + (e.message || String(e)), true);
     }
+
+    // ── OUTBOUND: ยังใช้ GAS เหมือนเดิม ──
+    google.script.run
+        .withSuccessHandler(function(delivData) {
+            if (delivData && delivData.success) {
+                _renderDeliverySection(delivData);
+                showToast('โหลด Outbound สำเร็จ');
+            }
+        })
+        .withFailureHandler(function(err) {
+            showToast('Outbound error: ' + (err.message || String(err)), true);
+        })
+        .getDeliveryTypeData(startVal, endVal);
 }
 
 // ── อัพเดต KPI Outbound + Net Flow + Flow Chart + Delivery Type จากข้อมูล getDeliveryTypeData ──
