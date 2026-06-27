@@ -27131,9 +27131,14 @@ window.loDeleteOrder = function(id) {
     showConfirmModal('ลบ Loading Order', 'ยืนยันลบ Order นี้?<br><span class="text-rose-400 text-xs">ไม่สามารถกู้คืนได้</span>', async function(){
         var {error} = await window._sb.from('loading_orders').delete().eq('id', id);
         if (error) { showToast('เกิดข้อผิดพลาด: '+error.message, true); return; }
+        // also delete associated loading_sessions
+        await window._sb.from('loading_sessions').delete().eq('order_id', id);
         showToast('🗑️ ลบ Order เรียบร้อย');
         var dateVal = document.getElementById('lo-date')?.value;
         if (dateVal) _loLoadOrders(dateVal);
+        var today = new Date().toISOString().slice(0,10);
+        if (typeof window._ldLoadOrderCards === 'function') window._ldLoadOrderCards(dateVal||today);
+        if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
     }, {type:'danger', okText:'ลบเลย'});
 };
 
