@@ -23679,7 +23679,7 @@ async function _ldLoadOrderCards(dateVal) {
             .order('created_at');
         _ldRenderCards(data||[]);
     } catch(e) {
-        wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">โหลดไม่สำเร็จ: '+(e?.message||'')+'</div>';
+        wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">Failed to load: '+(e?.message||'')+'</div>';
     }
 }
 
@@ -23687,7 +23687,7 @@ function _ldRenderCards(orders) {
     var wrap = _ldGetCardsWrap();
     if (!wrap) return;
     if (!orders.length) {
-        wrap.innerHTML = '<div class="text-center py-16 text-slate-300"><i class="fas fa-inbox text-5xl mb-3 block"></i><p class="font-bold text-slate-400 text-sm">ไม่มีงานโหลดสำหรับวันนี้</p><p class="text-xs text-slate-300 mt-1">รอ Loading Order จากเจ้าหน้าที่จัดส่ง</p></div>';
+        wrap.innerHTML = '<div class="text-center py-16 text-slate-300"><i class="fas fa-inbox text-5xl mb-3 block"></i><p class="font-bold text-slate-400 text-sm">No loading orders for today</p><p class="text-xs text-slate-300 mt-1">Waiting for orders from dispatch</p></div>';
         return;
     }
     wrap.innerHTML = orders.map(function(o) {
@@ -23698,12 +23698,12 @@ function _ldRenderCards(orders) {
         var isActive = _ldActiveOrderId === o.id;
         var stColor = _rv==='rejected'?'border-rose-500':_rv==='pending_review'?'border-violet-400':o.status==='in_progress'?'border-sky-400':'border-amber-400';
         var stBadge = _rv==='rejected'
-            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-400">❌ ตีกลับ</span>'
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-400">❌ Rejected</span>'
             : _rv==='pending_review'
-            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse block"></span>รอตรวจสอบ</span>'
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse block"></span>Under Review</span>'
             : o.status==='in_progress'
-            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-700 border border-sky-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse block"></span>กำลังโหลด</span>'
-            : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">รอโหลด</span>';
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-700 border border-sky-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse block"></span>Loading</span>'
+            : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">Pending</span>';
         var itemList = items.map(function(it,idx){
             return '<tr class="border-t border-slate-100">'
                 +'<td class="px-3 py-2 text-xs font-black text-slate-500">'+(idx+1)+'</td>'
@@ -23797,22 +23797,22 @@ function _ldRenderCards(orders) {
         if (_rv==='rejected') {
             var _rType = o.rejection_reason_type;
             var _rMsg = _rType===1
-                ? '⚖️ ส่วนต่างตราชั่งใหญ่ห่างกันเกินกำหนด'
+                ? '⚖️ Scale difference too large'
                 : _rType===2
-                ? '📏 น้ำหนักไม่อยู่ในช่วง / ไม่มีการประสานงานมาทางจัดส่ง'
-                : '❌ ตีกลับ';
+                ? '📏 Weight out of range / No prior coordination with dispatch'
+                : '❌ Rejected';
             rejBanner = '<div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:10px 16px;border-bottom:2px solid #fca5a5;">'
                 +'<div style="font-size:12px;font-weight:900;color:#fff;display:flex;align-items:center;gap:6px;">'
-                +'<i class="fas fa-exclamation-circle"></i> ตีกลับ — '+_rMsg+'</div>'
+                +'<i class="fas fa-exclamation-circle"></i> Rejected — '+_rMsg+'</div>'
                 +(o.rejection_note?'<div style="font-size:11px;color:#fca5a5;margin-top:3px;">'+_ldEsc(o.rejection_note)+'</div>':'')
-                +'<div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px;">กรุณาตรวจสอบและโหลดใหม่อีกครั้ง</div>'
+                +'<div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px;">Please review and re-submit loading data</div>'
                 +'</div>';
         }
         var pendingBanner = _rv==='pending_review'
             ? '<div style="background:linear-gradient(135deg,#4c1d95,#7c3aed);padding:12px 16px;display:flex;align-items:center;gap:10px;">'
               +'<i class="fas fa-hourglass-half" style="color:#c4b5fd;font-size:16px;"></i>'
-              +'<div><div style="font-size:13px;font-weight:900;color:#fff;">รอการตรวจสอบจากฝั่งจัดส่ง</div>'
-              +'<div style="font-size:11px;color:#c4b5fd;margin-top:2px;">ข้อมูลที่บันทึกไปแล้วอยู่ระหว่างตรวจสอบ</div></div>'
+              +'<div><div style="font-size:13px;font-weight:900;color:#fff;">Waiting for dispatch review</div>'
+              +'<div style="font-size:11px;color:#c4b5fd;margin-top:2px;">Your submitted data is being reviewed — please wait</div></div>'
               +'</div>'
             : '';
         var canToggle = _rv!=='pending_review' && _rv!=='rejected';
@@ -24029,10 +24029,10 @@ window.ldSpConfirm = async function(oid, itemCount) {
     try {
         var {error}=await window._sb.from('loading_orders').update({trailer_split:split, updated_at:new Date().toISOString()}).eq('id',oid);
         if(error) throw error;
-        showToast('✅ จัดรายการเสร็จแล้ว กดเลือกรถได้เลย');
+        showToast('✅ Items arranged — select a truck');
         var today=new Date().toISOString().slice(0,10);
         _ldLoadOrderCards(today);
-    } catch(e){ showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)),true); }
+    } catch(e){ showToast('Error: '+(e?.message||String(e)),true); }
 };
 
 function _ldBuildFormMobile(order) {
@@ -24094,17 +24094,17 @@ function _ldBuildFormMobile(order) {
                     // Live summary: W / Pcs / Avg
                     +'<div style="display:flex;flex:1;gap:4px;">'
                         +'<div style="flex:1;background:#14532d;border-radius:8px;padding:6px 4px;text-align:center;">'
-                            +'<div style="font-size:9px;font-weight:900;color:#6ee7b7;text-transform:uppercase;">ขึ้นแล้ว</div>'
+                            +'<div style="font-size:9px;font-weight:900;color:#6ee7b7;text-transform:uppercase;">Loaded</div>'
                             +'<div id="ldf-actual-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#4ade80;font-family:monospace;line-height:1.1;">—</div>'
                             +'<div style="font-size:9px;color:#86efac;">KG</div>'
                         +'</div>'
                         +'<div style="flex:1;background:#1e3a5f;border-radius:8px;padding:6px 4px;text-align:center;">'
-                            +'<div style="font-size:9px;font-weight:900;color:#93c5fd;text-transform:uppercase;">จำนวน</div>'
+                            +'<div style="font-size:9px;font-weight:900;color:#93c5fd;text-transform:uppercase;">Qty</div>'
                             +'<div id="ldf-actual-qty-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#60a5fa;font-family:monospace;line-height:1.1;">—</div>'
                             +'<div style="font-size:9px;color:#93c5fd;">PCS</div>'
                         +'</div>'
                         +'<div style="flex:1;background:#2e1065;border-radius:8px;padding:6px 4px;text-align:center;">'
-                            +'<div style="font-size:9px;font-weight:900;color:#c4b5fd;text-transform:uppercase;">เฉลี่ย</div>'
+                            +'<div style="font-size:9px;font-weight:900;color:#c4b5fd;text-transform:uppercase;">Avg</div>'
                             +'<div id="ldf-actual-avg-'+oid+'-'+idx+'" style="font-size:18px;font-weight:900;color:#a78bfa;font-family:monospace;line-height:1.1;">—</div>'
                             +'<div style="font-size:9px;color:#c4b5fd;">kg/pcs</div>'
                         +'</div>'
@@ -24137,7 +24137,7 @@ function _ldBuildFormMobile(order) {
             var sepRow='';
             if(!isLastGrp){
                 var nextEnd=Math.min(grpStart+CPR+CPR,itemDisp);
-                sepRow='<tr style="background:#1e293b;"><td colspan="'+(1+CPR)+'" style="padding:3px 10px;font-size:10px;font-weight:900;color:#64748b;text-align:center;">ช่องที่ '+(grpStart+CPR+1)+' – '+nextEnd+'</td></tr>';
+                sepRow='<tr style="background:#1e293b;"><td colspan="'+(1+CPR)+'" style="padding:3px 10px;font-size:10px;font-weight:900;color:#64748b;text-align:center;">Slots '+(grpStart+CPR+1)+' – '+nextEnd+'</td></tr>';
             }
             inputRows+='<tr>'+kgR+'</tr><tr>'+pcR+'</tr>'+sepRow;
         }
@@ -24546,7 +24546,7 @@ window.ldPauseHandlePhoto = function(inp, oid) {
     if (cb && _ldPausePhotos[oid].length) { cb.disabled = false; cb.style.background = '#d97706'; cb.style.cursor = 'pointer'; }
 };
 window.ldPauseConfirm = function(oid) {
-    if (!(_ldPausePhotos[oid]||[]).length) { showToast('⚠️ กรุณาถ่ายรูปก่อนพัก', true); return; }
+    if (!(_ldPausePhotos[oid]||[]).length) { showToast('⚠️ Please take a photo before break', true); return; }
     var now = new Date().toISOString();
     _ldInitSegment(oid);
     var segs = _ldSegments[oid];
@@ -24954,10 +24954,10 @@ window.ldCardSave = async function(oid) {
 
     // QC validation — all 5 checkboxes must be checked
     var qcState = _ldQcState[oid] || [];
-    var qcLabels = ['ตรวจสภาพสินค้า','ตรวจสนิม','SKU และจำนวน','จัดเรียง SKU','มัด/รัด'];
+    var qcLabels = ['No cracks / deformation','Rust check','SKU & qty correct','Dunnage placed','Strapped & tied'];
     for (var qi=0; qi<5; qi++) {
         if (!qcState[qi]) {
-            showToast('⚠️ ยังไม่ได้ตรวจ: '+qcLabels[qi], true);
+            showToast('⚠️ QC not checked: '+qcLabels[qi], true);
             var lbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+qi);
             if (lbl) { lbl.style.borderColor='#dc2626'; lbl.style.background='#fff1f2'; setTimeout(function(l){ l.style.borderColor='#fde68a'; l.style.background='#fffbeb'; }.bind(null,lbl),2000); }
             return;
@@ -24966,7 +24966,7 @@ window.ldCardSave = async function(oid) {
 
     // Photo validation — at least 1 photo required
     if (!(_ldCardPhotos[oid]||[]).length) {
-        showToast('⚠️ กรุณาถ่ายรูปสินค้าอย่างน้อย 1 รูป', true);
+        showToast('⚠️ At least 1 product photo is required', true);
         var pw = document.getElementById('ldf-photo-wrap-'+oid);
         if (pw) { pw.style.borderColor='#dc2626'; setTimeout(function(){ pw.style.borderColor='#e2e8f0'; },2000); }
         return;
@@ -25054,13 +25054,13 @@ window.ldCardSave = async function(oid) {
         _ldDraftClear(oid);
         if (_ldElapsedTmr[segKey]) { clearInterval(_ldElapsedTmr[segKey]); delete _ldElapsedTmr[segKey]; }
         delete _ldSegments[segKey]; delete _ldPaused[segKey];
-        showToast('✅ บันทึกการโหลดสำเร็จ');
+        showToast('✅ Loading record saved');
         _ldActiveOrderId = null;
         delete _ldCardPhotos[oid];
         delete _ldQcState[oid];
         _ldLoadOrderCards(today);
         _ldRefreshGlobalStats(today);
-    } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
+    } catch(e) { showToast('Error: '+(e?.message||String(e)), true); }
 };
 
 async function _ldRefreshGlobalStats(dateVal) {
@@ -25710,7 +25710,7 @@ window.ldSaveSession = async function() {
         var {error} = await window._sb.from('loading_sessions').insert(rows);
         if (error) throw error;
         _ldDraftClear(oid);
-        showToast('✅ บันทึกการโหลดสำเร็จ');
+        showToast('✅ Loading record saved');
         // reset form
         _ldPhotoPending = [];
         document.getElementById('ld-photo-previews').innerHTML = '';
@@ -25721,7 +25721,7 @@ window.ldSaveSession = async function() {
         _ldLiftCount = 0; ldAddLift();
         document.getElementById('ld-staff-names').innerHTML = '';
         _ldLoadSessions();
-    } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
+    } catch(e) { showToast('Error: '+(e?.message||String(e)), true); }
 };
 
 async function _ldLoadSessions() {
