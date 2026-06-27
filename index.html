@@ -28331,7 +28331,27 @@ window.exportLogisticImage = async function exportLogisticImage() {
             return;
         }
 
-        const shops = p.shops || [];
+        // ── resolve shops (same logic as renderLogisticList) ──
+        var _expRawShops = p.shops || [];
+        if (p.isChild && _expRawShops.length === 0) {
+            var _expMPlan = list.find(function(q){ return q.id === ((p.pairId||p.id.replace(/-C$/,''))+'-M'); });
+            if (_expMPlan) {
+                _expRawShops = (_expMPlan.shops||[]).map(function(s){
+                    var ci=(s.items||[]).filter(function(it){return it.truckLabel==='child';});
+                    return ci.length>0 ? Object.assign({},s,{items:ci}) : null;
+                }).filter(Boolean);
+            }
+        }
+        const shops = _expRawShops.map(function(s){
+            if (!p.isMother && !p.isChild) return s;
+            var allIt=s.items||[];
+            var hasLbls=allIt.some(function(it){return it.truckLabel;});
+            if (!hasLbls) return s;
+            var kept=allIt.filter(function(it){
+                return p.isMother ? (!it.truckLabel||it.truckLabel==='mother') : it.truckLabel==='child';
+            });
+            return Object.assign({},s,{items:kept});
+        }).filter(function(s){ return !p.isChild||(s.items||[]).length>0; });
         let isFirstPlanRow = true;
         const totalPlanRows = shops.reduce((s, sh) => s + Math.max((sh.items||[]).length, 1), 0) || 1;
         const distKm = shops[0]?.distance ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">${shops[0].distance} Km</div>` : '';
