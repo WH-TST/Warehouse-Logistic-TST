@@ -25068,9 +25068,11 @@ function _ldRequestNotifPermission(username) {
     if (!('Notification' in window)) return;
     if (Notification.permission === 'granted') {
         _ldRegisterPush(username);
+        if (typeof _whUpdateNotifBtn === 'function') _whUpdateNotifBtn();
     } else if (Notification.permission === 'default') {
         Notification.requestPermission().then(function(perm) {
             if (perm === 'granted') _ldRegisterPush(username);
+            if (typeof _whUpdateNotifBtn === 'function') _whUpdateNotifBtn();
         });
     }
 }
