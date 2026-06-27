@@ -25531,14 +25531,20 @@ window.ldLoadPlans = async function() {
     if (!sel) return;
     sel.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
     try {
-        var {data} = await window._sb.from('logistic_plans').select('plan_id,truck_plate,child_plate,shops,total_weight,is_child').eq('plan_date',dateVal).order('plan_id');
-        var plans = (data||[]).filter(function(r){ return !r.is_child; });
-        sel.innerHTML = '<option value="">-- เลือกแผน --</option>';
+        var {data} = await window._sb.from('logistic_plans')
+            .select('plan_id,truck_plate,child_plate,driver_transport,shops,total_weight,is_child,job_type')
+            .eq('plan_date',dateVal).order('plan_id');
+        // กรองออก: แผนรถลูก + แผน maintenance_pm (ไม่มีสินค้าโหลด)
+        var plans = (data||[]).filter(function(r){ return !r.is_child && r.job_type !== 'maintenance_pm'; });
+        sel.innerHTML = '<option value="">-- เลือกแผน หรือ กรอกเอง --</option>';
         plans.forEach(function(p){
-            var names = (p.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
+            // แสดงเฉพาะ delivery shop (ไม่ใช่ SC / transfer / pickup waypoint)
+            var deliveryShops = (p.shops||[]).filter(function(s){ return !s.type || s.type === 'delivery'; });
+            var names = deliveryShops.map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
+            var label = p.truck_plate || p.driver_transport || '—';
             var opt = document.createElement('option');
             opt.value = p.plan_id;
-            opt.textContent = p.plan_id + ' | ' + (p.truck_plate||'—') + ' | ' + names.slice(0,40);
+            opt.textContent = p.plan_id + ' | ' + label + ' | ' + names.slice(0,40);
             opt._planData = p;
             sel.appendChild(opt);
         });
@@ -25553,17 +25559,18 @@ window.ldOnPlanChange = function() {
         ['ld-truck-bar','ld-stats-bar','ld-form-card','ld-session-list'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.add('hidden'); });
         return;
     }
-    // truck bar
+    // truck bar — แสดงเฉพาะ delivery shops
     document.getElementById('ld-truck-bar').classList.remove('hidden');
-    document.getElementById('ld-truck-plate').textContent = _ldPlanData.truck_plate || '—';
-    var shopNames = (_ldPlanData.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
+    document.getElementById('ld-truck-plate').textContent = _ldPlanData.truck_plate || _ldPlanData.driver_transport || '—';
+    var deliveryShops = (_ldPlanData.shops||[]).filter(function(s){ return !s.type || s.type === 'delivery'; });
+    var shopNames = deliveryShops.map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
     document.getElementById('ld-truck-shops').textContent = shopNames || '—';
     document.getElementById('ld-truck-target-wt').textContent = Number(_ldPlanData.total_weight||0).toLocaleString();
-    // populate sku selector
+    // populate sku — จาก delivery + pickup shops เท่านั้น (ไม่รวม SC/transfer waypoints)
     var skuSel = document.getElementById('ld-sku-sel');
     skuSel.innerHTML = '<option value="">-- เลือกสินค้า --</option>';
     var seen = {};
-    (_ldPlanData.shops||[]).forEach(function(shop){
+    (_ldPlanData.shops||[]).filter(function(s){ return !s.type || s.type === 'delivery' || s.type === 'pickup'; }).forEach(function(shop){
         (shop.items||[]).forEach(function(it){
             var key = it.sku||it.productCode||'';
             if (!key || seen[key]) return;
