@@ -25871,7 +25871,7 @@ function _ldRenderMonKpi(rows, orders) {
     if (!el) return;
     var orderIdSet = new Set((orders||[]).map(function(o){ return o.id; }));
     var inProgressIds2 = new Set((orders||[]).filter(function(o){ return o.status==='in_progress'; }).map(function(o){ return o.id; }));
-    var validRows = rows.filter(function(r){ return !r.order_id || orderIdSet.has(r.order_id); });
+    var validRows = rows.filter(function(r){ return r.order_id && orderIdSet.has(r.order_id); });
     var done  = validRows.filter(function(r){ return r.record_type!=='draft'; });
     var live  = validRows.filter(function(r){ return r.record_type==='draft' && inProgressIds2.has(r.order_id); });
     var totalWt  = done.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
@@ -25894,7 +25894,7 @@ function _ldRenderMonitorTable(rows, orders) {
 
     var orderIdSet2 = new Set((orders||[]).map(function(o){ return o.id; }));
     var inProgressIds = new Set((orders||[]).filter(function(o){ return o.status==='in_progress'; }).map(function(o){ return o.id; }));
-    var validRows2 = rows.filter(function(r){ return !r.order_id || orderIdSet2.has(r.order_id); });
+    var validRows2 = rows.filter(function(r){ return r.order_id && orderIdSet2.has(r.order_id); });
     var live = validRows2.filter(function(r){ return r.record_type==='draft' && inProgressIds.has(r.order_id); });
     var done = validRows2.filter(function(r){ return r.record_type!=='draft'; });
 
