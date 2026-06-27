@@ -23819,7 +23819,7 @@ function _ldRenderCards(orders) {
 
         var _iconBg = _rv==='rejected'?'linear-gradient(135deg,#7f1d1d,#dc2626)':_rv==='pending_review'?'linear-gradient(135deg,#4c1d95,#7c3aed)':isActive?'linear-gradient(135deg,#0369a1,#0ea5e9)':'linear-gradient(135deg,#1e293b,#334155)';
         var _accentBar = _rv==='rejected'?'#ef4444':_rv==='pending_review'?'#7c3aed':isActive?'#0ea5e9':'#64748b';
-        return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all" style="border-left:4px solid '+_accentBar+';">'
+        return '<div id="ld-card-'+o.id+'" data-oid="'+o.id+'" data-rv="'+_rv+'" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all" style="border-left:4px solid '+_accentBar+';">'
             +'<div '+(canToggle?'onclick="ldToggleCard(\''+o.id+'\')" ':'')+' style="padding:12px 14px 12px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;'+(canToggle?'cursor:pointer;':'')+'">'
                 // Left: icon + info
                 +'<div style="display:flex;align-items:center;gap:12px;min-width:0;">'
@@ -25388,6 +25388,28 @@ function _ldSubOrders() {
                 });
             });
     }, 15000);
+
+    // Fast poll (5s) — detect review_status changes (approved/rejected) on pending_review cards
+    if (window._ldReviewPollTimer) clearInterval(window._ldReviewPollTimer);
+    window._ldReviewPollTimer = setInterval(function() {
+        var wrap = _ldGetCardsWrap();
+        if (!wrap) return;
+        // only run while there are pending_review cards visible
+        if (!wrap.querySelector('[data-rv="pending_review"]')) return;
+        var today = new Date().toISOString().slice(0,10);
+        window._sb.from('loading_orders').select('id,review_status')
+            .eq('order_date', today).eq('review_status','pending_review')
+            .then(function(res) {
+                var stillPending = new Set((res.data||[]).map(function(o){ return o.id; }));
+                var cards = wrap.querySelectorAll('[data-rv="pending_review"]');
+                var anyChanged = false;
+                cards.forEach(function(card) {
+                    var oid = card.dataset.oid;
+                    if (oid && !stillPending.has(oid)) anyChanged = true;
+                });
+                if (anyChanged) _ldLoadOrderCards(today);
+            });
+    }, 5000);
 }
 
 window.ldSwitchTab = function(tab) {
