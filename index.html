@@ -25189,42 +25189,54 @@ function _ldRequestNotifPermission(username) {
 }
 
 var _ldAlarmIv = null;
+var _ldAudioCtx = null; // reuse single context to avoid browser limit
+
 function _ldPlayNewOrderSound() {
-    // หยุดเสียงเก่าถ้ายังดังอยู่
     if (_ldAlarmIv) { clearInterval(_ldAlarmIv); _ldAlarmIv = null; }
     try {
-        var ctx = new (window.AudioContext || window.webkitAudioContext)();
-        if (ctx.state === 'suspended') ctx.resume();
+        // Reuse or create AudioContext
+        if (!_ldAudioCtx || _ldAudioCtx.state === 'closed') {
+            _ldAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        var ctx = _ldAudioCtx;
 
-        var playOnce = function() {
+        var _doPlay = function() {
             try {
-                if (ctx.state === 'suspended') ctx.resume();
+                var t = ctx.currentTime;
                 var beep = function(freq, start, dur, vol) {
                     var o = ctx.createOscillator();
                     var g = ctx.createGain();
                     o.connect(g); g.connect(ctx.destination);
                     o.type = 'sine';
                     o.frequency.value = freq;
-                    g.gain.setValueAtTime(0, ctx.currentTime + start);
-                    g.gain.linearRampToValueAtTime(vol||0.4, ctx.currentTime + start + 0.01);
-                    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-                    o.start(ctx.currentTime + start);
-                    o.stop(ctx.currentTime + start + dur + 0.05);
+                    g.gain.setValueAtTime(0.001, t + start);
+                    g.gain.linearRampToValueAtTime(vol||0.5, t + start + 0.02);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
+                    o.start(t + start);
+                    o.stop(t + start + dur + 0.05);
                 };
-                // pattern: ดัง-สูง-ดัง รวม ~0.7 วิ
                 beep(880,  0,    0.2, 0.7);
                 beep(1200, 0.25, 0.2, 0.7);
                 beep(880,  0.5,  0.2, 0.8);
             } catch(e){}
         };
 
-        playOnce(); // ดังทันที
-        var elapsed = 0;
-        _ldAlarmIv = setInterval(function() {
-            elapsed += 800;
-            if (elapsed >= 10000) { clearInterval(_ldAlarmIv); _ldAlarmIv = null; return; }
-            playOnce();
-        }, 800); // วนทุก 0.8 วิ ครบ 10 วิแล้วหยุด
+        var _start = function() {
+            _doPlay();
+            var elapsed = 0;
+            _ldAlarmIv = setInterval(function() {
+                elapsed += 800;
+                if (elapsed >= 10000) { clearInterval(_ldAlarmIv); _ldAlarmIv = null; return; }
+                _doPlay();
+            }, 800);
+        };
+
+        // Must resume before scheduling — resume() returns Promise
+        if (ctx.state === 'suspended') {
+            ctx.resume().then(_start).catch(function(){});
+        } else {
+            _start();
+        }
     } catch(e){}
 }
 
