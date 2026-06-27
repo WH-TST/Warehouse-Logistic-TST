@@ -7598,17 +7598,6 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       </div>
     </div>
 
-    <!-- ── Review Panel ── -->
-    <div id="ld-review-panel">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="width:4px;height:24px;background:linear-gradient(180deg,#7c3aed,#4c1d95);border-radius:4px;"></div>
-        <div style="font-size:15px;font-weight:900;color:#1e293b;">รอตรวจสอบจากจัดส่ง</div>
-        <span id="ld-review-count" style="background:#7c3aed;color:#fff;font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;"></span>
-      </div>
-      <div id="ld-review-list" class="space-y-3">
-        <div class="text-center py-8 text-slate-400 text-sm font-bold">ไม่มีงานรอตรวจสอบ</div>
-      </div>
-    </div>
   </div>
 
 </div>
@@ -25831,7 +25820,6 @@ window.ldMonLoad = async function() {
         _ldMonSetupRt(dateVal);
     }
     await _ldMonFetch(dateVal, true);
-    if (typeof window._ldLoadReviewPanel === 'function') window._ldLoadReviewPanel();
 };
 
 function _ldRenderMonitorTable(sessions, orders) {
@@ -25869,7 +25857,14 @@ function _ldRenderMonitorTable(sessions, orders) {
             var s = sm[it.sku]||{};
             return s.draft && (parseFloat(s.draft.qty)||0)>0;
         });
-        var statusBadge = allDone
+        var _rv = o.review_status||'';
+        var statusBadge = _rv==='pending_review'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse block"></span>รอตรวจสอบ</span>'
+            : _rv==='rejected'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-rose-200 text-rose-800 border border-rose-400">↩ ตีกลับแล้ว</span>'
+            : _rv==='approved'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-300">✓ อนุมัติแล้ว</span>'
+            : allDone
             ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-300">✓ เสร็จแล้ว</span>'
             : anyLoading
             ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse block"></span>กำลังโหลด</span>'
@@ -25913,22 +25908,38 @@ function _ldRenderMonitorTable(sessions, orders) {
             +'</tr>';
         }).join('');
 
-        return '<div style="background:#fff;border-radius:16px;border:2px solid '+(anyLoading?'#fda4af':allDone?'#86efac':'#e2e8f0')+';overflow:hidden;margin-bottom:12px;">'
+        var _cardBorder = _rv==='pending_review'?'#7c3aed':_rv==='rejected'?'#f87171':anyLoading?'#fda4af':allDone?'#86efac':'#e2e8f0';
+        var _cardAccent = _rv==='pending_review'?'linear-gradient(135deg,#4c1d95,#6d28d9)':_rv==='rejected'?'linear-gradient(135deg,#7f1d1d,#dc2626)':'#1e293b';
+        var _orderLabel = _ldEsc((o.order_no||'')+(o.truck_plate?' · '+o.truck_plate:'')+(o.customer_name?' · '+o.customer_name:''));
+        var scaleDiff = o.scale_diff!=null?(parseFloat(o.scale_diff)||0):null;
+        var diffChip = scaleDiff!=null
+            ? '<span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:900;background:'+(Math.abs(scaleDiff)>50?'#fef2f2':'#f0fdf4')+';color:'+(Math.abs(scaleDiff)>50?'#b91c1c':'#15803d')+';border:1px solid '+(Math.abs(scaleDiff)>50?'#fca5a5':'#bbf7d0')+';font-family:monospace;">⚖ '+(scaleDiff>=0?'+':'')+scaleDiff.toLocaleString()+' KG</span>'
+            : '';
+        // review action footer (only for pending_review, for users with monitor access)
+        var reviewFooter = (_rv==='pending_review')
+            ? '<div style="border-top:2px dashed #7c3aed;padding:12px 14px;display:flex;gap:10px;background:#faf5ff;">'
+                +'<button onclick="ldRejectOrder(\''+o.id+'\',\''+_orderLabel+'\')" style="flex:1;padding:10px 0;border-radius:10px;border:2px solid #fca5a5;background:#fff;color:#dc2626;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-times-circle" style="margin-right:5px;"></i>ตีกลับ</button>'
+                +'<button onclick="ldApproveOrder(\''+o.id+'\')" style="flex:2;padding:10px 0;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-weight:900;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(22,163,74,.3);"><i class="fas fa-check-circle" style="margin-right:5px;"></i>อนุมัติผ่านการตรวจสอบ</button>'
+              +'</div>'
+            : '';
+
+        return '<div style="background:#fff;border-radius:16px;border:2px solid '+_cardBorder+';overflow:hidden;margin-bottom:12px;">'
             // truck header
-            +'<div style="background:#1e293b;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+            +'<div style="background:'+_cardAccent+';padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
                 +'<div style="display:flex;align-items:center;gap:10px;">'
-                    +'<div style="width:36px;height:36px;background:#334155;border-radius:10px;display:flex;align-items:center;justify-content:center;">'
-                        +'<i class="fas fa-truck" style="color:#94a3b8;font-size:14px;"></i>'
+                    +'<div style="width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:10px;display:flex;align-items:center;justify-content:center;">'
+                        +'<i class="fas fa-truck" style="color:#fff;font-size:14px;"></i>'
                     +'</div>'
                     +'<div>'
                         +'<div style="font-size:18px;font-weight:900;color:#fff;font-family:monospace;">'+_ldEsc(o.truck_plate||'—')+'</div>'
-                        +'<div style="font-size:11px;color:#64748b;">'+_ldEsc(staffName)+' · เริ่ม '+startTime+'</div>'
+                        +'<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:1px;">'+_ldEsc(o.customer_name||staffName||'—')+' · เริ่ม '+startTime+'</div>'
                     +'</div>'
                 +'</div>'
                 +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+                    +diffChip
                     +statusBadge
                     +(_cu&&_cu.isAdmin
-                        ? '<button onclick="ldMonResetOrder(\''+o.id+'\',\''+_ldEsc(o.truck_plate||'')+'\')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #f87171;background:#7f1d1d;color:#fca5a5;font-size:11px;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:5px;" title="ลบข้อมูลการโหลดทั้งหมดของคันนี้"><i class="fas fa-undo-alt"></i> รีเซท</button>'
+                        ? '<button onclick="ldMonResetOrder(\''+o.id+'\',\''+_ldEsc(o.truck_plate||'')+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid rgba(248,113,113,.5);background:rgba(127,29,29,.6);color:#fca5a5;font-size:11px;font-weight:900;cursor:pointer;" title="รีเซทข้อมูลการโหลด"><i class="fas fa-undo-alt"></i></button>'
                         : '')
                 +'</div>'
             +'</div>'
@@ -25947,6 +25958,7 @@ function _ldRenderMonitorTable(sessions, orders) {
                 +'<tbody>'+itemRows+'</tbody>'
             +'</table>'
             +'</div>'
+            +reviewFooter
         +'</div>';
     }).join('');
 
