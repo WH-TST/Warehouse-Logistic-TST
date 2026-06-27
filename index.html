@@ -25057,6 +25057,18 @@ window.ldCardSave = async function(oid) {
 
     // confirm draft rows → update to final, or insert if no draft exists
     var draftIds = _ldDraftRowIds[oid]||{};
+
+    // For rejected orders: map existing done session IDs so we UPDATE instead of INSERT
+    if (orderData && (orderData.review_status||'')==='rejected' && !Object.keys(draftIds).length) {
+        var {data:existSess} = await window._sb.from('loading_sessions')
+            .select('id,sku').eq('order_id', oid).neq('record_type','draft');
+        if (existSess && existSess.length) {
+            var skuIdMap = {};
+            existSess.forEach(function(r){ if(!skuIdMap[r.sku]) skuIdMap[r.sku]=r.id; });
+            orderItems.forEach(function(oi, iIdx){ if(oi.sku && skuIdMap[oi.sku]) draftIds[iIdx]=skuIdMap[oi.sku]; });
+        }
+    }
+
     try {
         for (var iIdx2=0; iIdx2<items.length; iIdx2++) {
             var it = items[iIdx2];
