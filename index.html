@@ -25426,6 +25426,9 @@ function _ldSubOrders() {
         })
         .subscribe(function(status){
             console.log('[WMS-LD] realtime:', status);
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                setTimeout(function(){ if (typeof _ldSubOrders === 'function') _ldSubOrders(); }, 5000);
+            }
         });
 
     // Polling fallback ทุก 15 วิ — ทำงานทุก mode (admin + WH staff)
@@ -27471,6 +27474,9 @@ function _loSubscribe() {
         }).subscribe(function(state){
             var badge = document.getElementById('lo-realtime-badge');
             if (badge) badge.classList.toggle('hidden', state !== 'SUBSCRIBED');
+            if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
+                setTimeout(function(){ if (typeof _loSubOrders === 'function') _loSubOrders(); }, 5000);
+            }
         });
 }
 
