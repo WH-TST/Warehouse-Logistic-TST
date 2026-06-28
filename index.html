@@ -41073,7 +41073,7 @@ function drvRenderTraveling(){
     var remaining=shops.filter(function(sh,i){return !(_dShopVisits[i]&&_dShopVisits[i].departed_at);});
     var shopBtns=shops.map(function(sh,i){
       if(_dShopVisits[i]&&_dShopVisits[i].departed_at)return'';
-      var isSCTrv=sh.type==='service_center'; var isPUTrv=sh.type==='pickup'; var isTRTrv=sh.type==='transfer';
+      var isSCTrv=sh.type==='service_center'; var isPUTrv=sh.type==='pickup'; var isTRTrv=sh.type==='transfer'; var isTDTrv=false;
       return '<button onclick="drvSelectShop('+i+')" style="width:100%;text-align:left;background:#0f172a;border:2px solid '+(isSCTrv?'#92400e':isPUTrv?'#3730a3':isTDTrv?'#9a3412':isTRTrv?'#5b21b6':'#334155')+';border-radius:12px;padding:14px 16px;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:12px;">'
         +'<div style="width:32px;height:32px;border-radius:50%;background:'+(isSCTrv?'#422006':isPUTrv?'#1e1b4b':isTDTrv?'#431407':isTRTrv?'#2e1065':'#1e293b')+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:'+(isSCTrv?'#fbbf24':isPUTrv?'#a5b4fc':isTDTrv?'#fb923c':isTRTrv?'#c4b5fd':'#64748b')+';flex-shrink:0;">'+(isSCTrv?'🔧':isPUTrv?'📦':isTDTrv?'📤':isTRTrv?'📦➡':(i+1))+'</div>'
         +'<div style="flex:1;">'+(isSCTrv?'<span style="font-size:11px;color:#f59e0b;font-weight:900;">แวะศูนย์ซ่อม</span><br>':isPUTrv?'<span style="font-size:11px;color:#a5b4fc;font-weight:900;">แวะรับของ</span><br>':isTDTrv?'<span style="font-size:11px;color:#fb923c;font-weight:900;">แวะส่งย้ายของ</span><br>':isTRTrv?'<span style="font-size:11px;color:#c4b5fd;font-weight:900;">ย้ายสินค้า</span><br>':'')+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
@@ -41082,7 +41082,7 @@ function drvRenderTraveling(){
     return '<div class="drv-fade-up"><div class="drv-card"><div style="font-size:11px;font-weight:900;color:#93c5fd;margin-bottom:14px;"><i class="fas fa-route" style="margin-right:6px;"></i>เลือกร้านถัดไปที่จะไป ('+remaining.length+' ร้านเหลือ)</div>'+shopBtns+'</div></div>';
   }
   var seq=_dSelectedShopSeq;var shop=shops[seq]||{};
-  var isSC=shop.type==='service_center'; var isPU=shop.type==='pickup'; var isTR=shop.type==='transfer';
+  var isSC=shop.type==='service_center'; var isPU=shop.type==='pickup'; var isTR=shop.type==='transfer'; var isTD=false;
   var hasPhoto=!!_dCapturedPreviewUrl;
   var photoHtml=(isSC||isPU||isTR)?'':hasPhoto
     ?'<div style="position:relative;margin-bottom:10px;"><img src="'+_dCapturedPreviewUrl+'" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;"><div style="position:absolute;top:8px;right:8px;background:rgba(5,150,105,.92);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:900;color:#fff;"><i class="fas fa-check" style="margin-right:4px;"></i>ถ่ายแล้ว</div></div><button class="drv-btn-secondary" style="margin-bottom:12px;" onclick="drvOpenCamera()"><i class="fas fa-redo"></i> ถ่ายใหม่</button>'
