@@ -7725,14 +7725,13 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
   <div id="ld-tab-form" class="space-y-4">
 
     <!-- hidden inputs for legacy JS compat -->
-    <input type="hidden" id="ld-date">
     <select id="ld-plan-sel" class="hidden"><option value=""></option></select>
 
-    <!-- Top bar: วันนี้ + stats -->
+    <!-- Top bar: วันที่ + stats -->
     <div class="flex items-center justify-between">
-      <div class="font-black text-slate-700 text-sm flex items-center gap-2">
+      <div class="flex items-center gap-2">
         <i class="fas fa-calendar-day text-emerald-500"></i>
-        <span id="ld-today-display">—</span>
+        <input type="date" id="ld-date" class="border-2 border-emerald-200 rounded-xl px-2 py-1 text-sm font-black text-slate-700 focus:border-emerald-400 focus:outline-none" onchange="_ldLoadOrderCards(this.value);_ldRefreshGlobalStats(this.value);">
       </div>
       <div id="ld-live-badge" class="px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5">
         <span class="w-2 h-2 bg-emerald-500 rounded-full block animate-pulse"></span>Live
@@ -25430,7 +25429,7 @@ function _ldSubOrders() {
         .then(function(res){ (res.data||[]).forEach(function(o){ _ldLastKnownIds.add(o.id); _ldLastKnownIds.add(o.id+'_notified'); }); });
 
     _ldPollTimer = setInterval(function() {
-        var today = new Date().toISOString().slice(0,10);
+        var today = document.getElementById('ld-date')?.value || new Date().toISOString().slice(0,10);
         window._sb.from('loading_orders').select('*')
             .eq('order_date', today).in('status',['pending','in_progress'])
             .then(function(res) {
