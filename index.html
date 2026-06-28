@@ -25392,30 +25392,30 @@ var _ldLastKnownIds = new Set();
 function _ldSubOrders() {
     if (_ldOrderSub) { try { window._sb.removeChannel(_ldOrderSub); } catch(e){} _ldOrderSub = null; }
 
+    function _ldCurrentDate(){ return document.getElementById('ld-date')?.value || new Date().toISOString().slice(0,10); }
     _ldOrderSub = window._sb.channel('ld-orders-rt-v4')
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'loading_orders'}, function(payload){
-            var today = new Date().toISOString().slice(0,10);
-            _ldLoadOrderCards(today);
-            if (payload && payload.new && payload.new.order_date === today) {
-                _ldNotifyNewOrder(payload.new);
+            var cur = _ldCurrentDate();
+            // ถ้า order ที่ insert ตรงกับวันที่แสดงอยู่ — reload และแจ้งเตือน
+            if (payload && payload.new && payload.new.order_date === cur) {
+                _ldLoadOrderCards(cur);
                 if (!_ldLastKnownIds.has(payload.new.id+'_notified')) {
                     _ldLastKnownIds.add(payload.new.id+'_notified');
+                    _ldNotifyNewOrder(payload.new);
                 }
             }
         })
         .on('postgres_changes',{event:'UPDATE',schema:'public',table:'loading_orders'}, function(){
-            var today = new Date().toISOString().slice(0,10);
-            _ldLoadOrderCards(today);
+            _ldLoadOrderCards(_ldCurrentDate());
             if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .on('postgres_changes',{event:'DELETE',schema:'public',table:'loading_orders'}, function(){
-            var today = new Date().toISOString().slice(0,10);
-            _ldLoadOrderCards(today);
+            _ldLoadOrderCards(_ldCurrentDate());
             if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .on('postgres_changes',{event:'*',schema:'public',table:'loading_sessions'}, function(){
-            var today = new Date().toISOString().slice(0,10);
-            _ldRefreshGlobalStats(today);
+            var cur = _ldCurrentDate();
+            _ldRefreshGlobalStats(cur);
             if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .subscribe(function(status){
