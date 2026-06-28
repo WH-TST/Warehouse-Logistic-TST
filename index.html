@@ -41449,7 +41449,7 @@ window.drvDoFinishTrip=async function(){
       if(tDep&&tArr){var depM=parseInt(tDep.split(':')[0])*60+parseInt(tDep.split(':')[1]),arrM=parseInt(tArr.split(':')[0])*60+parseInt(tArr.split(':')[1]),diff=arrM-depM;if(diff>0){travelMin=diff;if(totalKm)kmhr=Math.round(totalKm/(diff/60)*10)/10;}}
       return{delivery_date:delivDate,driver_name:_dSess.driver_name||_dSess.username||null,truck_plate:_dTripPlan.truck_plate||null,mileage_start:newLog.mileage_start||null,mileage_end:newLog.mileage_end||null,time_depart:tDep||null,time_arrive:tDep2||tArr||null,shop_code:sh.shopId||null,shop_name:sh.shopName||null,distance_km:totalKm||null,travel_minutes:travelMin,km_per_hr:kmhr,planned_distance:parseFloat(sh.distance)||null,sale:sh.sale||null,recorded_at:now};
     });
-    if(dalRows.length)await window._sb.from('driver_activity_log').insert(dalRows);
+    if(dalRows.length&&!_dmAdminTripActive)await window._sb.from('driver_activity_log').insert(dalRows);
   }catch(e){console.warn('driver_activity_log insert failed',e);}
   drvRenderTimeline();drvRenderAction();
   drvShowToast('🎉 จบงานเรียบร้อย!');
