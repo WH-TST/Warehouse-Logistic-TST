@@ -27148,18 +27148,24 @@ window.loCloseModal = function() {
 };
 
 window.loModalLoadPlans = async function() {
-    var dateVal = document.getElementById('lo-m-date')?.value;
     var sel = document.getElementById('lo-m-plan');
-    if (!dateVal || !sel) return;
+    if (!sel) return;
     sel.innerHTML = '<option value="">-- เลือกแผน หรือ กรอกเอง --</option>';
     try {
-        var {data} = await window._sb.from('logistic_plans').select('plan_id,truck_plate,shops,total_weight').eq('plan_date', dateVal).eq('is_child', false).order('plan_id');
+        var today = new Date().toISOString().slice(0,10);
+        var {data} = await window._sb.from('logistic_plans')
+            .select('plan_id,plan_date,truck_plate,shops,total_weight')
+            .gte('plan_date', today)
+            .eq('is_child', false)
+            .in('status', ['planned','inprogress'])
+            .order('plan_date').order('plan_id');
         _loPlansCache = data || [];
         _loPlansCache.forEach(function(p){
             var opt = document.createElement('option');
             opt.value = p.plan_id;
+            var dateDisp = (p.plan_date||'').slice(5).replace('-','/');
             var shops = (p.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
-            opt.textContent = p.plan_id+' | '+( p.truck_plate||'—')+' | '+shops.slice(0,35);
+            opt.textContent = '['+dateDisp+'] '+p.plan_id+' | '+(p.truck_plate||'—')+' | '+shops.slice(0,30);
             sel.appendChild(opt);
         });
     } catch(e) {}
@@ -27170,6 +27176,11 @@ window.loImportFromPlan = function() {
     if (!planId) return;
     var plan = _loPlansCache.find(function(p){ return p.plan_id === planId; });
     if (!plan) return;
+    // auto-fill วันที่จากแผน แล้ว re-gen order no
+    if (plan.plan_date) {
+        document.getElementById('lo-m-date').value = plan.plan_date;
+        loGenOrderNo();
+    }
     // ใส่ทะเบียนรถ
     document.getElementById('lo-m-truck').value = plan.truck_plate || '';
     // import items จาก shops
