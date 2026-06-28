@@ -33958,7 +33958,9 @@ async function _applySession(){
     return;
   }
 
-  // Normal WMS user
+  // Normal WMS user — check training acknowledgement
+  setTimeout(function(){ if(typeof trCheckDriverPending==='function') trCheckDriverPending(_cu.username); }, 1500);
+  if(typeof _trStartRt==='function') _trStartRt(_cu.username);
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-main').classList.remove('wms-app-hidden');
   var n=document.getElementById('sidebar-user-name'),r=document.getElementById('sidebar-user-role');
@@ -40076,6 +40078,8 @@ window.drvPlayNewOrder=function drvPlayNewOrder(){
 window.whInit = async function(user, team) {
   _whMode = true;
   _ldActiveOrderId = null;
+  setTimeout(function(){ if(typeof trCheckDriverPending==='function') trCheckDriverPending(user.username); }, 1500);
+  if(typeof _trStartRt==='function') _trStartRt(user.username);
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-main').classList.add('wms-app-hidden');
   document.getElementById('app-sidebar').classList.add('wms-app-hidden');
