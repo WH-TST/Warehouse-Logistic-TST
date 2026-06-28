@@ -41411,6 +41411,7 @@ window.drvDoDepartShop=async function(){
 };
 
 window.drvDoFinishTrip=async function(){
+  if(_dSess&&_dSess.username){try{var {data:_bpRow}=await window._sb.from('driver_users').select('bypass_timer').eq('username',_dSess.username).maybeSingle();if(_bpRow)DRV_BYPASS_TIMER=DRV_TEST_MODE||(_bpRow.bypass_timer===true);}catch(e){}}
   var mile=parseInt((document.getElementById('drv-inp-mile-end')||{}).value||'');
   if(DRV_TEST_MODE&&(!mile||mile<=_dTripLog.mileage_start))mile=(_dTripLog.mileage_start||100000)+50;
   if(!DRV_BYPASS_TIMER&&(!mile||mile<=0)){drvShowToast('❌ กรอกเลขไมล์กลับให้ถูกต้อง',true);return;}
