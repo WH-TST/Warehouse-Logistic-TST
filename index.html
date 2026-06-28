@@ -39255,6 +39255,13 @@ window.dmOpenTrip=async function(planId,silent){
   DRV_BYPASS_TIMER=true;
   _dmAdminTripActive=true;
   _dTripPlan=_dmTripPlan;
+  // set _dSess from plan so driver functions (drvDoStartTrip etc.) don't throw on null
+  if(!_dSess){
+    var _planDriverId=_dmTripPlan.driver_id||null;
+    var _planDriverName=_dmTripPlan.driver_transport||null;
+    var _matchedDrv=_dmDrivers.find(function(d){return (d.driver_id&&d.driver_id===_planDriverId)||(d.driver_name&&d.driver_name===_planDriverName);});
+    _dSess={username:(_matchedDrv&&_matchedDrv.username)||_planDriverName||_planDriverId||'admin',driver_name:_planDriverName||'admin',driver_id:_planDriverId,bypass_timer:true};
+  }
   _dTripLog=_dmTripLog;
   _dShopVisits=_dmShopVisits;
   _dSelectedShopSeq=null;
