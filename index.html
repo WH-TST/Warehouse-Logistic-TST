@@ -24648,6 +24648,8 @@ function _ldLocalSave(oid) {
     }
     var noteEl = document.getElementById('ldf-note-'+oid);
     if (noteEl) draft.note = noteEl.value;
+    draft.startTime = _ldCardStartTimes[oid] || null;
+    draft.segments  = _ldSegments[oid] || null;
     try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(draft)); } catch(e){}
 }
 
@@ -24748,6 +24750,8 @@ function _ldDraftLoad(oid) {
             });
             var noteEl = document.getElementById('ldf-note-'+oid);
             if (noteEl && draft.note) noteEl.value = draft.note;
+            if (draft.startTime && !_ldCardStartTimes[oid]) _ldCardStartTimes[oid] = draft.startTime;
+            if (draft.segments && !_ldSegments[oid]) _ldSegments[oid] = draft.segments;
             usedLocal = true;
         }
     } catch(e){}
