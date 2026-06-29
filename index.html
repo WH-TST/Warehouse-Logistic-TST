@@ -26669,7 +26669,7 @@ function _ldRenderMonitorTable(rows, orders) {
                 var ur=order.unit_review||{};
                 var mRv=ur.mother||{};var tRv=ur.trailer||{};
                 var _sdUnit = _ldScaleDiffUnit[orderId]||{};
-                var _unitBar=function(unit,rv,label,plate,bgCls,txtCls,borderCls){
+                var _unitBar=function(unit,rv,label,plate,bgCls,txtCls,borderCls,unitSess){
                     var st=rv.status||'';
                     var approveBtn='',resetBtn='';
                     if(st==='pending_review'){
@@ -26681,6 +26681,29 @@ function _ldRenderMonitorTable(rows, orders) {
                     } else {
                         resetBtn=(_cu&&_cu.isAdmin)&&(mSess.length||tSess.length)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
                     }
+                    // per-unit time/weight stats
+                    var uStatsHtml = '';
+                    if (unitSess && unitSess.length) {
+                        var uMinS=null,uMaxE=null,uTQ=0,uTW=0,uLatest={};
+                        unitSess.forEach(function(r){
+                            if(r.start_time&&(!uMinS||r.start_time<uMinS))uMinS=r.start_time;
+                            if(r.end_time&&(!uMaxE||r.end_time>uMaxE))uMaxE=r.end_time;
+                            var sk=r.sku||('__'+r.id);
+                            if(!uLatest[sk]||(r.updated_at||'')>=(uLatest[sk].updated_at||''))uLatest[sk]=r;
+                        });
+                        Object.keys(uLatest).forEach(function(sk){uTQ+=parseFloat(uLatest[sk].qty)||0;uTW+=parseFloat(uLatest[sk].weight)||0;});
+                        var uSegM=null,uSegC=null;
+                        unitSess.forEach(function(r){var m=(r.note||'').match(/\[เวลาโหลดจริง:\s*(\d+)\s*·\s*(\d+)/);if(m){uSegM=parseInt(m[1]);uSegC=parseInt(m[2]);}});
+                        var uDur=uSegM!==null?uSegM:((uMinS&&uMaxE)?Math.round((new Date(uMaxE)-new Date(uMinS))/60000):0);
+                        var uDurLabel=uSegC?uDur+' นาที ('+uSegC+' ช่วง)':uDur+' นาที';
+                        uStatsHtml='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">'
+                            +(uMinS?_ldStatChip('fas fa-clock','#38bdf8','เริ่ม',_thTime(uMinS)):'')
+                            +(uMaxE?_ldStatChip('fas fa-flag-checkered','#34d399','สิ้นสุด',_thTime(uMaxE)):'')
+                            +(uDur>0?_ldStatChip('fas fa-stopwatch','#a78bfa','รวม',uDurLabel):'')
+                            +(uTW>0?_ldStatChip('fas fa-weight-hanging','#f472b6','น้ำหนัก',uTW.toLocaleString(undefined,{maximumFractionDigits:0})+' KG'):'')
+                            +(uTQ>0?_ldStatChip('fas fa-cubes','#60a5fa','PCS',uTQ.toLocaleString()):'')
+                        +'</div>';
+                    }
                     var sdVal=_sdUnit[unit]!=null?_sdUnit[unit]:'';
                     var sdRow='<div style="background:#f8fafc;padding:8px 14px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
                         +'<i class="fas fa-balance-scale" style="color:#7c3aed;font-size:13px;"></i>'
@@ -26689,17 +26712,20 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'<button onclick="ldCalcFinalUnit(\''+orderId+'\',\''+unit+'\')" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:900;cursor:pointer;"><i class="fas fa-calculator"></i> คำนวณ</button>'
                         +(sdVal!==''&&sdVal!==0?'<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:3px 8px;border-radius:6px;">ใช้ค่า '+(sdVal>0?'+':'')+sdVal+' KG</span>':'')
                     +'</div>';
-                    return '<div style="background:'+bgCls+';padding:8px 14px;border-top:1px solid '+borderCls+';display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'
-                        +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+'</span>'
-                        +'<div style="display:flex;align-items:center;">'+approveBtn+resetBtn+'</div>'
+                    return '<div style="background:'+bgCls+';padding:8px 14px;border-top:1px solid '+borderCls+';">'
+                        +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'
+                            +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+'</span>'
+                            +'<div style="display:flex;align-items:center;">'+approveBtn+resetBtn+'</div>'
+                        +'</div>'
+                        +uStatsHtml
                     +'</div>'+sdRow;
                 };
                 var mDiff=_sdUnit.mother!=null?_sdUnit.mother:null;
                 var tDiff=_sdUnit.trailer!=null?_sdUnit.trailer:null;
                 doneTableHtml=
-                    _unitBar('mother',mRv,'แม่ · Head · '+_ldEsc(order.truck_plate||''),order.truck_plate||'—','#dcfce7','#15803d','#86efac')
+                    _unitBar('mother',mRv,'แม่ · Head · '+_ldEsc(order.truck_plate||''),order.truck_plate||'—','#dcfce7','#15803d','#86efac',mSess)
                     +_buildDoneTable(mSess,mItems,mDiff)
-                    +_unitBar('trailer',tRv,'ลูก · Trailer · '+_ldEsc(order.trailer_plate||''),order.trailer_plate||'—','#dbeafe','#1d4ed8','#bfdbfe')
+                    +_unitBar('trailer',tRv,'ลูก · Trailer · '+_ldEsc(order.trailer_plate||''),order.trailer_plate||'—','#dbeafe','#1d4ed8','#bfdbfe',tSess)
                     +_buildDoneTable(tSess,tItems,tDiff);
             } else {
                 var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
