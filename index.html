@@ -27331,6 +27331,11 @@ window.loImportFromPlan = async function() {
     // ใส่ทะเบียนรถ (แม่)
     document.getElementById('lo-m-truck').value = plan.truck_plate || '';
 
+    // ใส่ชื่อลูกค้าจากแผน
+    var shopNames = (plan.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean);
+    var custEl = document.getElementById('lo-m-customer');
+    if (custEl && shopNames.length) custEl.value = shopNames.join(', ');
+
     // ตรวจว่าเป็น trailer plan ไหม
     var isTrailerPlan = !!(plan.is_mother || plan.pair_id);
     var childShops = [];
@@ -27555,7 +27560,9 @@ window.loSaveOrder = async function() {
     var truck    = document.getElementById('lo-m-truck')?.value.trim();
     var note     = document.getElementById('lo-m-note')?.value.trim();
     var planId   = document.getElementById('lo-m-plan')?.value || null;
+    var custName0    = document.getElementById('lo-m-customer')?.value.trim();
     if (!dateVal) { showToast('กรุณาเลือกวันที่', true); return; }
+    if (!custName0) { showToast('กรุณากรอกชื่อลูกค้า', true); return; }
 
     // collect items
     var tbody = document.getElementById('lo-m-items-tbody');
