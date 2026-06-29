@@ -18079,7 +18079,9 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 isChild:         false,
                 date:            payload.date,
                 jobType:         payload.jobType,
-                status:          payload.status         || 'planned',
+                status:          isUpdate && !(_cu && _cu.isAdmin)
+                                    ? (logiPlanList.find(x => x.id === planId)?.status || 'planned')
+                                    : (payload.status || 'planned'),
                 truckType:       payload.truckType,
                 trailerMode:     payload.trailerMode    || '',
                 driverTransport: payload.truckType === 'hire' ? (payload.transportName || '') : (payload.driverName || ''),
