@@ -25143,6 +25143,21 @@ window.ldCardSave = async function(oid) {
             }
         }
         delete _ldDraftRowIds[oid];
+        // Clean up duplicate rows: after saving, delete any extra rows for same order_id+sku
+        // (can exist when multiple staff saved from different devices before this fix)
+        try {
+            var {data:allRows} = await window._sb.from('loading_sessions')
+                .select('id,sku,updated_at').eq('order_id', oid).neq('record_type','draft');
+            if (allRows && allRows.length) {
+                var keepPerSku = {};
+                allRows.forEach(function(r){
+                    if (!keepPerSku[r.sku] || (r.updated_at||'') > (keepPerSku[r.sku].updated_at||'')) keepPerSku[r.sku] = r;
+                });
+                var keepIds = Object.keys(keepPerSku).map(function(sk){ return keepPerSku[sk].id; });
+                var dupIds = allRows.filter(function(r){ return keepIds.indexOf(r.id) < 0; }).map(function(r){ return r.id; });
+                if (dupIds.length) await window._sb.from('loading_sessions').delete().in('id', dupIds);
+            }
+        } catch(e){}
         var error = null;
         // mark order done if all items have data
         var allFilled = items.every(function(it){ return it.qty>0||it.weight>0; });
@@ -25856,8 +25871,9 @@ function _ldRenderSessionRows() {
     });
     var html = '';
     Object.values(bySkuMap).forEach(function(g){
-        var totalQty = g.rows.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
-        var totalWt  = g.rows.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
+        var latestRow = g.rows.reduce(function(a,r){ return (!a || (r.updated_at||'') >= (a.updated_at||'')) ? r : a; }, null) || {};
+        var totalQty = parseFloat(latestRow.qty)||0;
+        var totalWt  = parseFloat(latestRow.weight)||0;
         html += '<div class="bg-white border border-slate-200 rounded-xl overflow-hidden mb-2">'+
             '<div class="bg-slate-100 px-3 py-2 flex items-center justify-between">'+
               '<span class="font-black text-xs text-slate-700">'+g.sku+' — '+g.name+'</span>'+
@@ -26115,8 +26131,13 @@ function _ldRenderMonKpi(rows, orders) {
     var validRows = rows.filter(function(r){ return r.order_id && orderIdSet.has(r.order_id); });
     var done  = validRows.filter(function(r){ return r.record_type!=='draft'; });
     var live  = validRows.filter(function(r){ return r.record_type==='draft' && inProgressIds2.has(r.order_id); });
-    var totalWt  = done.reduce(function(a,r){ return a+(parseFloat(r.weight)||0); },0);
-    var totalPcs = done.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
+    var _kpiLatest = {};
+    done.forEach(function(r){
+        var k = (r.order_id||'')+'__'+(r.sku||r.id);
+        if (!_kpiLatest[k] || (r.updated_at||'') >= (_kpiLatest[k].updated_at||'')) _kpiLatest[k] = r;
+    });
+    var totalWt  = Object.keys(_kpiLatest).reduce(function(a,k){ return a+(parseFloat(_kpiLatest[k].weight)||0); },0);
+    var totalPcs = Object.keys(_kpiLatest).reduce(function(a,k){ return a+(parseFloat(_kpiLatest[k].qty)||0); },0);
     var liveOrders = new Set(live.map(function(r){ return r.order_id||''; }).filter(Boolean));
     el.innerHTML =
         '<div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-3 text-center"><div class="text-[10px] font-black text-emerald-500 uppercase mb-1">โหลดแล้ว (KG)</div><div class="text-2xl font-black text-emerald-700 font-mono">'+totalWt.toLocaleString(undefined,{maximumFractionDigits:0})+'</div></div>'+
@@ -26196,11 +26217,14 @@ function _ldRenderMonitorTable(rows, orders) {
                 // helper: build one item table for a set of sessions + target items
                 function _buildLiveTable(filtSess, targetItems, headerBg, borderColor) {
                     var sb = {};
+                    var _liveLatest = {};
                     filtSess.forEach(function(r){
                         var sk=r.sku||'?';
-                        if(!sb[sk]) sb[sk]={qty:0,weight:0,product_name:r.product_name};
-                        sb[sk].qty+=parseFloat(r.qty||0);
-                        sb[sk].weight+=parseFloat(r.weight||0);
+                        if(!_liveLatest[sk] || (r.updated_at||'') >= (_liveLatest[sk].updated_at||'')) _liveLatest[sk] = r;
+                    });
+                    Object.keys(_liveLatest).forEach(function(sk){
+                        var r=_liveLatest[sk];
+                        sb[sk]={qty:parseFloat(r.qty||0),weight:parseFloat(r.weight||0),product_name:r.product_name};
                     });
                     var tgtMap={};
                     targetItems.forEach(function(it){ tgtMap[it.sku||'']=it; });
