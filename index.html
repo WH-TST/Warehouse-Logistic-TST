@@ -12810,10 +12810,18 @@ window.switchView = function switchView(view) {
     if (activeContent) activeContent.classList.remove('hidden');
     if (activeNav) activeNav.classList.add('active');
 
-    // scroll back to top whenever switching views
-    window.scrollTo({top: 0, behavior: 'instant'});
+    // scroll back to top whenever switching views (cover all browsers/scroll containers)
+    try { window.scrollTo(0, 0); } catch(e){}
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+    var _mainEl = document.querySelector('main');
+    if (_mainEl) _mainEl.scrollTop = 0;
+    var _appMainEl = document.getElementById('app-main');
+    if (_appMainEl) _appMainEl.scrollTop = 0;
+    // close mobile sidebar if open (prevents sidebar covering content on tablet)
+    if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
+    // ensure scroll after repaint (for async-rendered content pushing page down)
+    setTimeout(function(){ window.scrollTo(0, 0); document.documentElement.scrollTop = 0; }, 80);
 
     if (view === 'loading-order' && window.loInit) window.loInit();
     if (view === 'loading' && window.ldInit) window.ldInit();
