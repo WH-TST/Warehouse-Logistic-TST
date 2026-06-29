@@ -7663,8 +7663,8 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <textarea id="lo-m-cust-detail" rows="2" placeholder="เช่น ต้องการให้มัดด้วยลวดเหล็ก, ส่งก่อน 10 โมง ฯลฯ" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none resize-none"></textarea>
       </div>
 
-      <!-- รถพ่วง toggle -->
-      <div>
+      <!-- รถพ่วง + วนชั่ง toggles -->
+      <div class="flex flex-wrap gap-6">
         <label class="flex items-center gap-3 cursor-pointer select-none">
           <div class="relative">
             <input type="checkbox" id="lo-m-is-trailer" class="sr-only" onchange="loToggleTrailer()">
@@ -7673,6 +7673,15 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
           </div>
           <span class="text-sm font-black text-slate-600">รถพ่วง <span class="font-normal text-slate-400">(Trailer Truck)</span></span>
         </label>
+        <label class="flex items-center gap-3 cursor-pointer select-none">
+          <div class="relative">
+            <input type="checkbox" id="lo-m-loop-weigh" class="sr-only" onchange="loToggleLoopWeigh()">
+            <div id="lo-loop-track" class="w-11 h-6 bg-slate-200 rounded-full transition-colors"></div>
+            <div id="lo-loop-thumb" class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"></div>
+          </div>
+          <span class="text-sm font-black text-slate-600">🔄 วนชั่ง <span class="font-normal text-slate-400">(ชั่งทีละรายการ)</span></span>
+        </label>
+      </div>
         <div id="lo-m-trailer-row" class="hidden mt-2">
           <label class="block text-xs font-black text-slate-500 mb-1">ทะเบียนรถลูก <span class="text-blue-500">(Trailer)</span></label>
           <input type="text" id="lo-m-trailer-plate" placeholder="เช่น 72-888" class="w-full border-2 border-blue-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-blue-400 focus:outline-none">
@@ -23815,6 +23824,7 @@ function _ldRenderCards(orders) {
                 +'</div>'
                 // Right: badge + chevron
                 +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'
+                    +(o.loop_weigh?'<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#fff;font-size:10px;font-weight:900;border-radius:8px;padding:2px 8px;">🔄 วนชั่ง</span>':'')
                     +stBadge
                     +(canToggle?'<i class="fas fa-chevron-'+(isActive?'up':'down')+'" style="color:#cbd5e1;font-size:11px;margin-left:2px;"></i>':'')
                 +'</div>'
@@ -24161,7 +24171,14 @@ function _ldBuildFormMobile(order) {
         return hdr+inputRows;
     }).join('');
 
-    return '<div style="padding:10px;background:#f0fdf4;display:flex;flex-direction:column;gap:10px;">'
+    var _mLoopBanner = order.loop_weigh
+        ? '<div style="background:linear-gradient(135deg,#78350f,#f59e0b);padding:10px 16px;display:flex;align-items:center;gap:10px;">'
+          +'<span style="font-size:22px;">🔄</span>'
+          +'<div><div style="font-size:13px;font-weight:900;color:#fff;">วนชั่ง — โหลดทีละรายการ</div>'
+          +'<div style="font-size:11px;color:#fde68a;margin-top:2px;">โหลดทีละรายการแล้วนำรถวนชั่งตราชั่งใหญ่ก่อนรายการถัดไป</div></div>'
+          +'</div>'
+        : '';
+    return _mLoopBanner+'<div style="padding:10px;background:#f0fdf4;display:flex;flex-direction:column;gap:10px;">'
         +'<div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px 14px;border:1px solid #d1fae5;">'
             +'<i class="fas fa-user-circle" style="color:#10b981;font-size:18px;"></i>'
             +'<span style="font-size:14px;font-weight:900;color:#1e293b;">'+_ldEsc(uName)+_ldEsc(teamTxt)+'</span>'
@@ -24302,6 +24319,14 @@ function _ldBuildForm(order) {
     var numCols = _ldCalcCols({items: items});
     _ldOrderCols[oid] = numCols;
 
+    var _loopWeighBanner = order.loop_weigh
+        ? '<div style="background:linear-gradient(135deg,#78350f,#f59e0b);padding:10px 16px;display:flex;align-items:center;gap:10px;">'
+          +'<span style="font-size:22px;">🔄</span>'
+          +'<div><div style="font-size:13px;font-weight:900;color:#fff;letter-spacing:.3px;">วนชั่ง — โหลดทีละรายการ</div>'
+          +'<div style="font-size:11px;color:#fde68a;margin-top:2px;">โหลดสินค้าทีละรายการแล้วนำรถเข้าวนชั่งตราชั่งใหญ่ก่อนรายการถัดไป</div></div>'
+          +'</div>'
+        : '';
+
     var _isMobile = window.innerWidth < 480;
     var INP_BASE = 'width:100%;box-sizing:border-box;border:2px solid #e2e8f0;border-radius:8px;background:#fff;text-align:center;font-size:'+(_isMobile?'15px':'18px')+';font-weight:700;padding:'+(_isMobile?'10px 2px':'8px 2px')+';outline:none;caret-color:#7c3aed;color:#1e293b;-webkit-appearance:none;display:block;';
     var INP_W = INP_BASE+'border-color:#bbf7d0;color:#15803d;';
@@ -24375,7 +24400,7 @@ function _ldBuildForm(order) {
         return rows;
     }).join('');
 
-    return '<div style="padding:12px;background:#f0fdf4;display:flex;flex-direction:column;gap:12px;">'
+    return _loopWeighBanner+'<div style="padding:12px;background:#f0fdf4;display:flex;flex-direction:column;gap:12px;">'
         // user badge
         +'<div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px 14px;border:1px solid #d1fae5;">'
             +'<i class="fas fa-user-circle" style="color:#10b981;font-size:18px;"></i>'
@@ -26948,13 +26973,24 @@ function _loRender(orders) {
         var items = o.items || [];
         var totalQty = items.reduce(function(a,i){ return a+(parseFloat(i.qty)||0); },0);
         var totalWt  = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
+        var isLW = !!o.loop_weigh;
         var itemRows = items.map(function(it, idx) {
+            var swCell = isLW
+                ? '<td class="px-3 py-1.5 text-xs text-right">'+
+                    '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">'+
+                        '<input id="lo-sw-'+o.id+'-'+idx+'" type="number" min="0" step="0.1" value="'+(it.scale_weight||'')+'" placeholder="—"'+
+                            ' style="width:72px;border:1.5px solid #d1fae5;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;color:#065f46;text-align:right;outline:none;">'+
+                        '<button onclick="loSaveScaleWeight(\''+o.id+'\','+idx+')" style="background:#10b981;color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;cursor:pointer;">✔</button>'+
+                    '</div>'+
+                  '</td>'
+                : '';
             return '<tr class="border-t border-slate-100">'+
                 '<td class="px-3 py-1.5 text-xs font-mono font-bold text-slate-700">'+(idx+1)+'</td>'+
                 '<td class="px-3 py-1.5 text-xs font-bold text-slate-700">'+_loEsc(it.sku||'')+'</td>'+
                 '<td class="px-3 py-1.5 text-xs text-slate-500">'+_loEsc(it.product_name||'')+'</td>'+
                 '<td class="px-3 py-1.5 text-xs text-right font-black text-sky-700">'+Number(it.qty||0).toLocaleString()+'</td>'+
                 '<td class="px-3 py-1.5 text-xs text-right font-black text-emerald-700">'+Number(it.target_weight||0).toLocaleString()+'</td>'+
+                swCell+
             '</tr>';
         }).join('');
 
@@ -26970,6 +27006,7 @@ function _loRender(orders) {
                     '<span class="font-black text-sm text-slate-800"><i class="fas fa-truck text-slate-400 mr-1.5"></i>'+_loEsc(o.truck_plate||'—')+'</span>'+
                     (o.customer_name?'<span class="font-bold text-sm text-emerald-700"><i class="fas fa-building text-emerald-400 mr-1"></i>'+_loEsc(o.customer_name)+'</span>':'')+
                     '<span class="px-2 py-0.5 rounded-full text-[10px] font-black border '+st.border+' '+st.text+'">'+st.label+'</span>'+
+                    (isLW?'<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#fff;font-size:10px;font-weight:900;border-radius:8px;padding:2px 8px;letter-spacing:.3px;">🔄 วนชั่ง</span>':'')+
                 '</div>'+
                 '<div class="flex items-center gap-2">'+
                     statusBtns+
@@ -26985,6 +27022,7 @@ function _loRender(orders) {
                         '<th class="px-3 py-1 text-left">สินค้า</th>'+
                         '<th class="px-3 py-1 text-right">จำนวน (เส้น)</th>'+
                         '<th class="px-3 py-1 text-right">เป้าน.น. (กก.)</th>'+
+                        (isLW?'<th class="px-3 py-1 text-right" style="color:#065f46;">⚖️ ตราชั่ง (กก.)</th>':'')+
                     '</tr></thead>'+
                     '<tbody>'+itemRows+'</tbody>'+
                     '<tfoot><tr class="border-t-2 border-slate-200">'+
@@ -26999,6 +27037,22 @@ function _loRender(orders) {
         '</div>';
     }).join('');
 }
+
+window.loSaveScaleWeight = async function(orderId, itemIdx) {
+    var inp = document.getElementById('lo-sw-'+orderId+'-'+itemIdx);
+    if (!inp) return;
+    var wt = parseFloat(inp.value);
+    if (isNaN(wt) || wt < 0) { showToast('กรุณากรอกน้ำหนักที่ถูกต้อง', true); return; }
+    var {data, error} = await window._sb.from('loading_orders').select('items').eq('id', orderId).maybeSingle();
+    if (error || !data) { showToast('โหลดข้อมูลไม่สำเร็จ', true); return; }
+    var items = (data.items || []).map(function(it, i) {
+        return i === itemIdx ? Object.assign({}, it, {scale_weight: wt}) : it;
+    });
+    var {error: e2} = await window._sb.from('loading_orders').update({items: items, updated_at: new Date().toISOString()}).eq('id', orderId);
+    if (e2) { showToast('บันทึกไม่สำเร็จ: '+(e2.message||''), true); return; }
+    showToast('✅ บันทึกน้ำหนักตราชั่งแล้ว');
+    inp.style.borderColor = '#6ee7b7';
+};
 
 window.loGenOrderNo = async function() {
     var dateEl = document.getElementById('lo-m-date');
@@ -27081,6 +27135,44 @@ function _loSetTrailerToggle(isTrailer, trailerPlate) {
     }
 }
 
+window.loToggleLoopWeigh = function() {
+    var cb = document.getElementById('lo-m-loop-weigh');
+    var track = document.getElementById('lo-loop-track');
+    var thumb = document.getElementById('lo-loop-thumb');
+    if (!cb) return;
+    if (cb.checked) {
+        if (track) track.style.background = '#f59e0b';
+        if (thumb) thumb.style.transform = 'translateX(20px)';
+    } else {
+        if (track) track.style.background = '';
+        if (thumb) thumb.style.transform = '';
+    }
+};
+
+function _loResetLoopWeigh() {
+    var cb = document.getElementById('lo-m-loop-weigh');
+    var track = document.getElementById('lo-loop-track');
+    var thumb = document.getElementById('lo-loop-thumb');
+    if (cb) cb.checked = false;
+    if (track) track.style.background = '';
+    if (thumb) thumb.style.transform = '';
+}
+
+function _loSetLoopWeigh(val) {
+    var cb = document.getElementById('lo-m-loop-weigh');
+    var track = document.getElementById('lo-loop-track');
+    var thumb = document.getElementById('lo-loop-thumb');
+    if (!cb) return;
+    cb.checked = !!val;
+    if (val) {
+        if (track) track.style.background = '#f59e0b';
+        if (thumb) thumb.style.transform = 'translateX(20px)';
+    } else {
+        if (track) track.style.background = '';
+        if (thumb) thumb.style.transform = '';
+    }
+}
+
 function _loSetModalMode(isEdit) {
     var hdr  = document.getElementById('lo-modal-header');
     var icon = document.getElementById('lo-modal-icon');
@@ -27119,6 +27211,7 @@ window.loNewOrder = function() {
     document.getElementById('lo-m-order-no').value = '';
     document.getElementById('lo-m-items-tbody').innerHTML = '';
     _loResetTrailerToggle();
+    _loResetLoopWeigh();
     loGenOrderNo();
     _loLoadCustomers();
     document.getElementById('lo-m-total').textContent = '';
@@ -27144,6 +27237,7 @@ window.loEditOrder = async function(id) {
     document.getElementById('lo-m-items-tbody').innerHTML = '';
     _loItemCount = 0;
     _loSetTrailerToggle(data.is_trailer, data.trailer_plate);
+    _loSetLoopWeigh(data.loop_weigh);
     await loModalLoadPlans();
     document.getElementById('lo-m-plan').value = data.plan_id || '';
     (data.items||[]).forEach(function(it){ loAddItem(it); });
@@ -27408,6 +27502,7 @@ window.loSaveOrder = async function() {
     var custDetail   = (document.getElementById('lo-m-cust-detail')?.value||'').trim();
     var isTrailer    = !!(document.getElementById('lo-m-is-trailer')?.checked);
     var trailerPlate = (document.getElementById('lo-m-trailer-plate')?.value||'').trim();
+    var isLoopWeigh  = !!(document.getElementById('lo-m-loop-weigh')?.checked);
     var fullNote     = [custDetail ? '[ลูกค้าต้องการ: '+custDetail+']' : '', note].filter(Boolean).join('\n');
     var payload = {
         plan_id:        planId,
@@ -27419,6 +27514,7 @@ window.loSaveOrder = async function() {
         order_no:       orderNo       || null,
         is_trailer:     isTrailer,
         trailer_plate:  isTrailer ? (trailerPlate||null) : null,
+        loop_weigh:     isLoopWeigh,
         status:         _loEditId ? undefined : 'pending',
         created_by:     window._currentUser || '',
         updated_at:     new Date().toISOString(),
