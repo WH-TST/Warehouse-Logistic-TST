@@ -40453,6 +40453,32 @@ window.drvInit=function(wmsUser){
       }
       setTimeout(function(){drvLoadPlan();},1500);
     })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'logistic_plans'},function(payload){
+      var p=payload.new;
+      if(!p)return;
+      // อัปเดต _dPlans ถ้าเป็นแผนของคนขับนี้
+      var idx=_dPlans.findIndex(function(x){return x.plan_id===p.plan_id;});
+      if(idx>=0&&p.shops){
+        _dPlans[idx].shops=p.shops;
+        // ถ้ากำลังเปิด trip screen ของแผนนี้อยู่ → re-render ทันที
+        if(_dTripPlan&&_dTripPlan.plan_id===p.plan_id&&p.shops){
+          var prevCount=(_dTripPlan.shops||[]).length;
+          _dTripPlan.shops=p.shops;
+          var newCount=p.shops.length;
+          drvRenderTimeline();
+          drvRenderAction();
+          // อัปเดต subtitle จำนวนจุดส่ง
+          var _ds=p.shops.filter(function(s){return s.type!=='service_center';});
+          var _sc=p.shops.length-_ds.length;
+          var subEl=document.getElementById('drv-trip-sub');
+          if(subEl) subEl.textContent='🚛 '+(_dTripPlan.truck_plate||'–')+' • '+_ds.length+' จุดส่ง'+(_sc>0?' + 🔧 '+_sc+' ศูนย์':'');
+          if(newCount>prevCount){
+            drvPlayNewOrder();
+            drvShowToast('📍 เพิ่มจุดส่งใหม่ '+(newCount-prevCount)+' จุด',false,5000);
+          }
+        }
+      }
+    })
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'truck_inspections'},function(payload){
       var ins=payload.new;
       if(!ins)return;
