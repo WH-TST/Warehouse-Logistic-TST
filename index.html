@@ -25091,27 +25091,28 @@ window.ldCardSave = async function(oid) {
     // confirm draft rows → update to final, or insert if no draft exists
     var draftIds = _ldDraftRowIds[oid]||{};
 
-    // For rejected orders: map existing done session IDs so we UPDATE instead of INSERT
-    // and delete old photos from storage before uploading new ones
-    if (orderData && (orderData.review_status||'')==='rejected' && !Object.keys(draftIds).length) {
+    // Always map existing done session IDs so we UPDATE instead of INSERT (prevents
+    // duplicate rows when multiple staff save from different devices on the same order)
+    {
         var {data:existSess} = await window._sb.from('loading_sessions')
             .select('id,sku,photo_urls').eq('order_id', oid).neq('record_type','draft');
         if (existSess && existSess.length) {
             var skuIdMap = {};
             existSess.forEach(function(r){ if(!skuIdMap[r.sku]) skuIdMap[r.sku]=r.id; });
-            orderItems.forEach(function(oi, iIdx){ if(oi.sku && skuIdMap[oi.sku]) draftIds[iIdx]=skuIdMap[oi.sku]; });
-            // Delete old photos from storage
-            var oldUrls = [];
-            existSess.forEach(function(r){ (r.photo_urls||[]).forEach(function(u){ if(u) oldUrls.push(u); }); });
-            if (oldUrls.length) {
-                var bucket = 'delivery-photos';
-                var toDelete = oldUrls.map(function(url){
-                    // extract path after /object/public/bucket-name/
-                    var m = url.match(/\/object\/public\/[^/]+\/(.+)/);
-                    return m ? m[1] : null;
-                }).filter(Boolean);
-                if (toDelete.length) {
-                    try { await window._sb.storage.from(bucket).remove(toDelete); } catch(e){}
+            orderItems.forEach(function(oi, iIdx){ if(oi.sku && skuIdMap[oi.sku] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[oi.sku]; });
+            // For rejected orders: also delete old photos from storage before re-uploading
+            if (orderData && (orderData.review_status||'')==='rejected') {
+                var oldUrls = [];
+                existSess.forEach(function(r){ (r.photo_urls||[]).forEach(function(u){ if(u) oldUrls.push(u); }); });
+                if (oldUrls.length) {
+                    var bucket = 'delivery-photos';
+                    var toDelete = oldUrls.map(function(url){
+                        var m = url.match(/\/object\/public\/[^/]+\/(.+)/);
+                        return m ? m[1] : null;
+                    }).filter(Boolean);
+                    if (toDelete.length) {
+                        try { await window._sb.storage.from(bucket).remove(toDelete); } catch(e){}
+                    }
                 }
             }
         }
