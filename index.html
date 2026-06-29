@@ -26759,7 +26759,9 @@ function _ldRenderMonitorTable(rows, orders) {
                                 : '<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;background:#1e293b;color:#475569;border:1px solid #334155;"><i class="fas fa-image" style="margin-right:4px;"></i>ไม่มีรูป</span>')
                         +'</div>'
                     +'</div>'
-                    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">'
+                    // hide summary chips for trailer_split — shown per-unit inside each section
+                    +(order.is_trailer && order.trailer_split ? '' :
+                    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">'
                         +_ldStatChip('fas fa-clock','#38bdf8','เริ่ม',tStart)
                         +_ldStatChip('fas fa-flag-checkered','#34d399','สิ้นสุด',tEnd)
                         +(function(){
@@ -26775,7 +26777,7 @@ function _ldRenderMonitorTable(rows, orders) {
                         +_ldStatChip('fas fa-cubes','#60a5fa','PCS',totalQty.toLocaleString())
                         +(function(){ var dd=_monDunnage(sessions); return dd.pcs||dd.kg ? _ldStatChip('fas fa-grip-lines','#f59e0b','เหล็กรอง',dd.pcs+' ท่อน · '+dd.kg+' KG') : ''; })()
                         +_monQcBadge()
-                    +'</div>'
+                    +'</div>')
                 +'</div>'
                 // scale diff input (office only) — hidden for trailer_split (handled per unit)
                 +(order.is_trailer && order.trailer_split ? '' :
