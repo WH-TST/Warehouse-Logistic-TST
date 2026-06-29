@@ -37841,8 +37841,9 @@ window.viewTripResult = async function(planId) {
     var sessionId = null;
     var existData = null;
     if(_scSessionId) {
-      var { data: _sd } = await window._sb.from('stock_count_sessions').select('id').eq('id', _scSessionId).maybeSingle();
-      existData = _sd;
+      var { data: _sd } = await window._sb.from('stock_count_sessions').select('id,movement_date').eq('id', _scSessionId).maybeSingle();
+      // ตรวจว่า session นั้นตรงกับ movementDate ที่กำลัง save — ป้องกัน save ผิดวัน
+      if(_sd && _sd.movement_date === movementDate) existData = _sd;
     }
     if(!existData) {
       var existQ = window._sb.from('stock_count_sessions')
@@ -37894,6 +37895,7 @@ window.viewTripResult = async function(planId) {
         .select('id').single();
       if(sErr){ showToast('❌ บันทึก session ล้มเหลว: ' + sErr.message, true); return; }
       sessionId = sData.id;
+      _scSessionId = sessionId; // เก็บไว้ให้ save ครั้งถัดไปใช้ตัวเดิม (ไม่ trigger merge ซ้ำ)
     }
 
     // insert items ใหม่
