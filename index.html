@@ -36960,7 +36960,7 @@ window.viewTripResult = async function(planId) {
           if(checkerEl && sessRes.data.checker_name) checkerEl.value = sessRes.data.checker_name;
           // ดึง items ทั้งหมดของ session นั้น
           var savedItemsRes = await window._sb.from('stock_count_items')
-            .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,note,ppb')
+            .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,ppb')
             .eq('session_id', sessId);
           var savedMap = {};
           (savedItemsRes.data||[]).forEach(function(r){ savedMap[r.sku] = r; });
@@ -36976,11 +36976,12 @@ window.viewTripResult = async function(planId) {
             item.pcs2     = Number(s.scrap2)||0;
             item.holdPcs  = Number(s.hold_pcs)||0;
             item.note     = s.note||'';
-            // วันย้อนหลัง: ใช้ยอดระบบที่บันทึกไว้ ณ วันนับ
+            // วันย้อนหลัง: ใช้ยอดระบบที่บันทึกไว้ ณ วันนับ (รวม QC เฉพาะ FG-BP)
             if(isHistorical && s.system_pcs != null) {
-              item.systemQty   = Number(s.system_pcs)||0;
+              var _hQC = (item.wh !== 'FG-BB') ? (Number(s.system_pcs_qc)||0) : 0;
               item.systemQtyWH = Number(s.system_pcs)||0;
-              item.systemQtyQC = 0;
+              item.systemQtyQC = _hQC;
+              item.systemQty   = item.systemQtyWH + _hQC;
             }
             delete savedMap[item.sku]; // ลบออกเพื่อเหลือแต่ manual items
           });
@@ -36989,7 +36990,9 @@ window.viewTripResult = async function(planId) {
             var mWH     = whFilter||'';
             var savedSys = (isHistorical && s.system_pcs != null) ? Number(s.system_pcs)||0 : null;
             var mSysWH  = savedSys !== null ? savedSys : (cntMapWH[s.sku+'|'+mWH]||0);
-            var mSysQC  = (savedSys !== null || mWH === 'FG-BB') ? 0 : (cntMapWH[s.sku+'|QC']||0);
+            var mSysQC  = (savedSys !== null)
+              ? (mWH !== 'FG-BB' ? (Number(s.system_pcs_qc)||0) : 0)
+              : (mWH === 'FG-BB' ? 0 : (cntMapWH[s.sku+'|QC']||0));
             _scItems.push({
               sku:         s.sku,
               name:        s.sku,
