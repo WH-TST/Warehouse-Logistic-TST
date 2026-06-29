@@ -36738,6 +36738,7 @@ window.viewTripResult = async function(planId) {
 
   // ── state ───────────────────────────────────────────────────────
   var _scItems = [];   // Count Sheet items (transection_fg + manual)
+  var _scSessionId = null; // session ID ที่โหลดไว้ — ใช้ในการ save เพื่อไม่ให้ผิด session
   var _recItems = [];  // Reconcile items (counting + saved counts) — แยกจาก _scItems
   var _scDate  = '';
 
@@ -36862,6 +36863,7 @@ window.viewTripResult = async function(planId) {
     if(!dateVal){ showToast('กรุณาเลือกวันที่', true); return; }
     _scDate = dateVal;
     _scItems = [];  // ล้างรายการเก่าทุกครั้งก่อนโหลดใหม่
+    _scSessionId = null; // รีเซ็ต session ID ทุกครั้งที่โหลดใหม่
     var whFilter = document.getElementById('sc-wh-filter').value;
     var tbody = document.getElementById('sc-sheet-tbody');
     tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
@@ -36952,9 +36954,10 @@ window.viewTripResult = async function(planId) {
           .select('id,checker_name')
           .eq('movement_date', dateVal);
         if(whFilter) sessQ = sessQ.eq('wh', whFilter);
-        var sessRes = await sessQ.order('id', {ascending: false}).limit(1).single();
+        var sessRes = await sessQ.order('id', {ascending: false}).limit(1).maybeSingle();
         if(sessRes.data) {
           var sessId = sessRes.data.id;
+          _scSessionId = sessId; // เก็บไว้ให้ save ใช้ตัวเดิม
           // ใส่ชื่อผู้นับกลับ
           var checkerEl = document.getElementById('sc-checker');
           if(checkerEl && sessRes.data.checker_name) checkerEl.value = sessRes.data.checker_name;
@@ -37833,11 +37836,20 @@ window.viewTripResult = async function(planId) {
     var whVal        = document.getElementById('sc-wh-filter').value || null;
 
     // ตรวจสอบว่ามี session เดิมสำหรับ movement_date+wh นี้หรือไม่
+    // ถ้ามี _scSessionId จาก load ให้ใช้ตัวเดิมเลย (ป้องกัน session แตก)
     var sessionId = null;
-    var existQ = window._sb.from('stock_count_sessions')
-      .select('id').eq('movement_date', movementDate);
-    if(whVal) existQ = existQ.eq('wh', whVal); else existQ = existQ.is('wh', null);
-    var { data: existData } = await existQ.order('id', {ascending:false}).limit(1).maybeSingle();
+    var existData = null;
+    if(_scSessionId) {
+      var { data: _sd } = await window._sb.from('stock_count_sessions').select('id').eq('id', _scSessionId).maybeSingle();
+      existData = _sd;
+    }
+    if(!existData) {
+      var existQ = window._sb.from('stock_count_sessions')
+        .select('id').eq('movement_date', movementDate);
+      if(whVal) existQ = existQ.eq('wh', whVal); else existQ = existQ.is('wh', null);
+      var { data: existData2 } = await existQ.order('id', {ascending:false}).limit(1).maybeSingle();
+      existData = existData2;
+    }
 
     if(existData) {
       // มี session เดิม → ลบ items เก่า แล้ว update session
