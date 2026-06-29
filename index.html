@@ -24828,12 +24828,11 @@ window.ldToggleTrailerUnit = function(orderId, unit) {
     if (!isOpen) {
         // opening — set as current unit for draft saving + mark in_progress
         _ldTrailerUnit[orderId] = unit;
-        if (!_ldCardStartTimes[orderId+'-'+unit]) _ldCardStartTimes[orderId+'-'+unit] = new Date().toISOString();
         var uKey = orderId+'-'+unit;
-        if (!_ldCardStartTimes[uKey]) _ldCardStartTimes[uKey] = new Date().toISOString();
-        _ldInitSegment(uKey);
         window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
         _ldRestoreDraftIds(orderId).then(function(){
+            if (!_ldCardStartTimes[uKey]) _ldCardStartTimes[uKey] = new Date().toISOString();
+            _ldInitSegment(uKey);
             setTimeout(function(){ _ldDraftLoad(orderId); _ldStartTimer(uKey); }, 120);
         });
     }
@@ -24853,10 +24852,11 @@ window.ldToggleCard = function(orderId) {
     var today = new Date().toISOString().slice(0,10);
     _ldLoadOrderCards(today);
     if (!isOpen) {
-        if (!_ldCardStartTimes[orderId]) _ldCardStartTimes[orderId] = new Date().toISOString();
-        _ldInitSegment(orderId);
         window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
         _ldRestoreDraftIds(orderId).then(function(){
+            // Set start_time only if none was restored from DB/localStorage (brand-new session)
+            if (!_ldCardStartTimes[orderId]) _ldCardStartTimes[orderId] = new Date().toISOString();
+            _ldInitSegment(orderId);
             setTimeout(function(){ _ldDraftLoad(orderId); _ldStartTimer(orderId); }, 120);
         });
     }
@@ -24873,12 +24873,19 @@ async function _ldRestoreDraftIds(oid) {
         if (!od) return;
         var orderItems = od.items||[];
 
-        // Fetch all draft rows for this order (include lifts for cross-device restore)
+        // Fetch all draft rows for this order (include lifts + start_time for cross-device restore)
         var {data:drafts} = await window._sb.from('loading_sessions')
-            .select('id,sku,lifts')
+            .select('id,sku,lifts,start_time')
             .eq('order_id', oid)
             .eq('record_type', 'draft');
         if (!drafts || !drafts.length) return;
+
+        // Restore start_time from earliest draft so cross-device timer is in sync
+        if (!_ldCardStartTimes[oid]) {
+            var earliest = null;
+            drafts.forEach(function(r){ if (r.start_time && (!earliest || r.start_time < earliest)) earliest = r.start_time; });
+            if (earliest) _ldCardStartTimes[oid] = earliest;
+        }
 
         // Delete orphan duplicates — keep only the latest row per sku
         var skuMap = {};
