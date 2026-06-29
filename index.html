@@ -24049,7 +24049,7 @@ window.ldSpConfirm = async function(oid, itemCount) {
         var kpp=parseFloat(document.getElementById('ldsp-kpp-'+oid+'-'+i).value)||0;
         var m=parseFloat(document.getElementById('ldsp-m-'+oid+'-'+i).value)||0;
         var t=parseFloat(document.getElementById('ldsp-t-'+oid+'-'+i).value)||0;
-        split[sku]={mother_pcs:m, mother_kg:Math.round(m*kpp), trailer_pcs:t, trailer_kg:Math.round(t*kpp)};
+        split[String(i)]={sku:sku, mother_pcs:m, mother_kg:Math.round(m*kpp), trailer_pcs:t, trailer_kg:Math.round(t*kpp)};
         i++;
     }
     try {
@@ -24068,8 +24068,8 @@ function _ldBuildFormMobile(order) {
     var items = order.items||[];
     if (order.is_trailer && _ldTrailerUnit[oid]) {
         var unit=_ldTrailerUnit[oid], split=order.trailer_split||{};
-        items = items.map(function(it){
-            var sp=split[it.sku]||{};
+        items = items.map(function(it,_idx){
+            var sp=split[String(_idx)]||split[it.sku]||{};
             var pcs=unit==='mother'?(sp.mother_pcs||0):(sp.trailer_pcs||0);
             var wt=unit==='mother'?(sp.mother_kg||0):(sp.trailer_kg||0);
             return Object.assign({},it,{qty:pcs,target_weight:wt});
@@ -24308,8 +24308,8 @@ function _ldBuildForm(order) {
     if (order.is_trailer && _ldTrailerUnit[oid]) {
         var unit = _ldTrailerUnit[oid]; // 'mother' or 'trailer'
         var split = order.trailer_split||{};
-        items = items.map(function(it){
-            var sp = split[it.sku]||{};
+        items = items.map(function(it,_idx){
+            var sp = split[String(_idx)]||split[it.sku]||{};
             var pcs = unit==='mother' ? (sp.mother_pcs||0) : (sp.trailer_pcs||0);
             var wt  = unit==='mother' ? (sp.mother_kg||0)  : (sp.trailer_kg||0);
             return Object.assign({}, it, {qty: pcs, target_weight: wt});
@@ -26253,11 +26253,11 @@ function _ldRenderMonitorTable(rows, orders) {
                     var motherSess = sess.filter(function(r){ return (r.truck_unit||'mother')==='mother'; });
                     var trailerSess = sess.filter(function(r){ return r.truck_unit==='trailer'; });
                     // build target items from split
-                    var mItems = g.orderItems.map(function(it){
-                        var sp=split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.mother_pcs||0,target_kg:sp.mother_kg||0};
+                    var mItems = g.orderItems.map(function(it,_i){
+                        var sp=split[String(_i)]||split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.mother_pcs||0,target_kg:sp.mother_kg||0};
                     }).filter(function(it){return it.qty>0;});
-                    var tItems = g.orderItems.map(function(it){
-                        var sp=split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.trailer_pcs||0,target_kg:sp.trailer_kg||0};
+                    var tItems = g.orderItems.map(function(it,_i){
+                        var sp=split[String(_i)]||split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.trailer_pcs||0,target_kg:sp.trailer_kg||0};
                     }).filter(function(it){return it.qty>0;});
                     var mTable = _buildLiveTable(motherSess, mItems, '#f0fdf4', '#86efac');
                     var tTable = _buildLiveTable(trailerSess, tItems, '#eff6ff', '#bfdbfe');
@@ -26503,8 +26503,8 @@ function _ldRenderMonitorTable(rows, orders) {
                 var sp=order.trailer_split;
                 var mSess=sessions.filter(function(r){return (r.truck_unit||'mother')==='mother';});
                 var tSess=sessions.filter(function(r){return r.truck_unit==='trailer';});
-                var mItems=orderItems.map(function(it){var s=sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
-                var tItems=orderItems.map(function(it){var s=sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
+                var mItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
+                var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
                 doneTableHtml=
                     '<div style="background:#dcfce7;padding:8px 14px;border-top:1px solid #86efac;display:flex;align-items:center;justify-content:space-between;">'
                         +'<span style="font-size:12px;font-weight:700;color:#15803d;">แม่ · Head · '+_ldEsc(order.truck_plate||'—')+'</span>'
