@@ -36928,9 +36928,10 @@ window.viewTripResult = async function(planId) {
       });
       _scItems = skuList.map(function(s){
         // ยอดระบบ = รวมทุกคลัง (FG-BP + QC อยู่แถวเดียวกันใน Count Sheet)
+        // FG-BB ไม่มีงาน QC — ไม่รวม QC
         var sysQtyWH = cntMapWH[s.sku+'|'+s.wh]||0;
-        var sysQtyQC = cntMapWH[s.sku+'|QC']||0;
-        // ระบบใน Count Sheet = คลังที่นับ + QC (ไม่รวมคลังอื่น)
+        var sysQtyQC = (s.wh === 'FG-BB') ? 0 : (cntMapWH[s.sku+'|QC']||0);
+        // ระบบใน Count Sheet = คลังที่นับ + QC (เฉพาะ FG-BP)
         var sysQty   = sysQtyWH + sysQtyQC;
         return {
           sku:         s.sku,
@@ -36988,7 +36989,7 @@ window.viewTripResult = async function(planId) {
             var mWH     = whFilter||'';
             var savedSys = (isHistorical && s.system_pcs != null) ? Number(s.system_pcs)||0 : null;
             var mSysWH  = savedSys !== null ? savedSys : (cntMapWH[s.sku+'|'+mWH]||0);
-            var mSysQC  = savedSys !== null ? 0 : (cntMapWH[s.sku+'|QC']||0);
+            var mSysQC  = (savedSys !== null || mWH === 'FG-BB') ? 0 : (cntMapWH[s.sku+'|QC']||0);
             _scItems.push({
               sku:         s.sku,
               name:        s.sku,
@@ -37540,7 +37541,7 @@ window.viewTripResult = async function(planId) {
         }
         // QC row: holdPcs มาจาก Count Sheet ของ FG-BP หรือ FG-BB (แถวเดียวกัน)
         var holdMem = isQCwh
-          ? (memMap[s.sku+'|FG-BP'] || memMap[s.sku+'|FG-BB'] || {})
+          ? (memMap[s.sku+'|FG-BP'] || {})
           : mem;
         var holdPcsVal = holdMem.holdPcs||0;
         var hasMem = isQCwh
@@ -37551,7 +37552,7 @@ window.viewTripResult = async function(planId) {
         var holdPcsFinal = 0;
         if (isQCwh) {
           // เลือก session ที่ใหม่ที่สุด (session_id สูงสุด) จาก FG-BP / FG-BB / null-wh
-          var holdCandidates = [savedMap[s.sku+'|FG-BP'], savedMap[s.sku+'|FG-BB'], savedMap[s.sku+'|']].filter(Boolean);
+          var holdCandidates = [savedMap[s.sku+'|FG-BP'], savedMap[s.sku+'|']].filter(Boolean);
           var holdSaved = holdCandidates.reduce(function(best, cur){ return (!best || cur._sessId > best._sessId) ? cur : best; }, null) || {};
           holdPcsFinal = holdPcsVal || holdSaved.holdPcs || 0;
         }
@@ -38047,7 +38048,7 @@ window.viewTripResult = async function(planId) {
     if(dup){ showToast('SKU นี้อยู่ในรายการแล้ว ('+wh+')', true); return; }
     var cntByWH  = _scAddSelected.cntByWH || {};
     var sysQtyWH = cntByWH[wh]||0;
-    var sysQtyQC = cntByWH['QC']||0;
+    var sysQtyQC = (wh === 'FG-BB') ? 0 : (cntByWH['QC']||0);
     _scItems.push({
       sku: _scAddSelected.sku, name: _scAddSelected.name,
       wh: wh, ppb: _scAddSelected.ppb,
