@@ -26482,11 +26482,11 @@ function _ldRenderMonitorTable(rows, orders) {
             if (_ldScaleDiff[orderId]==null && order.scale_diff!=null) {
                 _ldScaleDiff[orderId] = order.scale_diff;
             }
-            // per-unit scale diff for trailer split
-            var _usd = order.unit_scale_diff||{};
+            // per-unit scale diff for trailer split (stored inside unit_review JSON)
+            var _ur = order.unit_review||{};
             if (!_ldScaleDiffUnit[orderId]) _ldScaleDiffUnit[orderId] = {};
-            if (_ldScaleDiffUnit[orderId].mother==null && _usd.mother!=null) _ldScaleDiffUnit[orderId].mother=_usd.mother;
-            if (_ldScaleDiffUnit[orderId].trailer==null && _usd.trailer!=null) _ldScaleDiffUnit[orderId].trailer=_usd.trailer;
+            if (_ldScaleDiffUnit[orderId].mother==null && _ur.mother_scale_diff!=null) _ldScaleDiffUnit[orderId].mother=_ur.mother_scale_diff;
+            if (_ldScaleDiffUnit[orderId].trailer==null && _ur.trailer_scale_diff!=null) _ldScaleDiffUnit[orderId].trailer=_ur.trailer_scale_diff;
             var orderItems = order.items||[];
 
             // collect staff/team from ALL sessions (draft+done) for complete team list
@@ -26815,10 +26815,10 @@ window.ldCalcFinalUnit = async function(oid, unit) {
     var btn = inp ? inp.parentElement.querySelector('button') : null;
     if (btn) { btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; }
     try {
-        var {data:cur} = await window._sb.from('loading_orders').select('unit_scale_diff').eq('id',oid).maybeSingle();
-        var usd = (cur&&cur.unit_scale_diff) ? Object.assign({},cur.unit_scale_diff) : {};
-        usd[unit] = val||null;
-        await window._sb.from('loading_orders').update({unit_scale_diff:usd, updated_at:new Date().toISOString()}).eq('id',oid);
+        var {data:cur} = await window._sb.from('loading_orders').select('unit_review').eq('id',oid).maybeSingle();
+        var ur = (cur&&cur.unit_review) ? Object.assign({},cur.unit_review) : {};
+        ur[unit+'_scale_diff'] = val||null;
+        await window._sb.from('loading_orders').update({unit_review:ur, updated_at:new Date().toISOString()}).eq('id',oid);
         if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-check" style="color:#4ade80"></i> บันทึกแล้ว'; setTimeout(function(){ if(btn){btn.innerHTML='<i class="fas fa-calculator"></i> คำนวณ';btn.disabled=false;} },1500); }
     } catch(e) {
         if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-calculator"></i> คำนวณ'; }
