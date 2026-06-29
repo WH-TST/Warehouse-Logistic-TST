@@ -27256,7 +27256,7 @@ window.loModalLoadPlans = async function() {
     try {
         var today = new Date().toISOString().slice(0,10);
         var {data} = await window._sb.from('logistic_plans')
-            .select('plan_id,plan_date,truck_plate,shops,total_weight')
+            .select('plan_id,plan_date,truck_plate,child_plate,shops,total_weight,is_mother,pair_id')
             .gte('plan_date', today)
             .eq('is_child', false)
             .in('status', ['planned','inprogress'])
@@ -27273,25 +27273,50 @@ window.loModalLoadPlans = async function() {
     } catch(e) {}
 };
 
-window.loImportFromPlan = function() {
+window.loImportFromPlan = async function() {
     var planId = document.getElementById('lo-m-plan')?.value;
     if (!planId) return;
     var plan = _loPlansCache.find(function(p){ return p.plan_id === planId; });
     if (!plan) return;
-    // ใส่ทะเบียนรถ
+
+    // ใส่ทะเบียนรถ (แม่)
     document.getElementById('lo-m-truck').value = plan.truck_plate || '';
-    // import items จาก shops
+
+    // ตรวจว่าเป็น trailer plan ไหม
+    var isTrailerPlan = !!(plan.is_mother || plan.pair_id);
+    var childShops = [];
+    var childPlate = plan.child_plate || '';
+
+    if (isTrailerPlan && plan.pair_id) {
+        // ดึง child plan
+        try {
+            var {data: childData} = await window._sb.from('logistic_plans')
+                .select('plan_id,shops,truck_plate')
+                .eq('pair_id', plan.pair_id)
+                .eq('is_child', true)
+                .maybeSingle();
+            if (childData) {
+                childShops = childData.shops || [];
+                if (!childPlate) childPlate = childData.truck_plate || '';
+            }
+        } catch(e) {}
+    }
+
+    // เปิด/ปิด trailer toggle
+    _loSetTrailerToggle(isTrailerPlan, childPlate);
+
+    // รวม items จาก mother + child shops
     document.getElementById('lo-m-items-tbody').innerHTML = '';
     _loItemCount = 0;
     var seen = {};
-    (plan.shops||[]).forEach(function(shop){
+    var allShops = (plan.shops||[]).concat(childShops);
+    allShops.forEach(function(shop){
         (shop.items||[]).forEach(function(it){
             var sku = it.sku || it.productCode || '';
             var qty = parseFloat(it.qty)||0;
             var wt  = parseFloat(it.weight)||0;
             if (!sku) return;
             if (seen[sku]) {
-                // รวมกัน
                 seen[sku].qty += qty;
                 seen[sku].wt  += wt;
             } else {
