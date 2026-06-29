@@ -25138,8 +25138,8 @@ window.ldCardSave = async function(oid) {
         var {data:existSess} = await window._sb.from('loading_sessions')
             .select('id,sku,photo_urls').eq('order_id', oid).neq('record_type','draft');
         if (existSess && existSess.length) {
-            var skuIdMap = {};
-            existSess.forEach(function(r){ if(!skuIdMap[r.sku]) skuIdMap[r.sku]=r.id; });
+            var skuIdMap = {}, skuOldPhotos = {};
+            existSess.forEach(function(r){ if(!skuIdMap[r.sku]){ skuIdMap[r.sku]=r.id; skuOldPhotos[r.sku]=r.photo_urls||[]; } });
             orderItems.forEach(function(oi, iIdx){ if(oi.sku && skuIdMap[oi.sku] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[oi.sku]; });
             // For rejected orders: also delete old photos from storage before re-uploading
             if (orderData && (orderData.review_status||'')==='rejected') {
@@ -25173,7 +25173,7 @@ window.ldCardSave = async function(oid) {
                 qty: it.qty, weight: it.weight,
                 lift_count: it.lifts.length, lifts: it.lifts,
                 start_time: startIso, end_time: endIso,
-                note: note, photo_urls: photoUrls,
+                note: note, photo_urls: (function(){ var old=skuOldPhotos&&skuOldPhotos[oi.sku||'']||[]; var merged=old.slice(); photoUrls.forEach(function(u){ if(merged.indexOf(u)<0) merged.push(u); }); return merged; })(),
                 truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: endIso
             };
