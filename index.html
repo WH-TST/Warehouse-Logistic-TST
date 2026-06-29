@@ -24127,7 +24127,7 @@ function _ldBuildFormMobile(order) {
         var lc=_lc(it);
         var tgtPcs=parseFloat(it.qty)||0;
         var tgtKg=parseFloat(it.target_weight)||0;
-        var itemDisp=Math.max(CPR, lc+1); // min 4, always +1 buffer
+        var itemDisp=Math.ceil(Math.max(CPR,lc+1)/CPR)*CPR; // round up to full rows, always ≥1 buffer
         // Header row: product name + range + TARGET (prominent) + live summary
         var hdr='<tr style="background:#0f172a;">'
             +'<td colspan="'+(1+CPR)+'" style="padding:10px 12px;">'
@@ -24935,9 +24935,9 @@ window.ldCardStats = function(oid) {
         var firstCell = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-0');
         if (!firstCell) break;
         var itemQty = 0, itemWt = 0;
-        var _scols = _ldOrderCols[oid]||_LFT_COLS;
-        for (var c=0; c<_scols; c++) {
+        for (var c=0; ; c++) {
             var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+            if (!qEl) break;
             var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
             itemQty += parseFloat((qEl&&qEl.value)||0)||0;
             itemWt  += parseFloat((wEl&&wEl.value)||0)||0;
