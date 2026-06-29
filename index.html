@@ -18000,7 +18000,10 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                 plan_id:          pid,
                 plan_date:        payload.date,
                 job_type:         payload.jobType        || '',
-                status:           isUpdate ? (payload.status || 'planned') : 'planned',
+                status:           !isUpdate ? 'planned'
+                                    : (_cu && _cu.isAdmin)
+                                        ? (payload.status || 'planned')
+                                        : (logiPlanList.find(p => p.id === pid)?.status || 'planned'),
                 truck_type:       payload.truckType      || 'company',
                 truck_plate:      plate                  || '',
                 child_plate:      isTrailerSplit ? (payload.childPlate || '') : '',
@@ -34219,6 +34222,9 @@ async function _applySession(){
   if(n)n.textContent=_cu.name||_cu.username;if(r)r.textContent=_cu.role||'';
   var b=document.getElementById('btn-user-mgmt');
   if(b){if(_cu.isAdmin)b.classList.remove('hidden');else b.classList.add('hidden');}
+  // ซ่อน status dropdown ในฟอร์มแผนสำหรับ non-admin (status ถูก driver control)
+  var logiStatusSection = document.getElementById('logi-status')?.closest('div');
+  if(logiStatusSection){ logiStatusSection.style.display = _cu.isAdmin ? '' : 'none'; }
 
   var sidebar = document.getElementById('app-sidebar');
   var appMain = document.getElementById('app-main');
