@@ -25175,7 +25175,15 @@ window.ldCardSave = async function(oid) {
         // mark order done if all items have data
         var allFilled = items.every(function(it){ return it.qty>0||it.weight>0; });
         if (allFilled) {
-            await window._sb.from('loading_orders').update({status:'done', review_status:'pending_review', updated_at:new Date().toISOString()}).eq('id',oid);
+            var unit = _ldTrailerUnit[oid] || 'mother';
+            if (orderData && orderData.is_trailer && orderData.trailer_split) {
+                var {data:curOrd2} = await window._sb.from('loading_orders').select('unit_review').eq('id',oid).maybeSingle();
+                var ur = (curOrd2&&curOrd2.unit_review) ? Object.assign({},curOrd2.unit_review) : {};
+                ur[unit] = {status:'pending_review', reviewed_by:'', reviewed_at:''};
+                await window._sb.from('loading_orders').update({status:'done', review_status:'pending_review', unit_review:ur, updated_at:new Date().toISOString()}).eq('id',oid);
+            } else {
+                await window._sb.from('loading_orders').update({status:'done', review_status:'pending_review', updated_at:new Date().toISOString()}).eq('id',oid);
+            }
         }
         _ldDraftClear(oid);
         if (_ldElapsedTmr[segKey]) { clearInterval(_ldElapsedTmr[segKey]); delete _ldElapsedTmr[segKey]; }
@@ -26619,14 +26627,29 @@ function _ldRenderMonitorTable(rows, orders) {
                 var tSess=sessions.filter(function(r){return r.truck_unit==='trailer';});
                 var mItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
                 var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
+                var ur=order.unit_review||{};
+                var mRv=ur.mother||{};var tRv=ur.trailer||{};
+                var _unitBar=function(unit,rv,label,plate,bgCls,txtCls,borderCls){
+                    var st=rv.status||'';
+                    var approveBtn='',resetBtn='';
+                    if(st==='pending_review'){
+                        approveBtn='<button onclick="ldApproveUnit(\''+orderId+'\',\''+unit+'\')" style="padding:5px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;font-size:11px;font-weight:900;cursor:pointer;margin-left:8px;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>อนุมัติ</button>';
+                        resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #fca5a5;background:#fff5f5;color:#dc2626;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
+                    } else if(st==='approved'){
+                        approveBtn='<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ อนุมัติแล้ว</span>';
+                        resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
+                    } else {
+                        resetBtn=(_cu&&_cu.isAdmin)&&(mSess.length||tSess.length)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
+                    }
+                    return '<div style="background:'+bgCls+';padding:8px 14px;border-top:1px solid '+borderCls+';display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'
+                        +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+' · '+_ldEsc(plate||'—')+'</span>'
+                        +'<div style="display:flex;align-items:center;">'+approveBtn+resetBtn+'</div>'
+                    +'</div>';
+                };
                 doneTableHtml=
-                    '<div style="background:#dcfce7;padding:8px 14px;border-top:1px solid #86efac;display:flex;align-items:center;justify-content:space-between;">'
-                        +'<span style="font-size:12px;font-weight:700;color:#15803d;">แม่ · Head · '+_ldEsc(order.truck_plate||'—')+'</span>'
-                    +'</div>'
+                    _unitBar('mother',mRv,'แม่ · Head · '+_ldEsc(order.truck_plate||''),order.truck_plate||'—','#dcfce7','#15803d','#86efac')
                     +_buildDoneTable(mSess,mItems)
-                    +'<div style="background:#dbeafe;padding:8px 14px;border-top:1px solid #bfdbfe;display:flex;align-items:center;justify-content:space-between;">'
-                        +'<span style="font-size:12px;font-weight:700;color:#1d4ed8;">ลูก · Trailer · '+_ldEsc(order.trailer_plate||'—')+'</span>'
-                    +'</div>'
+                    +_unitBar('trailer',tRv,'ลูก · Trailer · '+_ldEsc(order.trailer_plate||''),order.trailer_plate||'—','#dbeafe','#1d4ed8','#bfdbfe')
                     +_buildDoneTable(tSess,tItems);
             } else {
                 var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
@@ -26689,8 +26712,9 @@ function _ldRenderMonitorTable(rows, orders) {
                         : '')
                 +'</div>'
                 +doneTableHtml
-                // approve/reject footer for pending_review
+                // approve/reject footer for pending_review (skip for trailer_split — handled per unit above)
                 +(function(){
+                    if (order.is_trailer && order.trailer_split) return '';
                     var _rv = order.review_status||'';
                     var _orderLabel = _ldEsc((order.order_no||'')+(order.truck_plate?' · '+order.truck_plate:'')+(order.customer_name?' · '+order.customer_name:''));
                     if (_rv==='pending_review') {
@@ -26981,6 +27005,41 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
       var d = document.getElementById('ld-mon-date')?.value;
       if (d) { _ldMonFetch(d,false); if(window._ldLoadOrderCards) window._ldLoadOrderCards(d); }
       _ldLoadReviewPanel();
+  };
+
+  window.ldApproveUnit = async function(oid, unit) {
+      if (!confirm('ยืนยันอนุมัติ — '+(unit==='mother'?'รถแม่':'รถลูก')+' ผ่านการตรวจสอบ?')) return;
+      var {data:cur} = await window._sb.from('loading_orders').select('unit_review').eq('id',oid).maybeSingle();
+      var ur = (cur&&cur.unit_review) ? Object.assign({},cur.unit_review) : {};
+      ur[unit] = {status:'approved', reviewed_by:(window._cu&&window._cu.name)||'admin', reviewed_at:new Date().toISOString()};
+      var bothApproved = (ur.mother&&ur.mother.status==='approved') && (ur.trailer&&ur.trailer.status==='approved');
+      var anyPending = (ur.mother&&ur.mother.status==='pending_review') || (ur.trailer&&ur.trailer.status==='pending_review');
+      var newRv = bothApproved ? 'approved' : anyPending ? 'pending_review' : 'approved';
+      var {error} = await window._sb.from('loading_orders').update({unit_review:ur, review_status:newRv, updated_at:new Date().toISOString()}).eq('id',oid);
+      if (error) { showToast('❌ '+error.message,true); return; }
+      showToast('✅ อนุมัติ'+(unit==='mother'?'รถแม่':'รถลูก')+'สำเร็จ');
+      var d = document.getElementById('ld-mon-date')?.value;
+      if (d) { _ldMonFetch(d,false); if(window._ldLoadOrderCards) window._ldLoadOrderCards(d); }
+      _ldLoadReviewPanel();
+  };
+
+  window.ldMonResetUnit = async function(orderId, truckPlate, unit) {
+      if (!(_cu && _cu.isAdmin)) return;
+      var label = (unit==='mother'?'รถแม่':'รถลูก')+' ('+truckPlate+')';
+      if (!confirm('รีเซท'+label+' ?\n\nจะลบข้อมูลการโหลดของ'+label+' และคืนสถานะหน่วยนี้')) return;
+      try {
+          await window._sb.from('loading_sessions').delete().eq('order_id',orderId).eq('truck_unit',unit==='mother'?'mother':'trailer');
+          var {data:cur} = await window._sb.from('loading_orders').select('unit_review').eq('id',orderId).maybeSingle();
+          var ur = (cur&&cur.unit_review) ? Object.assign({},cur.unit_review) : {};
+          delete ur[unit];
+          var anyPending = Object.values(ur).some(function(v){return v&&v.status==='pending_review';});
+          var newRv = anyPending ? 'pending_review' : '';
+          await window._sb.from('loading_orders').update({status:'in_progress', review_status:newRv||null, unit_review:ur, updated_at:new Date().toISOString()}).eq('id',orderId);
+          _ldShowToast('รีเซท'+label+'เรียบร้อย');
+          var today = new Date().toISOString().slice(0,10);
+          _ldLoadOrderCards(today);
+          if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
+      } catch(e) { alert('เกิดข้อผิดพลาด: '+(e?.message||String(e))); }
   };
 
   window.ldRejectOrder = function(oid, orderLabel) {
