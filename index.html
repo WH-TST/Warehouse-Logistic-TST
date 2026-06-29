@@ -7572,32 +7572,19 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       <div id="ld-mon-realtime-badge" class="hidden px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 animate-pulse"><span class="w-2 h-2 bg-emerald-500 rounded-full block"></span>Live</div>
     </div>
     <div id="ld-mon-kpi" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div id="ld-mon-table-wrap" class="overflow-x-auto">
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="bg-slate-800 text-white">
-              <th class="px-3 py-2.5 text-left font-black">#</th>
-              <th class="px-3 py-2.5 text-left font-black">ประเภท</th>
-              <th class="px-3 py-2.5 text-left font-black">วันที่</th>
-              <th class="px-3 py-2.5 text-left font-black">รหัส</th>
-              <th class="px-3 py-2.5 text-left font-black">ชื่อพนักงาน</th>
-              <th class="px-3 py-2.5 text-center font-black">ทีม</th>
-              <th class="px-3 py-2.5 text-center font-black">เวลาเริ่ม</th>
-              <th class="px-3 py-2.5 text-center font-black">เวลาเสร็จ</th>
-              <th class="px-3 py-2.5 text-right font-black">นาที</th>
-              <th class="px-3 py-2.5 text-right font-black">จำนวน</th>
-              <th class="px-3 py-2.5 text-right font-black">น้ำหนัก</th>
-              <th class="px-3 py-2.5 text-right font-black">นาที/รายการ</th>
-              <th class="px-3 py-2.5 text-right font-black">น้ำหนัก/หน่วย</th>
-              <th class="px-3 py-2.5 text-center font-black">รูป</th>
-            </tr>
-          </thead>
-          <tbody id="ld-mon-tbody">
-            <tr><td colspan="14" class="text-center py-12 text-slate-400 font-bold">เลือกวันที่เพื่อโหลดข้อมูล</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- Monitor view tabs -->
+    <div class="flex gap-2 mb-0">
+      <button id="ld-mon-tab-active" onclick="ldMonSwitchTab('active')"
+        class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm border-2 transition-all border-rose-400 bg-rose-50 text-rose-700 shadow-sm">
+        <span class="w-2 h-2 bg-rose-500 rounded-full inline-block animate-pulse"></span>กำลังโหลด / รออนุมัติ
+      </button>
+      <button id="ld-mon-tab-approved" onclick="ldMonSwitchTab('approved')"
+        class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm border-2 transition-all border-slate-200 bg-white text-slate-500">
+        <i class="fas fa-check-circle text-emerald-500"></i>อนุมัติแล้ว
+      </button>
+    </div>
+    <div id="ld-mon-table-wrap" class="overflow-x-auto">
+      <div class="text-center py-12 text-slate-400 font-bold">เลือกวันที่เพื่อโหลดข้อมูล</div>
     </div>
 
   </div>
@@ -26503,7 +26490,8 @@ function _ldRenderMonitorTable(rows, orders) {
             allSessionsByOrder[k].push(r);
         });
 
-        var orderCards = Object.keys(doneByOrder).map(function(orderId){
+        var orderCards_byId = {};
+        Object.keys(doneByOrder).forEach(function(orderId){
             var sessions = doneByOrder[orderId];
             var order = orderIdx[orderId] || {};
             // โหลด scale_diff จาก DB ถ้าผู้ใช้ยังไม่ได้กรอกใหม่
@@ -26767,7 +26755,7 @@ function _ldRenderMonitorTable(rows, orders) {
                   +'<div style="font-size:13px;font-weight:700;color:#93c5fd;font-family:monospace;">'+_ldEsc(order.trailer_plate||'—')+'<span style="font-size:10px;color:#93c5fd;margin-left:4px;">ลูก · Trailer</span></div>'
                 : '<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;">'+_ldEsc(order.truck_plate||orderId.slice(0,8))+'</div>';
 
-            return '<div style="background:#fff;border-radius:18px;border:2px solid #86efac;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px #0001;">'
+            var _cardHtml = '<div style="background:#fff;border-radius:18px;border:2px solid #86efac;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px #0001;">'
                 +'<div style="background:#0f172a;padding:14px 18px;">'
                     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">'
                         +'<div style="display:flex;align-items:center;gap:12px;">'
@@ -26844,18 +26832,59 @@ function _ldRenderMonitorTable(rows, orders) {
                     return '';
                 })()
             +'</div>';
-        }).join('');
+            orderCards_byId[orderId] = _cardHtml;
+        });
 
-        var doneOrderCount = Object.keys(doneByOrder).length;
-        doneHtml = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
-            +'<i class="fas fa-check-circle" style="color:#16a34a;font-size:14px;"></i>'
-            +'<span style="font-size:13px;font-weight:900;color:#15803d;text-transform:uppercase;letter-spacing:.05em;">โหลดเสร็จแล้ว ('+doneOrderCount+' คัน · '+done.length+' รายการ)</span>'
-            +'</div>'
-            +orderCards;
+        // split cards into: pending/rejected (tab1) vs approved (tab2)
+        var approvedCards = '', pendingCards = '';
+        Object.keys(doneByOrder).forEach(function(oid){
+            var ord = orderIdx[oid]||{};
+            var rv = ord.review_status||'';
+            var cardHtml = orderCards_byId[oid]||'';
+            if (rv==='approved') approvedCards += cardHtml;
+            else pendingCards += cardHtml;
+        });
+        doneHtml = {pending: pendingCards, approved: approvedCards};
     }
 
-    wrap.innerHTML = liveHtml + doneHtml || '<div class="text-center py-12 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
+    // ── assemble into tab panels ──
+    var _doneP = (typeof doneHtml === 'object') ? doneHtml : {pending:'',approved:''};
+    window._ldMonTab1Html = liveHtml + (_doneP.pending || '');
+    window._ldMonTab2Html = _doneP.approved || '';
+
+    // count cards for badge (live cards use border-radius:20px, done cards use border-radius:18px)
+    var approvedCount = (window._ldMonTab2Html.match(/border-radius:18px/g)||[]).length;
+    var activeCount   = (liveHtml.match(/border-radius:20px/g)||[]).length
+                      + ((_doneP.pending||'').match(/border-radius:18px/g)||[]).length;
+
+    // update tab labels with counts
+    var tabActive   = document.getElementById('ld-mon-tab-active');
+    var tabApproved = document.getElementById('ld-mon-tab-approved');
+    if (tabActive)   tabActive.innerHTML   = '<span style="width:8px;height:8px;background:#ef4444;border-radius:50%;display:inline-block;animation:pulse 1s infinite;margin-right:4px;"></span>กำลังโหลด / รออนุมัติ'+(activeCount?' <span style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px;">'+activeCount+'</span>':'');
+    if (tabApproved) tabApproved.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a;margin-right:4px;"></i>อนุมัติแล้ว'+(approvedCount?' <span style="background:#16a34a;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px;">'+approvedCount+'</span>':'');
+
+    // render active tab (preserve selected tab across refreshes)
+    ldMonSwitchTab(window._ldMonActiveTab || 'active', true);
 }
+
+var _ldMonActiveTab = 'active';
+window.ldMonSwitchTab = function(tab, skipStore) {
+    if (!skipStore) window._ldMonActiveTab = tab;
+    _ldMonActiveTab = tab;
+    var wrap = document.getElementById('ld-mon-table-wrap');
+    if (!wrap) return;
+    var t1 = window._ldMonTab1Html, t2 = window._ldMonTab2Html;
+    if (tab === 'approved') {
+        wrap.innerHTML = '<div style="padding:16px;">'+(t2 || '<div class="text-center py-16 text-slate-400 font-bold">ยังไม่มีรายการที่อนุมัติแล้ว</div>')+'</div>';
+    } else {
+        wrap.innerHTML = '<div style="padding:16px;">'+(t1 || '<div class="text-center py-16 text-slate-400 font-bold">ไม่มีงานกำลังโหลดหรือรออนุมัติ</div>')+'</div>';
+    }
+    // style active/inactive tabs
+    var btnA = document.getElementById('ld-mon-tab-active');
+    var btnB = document.getElementById('ld-mon-tab-approved');
+    if (btnA) { btnA.style.borderColor = tab==='active'?'#f43f5e':'#e2e8f0'; btnA.style.background = tab==='active'?'#fff1f2':'#fff'; btnA.style.color = tab==='active'?'#be123c':'#64748b'; btnA.style.boxShadow = tab==='active'?'0 2px 8px #fda4af55':'none'; }
+    if (btnB) { btnB.style.borderColor = tab==='approved'?'#22c55e':'#e2e8f0'; btnB.style.background = tab==='approved'?'#f0fdf4':'#fff'; btnB.style.color = tab==='approved'?'#15803d':'#64748b'; btnB.style.boxShadow = tab==='approved'?'0 2px 8px #86efac55':'none'; }
+};
 
 function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
