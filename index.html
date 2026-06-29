@@ -26223,8 +26223,15 @@ function _ldRenderMonitorTable(rows, orders) {
 
     var orderIdSet2 = new Set((orders||[]).map(function(o){ return o.id; }));
     var inProgressIds = new Set((orders||[]).filter(function(o){ return o.status==='in_progress'; }).map(function(o){ return o.id; }));
+    var _liveOrderIdx = {}; (orders||[]).forEach(function(o){ _liveOrderIdx[o.id]=o; });
     var validRows2 = rows.filter(function(r){ return r.order_id && orderIdSet2.has(r.order_id); });
-    var live = validRows2.filter(function(r){ return r.record_type==='draft' && inProgressIds.has(r.order_id); });
+    var live = validRows2.filter(function(r){
+        if (!inProgressIds.has(r.order_id)) return false;
+        if (r.record_type==='draft') return true;
+        // trailer_split in_progress: include done sessions for already-finished unit so it shows in live card
+        var ord = _liveOrderIdx[r.order_id];
+        return !!(ord && ord.is_trailer && ord.trailer_split);
+    });
     var done = validRows2.filter(function(r){ return r.record_type!=='draft'; });
 
     // ── LIVE SECTION ──
