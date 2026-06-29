@@ -26179,7 +26179,8 @@ function _ldRenderMonitorTable(rows, orders) {
                 customer_name:ord.customer_name, plan_id:r.plan_id,
                 orderItems: ord.items||[], sessions:[],
                 is_trailer: ord.is_trailer, trailer_plate: ord.trailer_plate,
-                trailer_split: ord.trailer_split
+                trailer_split: ord.trailer_split,
+                loop_weigh: !!ord.loop_weigh, orderId: k
             };
             liveByOrder[k].sessions.push(r);
         });
@@ -26227,9 +26228,10 @@ function _ldRenderMonitorTable(rows, orders) {
                         sb[sk]={qty:parseFloat(r.qty||0),weight:parseFloat(r.weight||0),product_name:r.product_name};
                     });
                     var tgtMap={};
-                    targetItems.forEach(function(it){ tgtMap[it.sku||'']=it; });
+                    targetItems.forEach(function(it,idx){ tgtMap[it.sku||'']=Object.assign({},it,{_idx:idx}); });
                     var allSk=Array.from(new Set(targetItems.map(function(it){return it.sku;}).concat(Object.keys(sb))));
-                    var totActWt=0,totActPcs=0,totTgtWt=0,totTgtPcs=0;
+                    var totActWt=0,totActPcs=0,totTgtWt=0,totTgtPcs=0,totScale=0;
+                    var isLW=g.loop_weigh, lwOid=g.orderId||orderId;
                     var rows2=allSk.map(function(sk){
                         var oIt=tgtMap[sk]||{};
                         var sIt=sb[sk]||{};
@@ -26243,6 +26245,20 @@ function _ldRenderMonitorTable(rows, orders) {
                         var overW=actW>0&&maxW&&actW/actQ>maxW;
                         var underW=actW>0&&minW&&actW/actQ<minW;
                         var kgColor=overW?'#dc2626':underW?'#d97706':'#7c3aed';
+                        var swCell='';
+                        if (isLW) {
+                            var itemIdx=oIt._idx!=null?oIt._idx:allSk.indexOf(sk);
+                            var sw=parseFloat(oIt.scale_weight)||0;
+                            totScale+=sw;
+                            swCell='<td style="padding:6px 8px;text-align:center;">'
+                                +'<div style="display:flex;align-items:center;gap:3px;justify-content:center;">'
+                                +'<input id="ld-sw-'+lwOid+'-'+itemIdx+'" type="number" min="0" step="0.1" value="'+(oIt.scale_weight||'')+'" placeholder="—"'
+                                +' style="width:72px;border:1.5px solid #fde68a;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;background:#fffbeb;">'
+                                +'<button onclick="_ldSaveScaleWeight(\''+lwOid+'\','+itemIdx+')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;cursor:pointer;">✔</button>'
+                                +'</div>'
+                                +(sw>0?'<div style="font-size:10px;font-weight:900;color:#92400e;text-align:center;">'+sw.toLocaleString()+' KG</div>':'')
+                            +'</td>';
+                        }
                         return '<tr style="border-bottom:1px solid '+borderColor+'20;">'
                             +'<td style="padding:8px 10px;">'
                                 +'<div style="font-size:12px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</div>'
@@ -26256,8 +26272,11 @@ function _ldRenderMonitorTable(rows, orders) {
                                 +kgPcs+(kgPcs!=='—'?' kg/pcs':'')
                                 +(minW&&maxW?'<div style="font-size:9px;color:#94a3b8;font-weight:500;">'+minW+'–'+maxW+'</div>':'')
                             +'</td>'
+                            +swCell
                         +'</tr>';
                     }).join('');
+                    var lwTh = isLW ? '<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#92400e;text-align:center;background:#fffbeb;">&#x2696;&#xFE0F; Scale (KG)</th>' : '';
+                    var lwFt = isLW ? '<td style="padding:10px;text-align:center;font-size:13px;font-weight:900;color:#92400e;background:#fffbeb;">'+(totScale>0?totScale.toLocaleString(undefined,{maximumFractionDigits:0})+' KG':'—')+'</td>' : '';
                     return {html:
                         '<div style="overflow-x:auto;">'
                         +'<table style="width:100%;border-collapse:collapse;min-width:500px;">'
@@ -26268,6 +26287,7 @@ function _ldRenderMonitorTable(rows, orders) {
                                 +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#0369a1;text-align:center;">โหลดจริง PCS</th>'
                                 +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#059669;text-align:center;">โหลดจริง KG</th>'
                                 +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#7c3aed;text-align:center;">kg/pcs (ช่วง)</th>'
+                                +lwTh
                             +'</tr></thead>'
                             +'<tbody style="background:#fff;">'+rows2+'</tbody>'
                             +'<tfoot><tr style="background:'+headerBg+';border-top:2px solid '+borderColor+';">'
@@ -26277,6 +26297,7 @@ function _ldRenderMonitorTable(rows, orders) {
                                 +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#0369a1;">'+totActPcs.toLocaleString()+' PCS</td>'
                                 +'<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#059669;">'+totActWt.toLocaleString(undefined,{maximumFractionDigits:0})+' KG</td>'
                                 +'<td></td>'
+                                +lwFt
                             +'</tr></tfoot>'
                         +'</table></div>',
                         actWt: totActWt, actPcs: totActPcs
