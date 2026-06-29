@@ -26482,6 +26482,11 @@ function _ldRenderMonitorTable(rows, orders) {
             if (_ldScaleDiff[orderId]==null && order.scale_diff!=null) {
                 _ldScaleDiff[orderId] = order.scale_diff;
             }
+            // per-unit scale diff for trailer split
+            var _usd = order.unit_scale_diff||{};
+            if (!_ldScaleDiffUnit[orderId]) _ldScaleDiffUnit[orderId] = {};
+            if (_ldScaleDiffUnit[orderId].mother==null && _usd.mother!=null) _ldScaleDiffUnit[orderId].mother=_usd.mother;
+            if (_ldScaleDiffUnit[orderId].trailer==null && _usd.trailer!=null) _ldScaleDiffUnit[orderId].trailer=_usd.trailer;
             var orderItems = order.items||[];
 
             // collect staff/team from ALL sessions (draft+done) for complete team list
@@ -26526,7 +26531,13 @@ function _ldRenderMonitorTable(rows, orders) {
             var finalMap = (_ldScaleDiff[orderId]!=null && _ldScaleDiff[orderId]!==0)
                 ? _ldComputeFinalWeights(sessions, _ldScaleDiff[orderId]) : null;
 
-            function _buildDoneTable(filtSess, targetItems) {
+            function _buildDoneTable(filtSess, targetItems, unitDiffKg) {
+                // override finalMap per unit when unitDiffKg provided
+                if (unitDiffKg!=null && unitDiffKg!==0) {
+                    finalMap = _ldComputeFinalWeights(filtSess, unitDiffKg);
+                } else if (unitDiffKg===0) {
+                    finalMap = null;
+                }
                 // Each session row stores the accumulated total for that sku.
                 // Keep only the latest row per sku (by updated_at) to avoid
                 // multiplying when multiple staff save from different devices.
@@ -26657,6 +26668,7 @@ function _ldRenderMonitorTable(rows, orders) {
                 var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0};}).filter(function(it){return it.qty>0;});
                 var ur=order.unit_review||{};
                 var mRv=ur.mother||{};var tRv=ur.trailer||{};
+                var _sdUnit = _ldScaleDiffUnit[orderId]||{};
                 var _unitBar=function(unit,rv,label,plate,bgCls,txtCls,borderCls){
                     var st=rv.status||'';
                     var approveBtn='',resetBtn='';
@@ -26669,16 +26681,26 @@ function _ldRenderMonitorTable(rows, orders) {
                     } else {
                         resetBtn=(_cu&&_cu.isAdmin)&&(mSess.length||tSess.length)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
                     }
-                    return '<div style="background:'+bgCls+';padding:8px 14px;border-top:1px solid '+borderCls+';display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'
-                        +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+' · '+_ldEsc(plate||'—')+'</span>'
-                        +'<div style="display:flex;align-items:center;">'+approveBtn+resetBtn+'</div>'
+                    var sdVal=_sdUnit[unit]!=null?_sdUnit[unit]:'';
+                    var sdRow='<div style="background:#f8fafc;padding:8px 14px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+                        +'<i class="fas fa-balance-scale" style="color:#7c3aed;font-size:13px;"></i>'
+                        +'<span style="font-size:11px;font-weight:900;color:#64748b;">ส่วนต่างตราชั่งใหญ่</span>'
+                        +'<input type="number" id="ld-scale-diff-'+orderId+'-'+unit+'" step="0.1" placeholder="±KG" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;width:160px;outline:none;background:#fff;" value="'+sdVal+'">'
+                        +'<button onclick="ldCalcFinalUnit(\''+orderId+'\',\''+unit+'\')" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:900;cursor:pointer;"><i class="fas fa-calculator"></i> คำนวณ</button>'
+                        +(sdVal!==''&&sdVal!==0?'<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:3px 8px;border-radius:6px;">ใช้ค่า '+(sdVal>0?'+':'')+sdVal+' KG</span>':'')
                     +'</div>';
+                    return '<div style="background:'+bgCls+';padding:8px 14px;border-top:1px solid '+borderCls+';display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'
+                        +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+'</span>'
+                        +'<div style="display:flex;align-items:center;">'+approveBtn+resetBtn+'</div>'
+                    +'</div>'+sdRow;
                 };
+                var mDiff=_sdUnit.mother!=null?_sdUnit.mother:null;
+                var tDiff=_sdUnit.trailer!=null?_sdUnit.trailer:null;
                 doneTableHtml=
                     _unitBar('mother',mRv,'แม่ · Head · '+_ldEsc(order.truck_plate||''),order.truck_plate||'—','#dcfce7','#15803d','#86efac')
-                    +_buildDoneTable(mSess,mItems)
+                    +_buildDoneTable(mSess,mItems,mDiff)
                     +_unitBar('trailer',tRv,'ลูก · Trailer · '+_ldEsc(order.trailer_plate||''),order.trailer_plate||'—','#dbeafe','#1d4ed8','#bfdbfe')
-                    +_buildDoneTable(tSess,tItems);
+                    +_buildDoneTable(tSess,tItems,tDiff);
             } else {
                 var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
                     return {sku:r.sku, product_name:r.product_name, qty:0, target_weight:0};
@@ -26729,8 +26751,9 @@ function _ldRenderMonitorTable(rows, orders) {
                         +_monQcBadge()
                     +'</div>'
                 +'</div>'
-                // scale diff input (office only)
-                +'<div style="background:#f8fafc;padding:10px 18px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+                // scale diff input (office only) — hidden for trailer_split (handled per unit)
+                +(order.is_trailer && order.trailer_split ? '' :
+                '<div style="background:#f8fafc;padding:10px 18px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
                     +'<i class="fas fa-balance-scale" style="color:#7c3aed;font-size:14px;"></i>'
                     +'<span style="font-size:11px;font-weight:900;color:#64748b;">ส่วนต่างตราชั่งใหญ่</span>'
                     +'<input type="number" id="ld-scale-diff-'+orderId+'" step="0.1" placeholder="±KG  (+มากกว่า / −น้อยกว่า)" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;width:200px;outline:none;background:#fff;" value="'+(_ldScaleDiff[orderId]!=null?_ldScaleDiff[orderId]:'')+'">'
@@ -26738,7 +26761,7 @@ function _ldRenderMonitorTable(rows, orders) {
                     +(_ldScaleDiff[orderId]!=null&&_ldScaleDiff[orderId]!==0
                         ? '<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:4px 10px;border-radius:6px;">ใช้ค่า '+(_ldScaleDiff[orderId]>0?'+':'')+_ldScaleDiff[orderId]+' KG</span>'
                         : '')
-                +'</div>'
+                +'</div>')
                 +doneTableHtml
                 // approve/reject footer for pending_review (skip for trailer_split — handled per unit above)
                 +(function(){
@@ -26782,6 +26805,27 @@ function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt
 
 // ── Scale diff / Final weight distribution ───────────────────────────
 var _ldScaleDiff = {}; // {orderId: number (KG, +/-)}
+var _ldScaleDiffUnit = {}; // {orderId: {mother: number, trailer: number}}
+
+window.ldCalcFinalUnit = async function(oid, unit) {
+    var inp = document.getElementById('ld-scale-diff-'+oid+'-'+unit);
+    var val = parseFloat(inp ? inp.value : 0)||0;
+    if (!_ldScaleDiffUnit[oid]) _ldScaleDiffUnit[oid] = {};
+    _ldScaleDiffUnit[oid][unit] = val;
+    var btn = inp ? inp.parentElement.querySelector('button') : null;
+    if (btn) { btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; }
+    try {
+        var {data:cur} = await window._sb.from('loading_orders').select('unit_scale_diff').eq('id',oid).maybeSingle();
+        var usd = (cur&&cur.unit_scale_diff) ? Object.assign({},cur.unit_scale_diff) : {};
+        usd[unit] = val||null;
+        await window._sb.from('loading_orders').update({unit_scale_diff:usd, updated_at:new Date().toISOString()}).eq('id',oid);
+        if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-check" style="color:#4ade80"></i> บันทึกแล้ว'; setTimeout(function(){ if(btn){btn.innerHTML='<i class="fas fa-calculator"></i> คำนวณ';btn.disabled=false;} },1500); }
+    } catch(e) {
+        if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-calculator"></i> คำนวณ'; }
+    }
+    var d = document.getElementById('ld-mon-date')?.value;
+    if (d) _ldMonFetch(d, false);
+};
 
 window.ldCalcFinal = async function(oid) {
     var inp = document.getElementById('ld-scale-diff-'+oid);
