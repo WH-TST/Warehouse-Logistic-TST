@@ -26391,18 +26391,23 @@ function _ldRenderMonitorTable(rows, orders) {
                 if (r.staff_name) staffSet[r.staff_name] = 1;
                 if (r.team) teamSet[r.team] = 1;
             });
-            // totals + times + photos from confirmed (done) sessions only
+            // totals + times + photos — use latest row per sku to avoid multiply-counting
             var minStart = null, maxEnd = null;
             var totalQty = 0, totalWt = 0;
             var allPhotos = [];
+            var _latestPerSku = {};
             sessions.forEach(function(r){
                 if (r.start_time) { if (!minStart||r.start_time<minStart) minStart=r.start_time; }
                 if (r.end_time)   { if (!maxEnd  ||r.end_time>maxEnd)     maxEnd=r.end_time;   }
-                totalQty += parseFloat(r.qty)||0;
-                totalWt  += parseFloat(r.weight)||0;
                 if (r.photo_urls && r.photo_urls.length) {
                     r.photo_urls.forEach(function(u){ if (u && allPhotos.indexOf(u)<0) allPhotos.push(u); });
                 }
+                var sk = r.sku||('__'+r.id);
+                if (!_latestPerSku[sk] || (r.updated_at||'') >= (_latestPerSku[sk].updated_at||'')) _latestPerSku[sk] = r;
+            });
+            Object.keys(_latestPerSku).forEach(function(sk){
+                totalQty += parseFloat(_latestPerSku[sk].qty)||0;
+                totalWt  += parseFloat(_latestPerSku[sk].weight)||0;
             });
             var staffNames = Object.keys(staffSet).join(', ') || '—';
             var teamName   = Object.keys(teamSet).join(', ')  || '—';
@@ -26423,12 +26428,19 @@ function _ldRenderMonitorTable(rows, orders) {
                 ? _ldComputeFinalWeights(sessions, _ldScaleDiff[orderId]) : null;
 
             function _buildDoneTable(filtSess, targetItems) {
-                var sm2 = {};
+                // Each session row stores the accumulated total for that sku.
+                // Keep only the latest row per sku (by updated_at) to avoid
+                // multiplying when multiple staff save from different devices.
+                var latestBySku = {};
                 filtSess.forEach(function(r){
                     if (!r.sku) return;
-                    if (!sm2[r.sku]) sm2[r.sku]={qty:0,weight:0};
-                    sm2[r.sku].qty+=parseFloat(r.qty)||0;
-                    sm2[r.sku].weight+=parseFloat(r.weight)||0;
+                    var prev = latestBySku[r.sku];
+                    if (!prev || (r.updated_at||'') >= (prev.updated_at||'')) latestBySku[r.sku] = r;
+                });
+                var sm2 = {};
+                Object.keys(latestBySku).forEach(function(sku){
+                    var r = latestBySku[sku];
+                    sm2[sku] = {qty: parseFloat(r.qty)||0, weight: parseFloat(r.weight)||0};
                 });
                 var itms = targetItems.length ? targetItems : filtSess.map(function(r){
                     return {sku:r.sku,product_name:r.product_name,qty:0,target_weight:0};
