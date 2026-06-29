@@ -26514,12 +26514,19 @@ function _ldRenderMonitorTable(rows, orders) {
                     if (isLW) {
                         var sw=parseFloat(it.scale_weight)||0;
                         tTotScale+=sw;
+                        var swAvg=sw>0&&aQ>0?(sw/aQ):null;
+                        var swAvgOor=swAvg!=null&&minW!=null&&maxW!=null&&(swAvg<minW||swAvg>maxW);
+                        var swAvgColor=swAvgOor?'#dc2626':'#92400e';
+                        var swAvgCell=swAvg!=null
+                            ?'<span style="color:'+swAvgColor+';font-weight:900;">'+swAvg.toFixed(2)+(swAvgOor?' ⚠':'')+'</span>'
+                            :'<span style="color:#cbd5e1;">—</span>';
                         scaleCell='<td style="padding:7px 8px;text-align:right;background:#fffbeb;">'
                             +'<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;">'
                             +'<input id="ld-sw-'+orderId+'-'+idx+'" type="number" min="0" step="0.1" value="'+(it.scale_weight||'')+'" placeholder="—"'
                             +' style="width:68px;border:1.5px solid #fde68a;border-radius:6px;padding:2px 5px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;">'
                             +'<button onclick="_ldSaveScaleWeight(\''+orderId+'\','+idx+')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:900;cursor:pointer;">✔</button>'
-                            +'</div></td>';
+                            +'</div></td>'
+                            +'<td style="padding:7px 8px;font-size:11px;text-align:right;background:#fffbeb;">'+swAvgCell+'</td>';
                     }
                     var finalCells='';
                     if (hasFinal) {
@@ -26548,7 +26555,8 @@ function _ldRenderMonitorTable(rows, orders) {
                         +finalCells
                     +'</tr>';
                 }).join('');
-                var lwTh = isLW ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">&#x2696;&#xFE0F; Scale (KG)</th>' : '';
+                var lwTh = isLW ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">&#x2696;&#xFE0F; Scale (KG)</th>'
+                    +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">Scale Avg</th>' : '';
                 var finalTh = hasFinal
                     ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">Final Weight (KG)</th>'
                       +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">Final Avg</th>'
@@ -26566,7 +26574,8 @@ function _ldRenderMonitorTable(rows, orders) {
                     +lwTh
                     +finalTh
                     +'</tr></thead>';
-                var lwFtd = isLW ? '<td style="padding:8px 8px;font-size:12px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">'+(tTotScale>0?tTotScale.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>' : '';
+                var lwFtd = isLW ? '<td style="padding:8px 8px;font-size:12px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">'+(tTotScale>0?tTotScale.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>'
+                    +'<td style="padding:8px 8px;font-size:11px;font-weight:700;color:#92400e;text-align:right;background:#fffbeb;">'+(tTotQ>0&&tTotScale>0?(tTotScale/tTotQ).toFixed(2):'—')+'</td>' : '';
                 var finalFtd = hasFinal
                     ? '<td style="padding:8px 8px;font-size:12px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">'+tTotFinal.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
                       +'<td style="padding:8px 8px;font-size:11px;font-weight:700;color:#0d9488;text-align:right;background:#ccfbf1;">'+(tTotQ>0?(tTotFinal/tTotQ).toFixed(2):'—')+'</td>'
