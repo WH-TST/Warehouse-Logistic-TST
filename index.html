@@ -25140,10 +25140,10 @@ window.ldCardSave = async function(oid) {
     // duplicate rows when multiple staff save from different devices on the same order)
     {
         var curUnit = _ldTrailerUnit[oid] || 'mother';
+        var skuIdMap = {}, skuOldPhotos = {}; // declared here so always in scope for photo merge below
         var {data:existSess} = await window._sb.from('loading_sessions')
             .select('id,sku,photo_urls,truck_unit').eq('order_id', oid).neq('record_type','draft');
         if (existSess && existSess.length) {
-            var skuIdMap = {}, skuOldPhotos = {};
             // For trailer split: match by sku+truck_unit so each unit keeps its own session
             existSess.forEach(function(r){
                 var key = r.sku+(r.truck_unit?'|'+r.truck_unit:'');
@@ -26232,7 +26232,9 @@ function _ldRenderMonitorTable(rows, orders) {
         var ord = _liveOrderIdx[r.order_id];
         return !!(ord && ord.is_trailer && ord.trailer_split);
     });
-    var done = validRows2.filter(function(r){ return r.record_type!=='draft'; });
+    // exclude sessions already in live (trailer_split in_progress done sessions) from done section
+    var liveSessionIds = new Set(live.map(function(r){ return r.id; }));
+    var done = validRows2.filter(function(r){ return r.record_type!=='draft' && !liveSessionIds.has(r.id); });
 
     // ── LIVE SECTION ──
     function _thTime(iso){
@@ -26866,7 +26868,7 @@ window.ldCalcFinalUnit = async function(oid, unit) {
     try {
         var {data:cur} = await window._sb.from('loading_orders').select('unit_review').eq('id',oid).maybeSingle();
         var ur = (cur&&cur.unit_review) ? Object.assign({},cur.unit_review) : {};
-        ur[unit+'_scale_diff'] = val||null;
+        ur[unit+'_scale_diff'] = (val !== 0) ? val : null;
         await window._sb.from('loading_orders').update({unit_review:ur, updated_at:new Date().toISOString()}).eq('id',oid);
         if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-check" style="color:#4ade80"></i> บันทึกแล้ว'; setTimeout(function(){ if(btn){btn.innerHTML='<i class="fas fa-calculator"></i> คำนวณ';btn.disabled=false;} },1500); }
     } catch(e) {
@@ -27162,8 +27164,11 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
           var ur = (cur&&cur.unit_review) ? Object.assign({},cur.unit_review) : {};
           delete ur[unit];
           var anyPending = Object.values(ur).some(function(v){return v&&v.status==='pending_review';});
-          var newRv = anyPending ? 'pending_review' : '';
-          await window._sb.from('loading_orders').update({status:'in_progress', review_status:newRv||null, unit_review:ur, updated_at:new Date().toISOString()}).eq('id',orderId);
+          var otherApproved = Object.values(ur).some(function(v){return v&&v.status==='approved';});
+          var newRv = anyPending ? 'pending_review' : otherApproved ? 'pending_review' : null;
+          // if other unit is approved/pending, keep status=done so monitor still shows it; otherwise in_progress for WH
+          var newStatus = (anyPending || otherApproved) ? 'done' : 'in_progress';
+          await window._sb.from('loading_orders').update({status:newStatus, review_status:newRv||null, unit_review:ur, updated_at:new Date().toISOString()}).eq('id',orderId);
           _ldShowToast('รีเซท'+label+'เรียบร้อย');
           var today = new Date().toISOString().slice(0,10);
           _ldLoadOrderCards(today);
