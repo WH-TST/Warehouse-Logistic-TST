@@ -1094,6 +1094,8 @@
         --text-muted:    #5a6f88;   /* medium steel */
     }
     body { font-family: 'Sarabun', 'Inter', sans-serif; background-color: var(--bg-base); color: var(--text-primary); margin: 0; }
+    /* Disable Chrome scroll-anchoring that overrides programmatic scrollTo(0,0) after DOM changes */
+    html, body { overflow-anchor: none; }
 
     /* ── MOBILE SIDEBAR DRAWER ── */
     #mobile-sidebar-overlay {
@@ -12810,18 +12812,19 @@ window.switchView = function switchView(view) {
     if (activeContent) activeContent.classList.remove('hidden');
     if (activeNav) activeNav.classList.add('active');
 
-    // scroll back to top whenever switching views (cover all browsers/scroll containers)
-    try { window.scrollTo(0, 0); } catch(e){}
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    var _mainEl = document.querySelector('main');
-    if (_mainEl) _mainEl.scrollTop = 0;
-    var _appMainEl = document.getElementById('app-main');
-    if (_appMainEl) _appMainEl.scrollTop = 0;
-    // close mobile sidebar if open (prevents sidebar covering content on tablet)
+    // scroll back to top — must run after Chrome layout (requestAnimationFrame) to beat scroll-anchoring
     if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
-    // ensure scroll after repaint (for async-rendered content pushing page down)
-    setTimeout(function(){ window.scrollTo(0, 0); document.documentElement.scrollTop = 0; }, 80);
+    function _scrollTop() {
+        try { window.scrollTo(0, 0); } catch(e){}
+        if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
+    _scrollTop(); // immediate pass
+    requestAnimationFrame(function() {
+        _scrollTop(); // after first paint
+        requestAnimationFrame(_scrollTop); // after second paint (Chrome async layout)
+    });
 
     if (view === 'loading-order' && window.loInit) window.loInit();
     if (view === 'loading' && window.ldInit) window.ldInit();
