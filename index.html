@@ -26469,8 +26469,9 @@ function _ldRenderMonitorTable(rows, orders) {
                 var itms = targetItems.length ? targetItems : filtSess.map(function(r){
                     return {sku:r.sku,product_name:r.product_name,qty:0,target_weight:0};
                 });
-                var tTotQ=0,tTotW=0,tTotFinal=0;
+                var tTotQ=0,tTotW=0,tTotFinal=0,tTotScale=0;
                 var hasFinal = !!finalMap;
+                var isLW = !!order.loop_weigh;
                 var tbody = itms.map(function(it,idx){
                     var r=sm2[it.sku]||{};
                     var aQ=parseFloat(r.qty)||0,aW=parseFloat(r.weight)||0;
@@ -26488,6 +26489,17 @@ function _ldRenderMonitorTable(rows, orders) {
                     var qBadge='';
                     if(tQ>0&&aQ>0&&qDiff!==0){var ov=qDiff>0;qColor=ov?'#d97706':'#dc2626';qBadge=' <span style="font-size:10px;font-weight:900;padding:1px 5px;border-radius:4px;background:'+(ov?'#fef3c7':'#fee2e2')+';color:'+(ov?'#92400e':'#991b1b')+'">'+( ov?'▲ +':'▼ ')+Math.abs(qDiff)+'</span>';}
                     tTotQ+=aQ; tTotW+=aW;
+                    var scaleCell='';
+                    if (isLW) {
+                        var sw=parseFloat(it.scale_weight)||0;
+                        tTotScale+=sw;
+                        scaleCell='<td style="padding:7px 8px;text-align:right;background:#fffbeb;">'
+                            +'<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;">'
+                            +'<input id="ld-sw-'+orderId+'-'+idx+'" type="number" min="0" step="0.1" value="'+(it.scale_weight||'')+'" placeholder="—"'
+                            +' style="width:68px;border:1.5px solid #fde68a;border-radius:6px;padding:2px 5px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;">'
+                            +'<button onclick="_ldSaveScaleWeight(\''+orderId+'\','+idx+')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:900;cursor:pointer;">✔</button>'
+                            +'</div></td>';
+                    }
                     var finalCells='';
                     if (hasFinal) {
                         var fm=finalMap[it.sku]||{finalKg:aW,finalAvg:avg||0};
@@ -26511,36 +26523,41 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+qColor+';text-align:right;">'+(aQ>0?aQ.toLocaleString():'—')+qBadge+'</td>'
                         +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+(aW>0?'#16a34a':'#cbd5e1')+';text-align:right;">'+(aW>0?aW.toLocaleString(undefined,{maximumFractionDigits:1}):'—')+'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;text-align:right;">'+avgCell+'</td>'
+                        +scaleCell
                         +finalCells
                     +'</tr>';
                 }).join('');
+                var lwTh = isLW ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">&#x2696;&#xFE0F; Scale (KG)</th>' : '';
                 var finalTh = hasFinal
-                    ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">นน ไฟนอล (KG)</th>'
-                      +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">เฉลี่ย ไฟนอล</th>'
+                    ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">Final Weight (KG)</th>'
+                      +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">Final Avg</th>'
                     : '';
                 var thead='<thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0;">'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:center;">#</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">รหัส</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">ชื่อสินค้า</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#0369a1;text-align:right;">ออเดอร์</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">SKU</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">Product</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#0369a1;text-align:right;">Order</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MIN</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MAX</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">โหลดจริง (PCS)</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">น้ำหนักจริง (KG)</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#7c3aed;text-align:right;">เฉลี่ย/เส้น</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">Loaded (PCS)</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">Loaded (KG)</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#7c3aed;text-align:right;">Avg/pcs</th>'
+                    +lwTh
                     +finalTh
                     +'</tr></thead>';
+                var lwFtd = isLW ? '<td style="padding:8px 8px;font-size:12px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">'+(tTotScale>0?tTotScale.toLocaleString(undefined,{maximumFractionDigits:0}):'—')+'</td>' : '';
                 var finalFtd = hasFinal
                     ? '<td style="padding:8px 8px;font-size:12px;font-weight:900;color:#0d9488;text-align:right;background:#ccfbf1;">'+tTotFinal.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
                       +'<td style="padding:8px 8px;font-size:11px;font-weight:700;color:#0d9488;text-align:right;background:#ccfbf1;">'+(tTotQ>0?(tTotFinal/tTotQ).toFixed(2):'—')+'</td>'
                     : '';
                 var tfoot='<tfoot><tr style="background:#f0fdf4;border-top:2px solid #86efac;">'
-                    +'<td colspan="3" style="padding:8px 10px;font-size:11px;font-weight:900;color:#15803d;">รวม</td>'
+                    +'<td colspan="3" style="padding:8px 10px;font-size:11px;font-weight:900;color:#15803d;">Total</td>'
                     +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+itms.reduce(function(a,i){return a+(Number(i.qty)||0);},0).toLocaleString()+'</td>'
                     +'<td colspan="2"></td>'
                     +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+tTotQ.toLocaleString()+'</td>'
                     +'<td style="padding:8px 10px;font-size:12px;font-weight:900;color:#15803d;text-align:right;">'+tTotW.toLocaleString(undefined,{maximumFractionDigits:0})+'</td>'
                     +'<td style="padding:8px 10px;font-size:11px;font-weight:700;color:#7c3aed;text-align:right;">'+(tTotQ>0?(tTotW/tTotQ).toFixed(2):'—')+'</td>'
+                    +lwFtd
                     +finalFtd
                     +'</tr></tfoot>';
                 return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:560px;">'+thead+'<tbody>'+tbody+'</tbody>'+tfoot+'</table></div>';
@@ -27086,6 +27103,22 @@ function _loRender(orders) {
         '</div>';
     }).join('');
 }
+
+window._ldSaveScaleWeight = async function(orderId, itemIdx) {
+    var inp = document.getElementById('ld-sw-'+orderId+'-'+itemIdx);
+    if (!inp) return;
+    var wt = parseFloat(inp.value);
+    if (isNaN(wt) || wt < 0) { showToast('กรุณากรอกน้ำหนักที่ถูกต้อง', true); return; }
+    var {data, error} = await window._sb.from('loading_orders').select('items').eq('id', orderId).maybeSingle();
+    if (error || !data) { showToast('โหลดข้อมูลไม่สำเร็จ', true); return; }
+    var items = (data.items || []).map(function(it, i) {
+        return i === itemIdx ? Object.assign({}, it, {scale_weight: wt}) : it;
+    });
+    var {error: e2} = await window._sb.from('loading_orders').update({items: items, updated_at: new Date().toISOString()}).eq('id', orderId);
+    if (e2) { showToast('บันทึกไม่สำเร็จ: '+(e2.message||''), true); return; }
+    showToast('✅ บันทึกน้ำหนักตราชั่งแล้ว');
+    inp.style.borderColor = '#fcd34d';
+};
 
 window.loSaveScaleWeight = async function(orderId, itemIdx) {
     var inp = document.getElementById('lo-sw-'+orderId+'-'+itemIdx);
