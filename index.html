@@ -24802,7 +24802,7 @@ async function _ldUpsertDraft(oid) {
                 sku: oi.sku||'', product_name: oi.product_name||'',
                 qty: totalQty, weight: totalWt,
                 lift_count: lifts.length, lifts: lifts,
-                start_time: _ldCardStartTimes[oid]||null,
+                start_time: _ldCardStartTimes[oid] || (_ldTrailerUnit[oid] ? _ldCardStartTimes[oid+'-'+_ldTrailerUnit[oid]] : null) || null,
                 end_time: null,
                 truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: new Date().toISOString()
@@ -24932,14 +24932,19 @@ async function _ldRestoreDraftIds(oid) {
             if (earliest) _ldCardStartTimes[oid] = earliest;
         }
 
-        // Delete orphan duplicates — keep only the latest row per sku
-        var skuMap = {};
-        drafts.forEach(function(r){ if(!skuMap[r.sku]) skuMap[r.sku]=[]; skuMap[r.sku].push(r.id); });
+        // Delete orphan duplicates — keep only the latest row per sku+truck_unit
+        // (trailer split: แม่ and ลูก may both have draft rows for same sku)
+        var skuUnitMap = {};
+        drafts.forEach(function(r){
+            var k = r.sku+'|'+(r.truck_unit||'mother');
+            if(!skuUnitMap[k]) skuUnitMap[k]=[];
+            skuUnitMap[k].push(r.id);
+        });
         var keepIds = [], deleteIds = [];
-        Object.keys(skuMap).forEach(function(sku){
-            var ids = skuMap[sku];
-            keepIds.push(ids[ids.length-1]);          // keep last
-            for(var i=0;i<ids.length-1;i++) deleteIds.push(ids[i]);  // delete earlier dupes
+        Object.keys(skuUnitMap).forEach(function(k){
+            var ids = skuUnitMap[k];
+            keepIds.push(ids[ids.length-1]);
+            for(var i=0;i<ids.length-1;i++) deleteIds.push(ids[i]);
         });
         if (deleteIds.length) {
             await window._sb.from('loading_sessions').delete().in('id', deleteIds);
