@@ -24611,9 +24611,11 @@ function _ldFmtMs(ms) {
 }
 function _ldStartTimer(oid) {
     if (_ldElapsedTmr[oid]) clearInterval(_ldElapsedTmr[oid]);
+    // for trailer units oid may be 'orderId-mother'/'orderId-trailer' but element uses base orderId
+    var baseOid = oid.replace(/-(?:mother|trailer)$/, '');
     _ldElapsedTmr[oid] = setInterval(function(){
-        if (_ldPaused[oid]) return;
-        var el = document.getElementById('ldf-elapsed-'+oid);
+        if (_ldPaused[oid] || _ldPaused[baseOid]) return;
+        var el = document.getElementById('ldf-elapsed-'+oid) || document.getElementById('ldf-elapsed-'+baseOid);
         if (!el) { clearInterval(_ldElapsedTmr[oid]); delete _ldElapsedTmr[oid]; return; }
         el.textContent = _ldFmtMs(_ldGetWorkMs(oid));
     }, 1000);
@@ -24647,11 +24649,12 @@ window.ldPauseHandlePhoto = function(inp, oid) {
 };
 window.ldPauseConfirm = function(oid) {
     if (!(_ldPausePhotos[oid]||[]).length) { showToast('⚠️ Please take a photo before break', true); return; }
+    var segKey = _ldTrailerUnit[oid] ? oid+'-'+_ldTrailerUnit[oid] : oid;
     var now = new Date().toISOString();
-    _ldInitSegment(oid);
-    var segs = _ldSegments[oid];
+    _ldInitSegment(segKey);
+    var segs = _ldSegments[segKey];
     if (!segs[segs.length-1].e) segs[segs.length-1].e = now;
-    _ldPaused[oid] = true;
+    _ldPaused[oid] = true; _ldPaused[segKey] = true;
     // move pause photos → main photos
     if (!_ldCardPhotos[oid]) _ldCardPhotos[oid] = [];
     _ldPausePhotos[oid].forEach(function(f){ _ldCardPhotos[oid].push(f); });
@@ -24667,10 +24670,11 @@ window.ldPauseConfirm = function(oid) {
     showToast('⏸ หยุดพักแล้ว กดเริ่มใหม่เมื่อสินค้าพร้อม');
 };
 window.ldPauseResume = function(oid) {
+    var segKey = _ldTrailerUnit[oid] ? oid+'-'+_ldTrailerUnit[oid] : oid;
     var now = new Date().toISOString();
-    if (!_ldSegments[oid]) _ldSegments[oid] = [];
-    _ldSegments[oid].push({s: now});
-    _ldPaused[oid] = false;
+    if (!_ldSegments[segKey]) _ldSegments[segKey] = [];
+    _ldSegments[segKey].push({s: now});
+    _ldPaused[oid] = false; _ldPaused[segKey] = false;
     document.getElementById('ldf-resume-panel-'+oid).style.display = 'none';
     document.getElementById('ldf-pause-btn-'+oid).style.display = 'flex';
     var lbl = document.getElementById('ldf-timer-label-'+oid);
