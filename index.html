@@ -12812,18 +12812,19 @@ window.switchView = function switchView(view) {
     if (activeContent) activeContent.classList.remove('hidden');
     if (activeNav) activeNav.classList.add('active');
 
-    // scroll back to top — must run after Chrome layout (requestAnimationFrame) to beat scroll-anchoring
     if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
-    function _scrollTop() {
-        try { window.scrollTo(0, 0); } catch(e){}
-        if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-    }
-    _scrollTop(); // immediate pass
+    // Bring the active view into view, compensating for sticky header — works in Chrome + Safari
     requestAnimationFrame(function() {
-        _scrollTop(); // after first paint
-        requestAnimationFrame(_scrollTop); // after second paint (Chrome async layout)
+        var _ac = document.getElementById('view-' + view + '-content');
+        if (_ac) {
+            _ac.scrollIntoView({ block: 'start', behavior: 'instant' });
+            var _hdr = document.getElementById('main-header');
+            if (_hdr && getComputedStyle(_hdr).display !== 'none') {
+                window.scrollBy(0, -_hdr.offsetHeight);
+            }
+        } else {
+            try { window.scrollTo(0, 0); } catch(e) {}
+        }
     });
 
     if (view === 'loading-order' && window.loInit) window.loInit();
