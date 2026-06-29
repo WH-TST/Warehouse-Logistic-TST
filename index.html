@@ -37852,8 +37852,33 @@ window.viewTripResult = async function(planId) {
     }
 
     if(existData) {
-      // มี session เดิม → ลบ items เก่า แล้ว update session
+      // มี session เดิม → ถ้าไม่ได้ผ่าน scLoadSheet (scSessionId=null) ให้ merge กับ items เก่า
+      // เพื่อป้องกัน items จากการบันทึกก่อนหน้าหาย เมื่อผู้ใช้เพิ่มสินค้าเองโดยไม่กดโหลด
       sessionId = existData.id;
+      if(!_scSessionId) {
+        var { data: oldItems } = await window._sb.from('stock_count_items')
+          .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,ppb')
+          .eq('session_id', sessionId);
+        var curSkuSet = {};
+        _scItems.forEach(function(it){ curSkuSet[it.sku+'|'+(it.wh||'')] = true; });
+        (oldItems||[]).forEach(function(s){
+          var k = s.sku+'|'+(whVal||'');
+          if(!curSkuSet[k]) {
+            // item เก่าที่ไม่ได้อยู่ใน _scItems ปัจจุบัน → เก็บไว้
+            _scItems.push({
+              sku: s.sku, name: s.sku, wh: whVal||'',
+              ppb: Number(s.ppb)||0,
+              systemQty: Number(s.system_pcs)||0,
+              systemQtyWH: Number(s.system_pcs)||0,
+              systemQtyQC: Number(s.system_pcs_qc)||0,
+              bundle1: Number(s.bundle1)||0, bundle2: Number(s.bundle2)||0,
+              pcs1: Number(s.scrap1)||0, pcs2: Number(s.scrap2)||0,
+              holdPcs: Number(s.hold_pcs)||0, note: s.note||''
+            });
+          }
+        });
+      }
+      _scSessionId = sessionId;
       var { error: delErr } = await window._sb.from('stock_count_items').delete().eq('session_id', sessionId);
       if(delErr){ showToast('❌ ลบข้อมูลเก่าล้มเหลว: ' + delErr.message, true); return; }
       var { error: upErr } = await window._sb.from('stock_count_sessions')
