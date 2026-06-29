@@ -25309,8 +25309,12 @@ window._ldPlayNewOrderSound = _ldPlayNewOrderSound;
 window._ldStopAlarm = _ldStopAlarm;
 
 function _ldNotifyNewOrder(order) {
-    _ldPlayNewOrderSound();
-    _ldShowOrderNotif(order);
+    // แสดง in-app popup เฉพาะ WH Staff เท่านั้น (ไม่ใช่ admin/office)
+    var isWhStaff = _cu && (_cu._whStaffId || _cu.role === 'WH Staff');
+    if (isWhStaff) {
+        _ldPlayNewOrderSound();
+        _ldShowOrderNotif(order);
+    }
     // Send push to all subscribed devices (including closed browsers)
     try {
         var _items = order.items||[];
