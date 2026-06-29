@@ -25135,12 +25135,21 @@ window.ldCardSave = async function(oid) {
     // Always map existing done session IDs so we UPDATE instead of INSERT (prevents
     // duplicate rows when multiple staff save from different devices on the same order)
     {
+        var curUnit = _ldTrailerUnit[oid] || 'mother';
         var {data:existSess} = await window._sb.from('loading_sessions')
-            .select('id,sku,photo_urls').eq('order_id', oid).neq('record_type','draft');
+            .select('id,sku,photo_urls,truck_unit').eq('order_id', oid).neq('record_type','draft');
         if (existSess && existSess.length) {
             var skuIdMap = {}, skuOldPhotos = {};
-            existSess.forEach(function(r){ if(!skuIdMap[r.sku]){ skuIdMap[r.sku]=r.id; skuOldPhotos[r.sku]=r.photo_urls||[]; } });
-            orderItems.forEach(function(oi, iIdx){ if(oi.sku && skuIdMap[oi.sku] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[oi.sku]; });
+            // For trailer split: match by sku+truck_unit so each unit keeps its own session
+            existSess.forEach(function(r){
+                var key = r.sku+(r.truck_unit?'|'+r.truck_unit:'');
+                var matchKey = r.sku+'|'+curUnit;
+                if(!skuIdMap[matchKey] && key===matchKey){ skuIdMap[matchKey]=r.id; skuOldPhotos[matchKey]=r.photo_urls||[]; }
+            });
+            orderItems.forEach(function(oi, iIdx){
+                var matchKey = (oi.sku||'')+'|'+curUnit;
+                if(oi.sku && skuIdMap[matchKey] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[matchKey];
+            });
             // For rejected orders: also delete old photos from storage before re-uploading
             if (orderData && (orderData.review_status||'')==='rejected') {
                 var oldUrls = [];
@@ -25173,7 +25182,7 @@ window.ldCardSave = async function(oid) {
                 qty: it.qty, weight: it.weight,
                 lift_count: it.lifts.length, lifts: it.lifts,
                 start_time: startIso, end_time: endIso,
-                note: note, photo_urls: (function(){ var old=skuOldPhotos&&skuOldPhotos[oi.sku||'']||[]; var merged=old.slice(); photoUrls.forEach(function(u){ if(merged.indexOf(u)<0) merged.push(u); }); return merged; })(),
+                note: note, photo_urls: (function(){ var mk=(oi.sku||'')+'|'+curUnit; var old=skuOldPhotos&&(skuOldPhotos[mk]||skuOldPhotos[oi.sku||''])||[]; var merged=old.slice(); photoUrls.forEach(function(u){ if(merged.indexOf(u)<0) merged.push(u); }); return merged; })(),
                 truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: endIso
             };
@@ -25184,17 +25193,18 @@ window.ldCardSave = async function(oid) {
             }
         }
         delete _ldDraftRowIds[oid];
-        // Clean up duplicate rows: after saving, delete any extra rows for same order_id+sku
-        // (can exist when multiple staff saved from different devices before this fix)
+        // Clean up duplicate rows: keep latest per sku+truck_unit combo
+        // (trailer split has 2 sessions per sku — one for แม่, one for ลูก — must NOT merge them)
         try {
             var {data:allRows} = await window._sb.from('loading_sessions')
-                .select('id,sku,updated_at').eq('order_id', oid).neq('record_type','draft');
+                .select('id,sku,truck_unit,updated_at').eq('order_id', oid).neq('record_type','draft');
             if (allRows && allRows.length) {
-                var keepPerSku = {};
+                var keepPerKey = {};
                 allRows.forEach(function(r){
-                    if (!keepPerSku[r.sku] || (r.updated_at||'') > (keepPerSku[r.sku].updated_at||'')) keepPerSku[r.sku] = r;
+                    var k = r.sku+'|'+(r.truck_unit||'mother');
+                    if (!keepPerKey[k] || (r.updated_at||'') > (keepPerKey[k].updated_at||'')) keepPerKey[k] = r;
                 });
-                var keepIds = Object.keys(keepPerSku).map(function(sk){ return keepPerSku[sk].id; });
+                var keepIds = Object.keys(keepPerKey).map(function(k){ return keepPerKey[k].id; });
                 var dupIds = allRows.filter(function(r){ return keepIds.indexOf(r.id) < 0; }).map(function(r){ return r.id; });
                 if (dupIds.length) await window._sb.from('loading_sessions').delete().in('id', dupIds);
             }
