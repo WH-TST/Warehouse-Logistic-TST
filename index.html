@@ -27124,8 +27124,16 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
       ur[unit] = {status:'approved', reviewed_by:(window._cu&&window._cu.name)||'admin', reviewed_at:new Date().toISOString()};
       var bothApproved = (ur.mother&&ur.mother.status==='approved') && (ur.trailer&&ur.trailer.status==='approved');
       var anyPending = (ur.mother&&ur.mother.status==='pending_review') || (ur.trailer&&ur.trailer.status==='pending_review');
-      var newRv = bothApproved ? 'approved' : anyPending ? 'pending_review' : 'approved';
-      var {error} = await window._sb.from('loading_orders').update({unit_review:ur, review_status:newRv, updated_at:new Date().toISOString()}).eq('id',oid);
+      // determine new overall status/review_status
+      var newRv, newStatus;
+      if (bothApproved) {
+          newRv = 'approved'; newStatus = 'done';           // both done & approved → fully closed
+      } else if (anyPending) {
+          newRv = 'pending_review'; newStatus = 'done';     // one approved, other pending → keep in monitor
+      } else {
+          newRv = null; newStatus = 'in_progress';          // one approved, other not loaded yet → keep WH card visible
+      }
+      var {error} = await window._sb.from('loading_orders').update({unit_review:ur, review_status:newRv||null, status:newStatus, updated_at:new Date().toISOString()}).eq('id',oid);
       if (error) { showToast('❌ '+error.message,true); return; }
       showToast('✅ อนุมัติ'+(unit==='mother'?'รถแม่':'รถลูก')+'สำเร็จ');
       var d = document.getElementById('ld-mon-date')?.value;
