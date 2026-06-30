@@ -26405,28 +26405,27 @@ function _ldRenderMonitorTable(rows, orders) {
 
                 // helper: build one item table for a set of sessions + target items
                 function _buildLiveTable(filtSess, targetItems, headerBg, borderColor) {
-                    var sb = {};
-                    var _liveLatest = {};
-                    filtSess.forEach(function(r){
+                    // Group sessions by SKU sorted oldest-first for positional matching
+                    // (supports duplicate SKU order items)
+                    var skuSessQueues = {};
+                    filtSess.slice().sort(function(a,b){ return (a.updated_at||'').localeCompare(b.updated_at||''); }).forEach(function(r){
                         var sk=r.sku||'?';
-                        if(!_liveLatest[sk] || (r.updated_at||'') >= (_liveLatest[sk].updated_at||'')) _liveLatest[sk] = r;
+                        if(!skuSessQueues[sk]) skuSessQueues[sk]=[];
+                        skuSessQueues[sk].push(r);
                     });
-                    Object.keys(_liveLatest).forEach(function(sk){
-                        var r=_liveLatest[sk];
-                        sb[sk]={qty:parseFloat(r.qty||0),weight:parseFloat(r.weight||0),product_name:r.product_name};
-                    });
-                    var tgtMap={};
-                    targetItems.forEach(function(it,idx){ tgtMap[it.sku||'']=Object.assign({},it,{_idx:idx}); });
-                    var allSk=Array.from(new Set(targetItems.map(function(it){return it.sku;}).concat(Object.keys(sb))));
+                    var skuSessPos = {};
                     var totActWt=0,totActPcs=0,totTgtWt=0,totTgtPcs=0,totScale=0;
                     var isLW=g.loop_weigh, lwOid=g.orderId||orderId;
-                    var rows2=allSk.map(function(sk){
-                        var oIt=tgtMap[sk]||{};
-                        var sIt=sb[sk]||{};
+                    var rows2=targetItems.map(function(oIt,idx){
+                        var sk=oIt.sku||'';
+                        if(!skuSessPos[sk]) skuSessPos[sk]=0;
+                        var sessArr=skuSessQueues[sk]||[];
+                        var r=sessArr[skuSessPos[sk]]||null;
+                        skuSessPos[sk]++;
                         var prod=_ldProductMap[sk]||{};
-                        var pName=prod.name||oIt.product_name||sIt.product_name||sk||'—';
+                        var pName=prod.name||oIt.product_name||(r&&r.product_name)||sk||'—';
                         var tgtQ=parseFloat(oIt.qty||0),tgtW=parseFloat(oIt.target_weight||oIt.target_kg||0);
-                        var actQ=sIt.qty||0,actW=sIt.weight||0;
+                        var actQ=r?parseFloat(r.qty||0):0,actW=r?parseFloat(r.weight||0):0;
                         var kgPcs=actQ>0&&actW>0?(actW/actQ).toFixed(2):'—';
                         var minW=prod.min_w,maxW=prod.max_w;
                         totTgtPcs+=tgtQ;totTgtWt+=tgtW;totActPcs+=actQ;totActWt+=actW;
@@ -26435,7 +26434,7 @@ function _ldRenderMonitorTable(rows, orders) {
                         var kgColor=overW?'#dc2626':underW?'#d97706':'#7c3aed';
                         var swCell='';
                         if (isLW) {
-                            var itemIdx=oIt._idx!=null?oIt._idx:allSk.indexOf(sk);
+                            var itemIdx=idx;
                             var sw=parseFloat(oIt.scale_weight)||0;
                             totScale+=sw;
                             swCell='<td style="padding:6px 8px;text-align:center;">'
