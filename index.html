@@ -23898,36 +23898,77 @@ function _ldRenderCards(orders) {
 
 async function _ldRestoreRejectedForm(oid, orderItems) {
     try {
-        // Fetch most recent done sessions for this order
+        // If user has already explicitly edited this form, preserve their data
+        try {
+            var _localRaw = localStorage.getItem('ld_draft_'+oid);
+            if (_localRaw) {
+                var _localDraft = JSON.parse(_localRaw);
+                if (_localDraft && _localDraft.userEdited) return;
+            }
+        } catch(e){}
+
         var {data:done} = await window._sb.from('loading_sessions')
             .select('sku,qty,weight,lifts')
             .eq('order_id', oid)
             .neq('record_type', 'draft')
             .order('created_at', {ascending:false});
         if (!done || !done.length) return;
-        // Build sku → session map (latest per sku)
+
         var skuMap = {};
         done.forEach(function(r){ if (!skuMap[r.sku]) skuMap[r.sku] = r; });
-        // Populate _ldDraftDBCache so _ldDraftLoad picks it up
-        if (!_ldDraftDBCache[oid]) _ldDraftDBCache[oid] = {};
+
+        // Build item index → lifts map
+        var itemLiftsMap = {};
         orderItems.forEach(function(oi, iIdx){
             var r = skuMap[oi.sku];
             if (!r) return;
-            // If lifts array exists, use it directly
             if (r.lifts && r.lifts.length) {
-                _ldDraftDBCache[oid][iIdx] = r.lifts;
+                itemLiftsMap[iIdx] = r.lifts;
             } else if ((parseFloat(r.weight)||0) > 0) {
-                // Fallback: single lift from total weight/qty
-                _ldDraftDBCache[oid][iIdx] = [{lift_no:1, weight:r.weight, qty:r.qty}];
+                itemLiftsMap[iIdx] = [{lift_no:1, weight:r.weight, qty:r.qty}];
             }
         });
-        // Always call _ldDraftLoad — it will fill empty fields from DB cache
-        // without overwriting any values the user already typed (localStorage takes priority per-field)
-        // Then auto-save draft to DB so monitor sees real-time values immediately
+        if (!Object.keys(itemLiftsMap).length) return;
+
+        // Store in DB cache for cross-device support
+        if (!_ldDraftDBCache[oid]) _ldDraftDBCache[oid] = {};
+        Object.keys(itemLiftsMap).forEach(function(k){ _ldDraftDBCache[oid][k] = itemLiftsMap[k]; });
+
+        // Directly set DOM values for empty fields (bypasses the localStorage vs DB cache conflict)
         setTimeout(function(){
-            _ldDraftLoad(oid);
-            setTimeout(function(){ if(typeof window.ldDraftSave==='function') window.ldDraftSave(oid); }, 100);
-        }, 150);
+            Object.keys(itemLiftsMap).forEach(function(iIdxStr){
+                var iIdx = parseInt(iIdxStr, 10);
+                (itemLiftsMap[iIdxStr]||[]).forEach(function(cell){
+                    var c = (cell.lift_no || 1) - 1;
+                    var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
+                    var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                    if (wEl && !wEl.value && cell.weight) wEl.value = cell.weight;
+                    if (qEl && !qEl.value && cell.qty) qEl.value = cell.qty;
+                });
+            });
+            ldCardStats(oid);
+            // Save pre-fill to localStorage WITHOUT userEdited flag so DB cache re-applies on next tab switch
+            var _preDraft = {lifts:[], note:'', userEdited:false};
+            var _iIdx2 = 0;
+            while (document.getElementById('ldf-lw-'+oid+'-'+_iIdx2+'-0')) {
+                var _row = [];
+                var _lcols = _ldOrderCols[oid]||_LFT_COLS;
+                for (var _c=0; _c<_lcols; _c++) {
+                    var _wEl = document.getElementById('ldf-lw-'+oid+'-'+_iIdx2+'-'+_c);
+                    var _qEl = document.getElementById('ldf-lq-'+oid+'-'+_iIdx2+'-'+_c);
+                    _row.push({w:_wEl?_wEl.value:'', q:_qEl?_qEl.value:''});
+                }
+                _preDraft.lifts.push(_row);
+                _iIdx2++;
+            }
+            var _noteEl2 = document.getElementById('ldf-note-'+oid);
+            if (_noteEl2) _preDraft.note = _noteEl2.value;
+            _preDraft.startTime = _ldCardStartTimes[oid]||null;
+            _preDraft.segments = _ldSegments[oid]||null;
+            try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(_preDraft)); } catch(e){}
+            // Trigger DB draft upsert so monitor sees real-time values
+            if (typeof window.ldDraftSave==='function') window.ldDraftSave(oid);
+        }, 200);
     } catch(e){}
 }
 
@@ -24709,7 +24750,7 @@ window.ldDraftSave = function(oid) {
 };
 
 function _ldLocalSave(oid) {
-    var draft = {lifts: [], note: ''};
+    var draft = {lifts: [], note: '', userEdited: true};
     var iIdx = 0;
     while (true) {
         if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
@@ -24821,10 +24862,12 @@ async function _ldUpsertDraft(oid) {
 
 function _ldDraftLoad(oid) {
     var usedLocal = false;
+    var userEdited = false;
     try {
         var raw = localStorage.getItem('ld_draft_'+oid);
         if (raw) {
             var draft = JSON.parse(raw);
+            userEdited = !!draft.userEdited;
             (draft.lifts||[]).forEach(function(itemLifts, iIdx) {
                 itemLifts.forEach(function(cell, c) {
                     var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
@@ -24840,8 +24883,9 @@ function _ldDraftLoad(oid) {
             usedLocal = true;
         }
     } catch(e){}
-    // Cross-device fallback: restore from Supabase lifts when localStorage is empty
-    if (!usedLocal && _ldDraftDBCache[oid]) {
+    // Apply DB cache when: no localStorage, OR localStorage exists but user hasn't edited yet (system pre-fill)
+    // If userEdited=true, respect exactly what user typed (including cleared fields)
+    if (!userEdited && _ldDraftDBCache[oid]) {
         Object.keys(_ldDraftDBCache[oid]).forEach(function(iIdxStr) {
             var iIdx = parseInt(iIdxStr, 10);
             var lifts = _ldDraftDBCache[oid][iIdxStr] || [];
@@ -24849,8 +24893,8 @@ function _ldDraftLoad(oid) {
                 var c = (cell.lift_no || 1) - 1;
                 var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
                 var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
-                if (wEl && cell.weight) wEl.value = cell.weight;
-                if (qEl && cell.qty) qEl.value = cell.qty;
+                if (wEl && !wEl.value && cell.weight) wEl.value = cell.weight;
+                if (qEl && !qEl.value && cell.qty) qEl.value = cell.qty;
             });
         });
     }
