@@ -27964,6 +27964,13 @@ window.loSetStatus = async function(id, status) {
     try {
         var {error} = await window._sb.from('loading_orders').update({status:status, updated_at:new Date().toISOString()}).eq('id', id);
         if (error) throw error;
+        // เมื่อกด "โหลดเสร็จ" จาก overview ให้ convert draft sessions → final อัตโนมัติ
+        if (status === 'done') {
+            var now = new Date().toISOString();
+            await window._sb.from('loading_sessions')
+                .update({record_type:'บันทึกการโหลด', updated_at:now})
+                .eq('order_id', id).eq('record_type','draft');
+        }
         var label = {pending:'รอโหลด', in_progress:'กำลังโหลด', done:'โหลดเสร็จแล้ว'}[status] || status;
         showToast('✅ อัปเดตสถานะ: '+label);
         var dateVal = document.getElementById('lo-date')?.value;
