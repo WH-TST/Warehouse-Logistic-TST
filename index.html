@@ -24154,10 +24154,17 @@ window.ldSpConfirm = async function(oid, itemCount) {
         split[String(i)]={sku:sku, mother_pcs:m, mother_kg:Math.round(m*kpp), trailer_pcs:t, trailer_kg:Math.round(t*kpp)};
         i++;
     }
+    // Validate: at least one item must have pcs > 0 for at least one unit
+    var totalM=0, totalT=0;
+    Object.values(split).forEach(function(s){ totalM+=s.mother_pcs||0; totalT+=s.trailer_pcs||0; });
+    if (totalM===0 && totalT===0) {
+        showToast('⚠️ กรุณากรอกจำนวนเส้นสำหรับแม่หรือลูกก่อนยืนยัน', true);
+        return;
+    }
     try {
         var {error}=await window._sb.from('loading_orders').update({trailer_split:split, updated_at:new Date().toISOString()}).eq('id',oid);
         if(error) throw error;
-        showToast('✅ Items arranged — select a truck');
+        showToast('✅ จัดสินค้าเสร็จแล้ว — เลือกรถที่จะโหลด');
         var today=new Date().toISOString().slice(0,10);
         _ldLoadOrderCards(today);
     } catch(e){ showToast('Error: '+(e?.message||String(e)),true); }
@@ -24176,6 +24183,17 @@ function _ldBuildFormMobile(order) {
             var wt=unit==='mother'?(sp.mother_kg||0):(sp.trailer_kg||0);
             return Object.assign({},it,{qty:pcs,target_weight:wt});
         }).filter(function(it){return it.qty>0;});
+
+        if (items.length === 0) {
+            var el = document.getElementById('ld-form-wrap-'+oid);
+            if (el) el.innerHTML = '<div style="padding:32px 20px;text-align:center;">'
+                + '<div style="font-size:32px;margin-bottom:12px;">⚠️</div>'
+                + '<div style="font-size:15px;font-weight:700;color:#f59e0b;margin-bottom:8px;">ยังไม่ได้กำหนดจำนวนสินค้า</div>'
+                + '<div style="font-size:13px;color:#94a3b8;margin-bottom:20px;">กรุณากดปุ่มด้านล่างเพื่อกลับไปจัดแบ่งสินค้าแม่/ลูกใหม่</div>'
+                + '<button onclick="ldSpOpen(\''+oid+'\')" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:800;cursor:pointer;">จัดแบ่งสินค้าใหม่</button>'
+                + '</div>';
+            return;
+        }
     }
     function _lc(it){
         var p=_ldProductMap[it.sku]||{},lpb=p.lpb||0,lpr=p.lpr||0,qty=parseFloat(it.qty)||0;
@@ -24416,6 +24434,18 @@ function _ldBuildForm(order) {
             var wt  = unit==='mother' ? (sp.mother_kg||0)  : (sp.trailer_kg||0);
             return Object.assign({}, it, {qty: pcs, target_weight: wt});
         }).filter(function(it){ return it.qty > 0; });
+
+        // If split was saved with all zeros (field worker didn't fill values), show re-configure prompt
+        if (items.length === 0) {
+            var el = document.getElementById('ld-form-wrap-'+oid);
+            if (el) el.innerHTML = '<div style="padding:32px 20px;text-align:center;color:#94a3b8;">'
+                + '<div style="font-size:32px;margin-bottom:12px;">⚠️</div>'
+                + '<div style="font-size:15px;font-weight:700;color:#f59e0b;margin-bottom:8px;">ยังไม่ได้กำหนดจำนวนสินค้า</div>'
+                + '<div style="font-size:13px;color:#94a3b8;margin-bottom:20px;">กรุณากดปุ่มด้านล่างเพื่อกลับไปจัดแบ่งสินค้าแม่/ลูกใหม่</div>'
+                + '<button onclick="ldSpOpen(\''+oid+'\')" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:14px;font-weight:800;cursor:pointer;">จัดแบ่งสินค้าใหม่</button>'
+                + '</div>';
+            return;
+        }
     }
 
     var numCols = _ldCalcCols({items: items});
