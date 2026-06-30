@@ -24325,7 +24325,7 @@ function _ldBuildFormMobile(order) {
             +'<div id="ldf-photo-prev-'+oid+'" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>'
         +'</div>'
         +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="Note (optional)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;outline:none;resize:none;box-sizing:border-box;background:#fff;"></textarea>'
-        +'<button onclick="ldCardSave(\''+oid+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);">'
+        +'<button id="ldf-save-btn-'+oid+'" onclick="ldCardSave(\''+oid+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);">'
             +'<i class="fas fa-save"></i> SAVE LOADING RECORD'
         +'</button>'
     +'</div>';
@@ -24571,7 +24571,7 @@ function _ldBuildForm(order) {
         // note
         +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="Note (optional)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;outline:none;resize:none;box-sizing:border-box;background:#fff;"></textarea>'
         // save
-        +'<button onclick="ldCardSave(\''+oid+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);letter-spacing:0.5px;">'
+        +'<button id="ldf-save-btn-'+oid+'" onclick="ldCardSave(\''+oid+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);letter-spacing:0.5px;">'
             +'<i class="fas fa-save"></i> SAVE LOADING RECORD'
         +'</button>'
     +'</div>';
@@ -24749,23 +24749,31 @@ async function _ldUpsertDraft(oid) {
         // Sync: fetch existing draft rows from DB to avoid any duplicate inserts
         // This is the safety net — covers cases where memory was cleared
         var {data:existingDrafts} = await window._sb.from('loading_sessions')
-            .select('id,sku').eq('order_id',oid).eq('record_type','draft');
+            .select('id,sku,created_at').eq('order_id',oid).eq('record_type','draft');
         if (existingDrafts && existingDrafts.length) {
-            // Deduplicate: if multiple rows exist per sku, delete extras and keep one
-            var skuSeen = {};
-            var toDelete = [];
-            existingDrafts.forEach(function(r){
-                if (skuSeen[r.sku]) { toDelete.push(r.id); }
-                else { skuSeen[r.sku] = r.id; }
+            // Count how many of each SKU the order needs (supports duplicate SKU rows)
+            var skuNeeded = {};
+            orderItems.forEach(function(oi){ if(oi.sku) skuNeeded[oi.sku]=(skuNeeded[oi.sku]||0)+1; });
+            // Group drafts by sku, sorted by created_at for stable positional match
+            var skuQueues = {};
+            existingDrafts.slice().sort(function(a,b){return (a.created_at||a.id||'').localeCompare(b.created_at||b.id||'');}).forEach(function(r){
+                if(r.sku){ if(!skuQueues[r.sku]) skuQueues[r.sku]=[]; skuQueues[r.sku].push(r.id); }
             });
-            if (toDelete.length) {
-                await window._sb.from('loading_sessions').delete().in('id', toDelete);
-            }
-            // Restore IDs into memory map
+            // Delete extras beyond what the order needs per SKU
+            var toDelete = [];
+            Object.keys(skuQueues).forEach(function(sku){
+                var need = skuNeeded[sku]||0;
+                if(skuQueues[sku].length > need) toDelete=toDelete.concat(skuQueues[sku].splice(need));
+            });
+            if(toDelete.length) await window._sb.from('loading_sessions').delete().in('id',toDelete);
+            // Map positionally: first draft of SKU → first order item of that SKU, etc.
+            var skuPos = {};
             orderItems.forEach(function(oi, iIdx){
-                if (oi.sku && skuSeen[oi.sku] && !_ldDraftRowIds[oid][iIdx]) {
-                    _ldDraftRowIds[oid][iIdx] = skuSeen[oi.sku];
-                }
+                if(!oi.sku) return;
+                if(!skuPos[oi.sku]) skuPos[oi.sku]=0;
+                var q = skuQueues[oi.sku]||[];
+                if(q[skuPos[oi.sku]]!==undefined && !_ldDraftRowIds[oid][iIdx]) _ldDraftRowIds[oid][iIdx]=q[skuPos[oi.sku]];
+                skuPos[oi.sku]++;
             });
         }
 
@@ -24937,17 +24945,22 @@ async function _ldRestoreDraftIds(oid) {
             await window._sb.from('loading_sessions').delete().in('id', deleteIds);
         }
 
-        // Map sku → id+lifts, then match to orderItems index
-        var skuToRow = {};
-        keepIds.forEach(function(kId){ var d=drafts.find(function(r){return r.id===kId;}); if(d) skuToRow[d.sku]=d; });
+        // Map positionally: group drafts per sku, match to order items in order
+        var skuDrafts = {};
+        keepIds.forEach(function(kId){ var d=drafts.find(function(r){return r.id===kId;}); if(d){ if(!skuDrafts[d.sku]) skuDrafts[d.sku]=[]; skuDrafts[d.sku].push(d); } });
         if (!_ldDraftRowIds[oid]) _ldDraftRowIds[oid] = {};
         if (!_ldDraftDBCache[oid]) _ldDraftDBCache[oid] = {};
+        var skuPos = {};
         orderItems.forEach(function(oi, iIdx){
-            if (oi.sku && skuToRow[oi.sku]) {
-                _ldDraftRowIds[oid][iIdx] = skuToRow[oi.sku].id;
-                if (skuToRow[oi.sku].lifts && skuToRow[oi.sku].lifts.length)
-                    _ldDraftDBCache[oid][iIdx] = skuToRow[oi.sku].lifts;
+            if(!oi.sku) return;
+            if(!skuPos[oi.sku]) skuPos[oi.sku]=0;
+            var arr = skuDrafts[oi.sku]||[];
+            if(arr[skuPos[oi.sku]]) {
+                _ldDraftRowIds[oid][iIdx] = arr[skuPos[oi.sku]].id;
+                if(arr[skuPos[oi.sku]].lifts && arr[skuPos[oi.sku]].lifts.length)
+                    _ldDraftDBCache[oid][iIdx] = arr[skuPos[oi.sku]].lifts;
             }
+            skuPos[oi.sku]++;
         });
     } catch(e){}
 }
@@ -25037,6 +25050,14 @@ window.ldCardRemovePhoto = function(oid, i) {
 };
 
 window.ldCardSave = async function(oid) {
+    var _saveBtn = document.getElementById('ldf-save-btn-'+oid);
+    if (_saveBtn && _saveBtn.disabled) return; // ป้องกันกดซ้ำ
+    if (_saveBtn) {
+        _saveBtn.disabled = true;
+        _saveBtn.style.background = '#64748b';
+        _saveBtn.style.cursor = 'not-allowed';
+        _saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+    }
     var today = new Date().toISOString().slice(0,10);
     // collect items from per-lift inputs
     var items = [];
@@ -25226,9 +25247,21 @@ window.ldCardSave = async function(oid) {
         _ldActiveOrderId = null;
         delete _ldCardPhotos[oid];
         delete _ldQcState[oid];
+        if (_saveBtn) {
+            _saveBtn.innerHTML = '<i class="fas fa-check-circle"></i> บันทึกเรียบร้อยแล้ว';
+            _saveBtn.style.background = '#065f46';
+        }
         _ldLoadOrderCards(today);
         _ldRefreshGlobalStats(today);
-    } catch(e) { showToast('Error: '+(e?.message||String(e)), true); }
+    } catch(e) {
+        showToast('Error: '+(e?.message||String(e)), true);
+        if (_saveBtn) {
+            _saveBtn.disabled = false;
+            _saveBtn.style.background = '#16a34a';
+            _saveBtn.style.cursor = 'pointer';
+            _saveBtn.innerHTML = '<i class="fas fa-save"></i> SAVE LOADING RECORD';
+        }
+    }
 };
 
 async function _ldRefreshGlobalStats(dateVal) {
