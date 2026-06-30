@@ -27084,10 +27084,21 @@ window.ldShowPhotos = function(key) {
     if (!modal) return;
     var idx = 0;
     function render() {
-        document.getElementById('ld-photo-img').src = urls[idx];
+        var img = document.getElementById('ld-photo-img');
+        var errDiv = document.getElementById('ld-photo-err');
+        img.style.display = 'block';
+        if (errDiv) errDiv.style.display = 'none';
+        img.src = '';
+        img.src = urls[idx];
+        img.onerror = function() {
+            img.style.display = 'none';
+            if (errDiv) { errDiv.style.display = 'flex'; errDiv.querySelector('a').href = urls[idx]; }
+        };
         document.getElementById('ld-photo-counter').textContent = (idx+1) + ' / ' + urls.length;
         document.getElementById('ld-photo-prev-btn').style.opacity = idx===0 ? '0.3' : '1';
         document.getElementById('ld-photo-next-btn').style.opacity = idx===urls.length-1 ? '0.3' : '1';
+        var link = document.getElementById('ld-photo-link');
+        if (link) link.href = urls[idx];
     }
     window._ldPhotoGo = function(dir) {
         idx = Math.max(0, Math.min(urls.length-1, idx+dir));
@@ -39032,10 +39043,15 @@ window.viewTripResult = async function(planId) {
     <div style="position:relative;display:flex;align-items:center;gap:10px;">
       <button id="ld-photo-prev-btn" onclick="window._ldPhotoGo(-1)" style="background:#1e293b;border:none;color:#fff;width:44px;height:44px;border-radius:50%;font-size:20px;cursor:pointer;flex-shrink:0;">‹</button>
       <img id="ld-photo-img" src="" style="max-width:80vw;max-height:80vh;border-radius:12px;object-fit:contain;box-shadow:0 4px 40px #0008;" />
+      <div id="ld-photo-err" style="display:none;flex-direction:column;align-items:center;gap:10px;color:#f87171;font-size:13px;font-weight:700;max-width:60vw;text-align:center;">
+        <i class="fas fa-image-slash" style="font-size:40px;opacity:0.5;"></i>
+        <span>โหลดรูปไม่ได้</span>
+        <a href="#" target="_blank" style="color:#60a5fa;font-size:11px;word-break:break-all;text-decoration:underline;">เปิด URL โดยตรง</a>
+      </div>
       <button id="ld-photo-next-btn" onclick="window._ldPhotoGo(1)" style="background:#1e293b;border:none;color:#fff;width:44px;height:44px;border-radius:50%;font-size:20px;cursor:pointer;flex-shrink:0;">›</button>
     </div>
     <!-- open full -->
-    <a id="ld-photo-link" onclick="document.getElementById('ld-photo-link').href=document.getElementById('ld-photo-img').src" href="#" target="_blank" style="color:#60a5fa;font-size:12px;font-weight:700;text-decoration:underline;"><i class="fas fa-external-link-alt"></i> เปิดรูปเต็ม</a>
+    <a id="ld-photo-link" href="#" target="_blank" style="color:#60a5fa;font-size:12px;font-weight:700;text-decoration:underline;"><i class="fas fa-external-link-alt"></i> เปิดรูปเต็ม</a>
   </div>
 </div>
 
