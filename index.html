@@ -23923,7 +23923,11 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         });
         // Always call _ldDraftLoad — it will fill empty fields from DB cache
         // without overwriting any values the user already typed (localStorage takes priority per-field)
-        setTimeout(function(){ _ldDraftLoad(oid); }, 150);
+        // Then auto-save draft to DB so monitor sees real-time values immediately
+        setTimeout(function(){
+            _ldDraftLoad(oid);
+            setTimeout(function(){ if(typeof window.ldDraftSave==='function') window.ldDraftSave(oid); }, 100);
+        }, 150);
     } catch(e){}
 }
 
