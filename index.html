@@ -26284,7 +26284,9 @@ function _ldRenderMonitorTable(rows, orders) {
     });
     // exclude sessions already in live (trailer_split in_progress done sessions) from done section
     var liveSessionIds = new Set(live.map(function(r){ return r.id; }));
-    var done = validRows2.filter(function(r){ return r.record_type!=='draft' && !liveSessionIds.has(r.id); });
+    // rejected orders: include their draft sessions in done section (field worker re-editing)
+    var _rejectedIds = new Set((orders||[]).filter(function(o){ return (o.review_status||'')==='rejected'; }).map(function(o){ return o.id; }));
+    var done = validRows2.filter(function(r){ return (!liveSessionIds.has(r.id)) && (r.record_type!=='draft' || _rejectedIds.has(r.order_id)); });
 
     // ── LIVE SECTION ──
     function _thTime(iso){
@@ -26810,7 +26812,26 @@ function _ldRenderMonitorTable(rows, orders) {
                 var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
                     return {sku:r.sku, product_name:r.product_name, qty:0, target_weight:0};
                 });
-                doneTableHtml = _buildDoneTable(sessions, itemsToRender);
+                // rejected orders: overlay draft values on top of done sessions (real-time edits from field)
+                var _rvOrd = order.review_status||'';
+                var _sessForTable = sessions;
+                var _hasDrafts = false;
+                if (_rvOrd === 'rejected') {
+                    var _rejDrafts = sessions.filter(function(r){ return r.record_type==='draft'; });
+                    var _doneSess  = sessions.filter(function(r){ return r.record_type!=='draft'; });
+                    if (_rejDrafts.length) {
+                        _hasDrafts = true;
+                        var _draftBySku = {};
+                        _rejDrafts.forEach(function(r){ if(r.sku) _draftBySku[r.sku]=r; });
+                        // use draft values where available, fall back to done for unchanged SKUs
+                        var _merged = _doneSess.map(function(r){ return _draftBySku[r.sku]||r; });
+                        _rejDrafts.forEach(function(r){ if(r.sku && !_doneSess.find(function(s){return s.sku===r.sku;})) _merged.push(r); });
+                        _sessForTable = _merged;
+                    } else {
+                        _sessForTable = _doneSess;
+                    }
+                }
+                doneTableHtml = _buildDoneTable(_sessForTable, itemsToRender);
             }
 
             var donePlateHtml = order.is_trailer
@@ -26818,7 +26839,9 @@ function _ldRenderMonitorTable(rows, orders) {
                   +'<div style="font-size:13px;font-weight:700;color:#93c5fd;font-family:monospace;">'+_ldEsc(order.trailer_plate||'—')+'<span style="font-size:10px;color:#93c5fd;margin-left:4px;">ลูก · Trailer</span></div>'
                 : '<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;">'+_ldEsc(order.truck_plate||orderId.slice(0,8))+'</div>';
 
-            var _cardHtml = '<div style="background:#fff;border-radius:18px;border:2px solid #86efac;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px #0001;">'
+            var _rvOrd2 = order.review_status||'';
+            var _cardBorderColor = (_rvOrd2==='rejected' && _hasDrafts) ? '#fb923c' : _rvOrd2==='rejected' ? '#fca5a5' : '#86efac';
+            var _cardHtml = '<div style="background:#fff;border-radius:18px;border:2px solid '+_cardBorderColor+';overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px #0001;">'
                 +'<div style="background:#0f172a;padding:14px 18px;">'
                     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">'
                         +'<div style="display:flex;align-items:center;gap:12px;">'
@@ -26832,7 +26855,11 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'</div>'
                         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
                             +(order.is_trailer?'<span style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#1d4ed8;color:#bfdbfe;">รถพ่วง</span>':'')
-                            +'<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>'
+                            +((order.review_status||'')==='rejected' && _hasDrafts
+                                ? '<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#fff7ed;color:#c2410c;border:1.5px solid #fb923c;display:inline-flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;background:#f97316;border-radius:50%;display:inline-block;animation:pulse 1s infinite;"></span>↩ กำลังโหลดใหม่</span>'
+                                : (order.review_status||'')==='rejected'
+                                ? '<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;">↩ ตีกลับ — รอหน้างาน</span>'
+                                : '<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>')
                             +(allPhotos.length
                                 ? (function(){ var k='ph_'+orderId; _ldPhotoRegistry[k]=allPhotos; return '<button onclick="ldShowPhotos(\''+k+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#7c3aed;color:#fff;border:none;cursor:pointer;"><i class="fas fa-images"></i> รูปภาพ ('+allPhotos.length+')</button>'; })()
                                 : '<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;background:#1e293b;color:#475569;border:1px solid #334155;"><i class="fas fa-image" style="margin-right:4px;"></i>ไม่มีรูป</span>')
@@ -26891,9 +26918,16 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'</div>';
                     }
                     if (_rv==='rejected') {
+                        if (_hasDrafts) {
+                            return '<div style="border-top:2px solid #fb923c;padding:10px 16px;background:#fff7ed;display:flex;align-items:center;gap:8px;">'
+                                +'<span style="width:8px;height:8px;background:#f97316;border-radius:50%;display:inline-block;animation:pulse 1s infinite;flex-shrink:0;"></span>'
+                                +'<span style="font-size:12px;font-weight:900;color:#c2410c;">↩ หน้างานกำลังแก้ไขและโหลดใหม่</span>'
+                                +'<span style="font-size:11px;color:#9a3412;">— ข้อมูลข้างบนแสดงค่าล่าสุดที่แก้ไข</span>'
+                            +'</div>';
+                        }
                         return '<div style="border-top:2px solid #fca5a5;padding:10px 16px;background:#fff5f5;display:flex;align-items:center;gap:8px;">'
                             +'<i class="fas fa-times-circle" style="color:#dc2626;"></i>'
-                            +'<span style="font-size:12px;font-weight:900;color:#dc2626;">ตีกลับแล้ว</span>'
+                            +'<span style="font-size:12px;font-weight:900;color:#dc2626;">↩ ตีกลับแล้ว — รอหน้างานแก้ไข</span>'
                             +(order.rejection_note?'<span style="font-size:11px;color:#64748b;">— '+_ldEsc(order.rejection_note)+'</span>':'')
                         +'</div>';
                     }
