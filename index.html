@@ -26723,13 +26723,15 @@ function _ldRenderMonitorTable(rows, orders) {
                             +(uTQ>0?_ldStatChip('fas fa-cubes','#60a5fa','PCS',uTQ.toLocaleString()):'')
                         +'</div>';
                     }
-                    var sdVal=_sdUnit[unit]!=null?_sdUnit[unit]:'';
+                    var sdDiff=_sdUnit[unit]!=null?_sdUnit[unit]:null;
+                    var sdInputVal=sdDiff!=null?(uTW+sdDiff).toFixed(1):'';
+                    var sdBadge=sdDiff!=null&&sdDiff!==0?'<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:3px 8px;border-radius:6px;">ส่วนต่าง '+(sdDiff>0?'+':'')+sdDiff.toFixed(1)+' KG</span>':'';
                     var sdRow='<div style="background:#f8fafc;padding:8px 14px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
                         +'<i class="fas fa-balance-scale" style="color:#7c3aed;font-size:13px;"></i>'
-                        +'<span style="font-size:11px;font-weight:900;color:#64748b;">ส่วนต่างตราชั่งใหญ่</span>'
-                        +'<input type="number" id="ld-scale-diff-'+orderId+'-'+unit+'" step="0.1" placeholder="±KG" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;width:160px;outline:none;background:#fff;" value="'+sdVal+'">'
+                        +'<span style="font-size:11px;font-weight:900;color:#64748b;">น้ำหนักตราชั่งใหญ่</span>'
+                        +'<input type="number" id="ld-scale-diff-'+orderId+'-'+unit+'" step="0.1" placeholder="กรอก KG จากตราชั่ง" data-loaded="'+uTW+'" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;width:160px;outline:none;background:#fff;" value="'+sdInputVal+'">'
                         +'<button onclick="ldCalcFinalUnit(\''+orderId+'\',\''+unit+'\')" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:900;cursor:pointer;"><i class="fas fa-calculator"></i> คำนวณ</button>'
-                        +(sdVal!==''&&sdVal!==0?'<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:3px 8px;border-radius:6px;">ใช้ค่า '+(sdVal>0?'+':'')+sdVal+' KG</span>':'')
+                        +sdBadge
                     +'</div>';
                     return '<div style="background:'+bgCls+';padding:8px 14px;border-top:1px solid '+borderCls+';">'
                         +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'
@@ -26800,15 +26802,20 @@ function _ldRenderMonitorTable(rows, orders) {
                 +'</div>'
                 // scale diff input (office only) — hidden for trailer_split (handled per unit)
                 +(order.is_trailer && order.trailer_split ? '' :
-                '<div style="background:#f8fafc;padding:10px 18px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
-                    +'<i class="fas fa-balance-scale" style="color:#7c3aed;font-size:14px;"></i>'
-                    +'<span style="font-size:11px;font-weight:900;color:#64748b;">ส่วนต่างตราชั่งใหญ่</span>'
-                    +'<input type="number" id="ld-scale-diff-'+orderId+'" step="0.1" placeholder="±KG  (+มากกว่า / −น้อยกว่า)" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;width:200px;outline:none;background:#fff;" value="'+(_ldScaleDiff[orderId]!=null?_ldScaleDiff[orderId]:'')+'">'
-                    +'<button onclick="ldCalcFinal(\''+orderId+'\')" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;"><i class="fas fa-calculator"></i> คำนวณ</button>'
-                    +(_ldScaleDiff[orderId]!=null&&_ldScaleDiff[orderId]!==0
-                        ? '<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:4px 10px;border-radius:6px;">ใช้ค่า '+(_ldScaleDiff[orderId]>0?'+':'')+_ldScaleDiff[orderId]+' KG</span>'
-                        : '')
-                +'</div>')
+                (function(){
+                    var _diff = _ldScaleDiff[orderId];
+                    var _inputVal = (_diff!=null) ? (totalWt + _diff).toFixed(1) : '';
+                    var _badge = (_diff!=null&&_diff!==0)
+                        ? '<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:4px 10px;border-radius:6px;">ส่วนต่าง '+(_diff>0?'+':'')+_diff.toFixed(1)+' KG</span>'
+                        : '';
+                    return '<div style="background:#f8fafc;padding:10px 18px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+                        +'<i class="fas fa-balance-scale" style="color:#7c3aed;font-size:14px;"></i>'
+                        +'<span style="font-size:11px;font-weight:900;color:#64748b;">น้ำหนักตราชั่งใหญ่</span>'
+                        +'<input type="number" id="ld-scale-diff-'+orderId+'" step="0.1" placeholder="กรอก KG จากตราชั่ง" data-loaded="'+totalWt+'" style="border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;width:200px;outline:none;background:#fff;" value="'+_inputVal+'">'
+                        +'<button onclick="ldCalcFinal(\''+orderId+'\')" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;"><i class="fas fa-calculator"></i> คำนวณ</button>'
+                        +_badge
+                    +'</div>';
+                })())
                 +doneTableHtml
                 // approve/reject footer for pending_review (skip for trailer_split — handled per unit above)
                 +(function(){
@@ -26897,7 +26904,9 @@ var _ldScaleDiffUnit = {}; // {orderId: {mother: number, trailer: number}}
 
 window.ldCalcFinalUnit = async function(oid, unit) {
     var inp = document.getElementById('ld-scale-diff-'+oid+'-'+unit);
-    var val = parseFloat(inp ? inp.value : 0)||0;
+    var scaleWt = parseFloat(inp ? inp.value : 0)||0;
+    var loaded  = parseFloat(inp ? (inp.dataset.loaded||0) : 0)||0;
+    var val = Math.round((scaleWt - loaded) * 10) / 10; // diff = ตราชั่งใหญ่ − น้ำหนักที่โหลด
     if (!_ldScaleDiffUnit[oid]) _ldScaleDiffUnit[oid] = {};
     _ldScaleDiffUnit[oid][unit] = val;
     var btn = inp ? inp.parentElement.querySelector('button') : null;
@@ -26917,7 +26926,9 @@ window.ldCalcFinalUnit = async function(oid, unit) {
 
 window.ldCalcFinal = async function(oid) {
     var inp = document.getElementById('ld-scale-diff-'+oid);
-    var val = parseFloat(inp ? inp.value : 0)||0;
+    var scaleWt = parseFloat(inp ? inp.value : 0)||0;
+    var loaded  = parseFloat(inp ? (inp.dataset.loaded||0) : 0)||0;
+    var val = Math.round((scaleWt - loaded) * 10) / 10; // diff = ตราชั่งใหญ่ − น้ำหนักที่โหลด
     _ldScaleDiff[oid] = val;
     // บันทึกลง DB
     var btn = inp ? inp.parentElement.querySelector('button') : null;
