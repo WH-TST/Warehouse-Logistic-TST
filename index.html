@@ -25134,17 +25134,16 @@ window.ldCardSave = async function(oid) {
     var timeNote = segCount>1 ? '[เวลาโหลดจริง: '+workMin+' · '+segCount+' ช่วง]' : '';
     var note = [timeNote, dunnageNote, userNote].filter(Boolean).join('\n');
 
-    // upload photos
-    var photoUrls = [];
-    for (var pi=0; pi<(_ldCardPhotos[oid]||[]).length; pi++) {
-        try {
-            var f = _ldCardPhotos[oid][pi];
-            var ext = (f.name||'photo.jpg').split('.').pop()||'jpg';
-            var path = 'loading/'+oid+'/'+Date.now()+'_'+pi+'.'+ext;
-            var {error:ue} = await window._sb.storage.from('delivery-photos').upload(path,f,{contentType:f.type||'image/jpeg',upsert:true});
-            if (!ue) { var {data:ud}=window._sb.storage.from('delivery-photos').getPublicUrl(path); photoUrls.push(ud.publicUrl); }
-        } catch(pe){}
-    }
+    // upload photos — parallel
+    var _photoFiles = _ldCardPhotos[oid]||[];
+    var _ts = Date.now();
+    var photoUrls = (await Promise.all(_photoFiles.map(function(f, pi){
+        var ext = (f.name||'photo.jpg').split('.').pop()||'jpg';
+        var path = 'loading/'+oid+'/'+_ts+'_'+pi+'.'+ext;
+        return window._sb.storage.from('delivery-photos').upload(path,f,{contentType:f.type||'image/jpeg',upsert:true})
+            .then(function(res){ if(!res.error){ var ud=window._sb.storage.from('delivery-photos').getPublicUrl(path); return ud.data.publicUrl; } return null; })
+            .catch(function(){ return null; });
+    }))).filter(Boolean);
 
     // confirm draft rows → update to final, or insert if no draft exists
     var draftIds = _ldDraftRowIds[oid]||{};
@@ -25186,6 +25185,9 @@ window.ldCardSave = async function(oid) {
     }
 
     try {
+        // Build all finalRows first, then batch save in parallel
+        var toUpdate = []; // [{id, row}]
+        var toInsert = []; // [row]
         for (var iIdx2=0; iIdx2<items.length; iIdx2++) {
             var it = items[iIdx2];
             if (!it.qty && !it.weight) continue;
@@ -25203,12 +25205,13 @@ window.ldCardSave = async function(oid) {
                 truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: endIso
             };
-            if (draftIds[iIdx2]) {
-                await window._sb.from('loading_sessions').update(finalRow).eq('id', draftIds[iIdx2]);
-            } else {
-                await window._sb.from('loading_sessions').insert(finalRow);
-            }
+            if (draftIds[iIdx2]) { toUpdate.push({id:draftIds[iIdx2], row:finalRow}); }
+            else { toInsert.push(finalRow); }
         }
+        // Run all UPDATEs in parallel + batch INSERT together
+        var saveOps = toUpdate.map(function(u){ return window._sb.from('loading_sessions').update(u.row).eq('id',u.id); });
+        if (toInsert.length) saveOps.push(window._sb.from('loading_sessions').insert(toInsert));
+        await Promise.all(saveOps);
         delete _ldDraftRowIds[oid];
         // Clean up duplicate rows: keep N latest per sku+truck_unit where N = count in orderItems
         // (supports duplicate SKU rows in same order, and trailer split per-unit sessions)
