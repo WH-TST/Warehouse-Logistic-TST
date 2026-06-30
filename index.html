@@ -26687,20 +26687,15 @@ function _ldRenderMonitorTable(rows, orders) {
                         finalMap = null;
                     }
                 }
-                // Each session row stores the accumulated total for that sku.
-                // Keep only the latest row per sku (by updated_at) to avoid
-                // multiplying when multiple staff save from different devices.
-                var latestBySku = {};
-                filtSess.forEach(function(r){
+                // Build positional session queues per SKU (sorted oldest-first)
+                // to support duplicate SKU order items — each iIdx gets its own session row.
+                var skuSessQueues2 = {};
+                filtSess.slice().sort(function(a,b){ return (a.updated_at||'').localeCompare(b.updated_at||''); }).forEach(function(r){
                     if (!r.sku) return;
-                    var prev = latestBySku[r.sku];
-                    if (!prev || (r.updated_at||'') >= (prev.updated_at||'')) latestBySku[r.sku] = r;
+                    if (!skuSessQueues2[r.sku]) skuSessQueues2[r.sku] = [];
+                    skuSessQueues2[r.sku].push(r);
                 });
-                var sm2 = {};
-                Object.keys(latestBySku).forEach(function(sku){
-                    var r = latestBySku[sku];
-                    sm2[sku] = {qty: parseFloat(r.qty)||0, weight: parseFloat(r.weight)||0};
-                });
+                var skuSessPos2 = {};
                 var itms = targetItems.length ? targetItems : filtSess.map(function(r){
                     return {sku:r.sku,product_name:r.product_name,qty:0,target_weight:0};
                 });
@@ -26708,7 +26703,12 @@ function _ldRenderMonitorTable(rows, orders) {
                 var hasFinal = !!finalMap;
                 var isLW = !!order.loop_weigh;
                 var tbody = itms.map(function(it,idx){
-                    var r=sm2[it.sku]||{};
+                    var sk=it.sku||'';
+                    if(!skuSessPos2[sk]) skuSessPos2[sk]=0;
+                    var _sessArr2=skuSessQueues2[sk]||[];
+                    var _sr=_sessArr2[skuSessPos2[sk]]||null;
+                    skuSessPos2[sk]++;
+                    var r=_sr?{qty:parseFloat(_sr.qty)||0,weight:parseFloat(_sr.weight)||0}:{};
                     var aQ=parseFloat(r.qty)||0,aW=parseFloat(r.weight)||0;
                     var avg=aQ>0?aW/aQ:null;
                     var prod=_ldProductMap[it.sku]||{};
