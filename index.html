@@ -24840,9 +24840,8 @@ function _ldDraftLoad(oid) {
             usedLocal = true;
         }
     } catch(e){}
-    // DB cache restore: fills any fields still empty after localStorage restore
-    // (covers cross-device fallback + rejected order pre-fill from done sessions)
-    if (_ldDraftDBCache[oid]) {
+    // Cross-device fallback: restore from Supabase lifts when localStorage is empty
+    if (!usedLocal && _ldDraftDBCache[oid]) {
         Object.keys(_ldDraftDBCache[oid]).forEach(function(iIdxStr) {
             var iIdx = parseInt(iIdxStr, 10);
             var lifts = _ldDraftDBCache[oid][iIdxStr] || [];
@@ -24850,8 +24849,8 @@ function _ldDraftLoad(oid) {
                 var c = (cell.lift_no || 1) - 1;
                 var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
                 var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
-                if (wEl && !wEl.value && cell.weight) wEl.value = cell.weight;
-                if (qEl && !qEl.value && cell.qty) qEl.value = cell.qty;
+                if (wEl && cell.weight) wEl.value = cell.weight;
+                if (qEl && cell.qty) qEl.value = cell.qty;
             });
         });
     }
