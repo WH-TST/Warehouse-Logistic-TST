@@ -23966,8 +23966,9 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
             _preDraft.startTime = _ldCardStartTimes[oid]||null;
             _preDraft.segments = _ldSegments[oid]||null;
             try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(_preDraft)); } catch(e){}
-            // Trigger DB draft upsert so monitor sees real-time values
-            if (typeof window.ldDraftSave==='function') window.ldDraftSave(oid);
+            // Push to DB so monitor sees real-time values — call upsert directly, NOT ldDraftSave,
+            // because ldDraftSave calls _ldLocalSave which would overwrite userEdited:false with true
+            setTimeout(function(){ if (typeof _ldUpsertDraft==='function') _ldUpsertDraft(oid); }, 200);
         }, 200);
     } catch(e){}
 }
