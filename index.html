@@ -26405,10 +26405,10 @@ function _ldRenderMonitorTable(rows, orders) {
 
                 // helper: build one item table for a set of sessions + target items
                 function _buildLiveTable(filtSess, targetItems, headerBg, borderColor) {
-                    // Group sessions by SKU sorted oldest-first for positional matching
-                    // (supports duplicate SKU order items)
+                    // Group sessions by SKU sorted by created_at ascending for positional matching
+                    // (supports duplicate SKU order items — ldCardSave creates sessions in iIdx order)
                     var skuSessQueues = {};
-                    filtSess.slice().sort(function(a,b){ return (a.updated_at||'').localeCompare(b.updated_at||''); }).forEach(function(r){
+                    filtSess.slice().sort(function(a,b){ return (a.created_at||'').localeCompare(b.created_at||''); }).forEach(function(r){
                         var sk=r.sku||'?';
                         if(!skuSessQueues[sk]) skuSessQueues[sk]=[];
                         skuSessQueues[sk].push(r);
@@ -26687,10 +26687,10 @@ function _ldRenderMonitorTable(rows, orders) {
                         finalMap = null;
                     }
                 }
-                // Build positional session queues per SKU (sorted oldest-first)
-                // to support duplicate SKU order items — each iIdx gets its own session row.
+                // Build positional session queues per SKU (sorted by created_at ascending)
+                // to support duplicate SKU order items — ldCardSave creates sessions in iIdx order.
                 var skuSessQueues2 = {};
-                filtSess.slice().sort(function(a,b){ return (a.updated_at||'').localeCompare(b.updated_at||''); }).forEach(function(r){
+                filtSess.slice().sort(function(a,b){ return (a.created_at||'').localeCompare(b.created_at||''); }).forEach(function(r){
                     if (!r.sku) return;
                     if (!skuSessQueues2[r.sku]) skuSessQueues2[r.sku] = [];
                     skuSessQueues2[r.sku].push(r);
