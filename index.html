@@ -23914,13 +23914,25 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
             .order('created_at', {ascending:false});
         if (!done || !done.length) return;
 
-        var skuMap = {};
-        done.forEach(function(r){ if (!skuMap[r.sku]) skuMap[r.sku] = r; });
+        // Group done sessions by SKU, sorted oldest-first for positional matching
+        // (supports duplicate SKU order items — each iIdx gets its own session)
+        var skuQueues = {};
+        done.forEach(function(r){
+            if (!skuQueues[r.sku]) skuQueues[r.sku] = [];
+            skuQueues[r.sku].push(r);
+        });
+        Object.keys(skuQueues).forEach(function(sku){
+            skuQueues[sku].sort(function(a,b){ return (a.created_at||'').localeCompare(b.created_at||''); });
+        });
 
-        // Build item index → lifts map
+        // Build item index → lifts map (positional: first iIdx with SKU gets first session, etc.)
+        var skuPos = {};
         var itemLiftsMap = {};
         orderItems.forEach(function(oi, iIdx){
-            var r = skuMap[oi.sku];
+            var sku = oi.sku;
+            if (!skuPos[sku]) skuPos[sku] = 0;
+            var r = (skuQueues[sku]||[])[skuPos[sku]];
+            skuPos[sku]++;
             if (!r) return;
             if (r.lifts && r.lifts.length) {
                 itemLiftsMap[iIdx] = r.lifts;
