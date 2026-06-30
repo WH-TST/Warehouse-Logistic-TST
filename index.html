@@ -26548,11 +26548,14 @@ function _ldRenderMonitorTable(rows, orders) {
                 ? _ldComputeFinalWeights(sessions, _ldScaleDiff[orderId]) : null;
 
             function _buildDoneTable(filtSess, targetItems, unitDiffKg) {
-                // always reset finalMap per unit to avoid leaking แม่'s map into ลูก
-                if (unitDiffKg!=null && unitDiffKg!==0) {
-                    finalMap = _ldComputeFinalWeights(filtSess, unitDiffKg);
-                } else {
-                    finalMap = null;
+                // trailer-unit mode: unitDiffKg ส่งมาชัดเจน → คำนวณใหม่ต่อ unit
+                // non-trailer mode: unitDiffKg=undefined → ใช้ finalMap ที่คำนวณไว้แล้วจาก _ldScaleDiff
+                if (unitDiffKg !== undefined) {
+                    if (unitDiffKg!=null && unitDiffKg!==0) {
+                        finalMap = _ldComputeFinalWeights(filtSess, unitDiffKg);
+                    } else {
+                        finalMap = null;
+                    }
                 }
                 // Each session row stores the accumulated total for that sku.
                 // Keep only the latest row per sku (by updated_at) to avoid
