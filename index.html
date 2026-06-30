@@ -27033,11 +27033,22 @@ function _ldComputeFinalWeights(sessions, diff) {
         }
     }
 
+    // largest remainder method — floor แต่ละ item แล้วแจก +1 ตามลำดับ fractional สูงสุด จนผลรวม = target พอดี
+    var target = Math.round(skus.reduce(function(s,sk){return s+sm[sk].weight;},0) + diff);
+    var floors = {}; var fracs = [];
+    skus.forEach(function(sk){
+        var raw = Math.max(0, sm[sk].weight + adds[sk]);
+        floors[sk] = Math.floor(raw);
+        fracs.push({sk:sk, frac: raw - Math.floor(raw)});
+    });
+    var floorSum = skus.reduce(function(s,sk){return s+floors[sk];},0);
+    var remainder = target - floorSum;
+    fracs.sort(function(a,b){return b.frac-a.frac;});
+    for (var i=0;i<remainder&&i<fracs.length;i++) floors[fracs[i].sk]++;
     var result={};
     skus.forEach(function(sk){
-        var r=sm[sk];
-        var fKg=Math.round(Math.max(0, r.weight+adds[sk]));
-        result[sk]={finalKg:fKg, finalAvg:r.qty>0?fKg/r.qty:0};
+        var fKg=floors[sk];
+        result[sk]={finalKg:fKg, finalAvg:sm[sk].qty>0?fKg/sm[sk].qty:0};
     });
     return result;
 }
