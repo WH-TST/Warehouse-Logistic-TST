@@ -27962,7 +27962,9 @@ window.loSaveOrder = async function() {
 
 window.loSetStatus = async function(id, status) {
     try {
-        var {error} = await window._sb.from('loading_orders').update({status:status, updated_at:new Date().toISOString()}).eq('id', id);
+        var updatePayload = {status:status, updated_at:new Date().toISOString()};
+        if (status === 'done') updatePayload.review_status = 'pending_review';
+        var {error} = await window._sb.from('loading_orders').update(updatePayload).eq('id', id);
         if (error) throw error;
         // เมื่อกด "โหลดเสร็จ" จาก overview ให้ convert draft sessions → final อัตโนมัติ
         if (status === 'done') {
