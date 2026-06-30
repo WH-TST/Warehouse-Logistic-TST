@@ -26111,10 +26111,14 @@ function _ldRenderMonitorTable(sessions, orders) {
             return arr.some(function(s){ return s.record_type==='draft' && (parseFloat(s.qty)||0)>0; });
         });
         var _rv = o.review_status||'';
+        // งาน rejected + มี draft (หน้างานกำลังแก้) → แสดงเป็น "กำลังโหลดใหม่"
+        var isReEditingAfterReject = _rv==='rejected' && anyLoading;
         var statusBadge = _rv==='pending_review'
             ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse block"></span>รอตรวจสอบ</span>'
+            : isReEditingAfterReject
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-orange-100 text-orange-700 border border-orange-400 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse block"></span>↩ กำลังโหลดใหม่</span>'
             : _rv==='rejected'
-            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-rose-200 text-rose-800 border border-rose-400">↩ ตีกลับแล้ว</span>'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-rose-200 text-rose-800 border border-rose-400">↩ ตีกลับ — รอหน้างาน</span>'
             : _rv==='approved'
             ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-300">✓ อนุมัติแล้ว</span>'
             : allDone
@@ -26128,16 +26132,12 @@ function _ldRenderMonitorTable(sessions, orders) {
         var _skuUsedIds = {}; // track matched session ids per sku to avoid reuse
         var itemRows = items.map(function(it, idx) {
             var arr = (sm[it.sku]||[]).filter(function(s){ return !(_skuUsedIds[it.sku]||{})[s.id]; });
-            // pick best match: done session with closest qty to order qty, else draft
-            var doneRow = arr.filter(function(s){return s.record_type!=='draft';}).reduce(function(best,s){
-                if(!best) return s;
-                return Math.abs((parseFloat(s.qty)||0)-it.qty) <= Math.abs((parseFloat(best.qty)||0)-it.qty) ? s : best;
-            }, null);
-            var draftRow = !doneRow ? arr.filter(function(s){return s.record_type==='draft';}).reduce(function(best,s){
-                if(!best) return s;
-                return Math.abs((parseFloat(s.qty)||0)-it.qty) <= Math.abs((parseFloat(best.qty)||0)-it.qty) ? s : best;
-            }, null) : null;
-            var matched = doneRow||draftRow;
+            // pick best match: for rejected+reloading prefer draft; otherwise prefer done
+            var _closestReduce = function(best,s,qty){ if(!best) return s; return Math.abs((parseFloat(s.qty)||0)-qty) <= Math.abs((parseFloat(best.qty)||0)-qty) ? s : best; };
+            var draftRow = arr.filter(function(s){return s.record_type==='draft';}).reduce(function(best,s){ return _closestReduce(best,s,it.qty); }, null);
+            var doneRow = arr.filter(function(s){return s.record_type!=='draft';}).reduce(function(best,s){ return _closestReduce(best,s,it.qty); }, null);
+            // ถ้าถูกตีกลับและมี draft → แสดงข้อมูล draft ที่หน้างานกำลังแก้
+            var matched = isReEditingAfterReject ? (draftRow||doneRow) : (doneRow||draftRow);
             if(matched){ if(!_skuUsedIds[it.sku]) _skuUsedIds[it.sku]={}; _skuUsedIds[it.sku][matched.id]=1; }
             var activeRow = matched;
             var actualQty = activeRow ? (parseFloat(activeRow.qty)||0) : 0;
