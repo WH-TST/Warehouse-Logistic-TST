@@ -25210,18 +25210,27 @@ window.ldCardSave = async function(oid) {
             }
         }
         delete _ldDraftRowIds[oid];
-        // Clean up duplicate rows: keep latest per sku+truck_unit combo
-        // (trailer split has 2 sessions per sku — one for แม่, one for ลูก — must NOT merge them)
+        // Clean up duplicate rows: keep N latest per sku+truck_unit where N = count in orderItems
+        // (supports duplicate SKU rows in same order, and trailer split per-unit sessions)
         try {
             var {data:allRows} = await window._sb.from('loading_sessions')
                 .select('id,sku,truck_unit,updated_at').eq('order_id', oid).neq('record_type','draft');
             if (allRows && allRows.length) {
+                var skuOrderCount = {};
+                orderItems.forEach(function(oi){ if(oi.sku) skuOrderCount[oi.sku]=(skuOrderCount[oi.sku]||0)+1; });
                 var keepPerKey = {};
                 allRows.forEach(function(r){
                     var k = r.sku+'|'+(r.truck_unit||'mother');
-                    if (!keepPerKey[k] || (r.updated_at||'') > (keepPerKey[k].updated_at||'')) keepPerKey[k] = r;
+                    if(!keepPerKey[k]) keepPerKey[k]=[];
+                    keepPerKey[k].push(r);
                 });
-                var keepIds = Object.keys(keepPerKey).map(function(k){ return keepPerKey[k].id; });
+                var keepIds = [];
+                Object.keys(keepPerKey).forEach(function(k){
+                    var sku = k.split('|')[0];
+                    var needed = skuOrderCount[sku]||1;
+                    keepPerKey[k].sort(function(a,b){return (b.updated_at||'').localeCompare(a.updated_at||'');});
+                    keepPerKey[k].slice(0,needed).forEach(function(r){keepIds.push(r.id);});
+                });
                 var dupIds = allRows.filter(function(r){ return keepIds.indexOf(r.id) < 0; }).map(function(r){ return r.id; });
                 if (dupIds.length) await window._sb.from('loading_sessions').delete().in('id', dupIds);
             }
