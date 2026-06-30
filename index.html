@@ -23921,9 +23921,12 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
                 _ldDraftDBCache[oid][iIdx] = [{lift_no:1, weight:r.weight, qty:r.qty}];
             }
         });
-        // Also clear any stale localStorage draft so DB cache takes over
-        try { localStorage.removeItem('ld_draft_'+oid); } catch(e){}
-        setTimeout(function(){ _ldDraftLoad(oid); }, 150);
+        // Only restore from DB if user hasn't already typed anything into localStorage
+        var _hasLocal = false;
+        try { _hasLocal = !!localStorage.getItem('ld_draft_'+oid); } catch(e){}
+        if (!_hasLocal) {
+            setTimeout(function(){ _ldDraftLoad(oid); }, 150);
+        }
     } catch(e){}
 }
 
