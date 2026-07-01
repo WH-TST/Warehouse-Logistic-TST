@@ -39629,7 +39629,7 @@ window.dmRefreshAll=async function(silent){
   }
   // Load all plans for today — exclude child trailer plans
   var {data:allPlans}=await window._sb.from('logistic_plans')
-    .select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,driver_id,job_type,is_child,is_mother')
+    .select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,driver_id,job_type,is_child,is_mother,trip_no')
     .eq('plan_date',today).eq('is_child',false);
   allPlans=allPlans||[];
   var allPlanIds=allPlans.map(function(p){return p.plan_id;});
@@ -39652,7 +39652,7 @@ window.dmRefreshAll=async function(silent){
       return (driver.driver_id && p.driver_id===driver.driver_id)||(driver.driver_name && p.driver_transport===driver.driver_name);
     });
     var maintPlan=allDriverPlans.find(function(p){return p.job_type==='maintenance_pm';});
-    var plans=allDriverPlans.filter(function(p){return p.job_type!=='maintenance_pm';});
+    var plans=allDriverPlans.filter(function(p){return p.job_type!=='maintenance_pm';}).sort(function(a,b){return (parseInt(a.trip_no)||9999)-(parseInt(b.trip_no)||9999);});
     var done=plans.filter(function(p){var l=tripLogsMap[p.plan_id];return (l&&l.status==='completed')||p.status==='success';}).length;
     var activePlan=plans.find(function(p){var l=tripLogsMap[p.plan_id];return p.status!=='success'&&(!l||l.status!=='completed');});
     var curLog=activePlan?tripLogsMap[activePlan.plan_id]:null;
@@ -39697,7 +39697,7 @@ window.dmRefreshAll=async function(silent){
         var _col={idle:'#475569',traveling:'#3b82f6',at_shop:'#f59e0b',returning:'#a78bfa',completed:'#34d399'}[_pst]||'#475569';
         var _icon={idle:'fa-clock',traveling:'fa-truck-moving',at_shop:'fa-store',returning:'fa-route',completed:'fa-check'}[_pst]||'fa-clock';
         var _shops=(p.shops||[]).filter(function(s){return s.type!=='service_center';});
-        var _label='เที่ยว '+(pi+1)+' · '+_shops.length+' จุด';
+        var _label='เที่ยว '+(p.trip_no||pi+1)+' · '+_shops.length+' จุด';
         tripBar+='<div style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border:1px solid '+_col+';border-radius:20px;padding:3px 9px;font-size:10px;color:'+_col+';font-weight:700;cursor:pointer;" onclick="event.stopPropagation();dmOpenAllDriverTrip(\''+driver.username+'\');">'
           +'<i class="fas '+_icon+'" style="font-size:9px;"></i>'+_label+'</div>';
       });
