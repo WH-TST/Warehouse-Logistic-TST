@@ -6788,6 +6788,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <button onclick="scSwitchTab('reconcile')" id="sc-btn-reconcile" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-balance-scale"></i> ไปหน้าเทียบ →
         </button>
+        <button onclick="scLoadEOM()" class="bg-indigo-700 hover:bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-calendar-check"></i> นับสิ้นเดือน FG
+        </button>
         <button onclick="scOpenHistoryManager('fg')" class="bg-orange-500 hover:bg-orange-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-database"></i> จัดการประวัติ
         </button>
@@ -37263,6 +37266,154 @@ window.viewTripResult = async function(planId) {
     } catch(err) {
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#ef4444;padding:40px">❌ ' + (err.message||err) + '</td></tr>';
       showToast('❌ โหลดข้อมูลล้มเหลว: ' + (err.message||err), true);
+    }
+  };
+
+  // ── End-of-Month Count: ดึงทุก SKU ที่มียอดสต๊อก (counting) ─────
+  window.scLoadEOM = async function(){
+    var today = new Date().toISOString().slice(0,10);
+    // ใช้วันที่วันนี้เป็น movement_date สำหรับบันทึก session
+    document.getElementById('sc-date').value = today;
+    _scDate = today;
+    _scItems = [];
+    _scSessionId = null;
+    var whFilter = document.getElementById('sc-wh-filter').value;
+    var tbody = document.getElementById('sc-sheet-tbody');
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px"><i class="fas fa-spinner fa-spin"></i> กำลังโหลดรายการสิ้นเดือน...</td></tr>';
+
+    try {
+      // 1. ดึงทุก SKU ที่มี cw_onhand > 0 จาก counting
+      var cntQ = window._sb.from('counting')
+        .select('item_number,product_name,warehouse,cw_onhand')
+        .gt('cw_onhand', 0)
+        .order('id', {ascending: true});
+      var cntRes = await cntQ;
+      if(cntRes.error) throw cntRes.error;
+      var cntRows = cntRes.data || [];
+
+      if(!cntRows.length){
+        tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการสต๊อกใน counting</td></tr>';
+        return;
+      }
+
+      // 2. สร้าง map: item_number|warehouse → cw_onhand และ item_number → total
+      var cntMapWH = {}, cntMapAll = {};
+      var skuOrder = [], skuNames = {};
+      cntRows.forEach(function(r){
+        var sku = r.item_number, wh = r.warehouse||'', v = Number(r.cw_onhand)||0;
+        var key = sku + '|' + wh;
+        cntMapWH[key] = (cntMapWH[key]||0) + v;
+        cntMapAll[sku] = (cntMapAll[sku]||0) + v;
+        if(skuOrder.indexOf(sku) === -1){ skuOrder.push(sku); skuNames[sku] = r.product_name||sku; }
+      });
+
+      // 3. สร้าง skuList: FG-BP (+ QC รวมแถวเดียว) และ FG-BB แยก
+      //    logic เหมือน scLoadSheet: FG-BP แสดง WH=FG-BP, systemQty = FG-BP + QC
+      //    FG-BB แสดง WH=FG-BB, systemQty = FG-BB เท่านั้น
+      var seenForList = {};
+      var skuList = [];
+      skuOrder.forEach(function(sku){
+        // FG-BP
+        var hasBP = (cntMapWH[sku+'|FG-BP']||0) > 0 || (cntMapWH[sku+'|QC']||0) > 0;
+        if(hasBP && !seenForList[sku+'|FG-BP']){
+          if(!whFilter || whFilter === 'FG-BP'){
+            skuList.push({ sku: sku, wh: 'FG-BP' });
+            seenForList[sku+'|FG-BP'] = true;
+          }
+        }
+        // FG-BB
+        var hasBB = (cntMapWH[sku+'|FG-BB']||0) > 0;
+        if(hasBB && !seenForList[sku+'|FG-BB']){
+          if(!whFilter || whFilter === 'FG-BB'){
+            skuList.push({ sku: sku, wh: 'FG-BB' });
+            seenForList[sku+'|FG-BB'] = true;
+          }
+        }
+      });
+
+      // กรณี whFilter=QC ให้แสดงเป็น FG-BP เหมือนเดิม (QC รวมอยู่แล้ว)
+      if(whFilter === 'QC'){
+        skuList = [];
+        skuOrder.forEach(function(sku){
+          if((cntMapWH[sku+'|QC']||0) > 0)
+            skuList.push({ sku: sku, wh: 'FG-BP' });
+        });
+      }
+
+      if(!skuList.length){
+        tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการในคลังที่เลือก</td></tr>';
+        return;
+      }
+
+      // 4. ดึง PPB จาก products
+      var allSkus = [...new Set(skuList.map(function(s){ return s.sku; }))];
+      var prodRes = await window._sb.from('products').select('sku,lines_per_bundle,name').in('sku', allSkus);
+      var ppbMap = {}, prodNameMap = {};
+      (prodRes.data||[]).forEach(function(p){
+        ppbMap[p.sku] = Number(p.lines_per_bundle)||0;
+        prodNameMap[p.sku] = (p.name||'').replace(/[฀-๿]+/g,'').replace(/\s{2,}/g,' ').trim();
+      });
+
+      // 5. สร้าง _scItems (logic systemQty เหมือน scLoadSheet)
+      _scItems = skuList.map(function(s){
+        var sysQtyWH = cntMapWH[s.sku+'|'+s.wh]||0;
+        var sysQtyQC = (s.wh === 'FG-BB') ? 0 : (cntMapWH[s.sku+'|QC']||0);
+        var sysQty   = sysQtyWH + sysQtyQC;
+        return {
+          sku:         s.sku,
+          name:        skuNames[s.sku] || s.sku,
+          printName:   prodNameMap[s.sku] || skuNames[s.sku] || s.sku,
+          wh:          s.wh,
+          ppb:         ppbMap[s.sku] || 0,
+          systemQty:   sysQty,
+          systemQtyWH: sysQtyWH,
+          systemQtyQC: sysQtyQC,
+          bundle1:0, bundle2:0, pcs1:0, pcs2:0, holdPcs:0, note:''
+        };
+      });
+
+      // 6. pre-fill จาก session ที่บันทึกไว้วันนี้ (ถ้ามี)
+      try {
+        var sessQ = window._sb.from('stock_count_sessions')
+          .select('id,checker_name')
+          .eq('movement_date', today);
+        if(whFilter) sessQ = sessQ.eq('wh', whFilter);
+        var sessRes = await sessQ.order('id', {ascending: false}).limit(1).maybeSingle();
+        if(sessRes.data){
+          _scSessionId = sessRes.data.id;
+          var checkerEl = document.getElementById('sc-checker');
+          if(checkerEl && sessRes.data.checker_name) checkerEl.value = sessRes.data.checker_name;
+          var savedItemsRes = await window._sb.from('stock_count_items')
+            .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,note,ppb')
+            .eq('session_id', _scSessionId);
+          var savedMap = {};
+          (savedItemsRes.data||[]).forEach(function(r){ savedMap[r.sku] = r; });
+          _scItems.forEach(function(item){
+            var s = savedMap[item.sku];
+            if(!s) return;
+            item.bundle1 = Number(s.bundle1)||0;
+            item.bundle2 = Number(s.bundle2)||0;
+            item.pcs1    = Number(s.scrap1)||0;
+            item.pcs2    = Number(s.scrap2)||0;
+            item.holdPcs = Number(s.hold_pcs)||0;
+            item.note    = s.note||'';
+          });
+        }
+      } catch(e){}
+
+      _scRenderSheet();
+      var info = document.getElementById('sc-sheet-info');
+      info.innerHTML = '📦 <b>นับสิ้นเดือน</b> — พบ <b>' + _scItems.length + '</b> SKU ที่มียอดสต๊อก' + (whFilter ? ' — WH: ' + whFilter : ' (ทุกคลัง)');
+      info.classList.remove('hidden');
+      info.style.background = '#ede9fe';
+      info.style.borderColor = '#c4b5fd';
+      info.style.color = '#4c1d95';
+      document.getElementById('sc-btn-reconcile').classList.remove('hidden');
+      showToast('✅ โหลดรายการสิ้นเดือน ' + _scItems.length + ' SKU');
+
+    } catch(err){
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#ef4444;padding:40px">❌ ' + (err.message||err) + '</td></tr>';
+      showToast('❌ โหลดล้มเหลว: ' + (err.message||err), true);
     }
   };
 
