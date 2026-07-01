@@ -6791,6 +6791,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <button onclick="scLoadEOM()" class="bg-indigo-700 hover:bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-calendar-check"></i> นับสิ้นเดือน FG
         </button>
+        <button id="sc-eom-import-btn" onclick="document.getElementById('sc-eom-file-input').click()" class="hidden bg-teal-600 hover:bg-teal-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-file-import"></i> แนบไฟล์นับ
+        </button>
+        <input type="file" id="sc-eom-file-input" accept=".xlsx,.xls,.csv" class="hidden" onchange="scEomImportFile(this)">
         <button onclick="scOpenHistoryManager('fg')" class="bg-orange-500 hover:bg-orange-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-database"></i> จัดการประวัติ
         </button>
@@ -37414,12 +37418,80 @@ window.viewTripResult = async function(planId) {
       info.style.borderColor = '#c4b5fd';
       info.style.color = '#4c1d95';
       document.getElementById('sc-btn-reconcile').classList.remove('hidden');
+      document.getElementById('sc-eom-import-btn').classList.remove('hidden');
       showToast('✅ โหลดรายการสิ้นเดือน ' + _scItems.length + ' SKU');
 
     } catch(err){
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#ef4444;padding:40px">❌ ' + (err.message||err) + '</td></tr>';
       showToast('❌ โหลดล้มเหลว: ' + (err.message||err), true);
     }
+  };
+
+  // ── EOM import file ──────────────────────────────────────────────
+  window.scEomImportFile = function(input){
+    var file = input.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        var wb = XLSX.read(e.target.result, {type:'binary'});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+        if(!rows.length){ showToast('❌ ไม่พบข้อมูลในไฟล์', true); return; }
+
+        // normalize header keys (trim + lowercase)
+        var norm = function(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,''); };
+
+        // map column aliases → field
+        var COL_MAP = {
+          'รหัสสินค้า':'sku','itemnumber':'sku','item_number':'sku','sku':'sku','รหัส':'sku',
+          'bundle1':'bundle1','bundle_1':'bundle1','บันเดิล1':'bundle1','บันเดิล_1':'bundle1',
+          'bundle2':'bundle2','bundle_2':'bundle2','บันเดิล2':'bundle2','บันเดิล_2':'bundle2',
+          'pcs1':'pcs1','pcs(1)':'pcs1','pcs.1':'pcs1','pcs_1':'pcs1',
+          'pcs2':'pcs2','pcs(2)':'pcs2','pcs.2':'pcs2','pcs_2':'pcs2',
+          'holdpcs':'holdPcs','hold_pcs':'holdPcs','holdpcs.':'holdPcs','holdpcs(.)':'holdPcs'
+        };
+
+        // detect header mapping from first row keys
+        var firstKeys = Object.keys(rows[0]);
+        var keyMap = {}; // excelKey → field
+        firstKeys.forEach(function(k){
+          var n = norm(k);
+          if(COL_MAP[n]) keyMap[k] = COL_MAP[n];
+        });
+
+        // build lookup: sku → {bundle1,bundle2,pcs1,pcs2,holdPcs}
+        var lookup = {};
+        rows.forEach(function(r){
+          var sku = '';
+          Object.keys(keyMap).forEach(function(k){ if(keyMap[k]==='sku') sku = String(r[k]||'').trim(); });
+          if(!sku) return;
+          var rec = {bundle1:'',bundle2:'',pcs1:'',pcs2:'',holdPcs:''};
+          Object.keys(keyMap).forEach(function(k){ if(keyMap[k]!=='sku') rec[keyMap[k]] = r[k]; });
+          lookup[sku] = rec;
+        });
+
+        // fill _scItems
+        var matched = 0;
+        _scItems.forEach(function(item){
+          var rec = lookup[item.item_number] || lookup[(item.item_number||'').trim()];
+          if(!rec) return;
+          if(rec.bundle1!=='' && rec.bundle1!==undefined) item.bundle1 = Number(rec.bundle1)||0;
+          if(rec.bundle2!=='' && rec.bundle2!==undefined) item.bundle2 = Number(rec.bundle2)||0;
+          if(rec.pcs1!==''   && rec.pcs1!==undefined)    item.pcs1    = Number(rec.pcs1)||0;
+          if(rec.pcs2!==''   && rec.pcs2!==undefined)    item.pcs2    = Number(rec.pcs2)||0;
+          if(rec.holdPcs!=='' && rec.holdPcs!==undefined) item.holdPcs = Number(rec.holdPcs)||0;
+          matched++;
+        });
+
+        _scRenderSheet();
+        input.value = '';
+        showToast('✅ แนบไฟล์สำเร็จ — match ' + matched + ' / ' + _scItems.length + ' SKU');
+      } catch(err){
+        showToast('❌ อ่านไฟล์ไม่ได้: ' + (err.message||err), true);
+      }
+    };
+    reader.readAsBinaryString(file);
   };
 
   // ── render Count Sheet table ─────────────────────────────────────
