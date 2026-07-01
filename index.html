@@ -24958,7 +24958,15 @@ async function _ldUpsertDraft(oid) {
             };
             var existingId = _ldDraftRowIds[oid][iIdx];
             if (existingId) {
-                await window._sb.from('loading_sessions').update(row).eq('id', existingId);
+                if (totalQty > 0 || totalWt > 0) {
+                    await window._sb.from('loading_sessions').update(row).eq('id', existingId);
+                } else {
+                    // Don't overwrite existing data with zeros — check DB first
+                    var {data:_ex} = await window._sb.from('loading_sessions').select('qty,weight').eq('id', existingId).maybeSingle();
+                    if (!_ex || (_ex.qty === 0 && _ex.weight === 0)) {
+                        await window._sb.from('loading_sessions').update(row).eq('id', existingId);
+                    }
+                }
             } else {
                 var {data:inserted} = await window._sb.from('loading_sessions').insert(row).select('id').single();
                 if (inserted) _ldDraftRowIds[oid][iIdx] = inserted.id;
