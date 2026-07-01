@@ -2151,6 +2151,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <button onclick="openAuditLogModal()" id="nav-audit-log" class="nav-btn" data-tip="Audit Log" title="ประวัติการแก้ไขข้อมูล">
                 <span class="nav-icon"><i class="fas fa-history"></i></span> Audit Log
             </button>
+            <button onclick="switchView('device-control')" id="nav-device-control" class="nav-btn" data-tip="Device Control">
+                <span class="nav-icon"><i class="fas fa-mobile-alt"></i></span> Device Control
+            </button>
 
         </nav>
 
@@ -7912,6 +7915,62 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
 <!-- ============================================================ -->
+<div id="view-device-control-content" class="hidden space-y-5">
+  <div class="rounded-2xl p-5 shadow-sm" style="background:#f0f9ff;border:1px solid #bae6fd;border-left:4px solid #0284c7;">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-black text-slate-800 flex items-center gap-2"><i class="fas fa-mobile-alt text-sky-600"></i> Device Control — Block Rules</h2>
+        <p class="text-sm text-slate-500 mt-1">กำหนดช่วงวันที่ห้ามเข้าเว็บไซต์บนแท็บเล็ต</p>
+      </div>
+      <button onclick="dcAddRule()" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition">
+        <i class="fas fa-plus"></i> เพิ่มกฎใหม่
+      </button>
+    </div>
+  </div>
+
+  <div class="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-sm text-sky-800 font-medium flex items-center gap-2">
+    <i class="fas fa-link"></i> Blocklist URL:
+    <code id="dc-blocklist-url" class="bg-white px-2 py-0.5 rounded text-xs border border-sky-200 select-all">https://lkuunmyrxugsoqwrvdby.supabase.co/functions/v1/blocklist</code>
+    <button onclick="navigator.clipboard.writeText('https://lkuunmyrxugsoqwrvdby.supabase.co/functions/v1/blocklist');showToast('คัดลอกแล้ว')" class="text-sky-600 hover:text-sky-800 ml-1"><i class="fas fa-copy"></i></button>
+  </div>
+
+  <div id="dc-rules-list" class="space-y-3">
+    <div class="text-center py-10 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>
+  </div>
+</div>
+
+<!-- DC Modal -->
+<div id="dc-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center" style="background:rgba(0,0,0,0.5);">
+  <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+    <h3 class="text-base font-black text-slate-800 mb-4" id="dc-modal-title">เพิ่มกฎ Block</h3>
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs font-bold text-slate-600 mb-1 block">Domain ที่ต้องการ Block</label>
+        <input id="dc-input-domain" type="text" placeholder="เช่น tst-uat.sandbox.operations.dynamics.com" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-slate-600 mb-1 block">ชื่อ/หมายเหตุ</label>
+        <input id="dc-input-label" type="text" placeholder="เช่น Microsoft Dynamics" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-bold text-slate-600 mb-1 block">วันที่เริ่ม Block (1-31)</label>
+          <input id="dc-input-start" type="number" min="1" max="31" placeholder="เช่น 28" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-600 mb-1 block">วันที่สิ้นสุด (1-31)</label>
+          <input id="dc-input-end" type="number" min="1" max="31" placeholder="เช่น 31" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
+        </div>
+      </div>
+      <p class="text-xs text-slate-400">ปล่อยว่างทั้งคู่ = block ตลอดเวลา</p>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="dcSaveRule()" class="flex-1 bg-sky-600 hover:bg-sky-500 text-white py-2 rounded-xl text-sm font-bold transition">บันทึก</button>
+      <button onclick="document.getElementById('dc-modal').classList.add('hidden')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-sm font-bold transition">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <div id="view-kpi-wh-content" class="hidden space-y-6">
 
   <!-- Header -->
@@ -42737,6 +42796,92 @@ window.trAckSubmit = async function(){
   _trPendingSession=null;
   drvShowToast('รับทราบการอบรมเรียบร้อย ✅',false,4000);
 };
+
+// ── Device Control ───────────────────────────────────────────────────
+var _dcEditId = null;
+
+async function dcLoadRules() {
+  var el = document.getElementById('dc-rules-list');
+  if(!el) return;
+  var { data: rules, error } = await window._sb.from('block_rules').select('*').order('created_at');
+  if(error){ el.innerHTML='<div class="text-red-500 text-sm text-center py-6">โหลดไม่ได้: '+error.message+'</div>'; return; }
+  if(!rules||!rules.length){ el.innerHTML='<div class="text-slate-400 text-sm text-center py-10"><i class="fas fa-shield-alt text-3xl mb-2 block"></i>ยังไม่มีกฎ Block</div>'; return; }
+  el.innerHTML = rules.map(function(r){
+    var days = r.start_day && r.end_day ? 'วันที่ '+r.start_day+' – '+r.end_day+' ของทุกเดือน' : 'ตลอดเวลา';
+    var activeColor = r.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500';
+    var activeLabel = r.active ? 'เปิดใช้' : 'ปิด';
+    return '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm">'
+      +'<div class="flex-1 min-w-0">'
+      +'<div class="font-bold text-slate-800 text-sm truncate">'+r.domain+'</div>'
+      +'<div class="text-xs text-slate-500 mt-0.5">'+(r.label||'')+'</div>'
+      +'<div class="flex items-center gap-2 mt-1">'
+      +'<span class="text-xs px-2 py-0.5 rounded-full '+activeColor+' font-bold">'+activeLabel+'</span>'
+      +'<span class="text-xs text-slate-400"><i class="fas fa-calendar-alt mr-1"></i>'+days+'</span>'
+      +'</div></div>'
+      +'<div class="flex gap-2 flex-shrink-0">'
+      +'<button onclick="dcToggleActive(\''+r.id+'\','+r.active+')" class="w-8 h-8 rounded-lg border text-xs flex items-center justify-center '+(r.active?'bg-green-50 border-green-200 text-green-600 hover:bg-red-50 hover:border-red-200 hover:text-red-500':'bg-slate-50 border-slate-200 text-slate-400 hover:bg-green-50 hover:border-green-200 hover:text-green-600')+' transition" title="'+(r.active?'ปิด':'เปิด')+'"><i class="fas fa-power-off"></i></button>'
+      +'<button onclick="dcEditRule(\''+r.id+'\',\''+r.domain+'\',\''+r.label+'\','+(r.start_day||'')+','+(r.end_day||')\')" class="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-500 hover:text-white transition text-xs flex items-center justify-center"><i class="fas fa-pen"></i></button>'
+      +'<button onclick="dcDeleteRule(\''+r.id+'\')" class="w-8 h-8 rounded-lg bg-red-50 border border-red-200 text-red-500 hover:bg-red-500 hover:text-white transition text-xs flex items-center justify-center"><i class="fas fa-trash"></i></button>'
+      +'</div></div>';
+  }).join('');
+}
+
+window.dcAddRule = function(){
+  _dcEditId = null;
+  document.getElementById('dc-modal-title').textContent = 'เพิ่มกฎ Block';
+  document.getElementById('dc-input-domain').value = '';
+  document.getElementById('dc-input-label').value = '';
+  document.getElementById('dc-input-start').value = '28';
+  document.getElementById('dc-input-end').value = '31';
+  document.getElementById('dc-modal').classList.remove('hidden');
+};
+
+window.dcEditRule = function(id, domain, label, start, end){
+  _dcEditId = id;
+  document.getElementById('dc-modal-title').textContent = 'แก้ไขกฎ Block';
+  document.getElementById('dc-input-domain').value = domain||'';
+  document.getElementById('dc-input-label').value = label||'';
+  document.getElementById('dc-input-start').value = start||'';
+  document.getElementById('dc-input-end').value = end||'';
+  document.getElementById('dc-modal').classList.remove('hidden');
+};
+
+window.dcSaveRule = async function(){
+  var domain = document.getElementById('dc-input-domain').value.trim();
+  if(!domain){ showToast('กรุณาใส่ Domain', true); return; }
+  var label = document.getElementById('dc-input-label').value.trim();
+  var start = parseInt(document.getElementById('dc-input-start').value)||null;
+  var end = parseInt(document.getElementById('dc-input-end').value)||null;
+  var payload = { domain, label, start_day: start, end_day: end };
+  var error;
+  if(_dcEditId){
+    ({ error } = await window._sb.from('block_rules').update(payload).eq('id', _dcEditId));
+  } else {
+    ({ error } = await window._sb.from('block_rules').insert(payload));
+  }
+  if(error){ showToast('บันทึกไม่ได้: '+error.message, true); return; }
+  document.getElementById('dc-modal').classList.add('hidden');
+  showToast('✅ บันทึกแล้ว');
+  dcLoadRules();
+};
+
+window.dcToggleActive = async function(id, current){
+  var { error } = await window._sb.from('block_rules').update({ active: !current }).eq('id', id);
+  if(error){ showToast('เกิดข้อผิดพลาด', true); return; }
+  dcLoadRules();
+};
+
+window.dcDeleteRule = async function(id){
+  if(!confirm('ลบกฎนี้?')) return;
+  var { error } = await window._sb.from('block_rules').delete().eq('id', id);
+  if(error){ showToast('ลบไม่ได้', true); return; }
+  showToast('ลบแล้ว');
+  dcLoadRules();
+};
+
+// Wire up switchView for device-control
+var _dcOrigSW = window.switchView;
+if(_dcOrigSW){ window.switchView = function(v){ _dcOrigSW(v); if(v==='device-control') dcLoadRules(); }; }
 
 // ── Wire up switchView & drvInit ─────────────────────────────────────
 var _origSW2 = window.switchView;
