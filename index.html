@@ -10593,7 +10593,7 @@ window.loadAnalytics = async function loadAnalytics() {
                 .lte('tst_pd_date', endVal)
                 .eq('reference', 'Production'),
             window._sb.from('onhand_fg')
-                .select('cw_quantity,quantity')
+                .select('cw_physical_inventory,physical_inventory')
         ]);
 
         if (txRes.error) throw txRes.error;
@@ -10619,8 +10619,8 @@ window.loadAnalytics = async function loadAnalytics() {
         // current inventory จาก onhand_fg
         let invKg = 0, invLines = 0;
         (ohRes.data || []).forEach(function(r) {
-            invKg    += Math.abs(parseFloat(r.quantity)    || 0);
-            invLines += Math.abs(parseFloat(r.cw_quantity) || 0);
+            invKg    += Math.abs(parseFloat(r.physical_inventory)    || 0);
+            invLines += Math.abs(parseFloat(r.cw_physical_inventory) || 0);
         });
 
         window._analyticsInWeight = totalInKg;
