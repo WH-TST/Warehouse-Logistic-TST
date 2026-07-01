@@ -7954,12 +7954,12 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-bold text-slate-600 mb-1 block">วันที่เริ่ม Block (1-31)</label>
-          <input id="dc-input-start" type="number" min="1" max="31" placeholder="เช่น 28" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
+          <label class="text-xs font-bold text-slate-600 mb-1 block">วันที่เริ่ม Block</label>
+          <input id="dc-input-start" type="date" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
         </div>
         <div>
-          <label class="text-xs font-bold text-slate-600 mb-1 block">วันที่สิ้นสุด (1-31)</label>
-          <input id="dc-input-end" type="number" min="1" max="31" placeholder="เช่น 31" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
+          <label class="text-xs font-bold text-slate-600 mb-1 block">วันที่สิ้นสุด</label>
+          <input id="dc-input-end" type="date" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-sky-400">
         </div>
       </div>
       <p class="text-xs text-slate-400">ปล่อยว่างทั้งคู่ = block ตลอดเวลา</p>
@@ -42807,7 +42807,7 @@ window.dcLoadRules = async function dcLoadRules() {
   if(error){ el.innerHTML='<div class="text-red-500 text-sm text-center py-6">โหลดไม่ได้: '+error.message+'</div>'; return; }
   if(!rules||!rules.length){ el.innerHTML='<div class="text-slate-400 text-sm text-center py-10"><i class="fas fa-shield-alt text-3xl mb-2 block"></i>ยังไม่มีกฎ Block</div>'; return; }
   el.innerHTML = rules.map(function(r){
-    var days = r.start_day && r.end_day ? 'วันที่ '+r.start_day+' – '+r.end_day+' ของทุกเดือน' : 'ตลอดเวลา';
+    var days = r.start_date && r.end_date ? r.start_date+' ถึง '+r.end_date : 'ตลอดเวลา';
     var activeColor = r.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500';
     var activeLabel = r.active ? 'เปิดใช้' : 'ปิด';
     return '<div class="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm">'
@@ -42820,7 +42820,7 @@ window.dcLoadRules = async function dcLoadRules() {
       +'</div></div>'
       +'<div class="flex gap-2 flex-shrink-0">'
       +'<button onclick="dcToggleActive(\''+r.id+'\','+r.active+')" class="w-8 h-8 rounded-lg border text-xs flex items-center justify-center '+(r.active?'bg-green-50 border-green-200 text-green-600 hover:bg-red-50 hover:border-red-200 hover:text-red-500':'bg-slate-50 border-slate-200 text-slate-400 hover:bg-green-50 hover:border-green-200 hover:text-green-600')+' transition" title="'+(r.active?'ปิด':'เปิด')+'"><i class="fas fa-power-off"></i></button>'
-      +'<button onclick="dcEditRule(\''+r.id+'\',\''+r.domain+'\',\''+r.label+'\','+(r.start_day||'null')+','+(r.end_day||'null')+')" class="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-500 hover:text-white transition text-xs flex items-center justify-center"><i class="fas fa-pen"></i></button>'
+      +'<button onclick="dcEditRule(\''+r.id+'\',\''+r.domain+'\',\''+r.label+'\',\''+( r.start_date||'')+'\',\''+( r.end_date||'')+'\')" class="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-500 hover:text-white transition text-xs flex items-center justify-center"><i class="fas fa-pen"></i></button>'
       +'<button onclick="dcDeleteRule(\''+r.id+'\')" class="w-8 h-8 rounded-lg bg-red-50 border border-red-200 text-red-500 hover:bg-red-500 hover:text-white transition text-xs flex items-center justify-center"><i class="fas fa-trash"></i></button>'
       +'</div></div>';
   }).join('');
@@ -42831,8 +42831,8 @@ window.dcAddRule = function(){
   document.getElementById('dc-modal-title').textContent = 'เพิ่มกฎ Block';
   document.getElementById('dc-input-domain').value = '';
   document.getElementById('dc-input-label').value = '';
-  document.getElementById('dc-input-start').value = '28';
-  document.getElementById('dc-input-end').value = '31';
+  document.getElementById('dc-input-start').value = '';
+  document.getElementById('dc-input-end').value = '';
   document.getElementById('dc-modal').classList.remove('hidden');
 };
 
@@ -42850,9 +42850,9 @@ window.dcSaveRule = async function(){
   var domain = document.getElementById('dc-input-domain').value.trim();
   if(!domain){ showToast('กรุณาใส่ Domain', true); return; }
   var label = document.getElementById('dc-input-label').value.trim();
-  var start = parseInt(document.getElementById('dc-input-start').value)||null;
-  var end = parseInt(document.getElementById('dc-input-end').value)||null;
-  var payload = { domain, label, start_day: start, end_day: end };
+  var start = document.getElementById('dc-input-start').value||null;
+  var end = document.getElementById('dc-input-end').value||null;
+  var payload = { domain, label, start_date: start, end_date: end };
   var error;
   if(_dcEditId){
     ({ error } = await window._sb.from('block_rules').update(payload).eq('id', _dcEditId));
