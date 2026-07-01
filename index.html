@@ -39735,10 +39735,10 @@ window.dmOpenAllDriverTrip=async function(username,silent){
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
   var dateVal=_dmDate||new Date().toISOString().split('T')[0];
-  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother').eq('plan_date',dateVal).eq('is_child',false);
+  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother,trip_no').eq('plan_date',dateVal).eq('is_child',false);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
-  _dmPlans=plans||[];
+  _dmPlans=(plans||[]).sort(function(a,b){ return (parseInt(a.trip_no)||9999)-(parseInt(b.trip_no)||9999); });
   _dmTripLogs={};_dmSvMap={};
   if(_dmPlans.length){
     var ids=_dmPlans.map(function(p){return p.plan_id;});
@@ -40095,7 +40095,7 @@ window.dmSelectDriver=async function(){
     .eq('plan_date',today).eq('is_child',false);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
-  _dmPlans=plans||[];
+  _dmPlans=(plans||[]).sort(function(a,b){ return (parseInt(a.trip_no)||9999)-(parseInt(b.trip_no)||9999); });
   _dmTripLogs={};_dmSvMap={};
 
   if(_dmPlans.length){
@@ -40193,7 +40193,7 @@ function dmRenderPlanList(area){
         +'<div style="height:100%;width:'+progressPct+'%;background:'+m.border+';border-radius:4px;transition:width .4s;"></div></div>';
       return '<div style="background:#1e293b;border:2px solid '+m.border+';border-radius:20px;padding:16px;margin-bottom:12px;">'
         +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
-        +'<div><div style="font-weight:900;color:#fff;font-size:16px;">เที่ยวที่ '+(pi+1)+'</div>'
+        +'<div><div style="font-weight:900;color:#fff;font-size:16px;">เที่ยวที่ '+(p.trip_no||pi+1)+'</div>'
         +'<div style="font-size:11px;color:#64748b;margin-top:1px;">'+dmEsc(p.plan_id)+' · 🚛 '+dmEsc(p.truck_plate||'–')+'</div></div>'
         +'<span style="font-size:11px;font-weight:900;color:'+m.color+';background:rgba(0,0,0,.3);padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
         +'<i class="fas '+m.icon+'" style="font-size:10px;"></i>'+m.label+'</span></div>'
