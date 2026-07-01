@@ -37272,14 +37272,14 @@ window.viewTripResult = async function(planId) {
   // ── End-of-Month Count: ดึงทุก SKU ที่มียอดสต๊อก (counting) ─────
   window.scLoadEOM = async function(){
     var today = new Date().toISOString().slice(0,10);
-    // ชื่อเดือนไทย (พ.ศ.)
-    var _d = new Date();
+    var pickedDate = document.getElementById('sc-date').value || today;
+    // ชื่อเดือนไทย (พ.ศ.) จากวันที่ที่เลือก
+    var _d = new Date(pickedDate + 'T00:00:00');
     var _thMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
                      'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
     var _eomNote = 'นับสิ้นเดือน ' + _thMonths[_d.getMonth()] + ' ' + (_d.getFullYear() + 543);
-    // ใช้วันที่วันนี้เป็น movement_date สำหรับบันทึก session
-    document.getElementById('sc-date').value = today;
-    _scDate = today;
+    document.getElementById('sc-date').value = pickedDate;
+    _scDate = pickedDate;
     _scItems = [];
     _scSessionId = null;
     var whFilter = document.getElementById('sc-wh-filter').value;
