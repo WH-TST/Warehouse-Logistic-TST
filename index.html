@@ -10623,6 +10623,23 @@ window.loadAnalytics = async function loadAnalytics() {
             invLines += Math.abs(parseFloat(r.cw_physical_inventory) || 0);
         });
 
+        // บันทึก snapshot วันนี้
+        var todaySnap = new Date().toISOString().slice(0,10);
+        window._sb.from('inventory_daily_snapshot').upsert(
+            { snapshot_date: todaySnap, total_kg: invKg, total_lines: invLines },
+            { onConflict: 'snapshot_date' }
+        );
+
+        // ดึง snapshot ย้อนหลังสำหรับ Inventory Trend
+        var {data: snapRows} = await window._sb.from('inventory_daily_snapshot')
+            .select('snapshot_date,total_kg,total_lines')
+            .gte('snapshot_date', startVal)
+            .lte('snapshot_date', endVal)
+            .order('snapshot_date');
+        var snapDates   = (snapRows||[]).map(function(r){ var p=r.snapshot_date.split('-'); return p[2]+'/'+p[1]; });
+        var snapWeights = (snapRows||[]).map(function(r){ return r.total_kg; });
+        var snapLines   = (snapRows||[]).map(function(r){ return r.total_lines; });
+
         window._analyticsInWeight = totalInKg;
         window._analyticsInLines  = totalInLines;
 
@@ -10630,6 +10647,7 @@ window.loadAnalytics = async function loadAnalytics() {
             totalInWeight: totalInKg, totalInLines: totalInLines,
             totalInventoryWeight: invKg, totalInventoryLines: invLines,
             dates: inDateLabels, dailyInbound, dailyOutbound: [],
+            inventoryTrendDates: snapDates, inventoryTrendWeight: snapWeights, inventoryTrendLines: snapLines,
         });
 
         showToast('โหลด Inbound สำเร็จ (' + (txRes.data||[]).length.toLocaleString() + ' รายการ) — กำลังโหลด Outbound...');
