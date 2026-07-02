@@ -7693,6 +7693,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
           <div class="flex gap-2">
             <button onclick="loPasteExcel()" class="text-xs font-black px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition flex items-center gap-1"><i class="fas fa-paste"></i> วางจาก Excel</button>
             <button onclick="loAddItem()" class="text-xs font-black px-3 py-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition flex items-center gap-1"><i class="fas fa-plus"></i> เพิ่มรายการ</button>
+            <button onclick="loAddItem({is_external:true})" class="text-xs font-black px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition flex items-center gap-1"><i class="fas fa-truck-loading"></i> เพิ่มเหล็กนอก</button>
           </div>
         </div>
         <div class="rounded-xl border border-slate-200 overflow-hidden">
@@ -24572,7 +24573,9 @@ function _ldBuildForm(order) {
         var rangeHtml = (minW!=null && maxW!=null)
             ? '<div id="ldf-range-'+oid+'-'+idx+'" data-min="'+minW+'" data-max="'+maxW+'" data-sku="'+_ldEsc(it.sku||'')+'" style="margin-top:3px;font-size:10px;font-weight:900;color:#fbbf24;">'+minW+' – '+maxW+' kg/pcs</div>'
             : '';
-        var productCell = '<td rowspan="'+numRowGroups+'" style="padding:10px 12px;vertical-align:middle;position:sticky;left:0;background:#1e293b;z-index:2;min-width:140px;max-width:170px;">'
+        var _extBg = it.is_external ? '#78350f' : '#1e293b';
+        var productCell = '<td rowspan="'+numRowGroups+'" style="padding:10px 12px;vertical-align:middle;position:sticky;left:0;background:'+_extBg+';z-index:2;min-width:140px;max-width:170px;">'
+            +(it.is_external?'<div style="font-size:9px;font-weight:900;color:#fbbf24;margin-bottom:3px;"><i class="fas fa-truck-loading" style="margin-right:3px;"></i>เหล็กนอก</div>':'')
             +'<div style="font-size:9px;font-weight:700;color:#64748b;">'+(idx+1)+'</div>'
             +'<div style="font-size:15px;font-weight:900;color:#fff;line-height:1.3;">'+_ldEsc(pName)+'</div>'
             +(it.sku?'<div style="font-size:9px;color:#475569;margin-top:1px;">'+_ldEsc(it.sku)+'</div>':'')
@@ -28146,12 +28149,16 @@ window.loAutoWt = function(n) {
 window.loAddItem = function(prefill) {
     _loItemCount++;
     var n = _loItemCount;
+    var isExt = !!(prefill?.is_external);
     var tbody = document.getElementById('lo-m-items-tbody');
     var tr = document.createElement('tr');
     tr.id = 'lo-item-row-'+n;
     tr.className = 'border-t border-slate-100';
+    if (isExt) tr.style.background = '#fffbeb';
     tr.innerHTML =
+        '<input type="hidden" id="lo-item-ext-'+n+'" value="'+(isExt?'1':'0')+'">'+
         '<td class="px-2 py-1.5">'+
+            (isExt ? '<div style="font-size:9px;font-weight:900;color:#d97706;margin-bottom:2px;"><i class="fas fa-truck-loading" style="margin-right:3px;"></i>เหล็กนอก</div>' : '')+
             '<input type="text" id="lo-item-sku-'+n+'" placeholder="SKU หรือชื่อสินค้า" value="'+(prefill?.sku||'')+'" autocomplete="off" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono font-bold focus:outline-none focus:border-indigo-400" oninput="window._loSkuSuggest('+n+',this.value)">'+
             '<input type="text" id="lo-item-name-'+n+'" placeholder="ชื่อสินค้า" value="'+(prefill?.product_name||'')+'" class="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs mt-0.5 focus:outline-none focus:border-indigo-400">'+
         '</td>'+
@@ -28203,7 +28210,8 @@ window.loSaveOrder = async function() {
         var qty  = parseFloat(document.getElementById('lo-item-qty-'+nStr)?.value||0)||0;
         var wt   = parseFloat(document.getElementById('lo-item-wt-'+nStr)?.value||0)||0;
         var cut  = !!(document.getElementById('lo-item-cut-'+nStr)?.checked);
-        if (sku || qty || wt) items.push({sku:sku, product_name:name, qty:qty, target_weight:wt, can_cut:cut});
+        var isExt = document.getElementById('lo-item-ext-'+nStr)?.value === '1';
+        if (sku || name || qty || wt) items.push({sku:sku, product_name:name, qty:qty, target_weight:wt, can_cut:cut, is_external:isExt||undefined});
     });
     if (!items.length) { showToast('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ', true); return; }
 
