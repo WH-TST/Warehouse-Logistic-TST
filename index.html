@@ -5993,6 +5993,36 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <div class="text-xs text-violet-500 font-bold mt-1">น้ำหนักรวมประมาณ (KG)</div>
       </div>
     </div>
+    <!-- summary cards (ON-HAND RM only) -->
+    <div id="invd-cards-rm" class="hidden grid grid-cols-3 gap-3">
+      <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+        <div id="invd-rm-card-sku" class="text-2xl font-black text-green-700">—</div>
+        <div class="text-xs text-green-500 font-bold mt-1">จำนวน SKU</div>
+      </div>
+      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+        <div id="invd-rm-card-physical" class="text-2xl font-black text-emerald-700">—</div>
+        <div class="text-xs text-emerald-500 font-bold mt-1">Physical Inventory รวม</div>
+      </div>
+      <div class="bg-teal-50 border border-teal-200 rounded-xl p-4 text-center">
+        <div id="invd-rm-card-avail" class="text-2xl font-black text-teal-700">—</div>
+        <div class="text-xs text-teal-500 font-bold mt-1">Available Physical รวม</div>
+      </div>
+    </div>
+    <!-- summary cards (COUNTING only) -->
+    <div id="invd-cards-counting" class="hidden grid grid-cols-3 gap-3">
+      <div class="bg-teal-50 border border-teal-200 rounded-xl p-4 text-center">
+        <div id="invd-cnt-card-sku" class="text-2xl font-black text-teal-700">—</div>
+        <div class="text-xs text-teal-500 font-bold mt-1">จำนวน SKU</div>
+      </div>
+      <div class="bg-cyan-50 border border-cyan-200 rounded-xl p-4 text-center">
+        <div id="invd-cnt-card-onhand" class="text-2xl font-black text-cyan-700">—</div>
+        <div class="text-xs text-cyan-500 font-bold mt-1">CW On-Hand รวม</div>
+      </div>
+      <div class="bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
+        <div id="invd-cnt-card-diff" class="text-2xl font-black text-sky-700">—</div>
+        <div class="text-xs text-sky-500 font-bold mt-1">CW ส่วนต่าง (Counted−Onhand)</div>
+      </div>
+    </div>
     <!-- table -->
     <div class="overflow-x-auto rounded-xl border border-slate-200" style="max-height:600px;overflow-y:auto">
       <table class="w-full border-collapse text-sm" id="invd-table">
@@ -13875,6 +13905,10 @@ let blockingChartInstance = null;
         if(cards) cards.classList.toggle('hidden', _invdTable !== 'onhand_fg');
         var cardsSemi = document.getElementById('invd-cards-semi');
         if(cardsSemi) cardsSemi.classList.toggle('hidden', _invdTable !== 'onhand_semi');
+        var cardsRm = document.getElementById('invd-cards-rm');
+        if(cardsRm) cardsRm.classList.toggle('hidden', _invdTable !== 'onhand_rm');
+        var cardsCnt = document.getElementById('invd-cards-counting');
+        if(cardsCnt) cardsCnt.classList.toggle('hidden', _invdTable !== 'counting');
         invdRenderHead();
         invdRender();
       } catch(e){
@@ -14042,6 +14076,34 @@ let blockingChartInstance = null;
         document.getElementById('invd-semi-card-sku').textContent    = semiSkuSet.size.toLocaleString();
         document.getElementById('invd-semi-card-band').textContent   = semiBands.toLocaleString();
         document.getElementById('invd-semi-card-weight').textContent = semiWeight.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+      }
+      // คำนวณ cards สำหรับ onhand_rm
+      if(_invdTable === 'onhand_rm'){
+        var rmSkuSet = new Set(), rmPhysical = 0, rmAvail = 0;
+        filtered.forEach(function(r){
+          if(r.item_number) rmSkuSet.add(r.item_number);
+          rmPhysical += Number(r.physical_inventory)||0;
+          rmAvail    += Number(r.available_physical)||0;
+        });
+        document.getElementById('invd-rm-card-sku').textContent      = rmSkuSet.size.toLocaleString();
+        document.getElementById('invd-rm-card-physical').textContent = rmPhysical.toLocaleString(undefined,{maximumFractionDigits:2});
+        document.getElementById('invd-rm-card-avail').textContent    = rmAvail.toLocaleString(undefined,{maximumFractionDigits:2});
+      }
+      // คำนวณ cards สำหรับ counting
+      if(_invdTable === 'counting'){
+        var cntSkuSet = new Set(), cntOnhand = 0, cntDiff = 0;
+        filtered.forEach(function(r){
+          if(r.item_number) cntSkuSet.add(r.item_number);
+          var oh  = Number(r.cw_onhand)||0;
+          var cnt = Number(r.cw_counted)||0;
+          cntOnhand += oh;
+          cntDiff   += (cnt - oh);
+        });
+        document.getElementById('invd-cnt-card-sku').textContent    = cntSkuSet.size.toLocaleString();
+        document.getElementById('invd-cnt-card-onhand').textContent = cntOnhand.toLocaleString(undefined,{maximumFractionDigits:2});
+        var diffEl = document.getElementById('invd-cnt-card-diff');
+        diffEl.textContent = (cntDiff >= 0 ? '+' : '') + cntDiff.toLocaleString(undefined,{maximumFractionDigits:2});
+        diffEl.style.color = cntDiff < 0 ? '#dc2626' : cntDiff > 0 ? '#16a34a' : '#0369a1';
       }
 
       var rowBg = ['#ffffff','#f8fafc'];
