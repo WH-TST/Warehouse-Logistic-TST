@@ -11027,6 +11027,24 @@ window.switchInvTab = function switchInvTab(tab) {
     }
 };
 
+// load tag start date from app_config
+window.loadTagStartDate = async function() {
+  try {
+    var res = await window._sb.from('app_config').select('value').eq('key','tag_start_date').maybeSingle();
+    var el = document.getElementById('tag-start-date');
+    if (el && res.data && res.data.value) el.value = res.data.value;
+  } catch(e) {}
+};
+window.saveTagStartDate = async function() {
+  var el = document.getElementById('tag-start-date');
+  if (!el || !el.value) return;
+  try {
+    await window._sb.from('app_config').upsert({key:'tag_start_date', value:el.value},{onConflict:'key'});
+    var msg = document.getElementById('tag-start-date-msg');
+    if (msg) { msg.classList.remove('hidden'); setTimeout(function(){ msg.classList.add('hidden'); }, 2000); }
+  } catch(e) {}
+};
+
 // analytics cache helper (used by space analysis)
 async function _sbGetAnalyticsCache(cacheKey) {
   try {
