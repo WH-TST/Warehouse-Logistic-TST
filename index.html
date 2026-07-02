@@ -995,7 +995,7 @@
           if (failureFn) failureFn(new Error('Script error: ' + action));
         };
 
-        script.src = GAS_URL
+        script.src = (window._WMS_GAS_URL || GAS_URL)
           + '?action='   + encodeURIComponent(action)
           + '&args='     + encodeURIComponent(JSON.stringify(args))
           + '&callback=' + encodeURIComponent(cbName);
@@ -1005,7 +1005,7 @@
 
       // POST fetch — ใช้กับ payload ขนาดใหญ่ที่ไม่พอใส่ใน URL
       function _postFetch(action, args, successFn, failureFn) {
-        fetch(GAS_URL, {
+        fetch(window._WMS_GAS_URL || GAS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: action, args: args })
@@ -10315,6 +10315,17 @@ const _safeStorage = {
 
     document.addEventListener("DOMContentLoaded", function() {
         console.log("✅ DOM Ready - Warehouse & Logistic Management System Initialized");
+
+        // โหลด gas_sync_url จาก Supabase แล้วอัปเดต GAS Bridge URL
+        (async function() {
+            try {
+                var res = await window._sb.from('app_config').select('value').eq('key','gas_sync_url').maybeSingle();
+                if (res.data && res.data.value) {
+                    window._WMS_GAS_URL = res.data.value;
+                    console.log('[GAS Bridge] URL updated from Supabase:', res.data.value.substring(0,60)+'...');
+                }
+            } catch(e) {}
+        })();
 
         // ── Init จัดการคลัง (default view) ────────────────────────────────────
         setTimeout(function() {
