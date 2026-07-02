@@ -11071,21 +11071,30 @@ window.saveTagStartDate = async function() {
   } catch(e) {}
 };
 
-/** ✅ แก้ไข loadPrintTagData() - เพิ่ม Console Log */
-window.loadPrintTagData = function loadPrintTagData() {
+window.loadPrintTagData = async function loadPrintTagData() {
     const dateInput = document.getElementById('tag-date');
     const date = dateInput.value;
-    
+
     if(!date) return showToast("กรุณาเลือกวันที่พิมพ์ TAG", true);
 
-    // ใช้ date string โดยตรงถ้าเป็น YYYY-MM-DD อยู่แล้ว
     const formattedDate = date.match(/^\d{4}-\d{2}-\d{2}$/) ? date : (() => {
         const d = new Date(date + 'T00:00:00');
         return isNaN(d) ? date : d.toISOString().split('T')[0];
     })();
-    
+
     const cont = document.getElementById('tag-list-container');
     cont.innerHTML = '<div class="p-20 text-center text-slate-300"><i class="fas fa-spinner fa-spin text-4xl mb-4"></i><p class="font-bold">กำลังคำนวณข้อมูลจากแผนผลิต...</p></div>';
+
+    // โหลด spreadsheetId และ sheetName จาก Supabase เพื่อส่งไปให้ GAS
+    var pbSpreadsheetId = '', pbSheetName = '', ppSpreadsheetId = '';
+    try {
+        var cfgRes = await window._sb.from('app_config').select('key,value').in('key', ['production_block_spreadsheet_id','production_block_sheet_name','production_plan_spreadsheet_id']);
+        if (cfgRes.data) cfgRes.data.forEach(function(r) {
+            if (r.key === 'production_block_spreadsheet_id') pbSpreadsheetId = r.value;
+            if (r.key === 'production_block_sheet_name')     pbSheetName     = r.value;
+            if (r.key === 'production_plan_spreadsheet_id')  ppSpreadsheetId = r.value;
+        });
+    } catch(e) {}
 
     google.script.run
         .withSuccessHandler(res => {
@@ -11105,7 +11114,7 @@ window.loadPrintTagData = function loadPrintTagData() {
             console.error("❌ Backend Error:", err);
             showToast("เกิดข้อผิดพลาด: " + err.message, true);
         })
-        .calculatePrintTagList(formattedDate); // ส่ง yyyy-MM-dd
+        .calculatePrintTagList({ date: formattedDate, pbSpreadsheetId: pbSpreadsheetId, pbSheetName: pbSheetName, ppSpreadsheetId: ppSpreadsheetId });
 }
 /**
  * ✅ ฟังก์ชันแสดงตาราง (ปรับปรุงใหม่)
