@@ -48,13 +48,6 @@
               window.loadAndRenderLogiCalendar();
             }
           });
-          // ติดตามการส่ง
-          _rtRefresh('dt', function() {
-            if (!document.getElementById('logi-panel-delivery-tracking')?.classList.contains('hidden')
-                && typeof window.dtLoad === 'function') {
-              window.dtLoad();
-            }
-          });
           // driver monitor
           _rtRefresh('dm', function() {
             var dmContent = document.getElementById('view-driver-monitor-content');
@@ -64,12 +57,6 @@
           });
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_logs' }, function() {
-          _rtRefresh('dt', function() {
-            if (!document.getElementById('logi-panel-delivery-tracking')?.classList.contains('hidden')
-                && typeof window.dtLoad === 'function') {
-              window.dtLoad();
-            }
-          });
           // sync สถานะแผนในรายการด้วย
           _rtRefresh('plan-list', function() {
             if (!document.getElementById('logi-panel-list')?.classList.contains('hidden')
@@ -82,14 +69,6 @@
             var dmContent = document.getElementById('view-driver-monitor-content');
             if (dmContent && !dmContent.classList.contains('hidden') && typeof window.dmRefresh === 'function') {
               window.dmRefresh();
-            }
-          });
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_visits' }, function() {
-          _rtRefresh('dt', function() {
-            if (!document.getElementById('logi-panel-delivery-tracking')?.classList.contains('hidden')
-                && typeof window.dtLoad === 'function') {
-              window.dtLoad();
             }
           });
         })
@@ -4849,58 +4828,6 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 
   </div><!-- end logi-panel-driverperf -->
 
-  <!-- ════════════════════════════════════════════════════════ -->
-  <!-- TAB: ติดตามการส่ง (Delivery Tracking)                   -->
-  <!-- ════════════════════════════════════════════════════════ -->
-  <div id="logi-panel-delivery-tracking" class="hidden space-y-4">
-
-    <!-- Filter bar -->
-    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex flex-wrap gap-3 items-end">
-      <div>
-        <label class="text-xs font-black text-slate-400 uppercase mb-1 block">วันที่</label>
-        <input type="date" id="dt-date" class="bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2 font-bold text-slate-700 outline-none focus:border-blue-400 text-sm">
-      </div>
-      <button onclick="dtLoad()" class="px-5 py-2.5 rounded-xl font-black text-sm text-white flex items-center gap-2" style="background:#2563eb;">
-        <i class="fas fa-search"></i> โหลดข้อมูล
-      </button>
-      <div class="ml-auto flex items-center gap-3">
-        <label class="flex items-center gap-2 text-sm font-bold text-slate-500 cursor-pointer">
-          <input type="checkbox" id="dt-autorefresh" onchange="dtToggleAuto()" class="rounded">
-          รีเฟรชอัตโนมัติ (30s)
-        </label>
-        <span id="dt-last-refresh" class="text-xs text-slate-400"></span>
-      </div>
-    </div>
-
-    <!-- Summary chips -->
-    <div id="dt-summary" class="hidden grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-center">
-        <div id="dt-sum-plans" class="text-2xl font-black text-slate-800">–</div>
-        <div class="text-xs font-black text-slate-400 uppercase mt-1">แผน</div>
-      </div>
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-center">
-        <div id="dt-sum-shops" class="text-2xl font-black text-slate-800">–</div>
-        <div class="text-xs font-black text-slate-400 uppercase mt-1">จุดส่งทั้งหมด</div>
-      </div>
-      <div class="rounded-2xl border shadow-sm p-4 text-center" style="background:#f0fdf4;border-color:#bbf7d0;">
-        <div id="dt-sum-done" class="text-2xl font-black text-emerald-600">–</div>
-        <div class="text-xs font-black text-emerald-500 uppercase mt-1">ส่งสำเร็จ</div>
-      </div>
-      <div class="rounded-2xl border shadow-sm p-4 text-center" style="background:#fff1f2;border-color:#fecdd3;">
-        <div id="dt-sum-fail" class="text-2xl font-black text-rose-600">–</div>
-        <div class="text-xs font-black text-rose-400 uppercase mt-1">ส่งไม่ได้</div>
-      </div>
-    </div>
-
-    <!-- Per-plan cards -->
-    <div id="dt-plan-list">
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-400">
-        <i class="fas fa-satellite-dish text-4xl mb-3 block opacity-30"></i>
-        <p class="font-bold">เลือกวันที่แล้วกด "โหลดข้อมูล"</p>
-      </div>
-    </div>
-
-  </div><!-- end logi-panel-delivery-tracking -->
 
   <!-- ════════════════════════════════════════════════════════ -->
   <!-- TAB: จัดการคนขับ (Driver Users)                         -->
@@ -18244,11 +18171,6 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             // 4. อัปเดต UI
             resetSaveBtn();
             showLogiSuccessToast(planId);
-            // refresh หน้าติดตามถ้า panel เปิดอยู่
-            if (!document.getElementById('logi-panel-delivery-tracking')?.classList.contains('hidden')) {
-                if (typeof window.dtLoad === 'function') dtLoad();
-            }
-
             const updatedPlan = {
                 id:              planId,
                 pairId:          basePlanId,
@@ -18938,7 +18860,6 @@ window.switchLogiTab = function switchLogiTab(tab) {
         loadorder:         'logi-panel-loadorder',
         driverlog:         'logi-panel-driverlog',
         driverperf:        'logi-panel-driverperf',
-        'delivery-tracking': 'logi-panel-delivery-tracking',
         'driver-users':    'logi-panel-driver-users',
         'wh-staff':        'logi-panel-wh-staff',
     };
@@ -18949,7 +18870,6 @@ window.switchLogiTab = function switchLogiTab(tab) {
         loadorder:         ' bg-emerald-700 text-white shadow',
         driverlog:         ' bg-teal-600 text-white shadow',
         driverperf:        ' bg-rose-600 text-white shadow',
-        'delivery-tracking': ' bg-blue-600 text-white shadow',
         'driver-users':    ' bg-purple-600 text-white shadow',
         'wh-staff':        ' bg-emerald-600 text-white shadow',
     };
@@ -18959,7 +18879,6 @@ window.switchLogiTab = function switchLogiTab(tab) {
         preshipment:       ' text-gray-500 hover:bg-white hover:text-orange-600',
         driverlog:         ' text-gray-500 hover:bg-white hover:text-teal-700',
         driverperf:        ' text-gray-500 hover:bg-white hover:text-rose-600',
-        'delivery-tracking': ' text-gray-500 hover:bg-white hover:text-blue-600',
         'driver-users':    ' text-gray-500 hover:bg-white hover:text-purple-600',
         'wh-staff':        ' text-gray-500 hover:bg-white hover:text-emerald-600',
     };
@@ -18976,13 +18895,10 @@ window.switchLogiTab = function switchLogiTab(tab) {
             if (btn) btn.className = btnBase + tabHover[t];
         }
     });
-    // หยุด auto-refresh ติดตามเมื่อออกจากแท็บ
-    if (tab !== 'delivery-tracking' && typeof window.dtDestroy === 'function') window.dtDestroy();
     if (tab === 'cal')               loadAndRenderLogiCalendar();
     if (tab === 'preshipment')       initPreShipmentTab();
     if (tab === 'driverlog')         dlogInit();
     if (tab === 'driverperf')        perfInit();
-    if (tab === 'delivery-tracking') dtInit();
     if (tab === 'driver-users')      duInit();
     if (tab === 'wh-staff')          whStaffInit();
     if (tab === 'autoplan') {
@@ -35699,9 +35615,9 @@ window.loRefreshOrderList = window.loRefreshHistory;
 })();
 
 // ══════════════════════════════════════════════════════════════════════════════
-// DELIVERY TRACKING — ติดตามการส่งแบบ real-time
+// DELIVERY TRACKING — REMOVED
 // ══════════════════════════════════════════════════════════════════════════════
-(function(){
+if (false)(function(){
   var _dtTimer = null;
 
   window.dtInit = function() {
