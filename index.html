@@ -931,6 +931,21 @@
     })();
     </script>
 
+    <script>
+    // Global toast utility — used throughout the app
+    window.showToast = function showToast(msg, isError) {
+        var toast    = document.getElementById('toast');
+        var toastMsg = document.getElementById('toast-msg');
+        var toastIco = document.getElementById('toast-icon');
+        if (!toast || !toastMsg || !toastIco) return;
+        toastMsg.innerText = msg;
+        toastIco.className = isError ? 'fas fa-exclamation-triangle text-rose-500 text-2xl' : 'fas fa-check-circle text-amber-500 text-2xl';
+        toast.classList.remove('translate-y-32');
+        clearTimeout(toast._toastTimer);
+        toast._toastTimer = setTimeout(function(){ toast.classList.add('translate-y-32'); }, 4000);
+    };
+    </script>
+
     <!-- ═══════════════════════════════════════════════════════════
          GAS Bridge — ใช้เมื่อรันบน GitHub Pages (ไม่ใช่ใน GAS)
          แทนที่ google.script.run ด้วย fetch() → GAS Web App URL
