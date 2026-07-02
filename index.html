@@ -11045,6 +11045,449 @@ window.saveTagStartDate = async function() {
   } catch(e) {}
 };
 
+/** ✅ แก้ไข loadPrintTagData() - เพิ่ม Console Log */
+window.loadPrintTagData = function loadPrintTagData() {
+    const dateInput = document.getElementById('tag-date');
+    const date = dateInput.value;
+    
+    if(!date) return showToast("กรุณาเลือกวันที่พิมพ์ TAG", true);
+
+    // ใช้ date string โดยตรงถ้าเป็น YYYY-MM-DD อยู่แล้ว
+    const formattedDate = date.match(/^\d{4}-\d{2}-\d{2}$/) ? date : (() => {
+        const d = new Date(date + 'T00:00:00');
+        return isNaN(d) ? date : d.toISOString().split('T')[0];
+    })();
+    
+    const cont = document.getElementById('tag-list-container');
+    cont.innerHTML = '<div class="p-20 text-center text-slate-300"><i class="fas fa-spinner fa-spin text-4xl mb-4"></i><p class="font-bold">กำลังคำนวณข้อมูลจากแผนผลิต...</p></div>';
+
+    google.script.run
+        .withSuccessHandler(res => {
+            console.log("✅ Response from Backend:", res);
+            
+            if(res.success && res.items && res.items.length > 0) {
+                tagPrintData = res.items;
+                renderTagList(res); 
+                showToast("คำนวณรายการพิมพ์สำเร็จ");
+            } else {
+                console.warn("⚠️ No data found:", res.message);
+                cont.innerHTML = '<div class="p-20 text-center text-slate-400"><i class="fas fa-info-circle text-5xl mb-4"></i><p>ไม่พบรายการที่ต้องพิมพ์ในวันที่เลือก</p></div>';
+                showToast(res.message || "ไม่มีข้อมูลในวันที่ระบุ", true);
+            }
+        })
+        .withFailureHandler(err => {
+            console.error("❌ Backend Error:", err);
+            showToast("เกิดข้อผิดพลาด: " + err.message, true);
+        })
+        .calculatePrintTagList(formattedDate); // ส่ง yyyy-MM-dd
+}
+/**
+ * ✅ ฟังก์ชันแสดงตาราง (ปรับปรุงใหม่)
+ */
+/**
+ * ✅ แก้ไข: renderTagList
+ * - ถ้าบันทึกแล้ว -> ช่อง "ต้องพิมพ์" เป็นค่าว่าง
+ * - ถ้าบันทึกแล้ว -> แสดงแค่ปุ่มส้ม (ปริ้นเพิ่ม) ปุ่มม่วงและเขียวไม่แสดง
+ */
+function renderTagList(data) {
+    const cont = document.getElementById('tag-list-container');
+    tagPrintData = data.items;
+
+    let html = `<div class="bg-white rounded-[2rem] shadow-xl overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-indigo-900 text-indigo-100 text-xs font-black uppercase">
+                <tr>
+                    <th class="p-5">เครื่อง</th>
+                    <th class="p-5">SKU / Product Name</th>
+                    <th class="p-5 text-right">ปริ้นสะสม</th>
+                    <th class="p-5 text-right">ใช้จริง</th>
+                    <th class="p-5 text-right">แผนวันนี้</th>
+                    <th class="p-5 text-right text-rose-600">ต้องพิมพ์</th>
+                    <th class="p-5 text-right">บันทึกแล้ว</th>
+                    <th class="p-5 text-center">จัดการ</th>
+                </tr>
+            </thead>
+            <tbody>`;
+    
+    data.items.forEach((item, i) => {
+        // เช็คว่าเคยบันทึกของวันนี้ไปหรือยัง
+        const hasSavedBefore = item.savedBundlesToday > 0;
+
+        // ถ้าบันทึกแล้ว ช่อง Input เป็นค่าว่างและกดไม่ได้
+        const inputValue = hasSavedBefore ? '' : item.needToPrintBundles;
+        const inputDisabled = hasSavedBefore ? 'disabled' : '';
+        const inputPlaceholder = hasSavedBefore ? '-' : '';
+
+        html += `<tr class="border-b hover:bg-slate-50 font-sarabun">
+            <td class="p-5 text-center">
+                <span class="bg-slate-100 px-3 py-1 rounded-lg font-black text-slate-600">-</span>
+            </td>
+            <td class="p-5">
+                <p class="font-black text-indigo-700 font-mono">${item.productId}</p>
+                <p class="text-[11px] font-bold text-slate-800">${item.productName}</p>
+            </td>
+            <td class="p-5 text-right font-bold text-slate-500">
+                ${item.printedExcludeToday} <span class="text-xs opacity-50">มัด</span>
+            </td>
+            <td class="p-5 text-right font-bold text-blue-600">
+                ${item.usedExcludeToday} <span class="text-xs opacity-50">มัด</span>
+            </td>
+            <td class="p-5 text-right font-bold text-amber-600">
+                ${item.planToday} <span class="text-xs opacity-50">มัด</span>
+            </td>
+            <td class="p-5 text-right">
+                <input type="number" id="qty-${i}" value="${inputValue}" placeholder="${inputPlaceholder}"
+                    class="w-20 p-2 border-2 border-rose-200 rounded-lg text-right font-black text-rose-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-100" 
+                    ${inputDisabled}>
+            </td>
+            <td class="p-5 text-right font-black text-emerald-600 text-lg">
+                <span id="saved-display-${i}">${item.savedBundlesToday}</span> <span class="text-xs opacity-50">มัด</span>
+            </td>
+            <td class="p-5 text-center">
+                <div id="action-area-${i}" class="flex justify-center gap-2">
+                    ${!hasSavedBefore ? 
+                        // กรณีที่ 1: ยังไม่เคยบันทึก -> แสดงปุ่มเขียว "บันทึกและปริ้น"
+                        `<button onclick="confirmAndSaveTag(${i})" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:bg-emerald-800 transition-all">
+                            <i class="fas fa-print mr-1"></i> บันทึก & ปริ้น
+                        </button>` : 
+                        // กรณีที่ 2: บันทึกไปแล้ว -> แสดงแค่ปุ่มส้ม "ปริ้นเพิ่ม" (ปุ่มม่วงหายไปเลย)
+                        `<button onclick="enablePrintExtra(${i})" class="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:bg-amber-600 transition-all">
+                            <i class="fas fa-plus mr-1"></i> ปริ้นเพิ่ม
+                        </button>`
+                    }
+                </div>
+            </td>
+        </tr>`;
+    });
+    cont.innerHTML = html + `</tbody></table></div>`;
+}
+/**
+ * ✅ ฟังก์ชันบันทึก (สถานะที่ 1 → สถานะที่ 2)
+ */
+/**
+ * ✅ แก้ไข: confirmAndSaveTag
+ * - บันทึกเสร็จ -> สั่ง generatePreview ทันที
+ * - เปลี่ยนปุ่มเป็นสีส้มทันที
+ */
+window.confirmAndSaveTag = function confirmAndSaveTag(idx) {
+    const item = tagPrintData[idx];
+    const qty = parseFloat(document.getElementById(`qty-${idx}`).value);
+    const date = document.getElementById('tag-date').value;
+
+    if (!qty || qty <= 0) return showToast("กรุณาระบุจำนวนมัด", true);
+
+    showToast("กำลังบันทึกและเตรียมพิมพ์...");
+    
+    google.script.run.withSuccessHandler(res => {
+        if(res.success) {
+            showToast("บันทึกสำเร็จ กำลังเปิดหน้าพิมพ์...");
+            
+            // อัปเดตข้อมูลในตัวแปร Local
+            tagPrintData[idx].savedBundlesToday = qty;
+            
+            // 1. อัปเดตตัวเลขแสดงผล
+            document.getElementById(`saved-display-${idx}`).innerText = qty;
+            
+            // 2. เคลียร์ช่อง Input และปิดการแก้ไข
+            const inputEl = document.getElementById(`qty-${idx}`);
+            inputEl.value = ""; 
+            inputEl.placeholder = "-";
+            inputEl.disabled = true;
+            inputEl.classList.add('disabled:bg-slate-100', 'disabled:text-slate-400', 'disabled:border-slate-100');
+            
+            // 3. เปลี่ยนปุ่มเป็น "ปริ้นเพิ่ม" (สีส้ม) ทันที
+            const actionArea = document.getElementById(`action-area-${idx}`);
+            actionArea.innerHTML = `
+                <button onclick="enablePrintExtra(${idx})" class="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:bg-amber-600 transition-all">
+                    <i class="fas fa-plus mr-1"></i> ปริ้นเพิ่ม
+                </button>
+            `;
+            
+            // 4. 🔥 สำคัญ: สั่งเปิดหน้า Preview ทันที
+            const previewItem = { ...item, needToPrintBundles: qty }; 
+            generatePreview(previewItem);
+            
+        }
+    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: qty });
+}
+        function generatePreviewFromRow(idx, qty) {
+            const item = tagPrintData[idx];
+            const previewItem = { ...item, needToPrintBundles: qty };
+            generatePreview(previewItem);
+            document.getElementById('tag-preview-area').classList.remove('hidden');
+        }
+
+/**
+ * ✅ ฟังก์ชันปริ้นเพิ่ม (สถานะที่ 3)
+ */
+window.enablePrintExtra = function enablePrintExtra(idx) {
+    const input = document.getElementById(`qty-${idx}`);
+    const actionArea = document.getElementById(`action-area-${idx}`);
+    
+    input.disabled = false;
+    input.value = ""; 
+    input.placeholder = "จำนวนที่เพิ่ม";
+    input.focus();
+    
+    actionArea.innerHTML = `
+        <button onclick="saveExtraAndPreview(${idx})" class="bg-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-lg hover:bg-rose-700 transition-all">
+            ยืนยันบันทึก & พรีวิว
+        </button>
+        <button onclick="loadPrintTagData()" class="bg-slate-400 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-500 transition-all">ยกเลิก</button>
+    `;
+}
+/**
+ * ✅ ฟังก์ชันบันทึกเพิ่มและแสดง Preview
+ */
+window.saveExtraAndPreview = function saveExtraAndPreview(idx) {
+    const item = tagPrintData[idx];
+    const extraQty = parseFloat(document.getElementById(`qty-${idx}`).value);
+    const date = document.getElementById('tag-date').value;
+
+    if (!extraQty || extraQty <= 0) return showToast("กรุณาระบุจำนวนมัด", true);
+
+    showToast("กำลังบันทึกยอดเพิ่มและพรีวิว...");
+    google.script.run.withSuccessHandler(res => {
+        if(res.success) {
+            showToast("บันทึกสำเร็จ");
+            const previewItem = { ...item, needToPrintBundles: extraQty };
+            generatePreview(previewItem);
+            document.getElementById('tag-preview-area').classList.remove('hidden');
+            loadPrintTagData(); 
+        }
+    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: extraQty });
+}
+/**
+ * ✅ ฟังก์ชันปริ้น TAG (สถานะที่ 2 → Preview)
+ */
+function generatePreviewFromRow(idx) {
+    const item = tagPrintData[idx];
+    const savedQty = item.savedBundlesToday; 
+    
+    if (savedQty <= 0) return showToast("ไม่มียอดที่บันทึกไว้สำหรับปริ้น", true);
+    
+    const tempItem = {...item, needToPrintBundles: savedQty};
+    generatePreview(tempItem); 
+    
+    document.getElementById('tag-preview-area').classList.remove('hidden');
+    window.scrollTo({
+        top: document.getElementById('tag-preview-area').offsetTop - 100,
+        behavior: 'smooth'
+    });
+}
+/**
+ * ========================================
+ * แก้ไขฟังก์ชัน generatePreview ให้ตรงตามรูปแบบที่ต้องการ 100%
+ * ========================================
+ * 
+ * วิธีใช้: 
+ * 1. ค้นหาฟังก์ชัน generatePreview ในไฟล์ HTML เดิม
+ * 2. แทนที่ทั้งฟังก์ชันด้วยโค้ดนี้
+ */
+
+function generatePreview(item) {
+    const area = document.getElementById('preview-content');
+    if (!area) return;
+    
+    area.innerHTML = ''; 
+    const bundles = item.needToPrintBundles;
+    let html = '';
+    const _stdVal = parseFloat(item.wStd);
+    const stdFormatted = (!isNaN(_stdVal) && _stdVal > 0) ? _stdVal.toFixed(2) : (item.wStd && item.wStd !== '-' ? item.wStd : '-');
+    
+    // ตัดภาษาไทยออกจากชื่อสินค้า
+    let engProductName = item.productName.replace(/[\u0E00-\u0E7F]/g, '');
+    engProductName = engProductName.replace(/\s+/g, ' ').trim();
+    
+    for (let i = 1; i <= bundles; i++) {
+        html += `
+            <div class="tag-preview-page" style="page-break-after: always; height: 75mm; width: 100mm; box-sizing: border-box; padding: 0; display: flex; flex-direction: column; font-family: 'Sarabun', sans-serif; font-weight: 900; color: black; line-height: 1.2; background: white;">
+
+                <!-- Header -->
+                <div style="display: flex; align-items: center; padding: 1.5mm 4mm 1mm 4mm;">
+                    <img src="https://static.wixstatic.com/media/5a1d18_237433e7b53841cca74e8f402795c4ca~mv2.png"
+                         style="width: 14mm; height: auto; margin-right: 2.5mm;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 12.5pt; font-weight: 900; line-height: 1.1; color: black;">บริษัท ที.แสตนดาร์ด สตีล จำกัด</div>
+                        <div style="font-size: 7.5pt; font-weight: 700; letter-spacing: 0.5px; color: black;">T.STANDARD STEEL COMPANY LIMITED</div>
+                    </div>
+                </div>
+                <!-- เส้นแบ่ง header / ข้อมูล -->
+                <div style="border-bottom: 2.5px solid black; margin: 0 0 1.5mm 0;"></div>
+
+                <!-- ข้อมูลสินค้า -->
+                <div style="font-size: 9.5pt; flex-grow: 1; padding: 1.5mm 4mm 0 4mm;">
+
+                    <!-- แถว 1: Item + Date -->
+                    <div style="display: flex; align-items: baseline; margin-bottom: 0.8mm;">
+                        <div style="white-space: nowrap; margin-right: 1mm;">Item:</div>
+                        <div style="font-size: 11.5pt; font-weight: 900; flex: 1;">${item.productId}</div>
+                        <div style="white-space: nowrap; margin-right: 1mm;">Date:</div>
+                        <div style="width: 36mm; border-bottom: 1.5px solid black;"></div>
+                    </div>
+
+                    <!-- แถว 2: Name -->
+                    <div style="display: flex; align-items: baseline; margin-bottom: 0.8mm;">
+                        <div style="white-space: nowrap; margin-right: 1mm;">Name:</div>
+                        <div style="flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-bottom: 1px solid #bbb; padding-left: 1mm;">${engProductName}</div>
+                    </div>
+
+                    <!-- แถว 3: Size -->
+                    <div style="display: flex; align-items: baseline; margin-bottom: 0.8mm;">
+                        <div style="white-space: nowrap; margin-right: 1mm;">Size:</div>
+                        <div style="flex: 1; border-bottom: 1px solid #bbb; padding-left: 1mm;">${item.productSize || '-'}</div>
+                    </div>
+
+                    <!-- แถว 4: Pcs/Bundle + Bundle No -->
+                    <div style="display: flex; align-items: baseline; margin-bottom: 0.8mm;">
+                        <div style="white-space: nowrap; margin-right: 1mm;">Pcs/Bundle:</div>
+                        <div style="white-space: nowrap; margin-right: 3mm; font-size: 10.5pt;">${item.pcsPerBundle}</div>
+                        <div style="white-space: nowrap; margin-right: 1mm;">Bundle No:</div>
+                        <div style="flex: 1; border-bottom: 1.5px solid black;"></div>
+                    </div>
+
+                    <!-- เส้นแบ่งประ -->
+                    <div style="border-top: 1px dashed #999; margin-bottom: 0.8mm;"></div>
+
+                    <!-- แถว 5: Weight Range + Wpcs -->
+                    <div style="display: flex; align-items: flex-end; margin-bottom: 0.8mm; min-height: 8mm;">
+                        <div style="white-space: nowrap; margin-right: 1mm;">Weight Range:</div>
+                        <div style="flex: 3; border-bottom: 1.5px solid black; margin-right: 1mm;"></div>
+                        <div style="white-space: nowrap; margin-right: 1mm;">Wpcs:</div>
+                        <div style="flex: 1; border-bottom: 1.5px solid black;"></div>
+                    </div>
+
+                    <!-- แถว 6: W(Min-Max) + STD -->
+                    <div style="display: flex; align-items: baseline; margin-bottom: 0.8mm;">
+                        <div style="white-space: nowrap; margin-right: 1mm;">W(Min-Max):</div>
+                        <div style="width: 24mm; font-size: 10pt;">${(item.wMinMax && item.wMinMax !== '-') ? item.wMinMax : '-'}</div>
+                        <div style="white-space: nowrap; margin-right: 1mm;">STD):</div>
+                        <div style="flex: 1; font-size: 10.5pt;">${stdFormatted}</div>
+                    </div>
+
+                    <!-- แถว 7: Machine + Shift -->
+                    <div style="display: flex; align-items: flex-end; min-height: 8mm;">
+                        <div style="white-space: nowrap; margin-right: 1mm;">Machine:</div>
+                        <div style="flex: 2; border-bottom: 1.5px solid black; margin-right: 4mm;"></div>
+                        <div style="white-space: nowrap; margin-right: 1mm;">Shift:</div>
+                        <div style="flex: 1; border-bottom: 1.5px solid black;"></div>
+                    </div>
+                </div>
+
+                <!-- Barcode + QC Stamp -->
+                <div style="display: flex; align-items: center; margin-top: 0.5mm; padding: 0 4mm 1mm 4mm; width: 100%; box-sizing: border-box;">
+                    <div style="flex: 1;">
+                        <svg class="barcode-svg" data-barcode="${item.productId}"></svg>
+                    </div>
+                    <div style="width: 16mm; height: 16mm; border: 2px solid black; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-left: 2mm; flex-shrink: 0;">
+                        <div style="font-size: 7pt; font-weight: 900; letter-spacing: 1px;">QC</div>
+                        <div style="border-top: 1.5px solid black; width: 70%; margin: 1px 0;"></div>
+                        <div style="font-size: 6.5pt; font-weight: 900; letter-spacing: 0.5px;">PASS</div>
+                    </div>
+                </div>
+            </div>`;
+    }
+    
+    area.innerHTML = html;
+    
+    // สั่งวาด Barcode
+    const svgs = area.querySelectorAll('.barcode-svg');
+    svgs.forEach(svg => {
+        const code = svg.getAttribute('data-barcode');
+        JsBarcode(svg, code, {
+            format: "CODE128",
+            width: 2.2,      
+            height: 48,        
+            displayValue: false, 
+            margin: 0,
+            textAlign: "left" 
+        });
+    });
+    
+    document.getElementById('tag-preview-area').classList.remove('hidden');
+}
+        window.closePrintPreview = function closePrintPreview() { document.getElementById('tag-preview-area').classList.add('hidden'); }
+
+        window.printTagPopup = function printTagPopup() {
+            var content = document.getElementById('preview-content');
+            if (!content) return;
+            var tags = content.querySelectorAll('.tag-preview-page');
+            if (!tags.length) return;
+            var html = '';
+            tags.forEach(function(t) { html += t.outerHTML; });
+            var pw = window.open('', '_blank', 'width=400,height=320');
+            pw.document.write(
+                '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+                '<style>' +
+                '@page { size: 100mm 75mm; margin: 0; }' +
+                'html, body { margin: 0; padding: 0; background: white; }' +
+                '.tag-preview-page { width: 100mm; height: 75mm; overflow: hidden; page-break-after: always; box-sizing: border-box; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 2mm 4mm; display: flex; flex-direction: column; position: relative; color: black; background: white; }' +
+                '.barcode-container { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 1mm; }' +
+                '.barcode-svg { width: 90% !important; max-height: 10mm; }' +
+                '* { font-family: Arial, sans-serif; box-sizing: border-box; }' +
+                '</style>' +
+                '</head><body onload="window.print();window.onafterprint=function(){window.close();};">' +
+                html + '</body></html>'
+            );
+            pw.document.close();
+        }
+
+        window.saveCalculation = function saveCalculation() {
+            if (rawData.length === 0) return showToast("ไม่มีข้อมูลเพื่อบันทึกการคำนวณ", true);
+            
+            const btn = document.getElementById('btn-save-calc');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> SAVING...';
+            btn.disabled = true;
+
+            const calcData = [];
+            const grouped = groupByMachine(rawData);
+
+            Object.keys(grouped).forEach(mach => {
+                const rows = grouped[mach];
+                const sumF = rows.reduce((acc, r) => acc + r.prodTimeDay, 0);
+                const F_norm = getNormalizedF(sumF);
+                let machM = 0;
+
+                rows.forEach(r => {
+                    const rowKey = `${mach}_${r.shift}_${r.productId}`;
+                    const inputs = inputValues[rowKey] || { planned: 0, other: 0 };
+                    const K = (inputs.planned + inputs.other) * (r.linesPerBundle || 1);
+                    const L = (r.speed > 0 ? (K / r.speed) / 60 : 0) + (r.pmTime || 0);
+                    machM += L;
+
+                    const finish = calculateN(document.getElementById('plan-date').value.split('-').reverse().join('/'), F_norm, machM);
+                    const status = determineStatus(finish, document.getElementById('plan-date').value.split('-').reverse().join('/'));
+
+                    calcData.push({
+                        dateString: r.dateString,
+                        machine: mach,
+                        shift: r.shift,
+                        productId: r.productId,
+                        productName: r.productName,
+                        plannedBundles: inputs.planned,
+                        otherBundles: inputs.other,
+                        totalLinesK: K,
+                        spaceHrsL: L,
+                        status: status.status,
+                        finishTime: finish ? finish.toLocaleString('th-TH') : '-'
+                    });
+                });
+            });
+
+            google.script.run.withSuccessHandler(res => {
+                btn.innerHTML = '<i class="fas fa-save"></i> SAVE CALC';
+                btn.disabled = false;
+                if(res.success) showToast(res.message);
+                else showToast(res.message, true);
+            }).saveCalculationToNewSheet(calcData);
+        }
+    
+/**
+ * ✅ ฟังก์ชันเรนเดอร์ข้อมูล Analytics Dashboard ฉบับสมบูรณ์
+ * (ตัดส่วนตารางสินค้าเร่งระบายออก และเพิ่มกราฟ Blocking Trend แทน)
+ */
+
+
 // analytics cache helper (used by space analysis)
 async function _sbGetAnalyticsCache(cacheKey) {
   try {
