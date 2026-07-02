@@ -27191,7 +27191,7 @@ function _ldRenderMonitorTable(rows, orders) {
                 +(order.is_trailer && order.trailer_split ? '' :
                 (function(){
                     var _diff = _ldScaleDiff[orderId];
-                    var _inputVal = (_diff!=null) ? (totalWt + _diff).toFixed(1) : '';
+                    var _inputVal = _ldScaleWtRaw[orderId] != null ? _ldScaleWtRaw[orderId] : ((_diff!=null) ? (totalWt + _diff).toFixed(1) : '');
                     var _badge = (_diff!=null&&_diff!==0)
                         ? '<span style="font-size:11px;color:#7c3aed;font-weight:700;background:#ede9fe;padding:4px 10px;border-radius:6px;">ส่วนต่าง '+(_diff>0?'+':'')+_diff.toFixed(1)+' KG</span>'
                         : '';
@@ -27295,6 +27295,7 @@ function _ldEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt
 // ── Scale diff / Final weight distribution ───────────────────────────
 var _ldScaleDiff = {}; // {orderId: number (KG, +/-)}
 var _ldScaleDiffUnit = {}; // {orderId: {mother: number, trailer: number}}
+var _ldScaleWtRaw = {}; // {orderId: raw scale weight (KG) — survives re-render}
 
 window.ldCalcFinalUnit = async function(oid, unit) {
     var inp = document.getElementById('ld-scale-diff-'+oid+'-'+unit);
@@ -27321,6 +27322,8 @@ window.ldCalcFinalUnit = async function(oid, unit) {
 window.ldCalcFinal = async function(oid) {
     var inp = document.getElementById('ld-scale-diff-'+oid);
     var scaleWt = parseFloat(inp ? inp.value : 0)||0;
+    if (!scaleWt || scaleWt <= 0) { showToast('กรุณากรอกน้ำหนักจากตราชั่งใหญ่ก่อนคำนวณ', true); return; }
+    _ldScaleWtRaw[oid] = scaleWt;
     var loaded  = parseFloat(inp ? (inp.dataset.loaded||0) : 0)||0;
     var val = Math.round((scaleWt - loaded) * 10) / 10; // diff = ตราชั่งใหญ่ − น้ำหนักที่โหลด
     _ldScaleDiff[oid] = val;
