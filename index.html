@@ -13813,14 +13813,13 @@ let blockingChartInstance = null;
         }
         var cols = _invdCols[_invdTable];
         var sortCol = isTransaction ? 'tst_pd_date' : 'item_number';
-        var q = window._sb.from(_invdTable).select(cols.join(',')).order(sortCol,{ascending:false});
+        var q = window._sb.from(_invdTable).select(cols.join(',')).order(sortCol,{ascending:false}).limit(20000);
         // date filter สำหรับ transaction tables
         if(isTransaction){
           var dateFrom = (document.getElementById('invd-date-from').value||'').trim();
           var dateTo   = (document.getElementById('invd-date-to').value||'').trim();
           if(dateFrom) q = q.gte('tst_pd_date', dateFrom);
           if(dateTo)   q = q.lte('tst_pd_date', dateTo);
-          if(!dateFrom && !dateTo) q = q.limit(1000);  // ถ้าไม่ filter ดึง 1000 ล่าสุด
         }
         var res = await q;
         if(res.error) throw res.error;
