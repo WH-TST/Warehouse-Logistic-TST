@@ -6005,11 +6005,11 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       </div>
       <div class="bg-cyan-50 border border-cyan-200 rounded-xl p-4 text-center">
         <div id="invd-cnt-card-onhand" class="text-2xl font-black text-cyan-700">—</div>
-        <div class="text-xs text-cyan-500 font-bold mt-1">CW On-Hand รวม</div>
+        <div class="text-xs text-cyan-500 font-bold mt-1">เส้น On-Hand รวม</div>
       </div>
-      <div class="bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
-        <div id="invd-cnt-card-diff" class="text-2xl font-black text-sky-700">—</div>
-        <div class="text-xs text-sky-500 font-bold mt-1">CW ส่วนต่าง (Counted−Onhand)</div>
+      <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-center">
+        <div id="invd-cnt-card-kg" class="text-2xl font-black text-indigo-700">—</div>
+        <div class="text-xs text-indigo-500 font-bold mt-1">น้ำหนัก On-Hand รวม (กก.)</div>
       </div>
     </div>
     <!-- table -->
@@ -14108,19 +14108,15 @@ let blockingChartInstance = null;
       }
       // คำนวณ cards สำหรับ counting
       if(_invdTable === 'counting'){
-        var cntSkuSet = new Set(), cntOnhand = 0, cntDiff = 0;
+        var cntSkuSet = new Set(), cntOnhand = 0, cntKg = 0;
         filtered.forEach(function(r){
           if(r.item_number) cntSkuSet.add(r.item_number);
-          var oh  = Number(r.cw_onhand)||0;
-          var cnt = Number(r.cw_counted)||0;
-          cntOnhand += oh;
-          cntDiff   += (cnt - oh);
+          cntOnhand += Number(r.cw_onhand)||0;
+          cntKg     += Number(r.cw_quantity)||0;
         });
         document.getElementById('invd-cnt-card-sku').textContent    = cntSkuSet.size.toLocaleString();
-        document.getElementById('invd-cnt-card-onhand').textContent = cntOnhand.toLocaleString(undefined,{maximumFractionDigits:2});
-        var diffEl = document.getElementById('invd-cnt-card-diff');
-        diffEl.textContent = (cntDiff >= 0 ? '+' : '') + cntDiff.toLocaleString(undefined,{maximumFractionDigits:2});
-        diffEl.style.color = cntDiff < 0 ? '#dc2626' : cntDiff > 0 ? '#16a34a' : '#0369a1';
+        document.getElementById('invd-cnt-card-onhand').textContent = cntOnhand.toLocaleString(undefined,{maximumFractionDigits:0});
+        document.getElementById('invd-cnt-card-kg').textContent     = cntKg.toLocaleString(undefined,{maximumFractionDigits:2});
       }
 
       var rowBg = ['#ffffff','#f8fafc'];
