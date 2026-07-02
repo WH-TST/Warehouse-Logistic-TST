@@ -9427,9 +9427,12 @@ const _safeStorage = {
       // ── Init ──────────────────────────────────────────────────────
       window.wmmInit = function() {
         const d = safeGet('wmc-date');
-        if (d && !d.value) {
+        if (d) {
+          const saved = localStorage.getItem('wmc_date');
           const t = new Date();
-          d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+          const today = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+          d.value = saved || today;
+          d.addEventListener('change', function(){ localStorage.setItem('wmc_date', this.value); }, {once:false});
         }
         wmCapLoad();
         wmmLoadOrders();
