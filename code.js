@@ -625,23 +625,30 @@ function saveCalculationToNewSheet(calculationData) {
 /**
  * ✅ เพิ่ม Logging ใน calculatePrintTagList()
  */
-function calculatePrintTagList(selectedDateStr) {
+function calculatePrintTagList(params) {
   try {
+    // รองรับทั้ง string เดิม และ object ใหม่ที่ส่งมาจาก frontend
+    var selectedDateStr  = (typeof params === 'string') ? params : (params.date || '');
+    var ppSpreadsheetId  = (typeof params === 'object' && params.ppSpreadsheetId)  ? params.ppSpreadsheetId  : SPREADSHEET_ID;
+    var pbSpreadsheetId  = (typeof params === 'object' && params.pbSpreadsheetId)  ? params.pbSpreadsheetId  : PROD_BLOCK_SPREADSHEET_ID;
+    var pbSheetName      = (typeof params === 'object' && params.pbSheetName)      ? params.pbSheetName      : null;
+
     Logger.log("========================================");
     Logger.log("🚀 START calculatePrintTagList (Plan ONLY Mode)");
     Logger.log("  - Selected Date: " + selectedDateStr);
-    
+    Logger.log("  - ppSpreadsheetId: " + ppSpreadsheetId);
+
     const productMap = getProductMap();
     const extMap = getExternalProductMap();
     const qcMap = getQCStandardMap();
-    
+
     // 1. ดึงข้อมูลประกอบ (ยอดปริ้นเก่า, ยอดใช้จริง, ยอดบันทึกวันนี้)
     const printedBundlesExcludeToday = getPrintedQtyExcludeDate(selectedDateStr);
     const actualLinesExcludeToday = getActualLinesFromDynamic(selectedDateStr);
     const todayPrintedLog = getPrintedQtyFromLog(selectedDateStr);
-    
+
     // 2. ดึงแผนวันนี้ (นี่คือพระเอกหลัก)
-    const planLinesToday = getPlanLinesByDate(selectedDateStr);
+    const planLinesToday = getPlanLinesByDate(selectedDateStr, ppSpreadsheetId);
     
     // ✅ แก้ไข: ใช้เฉพาะรายการที่มีในแผนวันนี้เท่านั้น (Plan Keys Only)
     // ไม่เอา ...Object.keys(printedBundlesExcludeToday) หรือ actualLinesExcludeToday มารวมแล้ว
@@ -841,9 +848,9 @@ function getActualLinesFromDynamic(excludeDateStr) {
 /**
  * ✅ แก้ไข getPlanLinesByDate() - เพิ่ม Logging และรองรับ Date Format
  */
-function getPlanLinesByDate(dateStr) {
+function getPlanLinesByDate(dateStr, overrideSpreadsheetId) {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.openById(overrideSpreadsheetId || SPREADSHEET_ID);
     const sheet = ss.getSheetByName(PLAN_SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) {
       Logger.log("⚠️ Sheet Plan ว่างเปล่า");
