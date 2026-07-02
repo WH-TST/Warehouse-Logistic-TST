@@ -9411,11 +9411,15 @@ const _safeStorage = {
           }
 
           var allMachines = {};
-          if (gasUrl) {
-            // 1. Production Block (forecast +1 ถึง +3 วัน เท่านั้น ไม่รวมวันนี้)
+          {
+            // 1. Production Block — ใช้ google.script.run (JSONP) แทน fetch เพื่อหลีกเลี่ยง CORS
             var pbResults = await Promise.all(monthKeys.map(function(mk) {
-              var url = gasUrl + '?action=getProductionBlock&args=' + encodeURIComponent(JSON.stringify([mk, pbSpreadsheetId, pbSheetName]));
-              return fetch(url, { redirect: 'follow' }).then(function(r){ return r.json(); }).catch(function(){ return null; });
+              return new Promise(function(resolve) {
+                google.script.run
+                  .withSuccessHandler(function(res) { resolve(res); })
+                  .withFailureHandler(function() { resolve(null); })
+                  .getProductionBlock(mk, pbSpreadsheetId, pbSheetName);
+              });
             }));
             pbResults.forEach(function(res) {
               if (!res || !res.success) return;
@@ -9436,8 +9440,12 @@ const _safeStorage = {
             // 2. Dashboard (แผนจริงวันนี้) — override/เพิ่มข้อมูลวันนี้
             var machineHours = {};
             if (ppSpreadsheetId) {
-              var ppRes = await fetch(gasUrl + '?action=getProductionPlanByDate&args=' + encodeURIComponent(JSON.stringify([dateStr, ppSpreadsheetId])), { redirect: 'follow' })
-                .then(function(r){ return r.json(); }).catch(function(){ return null; });
+              var ppRes = await new Promise(function(resolve) {
+                google.script.run
+                  .withSuccessHandler(function(res) { resolve(res); })
+                  .withFailureHandler(function() { resolve(null); })
+                  .getProductionPlanByDate(dateStr, ppSpreadsheetId);
+              });
               if (ppRes && ppRes.success) {
                 mergeMachines(allMachines, ppRes.machines);
                 Object.assign(machineHours, ppRes.hours || {});
