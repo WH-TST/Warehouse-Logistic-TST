@@ -26972,11 +26972,23 @@ function _ldRenderMonitorTable(rows, orders) {
     var live = validRows2.filter(function(r){
         // rejected orders → always show in live (both done + draft sessions as real-time baseline)
         if (_rejectedIds.has(r.order_id)) return true;
+        var ord = _liveOrderIdx[r.order_id];
+        // trailer_split: one unit may submit (status=done) while the other is still loading
+        // keep draft sessions for the unsubmitted unit in live, and done sessions for finished unit
+        if (ord && ord.is_trailer && ord.trailer_split) {
+            var ur = ord.unit_review||{};
+            var rUnit = r.truck_unit||'mother';
+            var rUnitStatus = (ur[rUnit]||{}).status||'';
+            // finished unit (pending_review/approved/rejected): include its done sessions in live card
+            if (rUnitStatus==='pending_review'||rUnitStatus==='approved'||rUnitStatus==='rejected') {
+                return r.record_type!=='draft';
+            }
+            // unfinished unit: include its draft sessions so monitor shows real-time progress
+            return r.record_type==='draft';
+        }
         if (!inProgressIds.has(r.order_id)) return false;
         if (r.record_type==='draft') return true;
-        // trailer_split in_progress: include done sessions for already-finished unit
-        var ord = _liveOrderIdx[r.order_id];
-        return !!(ord && ord.is_trailer && ord.trailer_split);
+        return false;
     });
     var liveSessionIds = new Set(live.map(function(r){ return r.id; }));
     var done = validRows2.filter(function(r){ return !liveSessionIds.has(r.id) && r.record_type!=='draft'; });
