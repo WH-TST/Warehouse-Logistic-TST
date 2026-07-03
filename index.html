@@ -24203,6 +24203,14 @@ function _ldGetCardsWrap() {
 async function _ldLoadOrderCards(dateVal) {
     var wrap = _ldGetCardsWrap();
     if (!wrap) return;
+    // Skip re-render while user is typing in any input/textarea — prevents keyboard dismissal
+    var focused = document.activeElement;
+    if (focused && (focused.tagName==='INPUT'||focused.tagName==='TEXTAREA') && wrap.contains(focused)) {
+        // Schedule a deferred refresh after focus leaves
+        clearTimeout(_ldLoadOrderCards._defer);
+        _ldLoadOrderCards._defer = setTimeout(function(){ _ldLoadOrderCards(dateVal); }, 2000);
+        return;
+    }
     try {
         var {data} = await window._sb.from('loading_orders').select('*')
             .eq('order_date', dateVal)
