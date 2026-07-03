@@ -26800,6 +26800,12 @@ function _ldSubscribeRealtime() {
 var _ldMonDate = '';
 async function _ldMonFetch(dateVal, showSpinner) {
     if (!dateVal) return;
+    // Skip re-render if user is actively typing in a monitor input
+    if (!showSpinner) {
+        var _ae = document.activeElement;
+        var _wrap = document.getElementById('ld-mon-table-wrap');
+        if (_ae && (_ae.tagName==='INPUT'||_ae.tagName==='TEXTAREA') && _wrap && _wrap.contains(_ae)) return;
+    }
     var wrap = document.getElementById('ld-mon-table-wrap');
     if (showSpinner && wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
