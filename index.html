@@ -25409,6 +25409,7 @@ async function _ldUpsertDraft(oid) {
             });
         }
 
+        var _draftFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
         var iIdx = 0;
         while (true) {
             if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
@@ -25421,7 +25422,8 @@ async function _ldUpsertDraft(oid) {
                 var q=parseFloat((qEl&&qEl.value)||0)||0;
                 if (w>0||q>0) { lifts.push({lift_no:c+1,qty:q,weight:w}); totalQty+=q; totalWt+=w; }
             }
-            var oi = orderItems[iIdx]||{};
+            var _dOiIdx = (_draftFOrigIdx && _draftFOrigIdx[iIdx]!==undefined) ? _draftFOrigIdx[iIdx] : iIdx;
+            var oi = orderItems[_dOiIdx]||{};
             var row = {
                 order_id: oid, plan_id: od.plan_id||'', plan_date: od.order_date||'',
                 record_type: 'draft',
