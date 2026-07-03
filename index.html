@@ -25576,7 +25576,27 @@ window.ldCardLookupStaff = function(oid) {
 var _ldCardPhotos = {};  // {orderId: [File, ...]}
 window.ldCardHandlePhotos = function(inp, oid) {
     if (!_ldCardPhotos[oid]) _ldCardPhotos[oid] = [];
-    _ldCardPhotos[oid] = _ldCardPhotos[oid].concat(Array.from(inp.files||[]));
+    var newFiles = Array.from(inp.files||[]);
+    _ldCardPhotos[oid] = _ldCardPhotos[oid].concat(newFiles);
+
+    // Auto-save to device: trigger download for each new photo
+    newFiles.forEach(function(f) {
+        try {
+            if (navigator.share && navigator.canShare && navigator.canShare({files:[f]})) {
+                // iOS: use share sheet (user can save to Photos from there)
+                // Don't auto-trigger — would popup for every photo
+            } else {
+                // Android / desktop: auto-download
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(f);
+                a.download = 'loading_' + oid + '_' + Date.now() + '.jpg';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function(){ document.body.removeChild(a); }, 1000);
+            }
+        } catch(e){}
+    });
+
     var prev = document.getElementById('ldf-photo-prev-'+oid);
     if (!prev) return;
     prev.innerHTML = '';
@@ -25584,10 +25604,26 @@ window.ldCardHandlePhotos = function(inp, oid) {
         var url = URL.createObjectURL(f);
         var div = document.createElement('div');
         div.className = 'relative w-16 h-16';
-        div.innerHTML = '<img src="'+url+'" class="w-16 h-16 object-cover rounded-xl border-2 border-slate-200">'
+        div.innerHTML = '<img src="'+url+'" class="w-16 h-16 object-cover rounded-xl border-2 border-slate-200" onclick="ldPhotoSaveToDevice(\''+oid+'\','+i+')" title="กดค้างเพื่อบันทึก">'
             +'<button onclick="ldCardRemovePhoto(\''+oid+'\','+i+')" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center"><i class="fas fa-times"></i></button>';
         prev.appendChild(div);
     });
+};
+
+window.ldPhotoSaveToDevice = function(oid, i) {
+    var f = (_ldCardPhotos[oid]||[])[i];
+    if (!f) return;
+    try {
+        if (navigator.share && navigator.canShare && navigator.canShare({files:[f]})) {
+            navigator.share({files:[f], title:'Loading Photo'});
+        } else {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(f);
+            a.download = 'loading_' + oid + '_' + i + '.jpg';
+            document.body.appendChild(a); a.click();
+            setTimeout(function(){ document.body.removeChild(a); }, 1000);
+        }
+    } catch(e){}
 };
 
 window.ldCardRemovePhoto = function(oid, i) {
@@ -25608,6 +25644,11 @@ window.ldCardRemovePhoto = function(oid, i) {
 window.ldCardSave = async function(oid) {
     var _saveBtn = document.getElementById('ldf-save-btn-'+oid);
     if (_saveBtn && _saveBtn.disabled) return; // ป้องกันกดซ้ำ
+    // Force commit any focused input (mobile Safari does not commit value before button click)
+    if (document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+        await new Promise(function(r){ setTimeout(r, 80); });
+    }
     if (_saveBtn) {
         _saveBtn.disabled = true;
         _saveBtn.style.background = '#64748b';
@@ -25722,21 +25763,7 @@ window.ldCardSave = async function(oid) {
                 var matchKey = (oi.sku||'')+'|'+curUnit;
                 if(oi.sku && skuIdMap[matchKey] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[matchKey];
             });
-            // For rejected orders: also delete old photos from storage before re-uploading
-            if (orderData && (orderData.review_status||'')==='rejected') {
-                var oldUrls = [];
-                existSess.forEach(function(r){ (r.photo_urls||[]).forEach(function(u){ if(u) oldUrls.push(u); }); });
-                if (oldUrls.length) {
-                    var bucket = 'delivery-photos';
-                    var toDelete = oldUrls.map(function(url){
-                        var m = url.match(/\/object\/public\/[^/]+\/(.+)/);
-                        return m ? m[1] : null;
-                    }).filter(Boolean);
-                    if (toDelete.length) {
-                        try { await window._sb.storage.from(bucket).remove(toDelete); } catch(e){}
-                    }
-                }
-            }
+            // Photos are NEVER deleted — keep all photos including from rejected orders
         }
     }
 
