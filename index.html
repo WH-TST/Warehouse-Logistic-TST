@@ -25334,18 +25334,17 @@ var _ldDraftDBCache   = {};   // {oid: {iIdx: lifts[]}} — lifts from Supabase 
 
 // ── called on every input; debounce 1.5s then upsert to DB ──
 window.ldDraftSave = function(oid, unit) {
-    // lock in the active unit so _ldUpsertDraft reads the right form elements
-    if (unit) _ldTrailerUnit[oid] = unit;
-    // save to localStorage immediately (for fast restore)
-    _ldLocalSave(oid);
-    // debounce DB upsert — key per oid+unit so mother/trailer timers don't cancel each other
-    var _timerKey = oid + '|' + (unit || _ldTrailerUnit[oid] || 'mother');
+    var _saveUnit = unit || _ldTrailerUnit[oid] || 'mother';
+    // save to localStorage immediately using the exact unit that triggered this save
+    _ldLocalSave(oid, _saveUnit);
+    // debounce DB upsert — keyed per oid+unit so mother/trailer timers are independent
+    var _timerKey = oid + '|' + _saveUnit;
     clearTimeout(_ldDraftTimers[_timerKey]);
-    _ldDraftTimers[_timerKey] = setTimeout(function(){ _ldUpsertDraft(oid); }, 1500);
+    _ldDraftTimers[_timerKey] = setTimeout(function(){ _ldUpsertDraft(oid, _saveUnit); }, 1500);
 };
 
-function _ldLocalSave(oid) {
-    var _lsUnit = _ldTrailerUnit[oid]||'mother';
+function _ldLocalSave(oid, unit) {
+    var _lsUnit = unit || _ldTrailerUnit[oid]||'mother';
     var draft = {lifts: [], note: '', userEdited: true};
     var iIdx = 0;
     while (true) {
@@ -25368,17 +25367,19 @@ function _ldLocalSave(oid) {
     try { localStorage.setItem(_lsKey, JSON.stringify(draft)); } catch(e){}
 }
 
-var _ldUpsertLock = {};   // prevent concurrent upserts per order
+var _ldUpsertLock = {};   // prevent concurrent upserts per order|unit
 
-async function _ldUpsertDraft(oid) {
-    // Skip if already running for this order (debounce race guard)
-    if (_ldUpsertLock[oid]) return;
-    _ldUpsertLock[oid] = true;
+async function _ldUpsertDraft(oid, unit) {
+    var _curUnit = unit || _ldTrailerUnit[oid] || 'mother';
+    var _uk = oid+'|'+_curUnit;
+    // Skip if already running for this order+unit (debounce race guard)
+    if (_ldUpsertLock[_uk]) return;
+    _ldUpsertLock[_uk] = true;
     try {
         // ensure we have order metadata
         if (!_ldDraftOrderCache[oid]) {
             var {data:od} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
-            if (!od) { _ldUpsertLock[oid]=false; return; }
+            if (!od) { _ldUpsertLock[_uk]=false; return; }
             _ldDraftOrderCache[oid] = od;
         }
         var od = _ldDraftOrderCache[oid];
@@ -25386,8 +25387,6 @@ async function _ldUpsertDraft(oid) {
         var cu = window._cu||{};
         var staffRec = (_ldStaffMaster||[]).find(function(x){ return x.name===cu.name||x.id===cu.username; });
         var staff = { id: staffRec?staffRec.id:(cu.username||''), name: staffRec?staffRec.name:(cu.name||cu.username||''), team: staffRec?staffRec.team:'' };
-        var _curUnit = _ldTrailerUnit[oid] || 'mother';
-        var _uk = oid+'|'+_curUnit;
         if (!_ldDraftRowIds[_uk]) _ldDraftRowIds[_uk] = {};
 
         // Sync: fetch existing draft rows from DB to avoid any duplicate inserts
@@ -25474,7 +25473,7 @@ async function _ldUpsertDraft(oid) {
             iIdx++;
         }
     } catch(e){}
-    _ldUpsertLock[oid] = false;
+    _ldUpsertLock[_uk] = false;
 }
 
 function _ldDraftLoad(oid, unit) {
