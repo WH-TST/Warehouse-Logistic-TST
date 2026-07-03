@@ -25579,6 +25579,32 @@ async function _ldRestoreDraftIds(oid) {
 
         var _restoreUnit = _ldTrailerUnit[oid] || 'mother';
         var _restoreUk = oid+'|'+_restoreUnit;
+
+        // For trailer split: purge stale drafts whose (sku, truck_unit) don't match the plan
+        if (od.is_trailer && od.trailer_split) {
+            var _sp = od.trailer_split;
+            // Build valid sets: which SKUs belong to which unit
+            var _validMother = new Set(), _validTrailer = new Set();
+            (orderItems||[]).forEach(function(it, _i) {
+                var s = _sp[String(_i)]||_sp[it.sku]||{};
+                if ((s.mother_pcs||0) > 0) _validMother.add(it.sku);
+                if ((s.trailer_pcs||0) > 0) _validTrailer.add(it.sku);
+            });
+            var {data:_allDrafts} = await window._sb.from('loading_sessions')
+                .select('id,sku,truck_unit').eq('order_id', oid).eq('record_type', 'draft');
+            if (_allDrafts && _allDrafts.length) {
+                var _staleIds = _allDrafts.filter(function(r) {
+                    var u = r.truck_unit||'mother';
+                    if (u === 'mother') return !_validMother.has(r.sku);
+                    if (u === 'trailer') return !_validTrailer.has(r.sku);
+                    return false;
+                }).map(function(r){ return r.id; });
+                if (_staleIds.length) {
+                    await window._sb.from('loading_sessions').delete().in('id', _staleIds);
+                }
+            }
+        }
+
         // Fetch draft rows for this order+unit (trailer split: mother and trailer are separate)
         var _restoreQ = window._sb.from('loading_sessions').select('id,sku,lifts,start_time,truck_unit').eq('order_id', oid).eq('record_type', 'draft');
         if (od.is_trailer && od.trailer_split) _restoreQ = _restoreQ.eq('truck_unit', _restoreUnit);
