@@ -27492,12 +27492,14 @@ function _ldRenderMonitorTable(rows, orders) {
                         unitSess.forEach(function(r){var m=(r.note||'').match(/\[เวลาโหลดจริง:\s*(\d+)\s*·\s*(\d+)/);if(m){uSegM=parseInt(m[1]);uSegC=parseInt(m[2]);}});
                         var uDur=uSegM!==null?uSegM:((uMinS&&uMaxE)?Math.round((new Date(uMaxE)-new Date(uMinS))/60000):0);
                         var uDurLabel=uSegC?uDur+' นาที ('+uSegC+' ช่วง)':uDur+' นาที';
+                        var uDunnage=_monDunnage(unitSess);
                         uStatsHtml='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">'
                             +(uMinS?_ldStatChip('fas fa-clock','#38bdf8','เริ่ม',_thTime(uMinS)):'')
                             +(uMaxE?_ldStatChip('fas fa-flag-checkered','#34d399','สิ้นสุด',_thTime(uMaxE)):'')
                             +(uDur>0?_ldStatChip('fas fa-stopwatch','#a78bfa','รวม',uDurLabel):'')
                             +(uTW>0?_ldStatChip('fas fa-weight-hanging','#f472b6','น้ำหนัก',uTW.toLocaleString(undefined,{maximumFractionDigits:0})+' KG'):'')
                             +(uTQ>0?_ldStatChip('fas fa-cubes','#60a5fa','PCS',uTQ.toLocaleString()):'')
+                            +((uDunnage.pcs||uDunnage.kg)?_ldStatChip('fas fa-grip-lines','#f59e0b','เหล็กรอง',uDunnage.pcs+' ท่อน · '+uDunnage.kg+' KG'):'')
                         +'</div>';
                     }
                     var sdDiff=_sdUnit[unit]!=null?_sdUnit[unit]:null;
