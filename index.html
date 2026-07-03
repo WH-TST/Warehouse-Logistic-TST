@@ -25359,8 +25359,15 @@ window.ldDraftSave = function(oid, unit) {
     var _segKey = (_od && _od.trailer_split) ? oid+'-'+_saveUnit : oid;
     var _isFirstStroke = !_ldCardStartTimes[_segKey];
     if (_isFirstStroke) {
+        // Rejection re-load: carry over closed segments from previous round
+        if (_od && _od.review_status === 'rejected') {
+            try {
+                var _prevSegs = JSON.parse(localStorage.getItem('ld_workseg_'+oid)||'null');
+                if (_prevSegs && _prevSegs.length) _ldSegments[_segKey] = _prevSegs;
+            } catch(e) {}
+        }
         _ldCardStartTimes[_segKey] = new Date().toISOString();
-        _ldInitSegment(_segKey);
+        _ldInitSegment(_segKey); // appends new open segment after closed previous ones
     }
     // save to localStorage immediately using the exact unit that triggered this save
     _ldLocalSave(oid, _saveUnit);
@@ -26064,9 +26071,12 @@ window.ldCardSave = async function(oid, unit) {
                 await window._sb.from('loading_orders').update({status:'done', review_status:'pending_review', updated_at:new Date().toISOString()}).eq('id',oid);
             }
         }
+        // Persist closed segments so rejection re-load can accumulate total time
+        try { localStorage.setItem('ld_workseg_'+oid, JSON.stringify(_ldSegments[segKey]||[])); } catch(e){}
         _ldDraftClear(oid);
         if (_ldElapsedTmr[segKey]) { clearInterval(_ldElapsedTmr[segKey]); delete _ldElapsedTmr[segKey]; }
-        delete _ldSegments[segKey]; delete _ldPaused[segKey];
+        delete _ldSegments[segKey]; delete _ldCardStartTimes[oid]; delete _ldCardStartTimes[segKey];
+        delete _ldPaused[segKey];
         showToast('✅ Loading record saved');
         _ldActiveOrderId = null;
         delete _ldCardPhotos[oid];
