@@ -24485,27 +24485,28 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         Object.keys(itemLiftsMap).forEach(function(k){ _ldDraftDBCache[_dlUk][k] = itemLiftsMap[k]; });
 
         // Directly set DOM values for empty fields (bypasses the localStorage vs DB cache conflict)
+        var _rjUnit = _ldTrailerUnit[oid]||'mother';
         setTimeout(function(){
             Object.keys(itemLiftsMap).forEach(function(iIdxStr){
                 var iIdx = parseInt(iIdxStr, 10);
                 (itemLiftsMap[iIdxStr]||[]).forEach(function(cell){
                     var c = (cell.lift_no || 1) - 1;
-                    var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
-                    var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                    var wEl = document.getElementById('ldf-lw-'+oid+'-'+_rjUnit+'-'+iIdx+'-'+c);
+                    var qEl = document.getElementById('ldf-lq-'+oid+'-'+_rjUnit+'-'+iIdx+'-'+c);
                     if (wEl && !wEl.value && cell.weight) wEl.value = cell.weight;
                     if (qEl && !qEl.value && cell.qty) qEl.value = cell.qty;
                 });
             });
-            ldCardStats(oid);
+            ldCardStats(oid, _rjUnit);
             // Save pre-fill to localStorage WITHOUT userEdited flag so DB cache re-applies on next tab switch
             var _preDraft = {lifts:[], note:'', userEdited:false};
             var _iIdx2 = 0;
-            while (document.getElementById('ldf-lw-'+oid+'-'+_iIdx2+'-0')) {
+            while (document.getElementById('ldf-lw-'+oid+'-'+_rjUnit+'-'+_iIdx2+'-0')) {
                 var _row = [];
                 var _lcols = _ldOrderCols[oid]||_LFT_COLS;
                 for (var _c=0; _c<_lcols; _c++) {
-                    var _wEl = document.getElementById('ldf-lw-'+oid+'-'+_iIdx2+'-'+_c);
-                    var _qEl = document.getElementById('ldf-lq-'+oid+'-'+_iIdx2+'-'+_c);
+                    var _wEl = document.getElementById('ldf-lw-'+oid+'-'+_rjUnit+'-'+_iIdx2+'-'+_c);
+                    var _qEl = document.getElementById('ldf-lq-'+oid+'-'+_rjUnit+'-'+_iIdx2+'-'+_c);
                     _row.push({w:_wEl?_wEl.value:'', q:_qEl?_qEl.value:''});
                 }
                 _preDraft.lifts.push(_row);
@@ -24710,6 +24711,7 @@ window.ldSpConfirm = async function(oid, itemCount) {
 
 function _ldBuildFormMobile(order) {
     var oid = order.id;
+    var unit = _ldTrailerUnit[oid]||'mother';
     if (order.is_trailer && !order.trailer_split) return _ldBuildTrailerSplitScreen(order);
     if (order.is_trailer && order.trailer_split && !_ldTrailerUnit[oid]) return _ldBuildTrailerPicker(order);
     var items = order.items||[];
@@ -24799,7 +24801,7 @@ function _ldBuildFormMobile(order) {
                 +'</div>'
             +'</td>'
         +'</tr>';
-        var ev='ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')';
+        var ev='ldCardStats(\''+oid+'\',\''+unit+'\');ldDraftSave(\''+oid+'\')';
         var inputRows='';
         for(var grpStart=0;grpStart<itemDisp;grpStart+=CPR){
             var grpEnd=Math.min(grpStart+CPR,itemDisp);
@@ -24808,8 +24810,8 @@ function _ldBuildFormMobile(order) {
             var kgR='<td style="padding:6px 3px;background:#f8fafc;font-size:12px;font-weight:900;color:#15803d;text-align:center;border-right:2px solid #e2e8f0;white-space:nowrap;">'+grpLabel+'Kg</td>';
             var pcR='<td style="padding:6px 3px;background:#f8fafc;font-size:12px;font-weight:900;color:#1d4ed8;text-align:center;border-right:2px solid #e2e8f0;'+(isLastGrp?'border-bottom:3px solid #cbd5e1;':'')+'white-space:nowrap;">'+grpLabel+'Pcs</td>';
             for(var c=grpStart;c<grpEnd;c++){
-                var cId='ldf-lw-'+oid+'-'+idx+'-'+c;
-                var qId='ldf-lq-'+oid+'-'+idx+'-'+c;
+                var cId='ldf-lw-'+oid+'-'+unit+'-'+idx+'-'+c;
+                var qId='ldf-lq-'+oid+'-'+unit+'-'+idx+'-'+c;
                 var isBuf=(c>=lc);
                 var cs='padding:4px 3px;'+(isLastGrp?'border-bottom:3px solid #cbd5e1;':'border-bottom:1px solid #f1f5f9;');
                 kgR+='<td style="'+cs+'"><input type="number" min="0" step="0.01" placeholder="kg" style="'+IW+(isBuf?'border-color:#d1d5db;color:#9ca3af;':'')+'" id="'+cId+'" oninput="'+ev+'"></td>';
@@ -24952,6 +24954,7 @@ function _ldBuildForm(order) {
         return _ldBuildFormMobile(order);
     }
     var oid = order.id;
+    var _formUnit = _ldTrailerUnit[oid]||'mother';
 
     // ── Trailer: no split yet → show split plan screen
     if (order.is_trailer && !order.trailer_split) {
@@ -25061,8 +25064,8 @@ function _ldBuildForm(order) {
             for (var c=0; c<_LFT_COLS; c++) {
                 var colIdx = rg * _LFT_COLS + c;
                 liftCells += '<td style="padding:6px 4px;vertical-align:middle;border-right:1px solid #f1f5f9;background:#fff;">'
-                    +'<input type="number" min="0" step="0.01" placeholder="kg" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
-                    +'<input type="number" min="0" step="1" placeholder="pcs" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\');ldDraftSave(\''+oid+'\')">'
+                    +'<input type="number" min="0" step="0.01" placeholder="kg" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+_formUnit+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\',\''+_formUnit+'\');ldDraftSave(\''+oid+'\')">'
+                    +'<input type="number" min="0" step="1" placeholder="pcs" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+_formUnit+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\',\''+_formUnit+'\');ldDraftSave(\''+oid+'\')">'
                 +'</td>';
             }
             var borderStyle = (rg === numRowGroups-1) ? 'border-bottom:2px solid #e2e8f0;' : 'border-bottom:1px dashed #cbd5e1;';
@@ -25338,15 +25341,16 @@ window.ldDraftSave = function(oid) {
 };
 
 function _ldLocalSave(oid) {
+    var _lsUnit = _ldTrailerUnit[oid]||'mother';
     var draft = {lifts: [], note: '', userEdited: true};
     var iIdx = 0;
     while (true) {
-        if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
+        if (!document.getElementById('ldf-lw-'+oid+'-'+_lsUnit+'-'+iIdx+'-0')) break;
         var itemLifts = [];
         var _lcols = _ldOrderCols[oid]||_LFT_COLS;
         for (var c=0; c<_lcols; c++) {
-            var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
-            var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+            var wEl = document.getElementById('ldf-lw-'+oid+'-'+_lsUnit+'-'+iIdx+'-'+c);
+            var qEl = document.getElementById('ldf-lq-'+oid+'-'+_lsUnit+'-'+iIdx+'-'+c);
             itemLifts.push({w: wEl?wEl.value:'', q: qEl?qEl.value:''});
         }
         draft.lifts.push(itemLifts);
@@ -25423,12 +25427,12 @@ async function _ldUpsertDraft(oid) {
         var _draftFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_uk];
         var iIdx = 0;
         while (true) {
-            if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
+            if (!document.getElementById('ldf-lw-'+oid+'-'+_curUnit+'-'+iIdx+'-0')) break;
             var lifts=[], totalQty=0, totalWt=0;
             var _ucols = _ldOrderCols[oid]||_LFT_COLS;
             for (var c=0; c<_ucols; c++) {
-                var wEl=document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
-                var qEl=document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                var wEl=document.getElementById('ldf-lw-'+oid+'-'+_curUnit+'-'+iIdx+'-'+c);
+                var qEl=document.getElementById('ldf-lq-'+oid+'-'+_curUnit+'-'+iIdx+'-'+c);
                 var w=parseFloat((wEl&&wEl.value)||0)||0;
                 var q=parseFloat((qEl&&qEl.value)||0)||0;
                 if (w>0||q>0) { lifts.push({lift_no:c+1,qty:q,weight:w}); totalQty+=q; totalWt+=w; }
@@ -25469,6 +25473,7 @@ async function _ldUpsertDraft(oid) {
 }
 
 function _ldDraftLoad(oid) {
+    var _dlUnit = _ldTrailerUnit[oid]||'mother';
     var usedLocal = false;
     var userEdited = false;
     try {
@@ -25478,8 +25483,8 @@ function _ldDraftLoad(oid) {
             userEdited = !!draft.userEdited;
             (draft.lifts||[]).forEach(function(itemLifts, iIdx) {
                 itemLifts.forEach(function(cell, c) {
-                    var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
-                    var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                    var wEl = document.getElementById('ldf-lw-'+oid+'-'+_dlUnit+'-'+iIdx+'-'+c);
+                    var qEl = document.getElementById('ldf-lq-'+oid+'-'+_dlUnit+'-'+iIdx+'-'+c);
                     if (wEl && cell.w) wEl.value = cell.w;
                     if (qEl && cell.q) qEl.value = cell.q;
                 });
@@ -25500,14 +25505,14 @@ function _ldDraftLoad(oid) {
             var lifts = _ldDraftDBCache[_dlUk2][iIdxStr] || [];
             lifts.forEach(function(cell) {
                 var c = (cell.lift_no || 1) - 1;
-                var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
-                var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+                var wEl = document.getElementById('ldf-lw-'+oid+'-'+_dlUnit+'-'+iIdx+'-'+c);
+                var qEl = document.getElementById('ldf-lq-'+oid+'-'+_dlUnit+'-'+iIdx+'-'+c);
                 if (wEl && !wEl.value && cell.weight) wEl.value = cell.weight;
                 if (qEl && !qEl.value && cell.qty) qEl.value = cell.qty;
             });
         });
     }
-    ldCardStats(oid);
+    ldCardStats(oid, _dlUnit);
 }
 
 function _ldDraftClear(oid) {
@@ -25521,9 +25526,6 @@ var _ldTrailerUnit = {}; // orderId → 'mother'|'trailer' currently selected (u
 window.ldToggleTrailerUnit = function(orderId, unit) {
     if (!_ldTrailerActive[orderId]) _ldTrailerActive[orderId] = {};
     var isOpen = !!_ldTrailerActive[orderId][unit];
-    // Close the other unit first — prevents duplicate DOM element IDs when both forms are open
-    var otherUnit = unit === 'mother' ? 'trailer' : 'mother';
-    _ldTrailerActive[orderId][otherUnit] = false;
     _ldTrailerActive[orderId][unit] = !isOpen;
     if (!isOpen) {
         // opening — set as current unit for draft saving + mark in_progress
@@ -25632,17 +25634,18 @@ async function _ldRestoreDraftIds(oid) {
     } catch(e){}
 }
 
-window.ldCardStats = function(oid) {
+window.ldCardStats = function(oid, unit) {
+    unit = unit||_ldTrailerUnit[oid]||'mother';
     var totalQty = 0, totalWt = 0, iIdx = 0;
     while (true) {
         // check if this item exists
-        var firstCell = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-0');
+        var firstCell = document.getElementById('ldf-lq-'+oid+'-'+unit+'-'+iIdx+'-0');
         if (!firstCell) break;
         var itemQty = 0, itemWt = 0;
         for (var c=0; ; c++) {
-            var qEl = document.getElementById('ldf-lq-'+oid+'-'+iIdx+'-'+c);
+            var qEl = document.getElementById('ldf-lq-'+oid+'-'+unit+'-'+iIdx+'-'+c);
             if (!qEl) break;
-            var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
+            var wEl = document.getElementById('ldf-lw-'+oid+'-'+unit+'-'+iIdx+'-'+c);
             itemQty += parseFloat((qEl&&qEl.value)||0)||0;
             itemWt  += parseFloat((wEl&&wEl.value)||0)||0;
         }
@@ -25775,13 +25778,13 @@ window.ldCardSave = async function(oid) {
     var items = [];
     var idx2 = 0;
     while (true) {
-        if (!document.getElementById('ldf-lq-'+oid+'-'+idx2+'-0')) break;
+        if (!document.getElementById('ldf-lq-'+oid+'-'+curUnit+'-'+idx2+'-0')) break;
         var lifts = [];
         var totalQty = 0, totalWt = 0;
         var _totalCols = _ldOrderCols[oid]||_LFT_COLS; // use full col count, not just first 7
         for (var c=0; c<_totalCols; c++) {
-            var qEl = document.getElementById('ldf-lq-'+oid+'-'+idx2+'-'+c);
-            var wEl = document.getElementById('ldf-lw-'+oid+'-'+idx2+'-'+c);
+            var qEl = document.getElementById('ldf-lq-'+oid+'-'+curUnit+'-'+idx2+'-'+c);
+            var wEl = document.getElementById('ldf-lw-'+oid+'-'+curUnit+'-'+idx2+'-'+c);
             var q = parseFloat((qEl&&qEl.value)||0)||0;
             var w = parseFloat((wEl&&wEl.value)||0)||0;
             if (q>0||w>0) { lifts.push({lift_no:c+1, qty:q, weight:w}); totalQty+=q; totalWt+=w; }
