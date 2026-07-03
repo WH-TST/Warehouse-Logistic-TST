@@ -24479,9 +24479,10 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         });
         if (!Object.keys(itemLiftsMap).length) return;
 
-        // Store in DB cache for cross-device support
-        if (!_ldDraftDBCache[oid]) _ldDraftDBCache[oid] = {};
-        Object.keys(itemLiftsMap).forEach(function(k){ _ldDraftDBCache[oid][k] = itemLiftsMap[k]; });
+        // Store in DB cache for cross-device support (unit-keyed so mother/trailer don't overwrite each other)
+        var _dlUk = oid+'|'+(_ldTrailerUnit[oid]||'mother');
+        if (!_ldDraftDBCache[_dlUk]) _ldDraftDBCache[_dlUk] = {};
+        Object.keys(itemLiftsMap).forEach(function(k){ _ldDraftDBCache[_dlUk][k] = itemLiftsMap[k]; });
 
         // Directly set DOM values for empty fields (bypasses the localStorage vs DB cache conflict)
         setTimeout(function(){
@@ -24721,7 +24722,7 @@ function _ldBuildFormMobile(order) {
             return Object.assign({},it,{qty:pcs,target_weight:wt,_origIdx:_idx});
         }).filter(function(it){return it.qty>0;});
         window._ldFormOrigIdx = window._ldFormOrigIdx || {};
-        window._ldFormOrigIdx[oid] = items.map(function(it){ return it._origIdx; });
+        window._ldFormOrigIdx[oid+'|'+(unit||'mother')] = items.map(function(it){ return it._origIdx; });
 
         if (items.length === 0) {
             var el = document.getElementById('ld-form-wrap-'+oid);
@@ -24975,7 +24976,7 @@ function _ldBuildForm(order) {
         }).filter(function(it){ return it.qty > 0; });
         // store original-index mapping so ldCardSave can use correct SKU from orderItems
         window._ldFormOrigIdx = window._ldFormOrigIdx || {};
-        window._ldFormOrigIdx[oid] = items.map(function(it){ return it._origIdx; });
+        window._ldFormOrigIdx[oid+'|'+(unit||'mother')] = items.map(function(it){ return it._origIdx; });
 
         // If split was saved with all zeros (field worker didn't fill values), show re-configure prompt
         if (items.length === 0) {
@@ -25376,12 +25377,13 @@ async function _ldUpsertDraft(oid) {
         var cu = window._cu||{};
         var staffRec = (_ldStaffMaster||[]).find(function(x){ return x.name===cu.name||x.id===cu.username; });
         var staff = { id: staffRec?staffRec.id:(cu.username||''), name: staffRec?staffRec.name:(cu.name||cu.username||''), team: staffRec?staffRec.team:'' };
-        if (!_ldDraftRowIds[oid]) _ldDraftRowIds[oid] = {};
+        if (!_ldDraftRowIds[_uk]) _ldDraftRowIds[_uk] = {};
 
         // Sync: fetch existing draft rows from DB to avoid any duplicate inserts
         // This is the safety net — covers cases where memory was cleared
         var _curUnit = _ldTrailerUnit[oid] || 'mother';
-        var _syncFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
+        var _uk = oid+'|'+_curUnit;
+        var _syncFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_uk];
         var _syncQ = window._sb.from('loading_sessions').select('id,sku,created_at').eq('order_id',oid).eq('record_type','draft');
         if (od.is_trailer && od.trailer_split) _syncQ = _syncQ.eq('truck_unit', _curUnit);
         var {data:existingDrafts} = await _syncQ;
@@ -25413,12 +25415,12 @@ async function _ldUpsertDraft(oid) {
                 if(!oi.sku) return;
                 if(!skuPos[oi.sku]) skuPos[oi.sku]=0;
                 var q = skuQueues[oi.sku]||[];
-                if(q[skuPos[oi.sku]]!==undefined && !_ldDraftRowIds[oid][oiIdx]) _ldDraftRowIds[oid][oiIdx]=q[skuPos[oi.sku]];
+                if(q[skuPos[oi.sku]]!==undefined && !_ldDraftRowIds[_uk][oiIdx]) _ldDraftRowIds[_uk][oiIdx]=q[skuPos[oi.sku]];
                 skuPos[oi.sku]++;
             });
         }
 
-        var _draftFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
+        var _draftFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_uk];
         var iIdx = 0;
         while (true) {
             if (!document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-0')) break;
@@ -25445,7 +25447,7 @@ async function _ldUpsertDraft(oid) {
                 truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: new Date().toISOString()
             };
-            var existingId = _ldDraftRowIds[oid][_dOiIdx];
+            var existingId = _ldDraftRowIds[_uk][_dOiIdx];
             if (existingId) {
                 if (totalQty > 0 || totalWt > 0) {
                     await window._sb.from('loading_sessions').update(row).eq('id', existingId);
@@ -25458,7 +25460,7 @@ async function _ldUpsertDraft(oid) {
                 }
             } else {
                 var {data:inserted} = await window._sb.from('loading_sessions').insert(row).select('id').single();
-                if (inserted) _ldDraftRowIds[oid][_dOiIdx] = inserted.id;
+                if (inserted) _ldDraftRowIds[_uk][_dOiIdx] = inserted.id;
             }
             iIdx++;
         }
@@ -25491,10 +25493,11 @@ function _ldDraftLoad(oid) {
     } catch(e){}
     // Apply DB cache when: no localStorage, OR localStorage exists but user hasn't edited yet (system pre-fill)
     // If userEdited=true, respect exactly what user typed (including cleared fields)
-    if (!userEdited && _ldDraftDBCache[oid]) {
-        Object.keys(_ldDraftDBCache[oid]).forEach(function(iIdxStr) {
+    var _dlUk2 = oid+'|'+(_ldTrailerUnit[oid]||'mother');
+    if (!userEdited && _ldDraftDBCache[_dlUk2]) {
+        Object.keys(_ldDraftDBCache[_dlUk2]).forEach(function(iIdxStr) {
             var iIdx = parseInt(iIdxStr, 10);
-            var lifts = _ldDraftDBCache[oid][iIdxStr] || [];
+            var lifts = _ldDraftDBCache[_dlUk2][iIdxStr] || [];
             lifts.forEach(function(cell) {
                 var c = (cell.lift_no || 1) - 1;
                 var wEl = document.getElementById('ldf-lw-'+oid+'-'+iIdx+'-'+c);
@@ -25567,11 +25570,12 @@ async function _ldRestoreDraftIds(oid) {
         if (!od) return;
         var orderItems = od.items||[];
 
-        // Fetch all draft rows for this order (include lifts + start_time for cross-device restore)
-        var {data:drafts} = await window._sb.from('loading_sessions')
-            .select('id,sku,lifts,start_time')
-            .eq('order_id', oid)
-            .eq('record_type', 'draft');
+        var _restoreUnit = _ldTrailerUnit[oid] || 'mother';
+        var _restoreUk = oid+'|'+_restoreUnit;
+        // Fetch draft rows for this order+unit (trailer split: mother and trailer are separate)
+        var _restoreQ = window._sb.from('loading_sessions').select('id,sku,lifts,start_time,truck_unit').eq('order_id', oid).eq('record_type', 'draft');
+        if (od.is_trailer && od.trailer_split) _restoreQ = _restoreQ.eq('truck_unit', _restoreUnit);
+        var {data:drafts} = await _restoreQ;
         if (!drafts || !drafts.length) return;
 
         // Restore start_time from earliest draft so cross-device timer is in sync
@@ -25602,17 +25606,23 @@ async function _ldRestoreDraftIds(oid) {
         // Map positionally: group drafts per sku, match to order items in order
         var skuDrafts = {};
         keepIds.forEach(function(kId){ var d=drafts.find(function(r){return r.id===kId;}); if(d){ if(!skuDrafts[d.sku]) skuDrafts[d.sku]=[]; skuDrafts[d.sku].push(d); } });
-        if (!_ldDraftRowIds[oid]) _ldDraftRowIds[oid] = {};
-        if (!_ldDraftDBCache[oid]) _ldDraftDBCache[oid] = {};
+        if (!_ldDraftRowIds[_restoreUk]) _ldDraftRowIds[_restoreUk] = {};
+        if (!_ldDraftDBCache[_restoreUk]) _ldDraftDBCache[_restoreUk] = {};
+        // Use _ldFormOrigIdx if available (trailer split filters some items out)
+        var _restoreFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_restoreUk];
+        var _restoreMapItems = _restoreFOrigIdx
+            ? _restoreFOrigIdx.map(function(oiIdx){ return {oi:orderItems[oiIdx]||{}, oiIdx:oiIdx}; })
+            : orderItems.map(function(oi,i){ return {oi:oi, oiIdx:i}; });
         var skuPos = {};
-        orderItems.forEach(function(oi, iIdx){
+        _restoreMapItems.forEach(function(entry){
+            var oi=entry.oi, oiIdx=entry.oiIdx;
             if(!oi.sku) return;
             if(!skuPos[oi.sku]) skuPos[oi.sku]=0;
             var arr = skuDrafts[oi.sku]||[];
             if(arr[skuPos[oi.sku]]) {
-                _ldDraftRowIds[oid][iIdx] = arr[skuPos[oi.sku]].id;
+                _ldDraftRowIds[_restoreUk][oiIdx] = arr[skuPos[oi.sku]].id;
                 if(arr[skuPos[oi.sku]].lifts && arr[skuPos[oi.sku]].lifts.length)
-                    _ldDraftDBCache[oid][iIdx] = arr[skuPos[oi.sku]].lifts;
+                    _ldDraftDBCache[_restoreUk][oiIdx] = arr[skuPos[oi.sku]].lifts;
             }
             skuPos[oi.sku]++;
         });
@@ -25845,7 +25855,8 @@ window.ldCardSave = async function(oid) {
     }))).filter(Boolean);
 
     // confirm draft rows → update to final, or insert if no draft exists
-    var draftIds = _ldDraftRowIds[oid]||{};
+    var _saveUk = oid+'|'+((_ldTrailerUnit[oid])||'mother');
+    var draftIds = _ldDraftRowIds[_saveUk]||{};
 
     // Always map existing done session IDs so we UPDATE instead of INSERT (prevents
     // duplicate rows when multiple staff save from different devices on the same order)
@@ -25861,12 +25872,12 @@ window.ldCardSave = async function(oid) {
                 var matchKey = r.sku+'|'+curUnit;
                 if(!skuIdMap[matchKey] && key===matchKey){ skuIdMap[matchKey]=r.id; skuOldPhotos[matchKey]=r.photo_urls||[]; }
             });
-            var _fOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
+            var _fOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_saveUk];
             if (_fOrigIdx) {
                 _fOrigIdx.forEach(function(origIdx, formIdx){
                     var oi = orderItems[origIdx]||{};
                     var matchKey = (oi.sku||'')+'|'+curUnit;
-                    if(oi.sku && skuIdMap[matchKey] && !draftIds[formIdx]) draftIds[formIdx]=skuIdMap[matchKey];
+                    if(oi.sku && skuIdMap[matchKey] && !draftIds[origIdx]) draftIds[origIdx]=skuIdMap[matchKey];
                 });
             } else {
                 orderItems.forEach(function(oi, iIdx){
@@ -25882,7 +25893,7 @@ window.ldCardSave = async function(oid) {
         // Build all finalRows first, then batch save in parallel
         var toUpdate = []; // [{id, row}]
         var toInsert = []; // [row]
-        var _fOrigIdx2 = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
+        var _fOrigIdx2 = window._ldFormOrigIdx && window._ldFormOrigIdx[_saveUk];
         for (var iIdx2=0; iIdx2<items.length; iIdx2++) {
             var it = items[iIdx2];
             if (!it.qty && !it.weight) continue;
@@ -25901,14 +25912,14 @@ window.ldCardSave = async function(oid) {
                 truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: endIso
             };
-            if (draftIds[iIdx2]) { toUpdate.push({id:draftIds[iIdx2], row:finalRow}); }
+            if (draftIds[_oiIdx]) { toUpdate.push({id:draftIds[_oiIdx], row:finalRow}); }
             else { toInsert.push(finalRow); }
         }
         // Run all UPDATEs in parallel + batch INSERT together
         var saveOps = toUpdate.map(function(u){ return window._sb.from('loading_sessions').update(u.row).eq('id',u.id); });
         if (toInsert.length) saveOps.push(window._sb.from('loading_sessions').insert(toInsert));
         await Promise.all(saveOps);
-        delete _ldDraftRowIds[oid];
+        delete _ldDraftRowIds[_saveUk];
         // Clean up duplicate rows: keep N latest per sku+truck_unit where N = count in orderItems
         // (supports duplicate SKU rows in same order, and trailer split per-unit sessions)
         try {
