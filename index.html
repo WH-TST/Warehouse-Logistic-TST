@@ -17859,7 +17859,7 @@ function initLogiDragSort() {
 }
 
 // ── เพิ่มแถวสินค้าในร้าน ──
-window.addLogiItem = function addLogiItem(shopIdx, sku, qty) {
+window.addLogiItem = function addLogiItem(shopIdx, sku, qty, canCut) {
     const itemsContainer = document.getElementById(`logi-items-${shopIdx}`);
     const emptyEl        = document.getElementById(`logi-items-empty-${shopIdx}`);
     if (!itemsContainer) return;
@@ -17870,6 +17870,7 @@ window.addLogiItem = function addLogiItem(shopIdx, sku, qty) {
     const product = LOGI_PRODUCTS_MASTER.find(p => p.sku === skuStr);
     const wt      = product ? ((parseFloat(qtyStr) || 0) * (product.likelyW || 0)).toFixed(2) : '0.00';
     const nameStr = product ? product.name : '';
+    const _canCut = !!canCut;
 
     // ตรวจว่าตอนนี้เลือกรถพ่วงอยู่ไหม
     const _truckSel = document.getElementById('logi-truck-plate');
@@ -17891,7 +17892,7 @@ window.addLogiItem = function addLogiItem(shopIdx, sku, qty) {
                  class="hidden absolute z-50 left-0 w-72 bg-white border-2 border-emerald-300 rounded-xl shadow-2xl max-h-48 overflow-y-auto mt-1">
             </div>
         </div>
-        <div class="col-span-3 text-xs font-bold text-slate-500 truncate logi-item-name" id="logi-item-name-${shopIdx}-${itemIdx}">${nameStr || '<span class="text-slate-300">—</span>'}</div>
+        <div class="col-span-3 text-xs font-bold text-slate-500 truncate logi-item-name" id="logi-item-name-${shopIdx}-${itemIdx}" data-can-cut="${_canCut}">${nameStr || '<span class="text-slate-300">—</span>'}${_canCut ? '<span style="display:inline-flex;align-items:center;gap:2px;margin-left:4px;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:0 5px;font-size:9px;font-weight:900;color:#b45309;vertical-align:middle;">✂ ตัดได้</span>' : ''}</div>
         <div class="col-span-2">
             <input type="number" placeholder="จำนวน" value="${qtyStr}" min="0"
                    oninput="onLogiQtyChange(${shopIdx}, ${itemIdx}, this)"
@@ -23851,7 +23852,7 @@ window.editLogiPlan = function editLogiPlan(planId) {
                     (s.items || []).forEach((it) => {
                         const container = document.getElementById(`logi-items-${cardIdx}`);
                         const itemIdxBefore = container ? container.children.length : 0;
-                        addLogiItem(cardIdx, it.sku || '', it.qty || 0);
+                        addLogiItem(cardIdx, it.sku || '', it.qty || 0, it.can_cut);
                         if (it.truckLabel && it.truckLabel !== 'mother') {
                             setLogiItemTruck(cardIdx, itemIdxBefore, it.truckLabel);
                         }
