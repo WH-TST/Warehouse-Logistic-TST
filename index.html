@@ -25521,6 +25521,9 @@ var _ldTrailerUnit = {}; // orderId → 'mother'|'trailer' currently selected (u
 window.ldToggleTrailerUnit = function(orderId, unit) {
     if (!_ldTrailerActive[orderId]) _ldTrailerActive[orderId] = {};
     var isOpen = !!_ldTrailerActive[orderId][unit];
+    // Close the other unit first — prevents duplicate DOM element IDs when both forms are open
+    var otherUnit = unit === 'mother' ? 'trailer' : 'mother';
+    _ldTrailerActive[orderId][otherUnit] = false;
     _ldTrailerActive[orderId][unit] = !isOpen;
     if (!isOpen) {
         // opening — set as current unit for draft saving + mark in_progress
