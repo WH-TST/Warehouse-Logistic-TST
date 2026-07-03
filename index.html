@@ -8898,27 +8898,46 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         </div>
 
         <div class="space-y-4">
+            <!-- Searchable Dropdown -->
             <div>
-                <label class="block text-xs font-black text-slate-400 uppercase mb-2">ค้นหาสินค้า (SKU / Name)</label>
-                <input list="product-datalist" id="extra-product-input" 
-                       class="w-full bg-slate-50 border-2 border-slate-200 p-4 rounded-xl font-bold text-slate-700 outline-none focus:border-rose-500 transition-all" 
-                       placeholder="พิมพ์รหัส หรือ ชื่อสินค้า...">
-                <datalist id="product-datalist">
-                    </datalist>
+                <label class="block text-xs font-black text-slate-400 uppercase mb-2">ค้นหาสินค้า (SKU / ชื่อ)</label>
+                <div class="relative" id="extra-product-wrapper">
+                    <input type="text" id="extra-product-search"
+                           class="w-full bg-slate-50 border-2 border-slate-200 p-4 rounded-xl font-bold text-slate-700 outline-none focus:border-rose-500 transition-all"
+                           placeholder="พิมพ์รหัส หรือ ชื่อสินค้า..."
+                           autocomplete="off"
+                           oninput="filterExtraProductDropdown(this.value)"
+                           onfocus="showExtraProductDropdown()">
+                    <div id="extra-product-dropdown"
+                         class="absolute z-50 w-full bg-white border-2 border-slate-200 rounded-xl shadow-xl mt-1 max-h-56 overflow-y-auto hidden">
+                    </div>
+                    <input type="hidden" id="extra-product-sku">
+                    <input type="hidden" id="extra-product-lpb" value="1">
+                </div>
+                <p id="extra-product-selected" class="text-xs text-rose-600 font-bold mt-1 hidden"></p>
             </div>
-            
+
+            <!-- จำนวนเส้น -->
             <div>
-                <label class="block text-xs font-black text-slate-400 uppercase mb-2">จำนวน (มัด)</label>
-                <input type="number" id="extra-qty-input" 
-                       class="w-full bg-slate-50 border-2 border-slate-200 p-4 rounded-xl font-bold text-slate-700 outline-none focus:border-rose-500 transition-all text-center text-2xl" 
-                       placeholder="0">
+                <label class="block text-xs font-black text-slate-400 uppercase mb-2">จำนวน (เส้น)</label>
+                <input type="number" id="extra-lines-input" min="1"
+                       class="w-full bg-slate-50 border-2 border-slate-200 p-4 rounded-xl font-bold text-slate-700 outline-none focus:border-rose-500 transition-all text-center text-2xl"
+                       placeholder="0"
+                       oninput="calcExtraBundles()">
+            </div>
+
+            <!-- แสดงผลมัด -->
+            <div id="extra-bundle-preview" class="hidden bg-rose-50 border-2 border-rose-200 rounded-xl p-4 text-center">
+                <p class="text-xs font-black text-rose-400 uppercase mb-1">จำนวนมัดที่จะพิมพ์</p>
+                <p class="text-4xl font-black text-rose-600"><span id="extra-bundle-count">0</span> <span class="text-base">มัด</span></p>
+                <p class="text-xs text-slate-400 mt-1"><span id="extra-lpb-hint"></span> เส้น/มัด</p>
             </div>
         </div>
 
         <div class="flex gap-3 mt-8">
             <button onclick="closeExtraJobModal()" class="flex-1 py-4 rounded-xl font-black text-slate-500 hover:bg-slate-100 transition-all">ยกเลิก</button>
             <button onclick="confirmExtraJobPrint()" class="flex-1 py-4 rounded-xl font-black text-white bg-rose-600 hover:bg-rose-700 shadow-lg transition-all">
-                บันทึก & ปริ้น
+                <i class="fas fa-print mr-2"></i>บันทึก & ปริ้น
             </button>
         </div>
     </div>
@@ -12191,67 +12210,115 @@ let allProductListCache = [];
 /**
  * 1. เปิด Modal งานแทรก และโหลดข้อมูลสินค้า (ถ้ายังไม่มี)
  */
-window.openExtraJobModal = function openExtraJobModal() {
+window.openExtraJobModal = async function openExtraJobModal() {
     const modal = document.getElementById('extra-job-modal');
     modal.classList.remove('hidden');
-    
+
     // เคลียร์ค่าเดิม
-    document.getElementById('extra-product-input').value = '';
-    document.getElementById('extra-qty-input').value = '';
-    
-    // ถ้ายังไม่เคยโหลดข้อมูลสินค้า ให้โหลดจาก Server
+    document.getElementById('extra-product-search').value = '';
+    document.getElementById('extra-product-sku').value = '';
+    document.getElementById('extra-product-lpb').value = '1';
+    document.getElementById('extra-lines-input').value = '';
+    document.getElementById('extra-product-selected').classList.add('hidden');
+    document.getElementById('extra-bundle-preview').classList.add('hidden');
+    document.getElementById('extra-product-dropdown').classList.add('hidden');
+
+    // โหลดสินค้าจาก Supabase ถ้ายังไม่มี cache
     if (allProductListCache.length === 0) {
-        document.getElementById('extra-product-input').placeholder = "กำลังโหลดรายชื่อสินค้า...";
-        
-        google.script.run.withSuccessHandler(data => {
-            allProductListCache = data;
-            const datalist = document.getElementById('product-datalist');
-            datalist.innerHTML = '';
-            
-            data.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id; // เวลาเลือกจะใส่รหัสลง Input
-                opt.label = p.name; // แสดงชื่อสินค้าคู่กัน
-                datalist.appendChild(opt);
+        document.getElementById('extra-product-search').placeholder = 'กำลังโหลด...';
+        const { data } = await window._sb.from('products').select('sku,name,lines_per_bundle');
+        if (data) {
+            allProductListCache = data.map(function(p) {
+                return { id: p.sku, name: p.name, linesPerBundle: p.lines_per_bundle || 1 };
             });
-            
-            document.getElementById('extra-product-input').placeholder = "พิมพ์รหัส หรือ ชื่อสินค้า...";
-        }).getAllProductsForDropdown();
+        }
+        document.getElementById('extra-product-search').placeholder = 'พิมพ์รหัส หรือ ชื่อสินค้า...';
     }
 }
 
-/**
- * 2. ปิด Modal
- */
-window.closeExtraJobModal = function closeExtraJobModal() {
-    document.getElementById('extra-job-modal').classList.add('hidden');
+window.filterExtraProductDropdown = function filterExtraProductDropdown(q) {
+    // เคลียร์สินค้าที่เลือกไว้
+    document.getElementById('extra-product-sku').value = '';
+    document.getElementById('extra-product-selected').classList.add('hidden');
+    document.getElementById('extra-bundle-preview').classList.add('hidden');
+
+    const dd = document.getElementById('extra-product-dropdown');
+    if (!q || q.length < 1) { dd.classList.add('hidden'); return; }
+
+    const kw = q.toLowerCase();
+    const matches = allProductListCache.filter(function(p) {
+        return p.id.toLowerCase().includes(kw) || (p.name || '').toLowerCase().includes(kw);
+    }).slice(0, 30);
+
+    if (matches.length === 0) { dd.innerHTML = '<div class="p-3 text-slate-400 text-sm text-center">ไม่พบสินค้า</div>'; dd.classList.remove('hidden'); return; }
+
+    dd.innerHTML = matches.map(function(p) {
+        return `<div class="px-4 py-3 cursor-pointer hover:bg-rose-50 border-b border-slate-100 last:border-0"
+                     onmousedown="selectExtraProduct('${p.id}','${(p.name||'').replace(/'/g,"\\'")}',${p.linesPerBundle})">
+            <p class="font-black text-indigo-700 font-mono text-sm">${p.id}</p>
+            <p class="text-xs text-slate-500">${p.name || ''}</p>
+        </div>`;
+    }).join('');
+    dd.classList.remove('hidden');
 }
 
-/**
- * 3. ยืนยันการพิมพ์งานแทรก
- */
+window.showExtraProductDropdown = function showExtraProductDropdown() {
+    const q = document.getElementById('extra-product-search').value;
+    if (q.length >= 1) filterExtraProductDropdown(q);
+}
+
+window.selectExtraProduct = function selectExtraProduct(sku, name, lpb) {
+    document.getElementById('extra-product-search').value = sku + ' — ' + name;
+    document.getElementById('extra-product-sku').value = sku;
+    document.getElementById('extra-product-lpb').value = lpb;
+    document.getElementById('extra-product-dropdown').classList.add('hidden');
+    const sel = document.getElementById('extra-product-selected');
+    sel.textContent = name + ' (' + lpb + ' เส้น/มัด)';
+    sel.classList.remove('hidden');
+    calcExtraBundles();
+}
+
+window.calcExtraBundles = function calcExtraBundles() {
+    const lines = parseFloat(document.getElementById('extra-lines-input').value) || 0;
+    const lpb   = parseFloat(document.getElementById('extra-product-lpb').value) || 1;
+    const bundles = lines > 0 ? Math.ceil(lines / lpb) : 0;
+    const preview = document.getElementById('extra-bundle-preview');
+    if (lines > 0 && document.getElementById('extra-product-sku').value) {
+        document.getElementById('extra-bundle-count').textContent = bundles;
+        document.getElementById('extra-lpb-hint').textContent = lpb;
+        preview.classList.remove('hidden');
+    } else {
+        preview.classList.add('hidden');
+    }
+}
+
+window.closeExtraJobModal = function closeExtraJobModal() {
+    document.getElementById('extra-job-modal').classList.add('hidden');
+    document.getElementById('extra-product-dropdown').classList.add('hidden');
+}
+
 window.confirmExtraJobPrint = async function confirmExtraJobPrint() {
-    const inputId = document.getElementById('extra-product-input').value.trim();
-    const qty = parseFloat(document.getElementById('extra-qty-input').value);
-    const date = document.getElementById('tag-date').value; // ใช้วันที่เดียวกับหน้าจอหลัก
+    const sku   = document.getElementById('extra-product-sku').value.trim();
+    const lines = parseFloat(document.getElementById('extra-lines-input').value);
+    const lpb   = parseFloat(document.getElementById('extra-product-lpb').value) || 1;
+    const date  = document.getElementById('tag-date').value;
 
-    if (!inputId) return showToast("กรุณาเลือกสินค้า", true);
-    if (!qty || qty <= 0) return showToast("กรุณาระบุจำนวนมัด", true);
+    if (!sku)           return showToast("กรุณาเลือกสินค้า", true);
+    if (!lines || lines <= 0) return showToast("กรุณาระบุจำนวนเส้น", true);
 
-    // ค้นหาข้อมูลสินค้าจาก Cache (เพื่อเอา Spec มาทำ Tag)
-    const productInfo = allProductListCache.find(p => p.id === inputId);
-
-    if (!productInfo) return showToast("ไม่พบข้อมูลสินค้ารหัสนี้ในระบบ", true);
+    const bundles = Math.ceil(lines / lpb);
+    const productInfo = allProductListCache.find(function(p) { return p.id === sku; });
+    if (!productInfo) return showToast("ไม่พบข้อมูลสินค้า", true);
 
     showToast("กำลังบันทึกงานแทรก...");
 
     const { error } = await window._sb.from('print_tag_log').insert({
         printed_at: new Date().toISOString(),
         print_date: date,
-        sku: productInfo.id,
-        bundles: qty,
+        sku: sku,
+        bundles: bundles,
         user_email: window._currentUser || '',
-        total_pcs: qty * (productInfo.linesPerBundle || 1)
+        total_pcs: lines
     });
 
     if (error) { showToast("บันทึกไม่สำเร็จ: " + error.message, true); return; }
@@ -12264,8 +12331,8 @@ window.confirmExtraJobPrint = async function confirmExtraJobPrint() {
         productSize: productInfo.productSize,
         wStd: productInfo.wStd,
         wMinMax: productInfo.wMinMax,
-        pcsPerBundle: productInfo.pcsPerBundle,
-        needToPrintBundles: qty
+        pcsPerBundle: lpb,
+        needToPrintBundles: bundles
     });
 }
 
