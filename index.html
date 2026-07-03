@@ -27471,12 +27471,12 @@ function _ldRenderMonitorTable(rows, orders) {
             var doneTableHtml = '';
             if (order.is_trailer && order.trailer_split) {
                 var sp=order.trailer_split;
+                var mItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0,can_cut:it.can_cut};}).filter(function(it){return it.qty>0;});
+                var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0,can_cut:it.can_cut};}).filter(function(it){return it.qty>0;});
                 // For sessions without truck_unit (old data), infer from SKU: if SKU only in trailer split → trailer
                 var _tOnlySku=new Set(tItems.filter(function(ti){return !mItems.some(function(mi){return mi.sku===ti.sku;});}).map(function(ti){return ti.sku;}));
                 var mSess=sessions.filter(function(r){return r.truck_unit==='mother'||(r.truck_unit!=='trailer'&&!_tOnlySku.has(r.sku));});
                 var tSess=sessions.filter(function(r){return r.truck_unit==='trailer'||(!r.truck_unit&&_tOnlySku.has(r.sku));});
-                var mItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0,can_cut:it.can_cut};}).filter(function(it){return it.qty>0;});
-                var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0,can_cut:it.can_cut};}).filter(function(it){return it.qty>0;});
                 var ur=order.unit_review||{};
                 var mRv=ur.mother||{};var tRv=ur.trailer||{};
                 var _sdUnit = _ldScaleDiffUnit[orderId]||{};
