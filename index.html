@@ -25579,7 +25579,21 @@ window.ldCardHandlePhotos = function(inp, oid) {
     var newFiles = Array.from(inp.files||[]);
     _ldCardPhotos[oid] = _ldCardPhotos[oid].concat(newFiles);
 
-    // Photos can be saved by tapping the thumbnail after capture
+    // Android: auto-download with delay to avoid keyboard dismiss
+    if (!/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        setTimeout(function() {
+            newFiles.forEach(function(f, fi) {
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(f);
+                a.download = 'loading_' + oid + '_' + Date.now() + '_' + fi + '.jpg';
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 2000);
+            });
+        }, 1500);
+    }
+    // iOS: photos taken with camera are already saved to Camera Roll by the OS automatically
 
     var prev = document.getElementById('ldf-photo-prev-'+oid);
     if (!prev) return;
