@@ -23650,8 +23650,9 @@ window.editLogiPlan = function editLogiPlan(planId) {
                 const statusEl = document.getElementById('logi-status');
                 if (statusEl) {
                     statusEl.value = p.status || 'planned';
-                    // ล็อค status ถ้า inprogress และไม่ใช่ admin
-                    statusEl.disabled = (p.status === 'inprogress' && !(_cu && _cu.isAdmin));
+                    // รถจ้าง: แก้สถานะได้ทุกสถานะ (ไม่มี Driver App อัปเดตให้)
+                    const _pIsHire = p.truckType === 'hire' || p.truckType === 'hired';
+                    statusEl.disabled = !_pIsHire && (p.status === 'inprogress' && !(_cu && _cu.isAdmin));
                     onLogiStatusChange();
                 }
 
