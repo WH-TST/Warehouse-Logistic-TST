@@ -12489,21 +12489,33 @@ window.saveTagSpecSettings = async function saveTagSpecSettings() {
     closeTagSpecSettings();
 };
 
-// ดึงสเปคสินค้าจาก GAS → Sheet ตาม config
+// ดึงสเปคสินค้า: GAS (size/custom) + Supabase products (wStd, wMinMax) พร้อมกัน
 window.fetchProductSpec = async function fetchProductSpec(sku) {
     if (!_tagSpecConfig) {
         const { data } = await window._sb.from('app_config').select('value').eq('key', 'tag_spec_config').maybeSingle();
         if (data && data.value) { try { _tagSpecConfig = JSON.parse(data.value); } catch(e) {} }
     }
     const cfg = _tagSpecConfig;
-    if (!cfg || !cfg.spreadsheetId || !cfg.sheetName || !cfg.fields) return {};
 
-    return new Promise(function(resolve) {
-        google.script.run
-            .withSuccessHandler(function(res) { resolve((res && res.success) ? (res.spec || {}) : {}); })
-            .withFailureHandler(function()    { resolve({}); })
-            .getProductSpec(cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields));
-    });
+    const gasPromise = (cfg && cfg.spreadsheetId && cfg.sheetName && cfg.fields)
+        ? new Promise(function(resolve) {
+            google.script.run
+                .withSuccessHandler(function(res) { resolve((res && res.success) ? (res.spec || {}) : {}); })
+                .withFailureHandler(function()    { resolve({}); })
+                .getProductSpec(cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields));
+          })
+        : Promise.resolve({});
+
+    const supabasePromise = window._sb.from('products')
+        .select('likely_w,min_w,max_w').eq('sku', sku).maybeSingle();
+
+    const [gasSpec, prodRes] = await Promise.all([gasPromise, supabasePromise]);
+    const prod = (prodRes && prodRes.data) || {};
+
+    const wStd    = (prod.likely_w && prod.likely_w > 0) ? String(prod.likely_w) : '';
+    const wMinMax = (prod.min_w > 0 || prod.max_w > 0) ? (prod.min_w + ' - ' + prod.max_w) : '';
+
+    return Object.assign({}, gasSpec, { wStd: wStd || gasSpec.wStd, wMinMax: wMinMax || gasSpec.wMinMax });
 };
 
 // ✅ ฟังก์ชันวาดกราฟ Trend น้ำหนักและจำนวนเส้นคงคลัง (2 แกน Y)
