@@ -24963,8 +24963,11 @@ function _ldBuildForm(order) {
             var sp = split[String(_idx)]||split[it.sku]||{};
             var pcs = unit==='mother' ? (sp.mother_pcs||0) : (sp.trailer_pcs||0);
             var wt  = unit==='mother' ? (sp.mother_kg||0)  : (sp.trailer_kg||0);
-            return Object.assign({}, it, {qty: pcs, target_weight: wt});
+            return Object.assign({}, it, {qty: pcs, target_weight: wt, _origIdx: _idx});
         }).filter(function(it){ return it.qty > 0; });
+        // store original-index mapping so ldCardSave can use correct SKU from orderItems
+        window._ldFormOrigIdx = window._ldFormOrigIdx || {};
+        window._ldFormOrigIdx[oid] = items.map(function(it){ return it._origIdx; });
 
         // If split was saved with all zeros (field worker didn't fill values), show re-configure prompt
         if (items.length === 0) {
@@ -25839,10 +25842,19 @@ window.ldCardSave = async function(oid) {
                 var matchKey = r.sku+'|'+curUnit;
                 if(!skuIdMap[matchKey] && key===matchKey){ skuIdMap[matchKey]=r.id; skuOldPhotos[matchKey]=r.photo_urls||[]; }
             });
-            orderItems.forEach(function(oi, iIdx){
-                var matchKey = (oi.sku||'')+'|'+curUnit;
-                if(oi.sku && skuIdMap[matchKey] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[matchKey];
-            });
+            var _fOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
+            if (_fOrigIdx) {
+                _fOrigIdx.forEach(function(origIdx, formIdx){
+                    var oi = orderItems[origIdx]||{};
+                    var matchKey = (oi.sku||'')+'|'+curUnit;
+                    if(oi.sku && skuIdMap[matchKey] && !draftIds[formIdx]) draftIds[formIdx]=skuIdMap[matchKey];
+                });
+            } else {
+                orderItems.forEach(function(oi, iIdx){
+                    var matchKey = (oi.sku||'')+'|'+curUnit;
+                    if(oi.sku && skuIdMap[matchKey] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[matchKey];
+                });
+            }
             // Photos are NEVER deleted — keep all photos including from rejected orders
         }
     }
@@ -25851,10 +25863,12 @@ window.ldCardSave = async function(oid) {
         // Build all finalRows first, then batch save in parallel
         var toUpdate = []; // [{id, row}]
         var toInsert = []; // [row]
+        var _fOrigIdx2 = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
         for (var iIdx2=0; iIdx2<items.length; iIdx2++) {
             var it = items[iIdx2];
             if (!it.qty && !it.weight) continue;
-            var oi = orderItems[iIdx2]||{};
+            var _oiIdx = (_fOrigIdx2 && _fOrigIdx2[iIdx2] !== undefined) ? _fOrigIdx2[iIdx2] : iIdx2;
+            var oi = orderItems[_oiIdx]||{};
             var s = staffList[0];
             var finalRow = {
                 order_id: oid, plan_id: planId, plan_date: planDate,
