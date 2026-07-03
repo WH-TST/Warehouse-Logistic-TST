@@ -11552,7 +11552,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
             return;
         }
 
-        // 2. ดึงแผนผลิตวันนี้ + log การพิมพ์ พร้อมกัน (ผ่าน GAS Bridge เดียวกับ WH Management)
+        // 2. ดึงแผนผลิตวันนี้ + log การพิมพ์ พร้อมกัน
         const [planRes, logRes, prodRes] = await Promise.all([
             new Promise(function(resolve) {
                 google.script.run
@@ -11560,12 +11560,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
                     .withFailureHandler(function() { resolve(null); })
                     .getProductionPlanByDate(formattedDate, ppSpreadsheetId);
             }),
-            new Promise(function(resolve) {
-                google.script.run
-                    .withSuccessHandler(resolve)
-                    .withFailureHandler(function() { resolve(null); })
-                    .getPrintTagLog(formattedDate, ppSpreadsheetId);
-            }),
+            window._sb.from('print_tag_log').select('sku,bundles').eq('print_date', formattedDate),
             window._sb.from('products').select('sku,name,lines_per_bundle')
         ]);
 
@@ -11580,7 +11575,10 @@ window.loadPrintTagData = async function loadPrintTagData() {
             });
         }
 
-        const savedLog = (logRes && logRes.log) ? logRes.log : {};
+        const savedLog = {};
+        if (logRes && logRes.data) logRes.data.forEach(function(r) {
+            savedLog[r.sku] = (savedLog[r.sku] || 0) + (r.bundles || 0);
+        });
 
         // Map products สำหรับ linesPerBundle และชื่อสินค้า
         const prodMap = {};
@@ -11711,7 +11709,7 @@ function renderTagList(data) {
  * - บันทึกเสร็จ -> สั่ง generatePreview ทันที
  * - เปลี่ยนปุ่มเป็นสีส้มทันที
  */
-window.confirmAndSaveTag = function confirmAndSaveTag(idx) {
+window.confirmAndSaveTag = async function confirmAndSaveTag(idx) {
     const item = tagPrintData[idx];
     const qty = parseFloat(document.getElementById(`qty-${idx}`).value);
     const date = document.getElementById('tag-date').value;
@@ -11719,38 +11717,32 @@ window.confirmAndSaveTag = function confirmAndSaveTag(idx) {
     if (!qty || qty <= 0) return showToast("กรุณาระบุจำนวนมัด", true);
 
     showToast("กำลังบันทึกและเตรียมพิมพ์...");
-    
-    google.script.run.withSuccessHandler(res => {
-        if(res.success) {
-            showToast("บันทึกสำเร็จ กำลังเปิดหน้าพิมพ์...");
-            
-            // อัปเดตข้อมูลในตัวแปร Local
-            tagPrintData[idx].savedBundlesToday = qty;
-            
-            // 1. อัปเดตตัวเลขแสดงผล
-            document.getElementById(`saved-display-${idx}`).innerText = qty;
-            
-            // 2. เคลียร์ช่อง Input และปิดการแก้ไข
-            const inputEl = document.getElementById(`qty-${idx}`);
-            inputEl.value = ""; 
-            inputEl.placeholder = "-";
-            inputEl.disabled = true;
-            inputEl.classList.add('disabled:bg-slate-100', 'disabled:text-slate-400', 'disabled:border-slate-100');
-            
-            // 3. เปลี่ยนปุ่มเป็น "ปริ้นเพิ่ม" (สีส้ม) ทันที
-            const actionArea = document.getElementById(`action-area-${idx}`);
-            actionArea.innerHTML = `
-                <button onclick="enablePrintExtra(${idx})" class="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:bg-amber-600 transition-all">
-                    <i class="fas fa-plus mr-1"></i> ปริ้นเพิ่ม
-                </button>
-            `;
-            
-            // 4. 🔥 สำคัญ: สั่งเปิดหน้า Preview ทันที
-            const previewItem = { ...item, needToPrintBundles: qty }; 
-            generatePreview(previewItem);
-            
-        }
-    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: qty }, window._tagPPSpreadsheetId || '');
+
+    const { error } = await window._sb.from('print_tag_log').insert({
+        printed_at: new Date().toISOString(),
+        print_date: date,
+        sku: item.productId,
+        bundles: qty,
+        user_email: window._currentUser || '',
+        total_pcs: qty * (item.linesPerBundle || 1)
+    });
+
+    if (error) { showToast("บันทึกไม่สำเร็จ: " + error.message, true); return; }
+
+    showToast("บันทึกสำเร็จ กำลังเปิดหน้าพิมพ์...");
+    tagPrintData[idx].savedBundlesToday = qty;
+    document.getElementById(`saved-display-${idx}`).innerText = qty;
+
+    const inputEl = document.getElementById(`qty-${idx}`);
+    inputEl.value = ""; inputEl.placeholder = "-"; inputEl.disabled = true;
+    inputEl.classList.add('disabled:bg-slate-100', 'disabled:text-slate-400', 'disabled:border-slate-100');
+
+    document.getElementById(`action-area-${idx}`).innerHTML = `
+        <button onclick="enablePrintExtra(${idx})" class="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:bg-amber-600 transition-all">
+            <i class="fas fa-plus mr-1"></i> ปริ้นเพิ่ม
+        </button>`;
+
+    generatePreview({ ...item, needToPrintBundles: qty });
 }
         function generatePreviewFromRow(idx, qty) {
             const item = tagPrintData[idx];
@@ -11781,7 +11773,7 @@ window.enablePrintExtra = function enablePrintExtra(idx) {
 /**
  * ✅ ฟังก์ชันบันทึกเพิ่มและแสดง Preview
  */
-window.saveExtraAndPreview = function saveExtraAndPreview(idx) {
+window.saveExtraAndPreview = async function saveExtraAndPreview(idx) {
     const item = tagPrintData[idx];
     const extraQty = parseFloat(document.getElementById(`qty-${idx}`).value);
     const date = document.getElementById('tag-date').value;
@@ -11789,15 +11781,19 @@ window.saveExtraAndPreview = function saveExtraAndPreview(idx) {
     if (!extraQty || extraQty <= 0) return showToast("กรุณาระบุจำนวนมัด", true);
 
     showToast("กำลังบันทึกยอดเพิ่มและพรีวิว...");
-    google.script.run.withSuccessHandler(res => {
-        if(res.success) {
-            showToast("บันทึกสำเร็จ");
-            const previewItem = { ...item, needToPrintBundles: extraQty };
-            generatePreview(previewItem);
-            document.getElementById('tag-preview-area').classList.remove('hidden');
-            loadPrintTagData(); 
-        }
-    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: extraQty }, window._tagPPSpreadsheetId || '');
+    const { error } = await window._sb.from('print_tag_log').insert({
+        printed_at: new Date().toISOString(),
+        print_date: date,
+        sku: item.productId,
+        bundles: extraQty,
+        user_email: window._currentUser || '',
+        total_pcs: extraQty * (item.linesPerBundle || 1)
+    });
+    if (error) { showToast("บันทึกไม่สำเร็จ: " + error.message, true); return; }
+    showToast("บันทึกสำเร็จ");
+    generatePreview({ ...item, needToPrintBundles: extraQty });
+    document.getElementById('tag-preview-area').classList.remove('hidden');
+    loadPrintTagData();
 }
 /**
  * ✅ ฟังก์ชันปริ้น TAG (สถานะที่ 2 → Preview)
@@ -12220,7 +12216,7 @@ window.closeExtraJobModal = function closeExtraJobModal() {
 /**
  * 3. ยืนยันการพิมพ์งานแทรก
  */
-window.confirmExtraJobPrint = function confirmExtraJobPrint() {
+window.confirmExtraJobPrint = async function confirmExtraJobPrint() {
     const inputId = document.getElementById('extra-product-input').value.trim();
     const qty = parseFloat(document.getElementById('extra-qty-input').value);
     const date = document.getElementById('tag-date').value; // ใช้วันที่เดียวกับหน้าจอหลัก
@@ -12235,37 +12231,28 @@ window.confirmExtraJobPrint = function confirmExtraJobPrint() {
 
     showToast("กำลังบันทึกงานแทรก...");
 
-    // บันทึกลง Log (เหมือนงานปกติ)
-    google.script.run.withSuccessHandler(res => {
-        if (res.success) {
-            showToast("บันทึกงานแทรกสำเร็จ");
-            closeExtraJobModal();
+    const { error } = await window._sb.from('print_tag_log').insert({
+        printed_at: new Date().toISOString(),
+        print_date: date,
+        sku: productInfo.id,
+        bundles: qty,
+        user_email: window._currentUser || '',
+        total_pcs: qty * (productInfo.linesPerBundle || 1)
+    });
 
-            // สร้าง Object สำหรับสร้าง Tag Preview
-            // (ต้องจำลองโครงสร้างให้เหมือนกับที่ได้จาก Plan)
-            const previewItem = {
-                productId: productInfo.id,
-                productName: productInfo.name,
-                productSize: productInfo.productSize,
-                wStd: productInfo.wStd,
-                wMinMax: productInfo.wMinMax,
-                pcsPerBundle: productInfo.pcsPerBundle,
-                needToPrintBundles: qty
-            };
+    if (error) { showToast("บันทึกไม่สำเร็จ: " + error.message, true); return; }
 
-            // เรียกฟังก์ชัน Preview ตัวเดิม
-            generatePreview(previewItem);
-            
-            // ถ้าอยากให้ตารางหลักรีเฟรชยอดด้วย (เผื่อมีรายการนี้ในแผนแต่เป็น 0)
-            // loadPrintTagData(); 
-        } else {
-            showToast("บันทึกไม่สำเร็จ: " + res.message, true);
-        }
-    }).savePrintTagLog({
-        productionDate: date,
+    showToast("บันทึกงานแทรกสำเร็จ");
+    closeExtraJobModal();
+    generatePreview({
         productId: productInfo.id,
-        bundles: qty
-    }, window._tagPPSpreadsheetId || '');
+        productName: productInfo.name,
+        productSize: productInfo.productSize,
+        wStd: productInfo.wStd,
+        wMinMax: productInfo.wMinMax,
+        pcsPerBundle: productInfo.pcsPerBundle,
+        needToPrintBundles: qty
+    });
 }
 
 // ✅ ฟังก์ชันวาดกราฟ Trend น้ำหนักและจำนวนเส้นคงคลัง (2 แกน Y)
