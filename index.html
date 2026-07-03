@@ -25930,6 +25930,18 @@ window.ldCardSave = async function(oid, unit) {
     var workMin = Math.round(workMs/60000);
     var startIso = segs.length ? segs[0].s : (_ldCardStartTimes[oid]||endIso);
     var segCount = segs.length;
+    // pause_count = number of completed pause breaks (closed segments excluding the last working segment)
+    var closedSegs = segs.filter(function(s){ return !!s.e; });
+    var pauseCount = Math.max(0, closedSegs.length - (segs[segs.length-1] && segs[segs.length-1].e ? 0 : 1));
+    // round_no: how many final saves already exist for this order's first SKU
+    var roundNo = 1;
+    try {
+        var {count:_prevCount} = await window._sb.from('loading_sessions')
+            .select('*', {count:'exact', head:true})
+            .eq('order_id', oid).eq('record_type', 'บันทึกการโหลด')
+            .eq('sku', (orderItems[0]&&orderItems[0].sku)||'');
+        if (_prevCount !== null) roundNo = _prevCount + 1;
+    } catch(e){}
 
     var userNote = document.getElementById('ldf-note-'+oid)?.value||'';
     var dPcs = parseInt(document.getElementById('ldf-dunnage-pcs-'+oid)?.value||0)||0;
@@ -26004,6 +26016,9 @@ window.ldCardSave = async function(oid, unit) {
                 start_time: startIso, end_time: endIso,
                 note: note, photo_urls: (function(){ var mk=(oi.sku||'')+'|'+curUnit; var old=skuOldPhotos&&(skuOldPhotos[mk]||skuOldPhotos[oi.sku||''])||[]; var merged=old.slice(); photoUrls.forEach(function(u){ if(merged.indexOf(u)<0) merged.push(u); }); return merged; })(),
                 truck_unit: curUnit,
+                work_time_min: workMin,
+                pause_count: pauseCount,
+                round_no: roundNo,
                 updated_at: endIso
             };
             if (draftIds[_oiIdx]) { toUpdate.push({id:draftIds[_oiIdx], row:finalRow}); }
