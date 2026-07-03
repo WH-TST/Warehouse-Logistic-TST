@@ -24271,6 +24271,10 @@ function _ldRenderCards(orders) {
                     +'<i class="fas fa-check-circle" style="color:#bbf7d0;font-size:13px;"></i>'
                     +'<div style="font-size:12px;font-weight:900;color:#fff;">อนุมัติแล้ว ✓</div>'
                     +'</div>';
+                if (st==='rejected') return '<div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:10px 16px;display:flex;align-items:center;gap:8px;">'
+                    +'<i class="fas fa-times-circle" style="color:#fca5a5;font-size:13px;"></i>'
+                    +'<div style="font-size:12px;font-weight:900;color:#fff;">↩ ตีกลับ — กรุณาแก้ไขและโหลดใหม่</div>'
+                    +'</div>';
                 return '';
             };
             return '<div id="ld-card-'+o.id+'" class="bg-white rounded-2xl border-2 border-blue-400 shadow-sm overflow-hidden transition-all">'
@@ -27426,12 +27430,16 @@ function _ldRenderMonitorTable(rows, orders) {
                 var _sdUnit = _ldScaleDiffUnit[orderId]||{};
                 var _unitBar=function(unit,rv,label,plate,bgCls,txtCls,borderCls,unitSess){
                     var st=rv.status||'';
-                    var approveBtn='',resetBtn='';
+                    var approveBtn='',resetBtn='',rejectBtn='';
                     if(st==='pending_review'){
                         approveBtn='<button onclick="ldApproveUnit(\''+orderId+'\',\''+unit+'\')" style="padding:5px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;font-size:11px;font-weight:900;cursor:pointer;margin-left:8px;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>อนุมัติ</button>';
-                        resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #fca5a5;background:#fff5f5;color:#dc2626;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
+                        rejectBtn='<button onclick="ldRejectUnit(\''+orderId+'\',\''+unit+'\',\''+_ldEsc(label)+'\')" style="padding:5px 10px;border-radius:8px;border:2px solid #fca5a5;background:#fff5f5;color:#dc2626;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-times-circle" style="margin-right:3px;"></i>ตีกลับ</button>';
+                        resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
                     } else if(st==='approved'){
                         approveBtn='<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ อนุมัติแล้ว</span>';
+                        resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
+                    } else if(st==='rejected'){
+                        approveBtn='<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;">↩ ตีกลับ — รอแก้ไข</span>';
                         resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
                     } else {
                         resetBtn=(_cu&&_cu.isAdmin)&&(mSess.length||tSess.length)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
@@ -27472,7 +27480,7 @@ function _ldRenderMonitorTable(rows, orders) {
                     return '<div style="background:'+bgCls+';padding:8px 14px;border-top:1px solid '+borderCls+';">'
                         +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'
                             +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+'</span>'
-                            +'<div style="display:flex;align-items:center;">'+approveBtn+resetBtn+'</div>'
+                            +'<div style="display:flex;align-items:center;">'+approveBtn+rejectBtn+resetBtn+'</div>'
                         +'</div>'
                         +uStatsHtml
                     +'</div>'+sdRow;
@@ -27991,6 +27999,54 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
       var {error} = await window._sb.from('loading_orders').update({unit_review:ur, review_status:newRv||null, status:newStatus, updated_at:new Date().toISOString()}).eq('id',oid);
       if (error) { showToast('❌ '+error.message,true); return; }
       showToast('✅ อนุมัติ'+(unit==='mother'?'รถแม่':'รถลูก')+'สำเร็จ');
+      var d = document.getElementById('ld-mon-date')?.value;
+      if (d) { _ldMonFetch(d,false); if(window._ldLoadOrderCards) window._ldLoadOrderCards(d); }
+      _ldLoadReviewPanel();
+  };
+
+  window.ldRejectUnit = function(oid, unit, unitLabel) {
+      var modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+      modal.dataset.ldRejUnit = '1';
+      modal.innerHTML = '<div style="background:#fff;border-radius:20px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);">'
+          +'<div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:16px 20px;">'
+          +'<div style="font-size:16px;font-weight:900;color:#fff;">❌ ตีกลับ — '+(unit==='mother'?'รถแม่ (Head)':'รถลูก (Trailer)')+'</div>'
+          +'<div style="font-size:12px;color:#fca5a5;margin-top:2px;">'+unitLabel+'</div></div>'
+          +'<div style="padding:20px;">'
+          +'<div style="font-size:12px;font-weight:900;color:#374151;margin-bottom:10px;">เหตุผลที่ไม่ผ่าน:</div>'
+          +'<label id="ld-reju-lbl-1" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;cursor:pointer;padding:10px;border:2px solid #fca5a5;border-radius:10px;background:#fff5f5;">'
+          +'<input type="radio" name="ld-reju-type" value="1" checked style="margin-top:2px;flex-shrink:0;accent-color:#dc2626;" onchange="document.getElementById(\'ld-reju-lbl-1\').style.borderColor=\'#fca5a5\';document.getElementById(\'ld-reju-lbl-2\').style.borderColor=\'#e5e7eb\';">'
+          +'<span style="font-size:12px;font-weight:700;color:#374151;">⚖️ ส่วนต่างรวมระหว่างหน้างาน กับตราชั่งใหญ่ห่างกันเกินกำหนด</span></label>'
+          +'<label id="ld-reju-lbl-2" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;cursor:pointer;padding:10px;border:2px solid #e5e7eb;border-radius:10px;">'
+          +'<input type="radio" name="ld-reju-type" value="2" style="margin-top:2px;flex-shrink:0;accent-color:#dc2626;" onchange="document.getElementById(\'ld-reju-lbl-2\').style.borderColor=\'#fca5a5\';document.getElementById(\'ld-reju-lbl-1\').style.borderColor=\'#e5e7eb\';">'
+          +'<span style="font-size:12px;font-weight:700;color:#374151;">📏 น้ำหนักไม่อยู่ในช่วง และไม่มีการประสานงานมาทางจัดส่ง</span></label>'
+          +'<textarea id="ld-reju-note" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)" rows="2" style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;resize:none;outline:none;box-sizing:border-box;"></textarea>'
+          +'<div style="display:flex;gap:8px;margin-top:14px;">'
+          +'<button onclick="document.querySelector(\'[data-ld-rej-unit]\').remove()" style="flex:1;padding:10px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;color:#64748b;font-weight:700;font-size:13px;cursor:pointer;">ยกเลิก</button>'
+          +'<button onclick="ldRejectUnitConfirm(\''+oid+'\',\''+unit+'\')" style="flex:2;padding:10px;border-radius:10px;border:none;background:#dc2626;color:#fff;font-weight:900;font-size:13px;cursor:pointer;"><i class="fas fa-times-circle" style="margin-right:6px;"></i>ยืนยันตีกลับ</button>'
+          +'</div></div></div>';
+      document.body.appendChild(modal);
+      modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  };
+
+  window.ldRejectUnitConfirm = async function(oid, unit) {
+      var typeEl = document.querySelector('input[name="ld-reju-type"]:checked');
+      var type = typeEl ? parseInt(typeEl.value) : 1;
+      var note = (document.getElementById('ld-reju-note')?.value||'').trim();
+      var modal = document.querySelector('[data-ld-rej-unit]');
+      if (modal) modal.remove();
+      var {data:cur} = await window._sb.from('loading_orders').select('unit_review').eq('id',oid).maybeSingle();
+      var ur = (cur&&cur.unit_review) ? Object.assign({},cur.unit_review) : {};
+      ur[unit] = {status:'rejected', rejection_reason_type:type, rejection_note:note,
+                  reviewed_by:(window._cu&&window._cu.name)||'admin', reviewed_at:new Date().toISOString()};
+      // overall review_status: if any unit still pending → pending_review, else rejected
+      var anyPending = Object.entries(ur).some(function(e){ return e[1]&&e[1].status==='pending_review'; });
+      var newRv = anyPending ? 'pending_review' : 'rejected';
+      var {error} = await window._sb.from('loading_orders').update({
+          unit_review:ur, review_status:newRv, status:'done', updated_at:new Date().toISOString()
+      }).eq('id',oid);
+      if (error) { showToast('❌ '+error.message,true); return; }
+      showToast('↩️ ตีกลับ'+(unit==='mother'?'รถแม่':'รถลูก')+'เรียบร้อย');
       var d = document.getElementById('ld-mon-date')?.value;
       if (d) { _ldMonFetch(d,false); if(window._ldLoadOrderCards) window._ldLoadOrderCards(d); }
       _ldLoadReviewPanel();
