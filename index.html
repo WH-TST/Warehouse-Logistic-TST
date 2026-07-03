@@ -33739,16 +33739,16 @@ window.loadKpiWH = function loadKpiWH() {
     kpiWHAutoData  = {};
     kpiWHSavedData = {};
 
-    // ดึงข้อมูลทั้งหมดจาก Supabase พร้อมกัน 3 ตาราง
+    // ดึงข้อมูลทั้งหมดจาก Supabase พร้อมกัน
     Promise.all([
-        // 1. kpi_inventory → FG/SEMI Checker, Prod KPI, Final Adj
+        // 0. kpi_inventory → FG/SEMI Checker, Prod KPI, Final Adj
         window._sb.from('kpi_inventory').select('cycle_date,type,kpi_checker,kpi_prd,kpi_final')
             .gte('cycle_date', startStr).lte('cycle_date', endStr),
-        // 2. wh_activity_log → เฉพาะช่วงวันที่เลือก (ใช้คำนวณ Load/Damage Score)
+        // 1. wh_activity_log → ใช้เฉพาะ Accuracy (โหลดผิด/เคลม) + Damage Score
         window._sb.from('wh_activity_log').select('type,date,min_per_item,weight_per_unit,truck_plate').gte('date', startStr).lte('date', endStr),
-        // 3. kpi_wh_log → ข้อมูลที่เคยบันทึกไว้
+        // 2. kpi_wh_log → ข้อมูลที่เคยบันทึกไว้
         window._sb.from('kpi_wh_log').select('*').gte('cycle_date', startStr).lte('cycle_date', endStr),
-        // 4. production_plan_cache → planMinutes per date
+        // 3. production_plan_cache → planMinutes per date
         (async function() {
             var planMap2 = {};
             var months = {};
@@ -33772,13 +33772,21 @@ window.loadKpiWH = function loadKpiWH() {
             // แปลงชั่วโมง → นาที
             Object.keys(planMap2).forEach(function(k) { planMap2[k] = Math.round(planMap2[k] * 60); });
             return { data: Object.keys(planMap2).map(function(k){ return { plan_date: k, total_mins: planMap2[k] }; }) };
-        })()
+        })(),
+        // 4. loading_sessions → ข้อมูลโหลดจริง (Speed Score)
+        window._sb.from('loading_sessions')
+            .select('plan_date,work_time_min,weight,qty,record_type')
+            .gte('plan_date', startStr).lte('plan_date', endStr)
+            .eq('record_type', 'บันทึกการโหลด')
+            .not('work_time_min', 'is', null)
+            .gt('work_time_min', 0)
     ]).then(function(results) {
         var kpiRows   = (results[0].data || []);
         var actRows   = (results[1].data || []);
         var savedRows = (results[2].data || []);
         var planRows  = (results[3].data || []);
-        console.log('[KPI-WH] actRows:', actRows.length, 'err:', results[1].error, 'sample:', actRows[0]);
+        var lsRows    = (results[4].data || []);
+        console.log('[KPI-WH] actRows:', actRows.length, 'lsRows:', lsRows.length, 'err:', results[1].error);
 
         // ── Build kpiWHSavedData จาก kpi_wh_log ──
         savedRows.forEach(function(r) {
@@ -33816,22 +33824,30 @@ window.loadKpiWH = function loadKpiWH() {
             planMap[r.plan_date] = r.total_mins || 0;
         });
 
-        // ── คำนวณ Median MPI/KG ทุก historical trip (baseline สำหรับ efficiency) ──
-        var allMpiKgA=[], allMpiKgB=[], allMpiKgC=[], allMpiKgD=[];
-        var whaMap = {}; // key=yyyy-MM-dd → { wpuList, mpiList, wrongCount, claimCount, dmgLoad, dmgStore }
+        // ── Build whaMap จาก wh_activity_log (Accuracy + Damage เท่านั้น) ──
+        var whaMap = {}; // key=yyyy-MM-dd → { wrongCount, claimCount, dmgLoad, dmgStore }
         actRows.forEach(function(r) {
             var key = (r.date || '').slice(0, 10);
-            if (!whaMap[key]) whaMap[key] = { wpuList:[], mpiList:[], wrongCount:0, claimCount:0, dmgLoad:0, dmgStore:0 };
-            if (r.type === 'โหลดสินค้าผิด')         { whaMap[key].wrongCount++; return; }
-            if (r.type === 'เคลมสินค้า')             { whaMap[key].claimCount++; return; }
-            if (r.type === 'สินค้าเสียหาย-การโหลด') { whaMap[key].dmgLoad++;    return; }
-            if (r.type === 'สินค้าเสียหาย-การเก็บ') { whaMap[key].dmgStore++;   return; }
-            if (r.type !== 'บันทึกการโหลด') return;
-            var wpu = parseFloat(r.weight_per_unit) || 0;
-            var mpi = parseFloat(r.min_per_item)    || 0;
+            if (!whaMap[key]) whaMap[key] = { wrongCount:0, claimCount:0, dmgLoad:0, dmgStore:0 };
+            if (r.type === 'โหลดสินค้าผิด')         { whaMap[key].wrongCount++; }
+            else if (r.type === 'เคลมสินค้า')        { whaMap[key].claimCount++; }
+            else if (r.type === 'สินค้าเสียหาย-การโหลด') { whaMap[key].dmgLoad++; }
+            else if (r.type === 'สินค้าเสียหาย-การเก็บ') { whaMap[key].dmgStore++; }
+        });
+
+        // ── Build lsMap จาก loading_sessions (Speed Score) ──
+        var allMpiKgA=[], allMpiKgB=[], allMpiKgC=[], allMpiKgD=[];
+        var lsMap = {}; // key=yyyy-MM-dd → { wpuList, mpiList }
+        lsRows.forEach(function(r) {
+            var key = (r.plan_date || '').slice(0, 10);
+            if (!lsMap[key]) lsMap[key] = { wpuList:[], mpiList:[] };
+            var qty = parseFloat(r.qty) || 0;
+            if (qty <= 0) return;
+            var wpu = (parseFloat(r.weight) || 0) / qty;
+            var mpi = (parseFloat(r.work_time_min) || 0) / qty;
             if (wpu <= 0 || mpi <= 0) return;
-            whaMap[key].wpuList.push(wpu);
-            whaMap[key].mpiList.push(mpi);
+            lsMap[key].wpuList.push(wpu);
+            lsMap[key].mpiList.push(mpi);
             var mpkg = mpi / wpu;
             if      (wpu < 3000)   allMpiKgA.push(mpkg);
             else if (wpu <= 8000)  allMpiKgB.push(mpkg);
@@ -33872,16 +33888,17 @@ window.loadKpiWH = function loadKpiWH() {
             var prdKPIFG        = kpiFG.prd   != null ? Math.round(kpiFG.prd   * 10)/10 : null;
             var prdKPISEMI      = kpiSEMI.prd != null ? Math.round(kpiSEMI.prd * 10)/10 : null;
 
-            // Load Score จาก wh_activity_log
+            // Load Score: Speed จาก loading_sessions, Accuracy จาก wh_activity_log
             var efficiency=null, effStep1=null, accuracyScore=null;
-            var wrongCount  = wha ? (wha.wrongCount||0) : 0;
-            var claimCount  = wha ? (wha.claimCount||0) : 0;
-            var dmgLoad     = wha ? (wha.dmgLoad||0)    : 0;
-            var dmgStore    = wha ? (wha.dmgStore||0)   : 0;
-            if (wha && wha.wpuList.length > 0 && medAll) {
+            var lsa = lsMap[key] || null;
+            var wrongCount = wha ? (wha.wrongCount||0) : 0;
+            var claimCount = wha ? (wha.claimCount||0) : 0;
+            var dmgLoad    = wha ? (wha.dmgLoad||0)    : 0;
+            var dmgStore   = wha ? (wha.dmgStore||0)   : 0;
+            if (lsa && lsa.wpuList.length > 0 && medAll) {
                 var effList = [];
-                for (var t=0; t<wha.wpuList.length; t++) {
-                    var wpu_t = wha.wpuList[t], mpi_t = wha.mpiList[t];
+                for (var t=0; t<lsa.wpuList.length; t++) {
+                    var wpu_t = lsa.wpuList[t], mpi_t = lsa.mpiList[t];
                     if (wpu_t>0 && mpi_t>0) {
                         var gm = groupMedian(wpu_t);
                         if (gm) effList.push(Math.min(100, (gm/(mpi_t/wpu_t))*100));
@@ -33892,7 +33909,7 @@ window.loadKpiWH = function loadKpiWH() {
                     accuracyScore = Math.max(0, 100 - wrongCount*15 - claimCount*10);
                     efficiency = Math.round((effStep1*0.6 + accuracyScore*0.4)*10)/10;
                 }
-            } else if (wha && (wrongCount>0||claimCount>0)) {
+            } else if (wrongCount>0 || claimCount>0) {
                 accuracyScore = Math.max(0, 100-wrongCount*15-claimCount*10);
                 efficiency = Math.round(accuracyScore*10)/10;
             }
