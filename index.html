@@ -25380,31 +25380,40 @@ async function _ldUpsertDraft(oid) {
 
         // Sync: fetch existing draft rows from DB to avoid any duplicate inserts
         // This is the safety net — covers cases where memory was cleared
-        var {data:existingDrafts} = await window._sb.from('loading_sessions')
-            .select('id,sku,created_at').eq('order_id',oid).eq('record_type','draft');
+        var _curUnit = _ldTrailerUnit[oid] || 'mother';
+        var _syncFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[oid];
+        var _syncQ = window._sb.from('loading_sessions').select('id,sku,created_at').eq('order_id',oid).eq('record_type','draft');
+        if (od.is_trailer && od.trailer_split) _syncQ = _syncQ.eq('truck_unit', _curUnit);
+        var {data:existingDrafts} = await _syncQ;
         if (existingDrafts && existingDrafts.length) {
-            // Count how many of each SKU the order needs (supports duplicate SKU rows)
+            // Count only SKUs that appear in the form (trailer split may filter some items out)
             var skuNeeded = {};
-            orderItems.forEach(function(oi){ if(oi.sku) skuNeeded[oi.sku]=(skuNeeded[oi.sku]||0)+1; });
+            if (_syncFOrigIdx) {
+                _syncFOrigIdx.forEach(function(oiIdx){ var oi=orderItems[oiIdx]; if(oi&&oi.sku) skuNeeded[oi.sku]=(skuNeeded[oi.sku]||0)+1; });
+            } else {
+                orderItems.forEach(function(oi){ if(oi.sku) skuNeeded[oi.sku]=(skuNeeded[oi.sku]||0)+1; });
+            }
             // Group drafts by sku, sorted by created_at for stable positional match
             var skuQueues = {};
             existingDrafts.slice().sort(function(a,b){return (a.created_at||a.id||'').localeCompare(b.created_at||b.id||'');}).forEach(function(r){
                 if(r.sku){ if(!skuQueues[r.sku]) skuQueues[r.sku]=[]; skuQueues[r.sku].push(r.id); }
             });
-            // Delete extras beyond what the order needs per SKU
+            // Delete extras beyond what the form needs per SKU (incl. orphan wrong-SKU drafts)
             var toDelete = [];
             Object.keys(skuQueues).forEach(function(sku){
                 var need = skuNeeded[sku]||0;
                 if(skuQueues[sku].length > need) toDelete=toDelete.concat(skuQueues[sku].splice(need));
             });
             if(toDelete.length) await window._sb.from('loading_sessions').delete().in('id',toDelete);
-            // Map positionally: first draft of SKU → first order item of that SKU, etc.
+            // Map positionally using orderItems indices (keyed by _dOiIdx, not form iIdx)
             var skuPos = {};
-            orderItems.forEach(function(oi, iIdx){
+            var _mapItems = _syncFOrigIdx ? _syncFOrigIdx.map(function(oiIdx){ return {oi:orderItems[oiIdx]||{}, oiIdx:oiIdx}; }) : orderItems.map(function(oi,i){ return {oi:oi, oiIdx:i}; });
+            _mapItems.forEach(function(entry){
+                var oi=entry.oi, oiIdx=entry.oiIdx;
                 if(!oi.sku) return;
                 if(!skuPos[oi.sku]) skuPos[oi.sku]=0;
                 var q = skuQueues[oi.sku]||[];
-                if(q[skuPos[oi.sku]]!==undefined && !_ldDraftRowIds[oid][iIdx]) _ldDraftRowIds[oid][iIdx]=q[skuPos[oi.sku]];
+                if(q[skuPos[oi.sku]]!==undefined && !_ldDraftRowIds[oid][oiIdx]) _ldDraftRowIds[oid][oiIdx]=q[skuPos[oi.sku]];
                 skuPos[oi.sku]++;
             });
         }
@@ -25436,7 +25445,7 @@ async function _ldUpsertDraft(oid) {
                 truck_unit: _ldTrailerUnit[oid] || 'mother',
                 updated_at: new Date().toISOString()
             };
-            var existingId = _ldDraftRowIds[oid][iIdx];
+            var existingId = _ldDraftRowIds[oid][_dOiIdx];
             if (existingId) {
                 if (totalQty > 0 || totalWt > 0) {
                     await window._sb.from('loading_sessions').update(row).eq('id', existingId);
@@ -25449,7 +25458,7 @@ async function _ldUpsertDraft(oid) {
                 }
             } else {
                 var {data:inserted} = await window._sb.from('loading_sessions').insert(row).select('id').single();
-                if (inserted) _ldDraftRowIds[oid][iIdx] = inserted.id;
+                if (inserted) _ldDraftRowIds[oid][_dOiIdx] = inserted.id;
             }
             iIdx++;
         }
