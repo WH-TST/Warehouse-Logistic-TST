@@ -8959,6 +8959,11 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                     <p class="text-slate-400 text-xs font-bold">ระบบจะดึงข้อมูล Size, Weight ฯลฯ มาใส่ใน Tag อัตโนมัติ</p>
                 </div>
             </div>
+            <!-- GAS URL -->
+            <div class="mb-4">
+                <label class="block text-xs font-black text-slate-400 uppercase mb-1">GAS Web App URL (wms.js deployment)</label>
+                <input type="text" id="tss-gas-url" class="w-full bg-slate-50 border-2 border-slate-200 p-3 rounded-xl font-mono text-sm outline-none focus:border-violet-400" placeholder="https://script.google.com/macros/s/.../exec">
+            </div>
             <!-- Sheet ID + Sheet Name -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
@@ -12427,10 +12432,11 @@ window.openTagSpecSettings = async function openTagSpecSettings() {
     if (data && data.value) {
         try { _tagSpecConfig = JSON.parse(data.value); } catch(e) { _tagSpecConfig = null; }
     }
-    const cfg = _tagSpecConfig || { spreadsheetId: '', sheetName: '', fields: [
+    const cfg = _tagSpecConfig || { gasUrl: '', spreadsheetId: '', sheetName: '', fields: [
         { key: 'sku', label: 'รหัสสินค้า (SKU)', col: 'A' },
         { key: 'size', label: 'Size / ขนาด', col: 'B' }
     ]};
+    document.getElementById('tss-gas-url').value    = cfg.gasUrl || '';
     document.getElementById('tss-sheet-id').value   = cfg.spreadsheetId || '';
     document.getElementById('tss-sheet-name').value = cfg.sheetName || '';
     // render fields
@@ -12467,9 +12473,11 @@ window.addTagSpecFieldRow = function addTagSpecFieldRow() {
 };
 
 window.saveTagSpecSettings = async function saveTagSpecSettings() {
+    const gasUrl        = document.getElementById('tss-gas-url').value.trim();
     const spreadsheetId = document.getElementById('tss-sheet-id').value.trim();
     const sheetName     = document.getElementById('tss-sheet-name').value.trim();
-    if (!spreadsheetId || !sheetName) return showToast('กรุณากรอก Spreadsheet ID และ ชื่อ Sheet', true);
+    if (!gasUrl)                       return showToast('กรุณากรอก GAS URL', true);
+    if (!spreadsheetId || !sheetName)  return showToast('กรุณากรอก Spreadsheet ID และ ชื่อ Sheet', true);
 
     const rows = document.querySelectorAll('#tss-fields-body tr');
     const fields = [];
@@ -12482,7 +12490,7 @@ window.saveTagSpecSettings = async function saveTagSpecSettings() {
 
     if (!fields.find(function(f){ return f.key === 'sku'; })) return showToast('ต้องมี field key = "sku" เพื่อใช้ค้นหา', true);
 
-    const cfg = { spreadsheetId: spreadsheetId, sheetName: sheetName, fields: fields };
+    const cfg = { gasUrl: gasUrl, spreadsheetId: spreadsheetId, sheetName: sheetName, fields: fields };
     _tagSpecConfig = cfg;
 
     const { error } = await window._sb.from('app_config').upsert({ key: 'tag_spec_config', value: JSON.stringify(cfg) }, { onConflict: 'key' });
@@ -12499,21 +12507,16 @@ window.fetchProductSpec = async function fetchProductSpec(sku) {
     }
     const cfg = _tagSpecConfig;
 
-    const gasPromise = (cfg && cfg.spreadsheetId && cfg.sheetName && cfg.fields)
+    if (cfg && cfg.gasUrl) window._WMS_GAS_URL = cfg.gasUrl;
+
+    const gasPromise = (cfg && cfg.gasUrl && cfg.spreadsheetId && cfg.sheetName && cfg.fields)
         ? new Promise(function(resolve) {
-            console.log('[TagSpec] calling GAS getProductSpec, sku=', sku, 'url=', window._WMS_GAS_URL);
             google.script.run
-                .withSuccessHandler(function(res) {
-                    console.log('[TagSpec] GAS response:', JSON.stringify(res));
-                    resolve((res && res.success) ? (res.spec || {}) : {});
-                })
-                .withFailureHandler(function(e) {
-                    console.error('[TagSpec] GAS error:', e);
-                    resolve({});
-                })
+                .withSuccessHandler(function(res) { resolve((res && res.success) ? (res.spec || {}) : {}); })
+                .withFailureHandler(function()    { resolve({}); })
                 .getProductSpec(cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields));
           })
-        : (console.log('[TagSpec] no cfg, skip GAS'), Promise.resolve({}));
+        : Promise.resolve({});
 
     const supabasePromise = window._sb.from('products')
         .select('likely_w,min_w,max_w').eq('sku', sku).maybeSingle();
