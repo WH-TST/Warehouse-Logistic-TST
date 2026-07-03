@@ -24710,8 +24710,10 @@ function _ldBuildFormMobile(order) {
             var sp=split[String(_idx)]||split[it.sku]||{};
             var pcs=unit==='mother'?(sp.mother_pcs||0):(sp.trailer_pcs||0);
             var wt=unit==='mother'?(sp.mother_kg||0):(sp.trailer_kg||0);
-            return Object.assign({},it,{qty:pcs,target_weight:wt});
+            return Object.assign({},it,{qty:pcs,target_weight:wt,_origIdx:_idx});
         }).filter(function(it){return it.qty>0;});
+        window._ldFormOrigIdx = window._ldFormOrigIdx || {};
+        window._ldFormOrigIdx[oid] = items.map(function(it){ return it._origIdx; });
 
         if (items.length === 0) {
             var el = document.getElementById('ld-form-wrap-'+oid);
@@ -27469,8 +27471,10 @@ function _ldRenderMonitorTable(rows, orders) {
             var doneTableHtml = '';
             if (order.is_trailer && order.trailer_split) {
                 var sp=order.trailer_split;
-                var mSess=sessions.filter(function(r){return (r.truck_unit||'mother')==='mother';});
-                var tSess=sessions.filter(function(r){return r.truck_unit==='trailer';});
+                // For sessions without truck_unit (old data), infer from SKU: if SKU only in trailer split → trailer
+                var _tOnlySku=new Set(tItems.filter(function(ti){return !mItems.some(function(mi){return mi.sku===ti.sku;});}).map(function(ti){return ti.sku;}));
+                var mSess=sessions.filter(function(r){return r.truck_unit==='mother'||(r.truck_unit!=='trailer'&&!_tOnlySku.has(r.sku));});
+                var tSess=sessions.filter(function(r){return r.truck_unit==='trailer'||(!r.truck_unit&&_tOnlySku.has(r.sku));});
                 var mItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0,can_cut:it.can_cut};}).filter(function(it){return it.qty>0;});
                 var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0,can_cut:it.can_cut};}).filter(function(it){return it.qty>0;});
                 var ur=order.unit_review||{};
