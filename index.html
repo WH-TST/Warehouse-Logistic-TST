@@ -11562,7 +11562,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
             // ปริ้นสะสม: ตั้งแต่ startDate ถึงก่อนวันที่เลือก
             window._sb.from('print_tag_log').select('sku,bundles').gte('print_date', startDate).lt('print_date', formattedDate),
             // ใช้จริง: transection_fg reference = Production ตั้งแต่ startDate ถึงก่อนวันที่เลือก
-            window._sb.from('transection_fg').select('item_number,issue').ilike('reference', '%Production%').gte('tst_pd_date', startDate).lt('tst_pd_date', formattedDate)
+            window._sb.from('transection_fg').select('item_number,cw_quantity').eq('reference', 'Production').gte('tst_pd_date', startDate).lt('tst_pd_date', formattedDate)
         ]);
 
         // 3. รวม lines ต่อ SKU จากทุกเครื่อง
@@ -11587,11 +11587,11 @@ window.loadPrintTagData = async function loadPrintTagData() {
             cumulativePrint[r.sku] = (cumulativePrint[r.sku] || 0) + (r.bundles || 0);
         });
 
-        // ใช้จริง (ก่อนวันที่เลือก, จาก transection_fg)
-        const usedReal = {};
+        // ใช้จริง (ก่อนวันที่เลือก, จาก transection_fg) — รวม cw_quantity ก่อน แล้วหาร lines_per_bundle ทีหลัง
+        const usedCwLines = {};
         if (usedRes && usedRes.data) usedRes.data.forEach(function(r) {
-            const qty = parseFloat(r.issue) || 0;
-            if (qty > 0) usedReal[r.item_number] = (usedReal[r.item_number] || 0) + qty;
+            const qty = parseFloat(r.cw_quantity) || 0;
+            if (qty > 0) usedCwLines[r.item_number] = (usedCwLines[r.item_number] || 0) + qty;
         });
 
         // Map products สำหรับ linesPerBundle และชื่อสินค้า
@@ -11613,7 +11613,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
                 savedBundlesToday: savedBundles,
                 needToPrintBundles: needToPrint,
                 printedExcludeToday: cumulativePrint[sku] || 0,
-                usedExcludeToday: usedReal[sku] || 0,
+                usedExcludeToday: Math.floor((usedCwLines[sku] || 0) / linesPerBundle),
                 wStd: '-'
             };
         }).filter(function(i) { return i.planToday > 0; });
