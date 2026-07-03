@@ -26973,17 +26973,19 @@ function _ldRenderMonitorTable(rows, orders) {
         // rejected orders → always show in live (both done + draft sessions as real-time baseline)
         if (_rejectedIds.has(r.order_id)) return true;
         var ord = _liveOrderIdx[r.order_id];
-        // trailer_split: one unit may submit (status=done) while the other is still loading
-        // keep draft sessions for the unsubmitted unit in live, and done sessions for finished unit
+        // trailer_split: one unit may submit while the other is still loading
         if (ord && ord.is_trailer && ord.trailer_split) {
             var ur = ord.unit_review||{};
             var rUnit = r.truck_unit||'mother';
             var rUnitStatus = (ur[rUnit]||{}).status||'';
-            // finished unit (pending_review/approved/rejected): include its done sessions in live card
+            var bothHaveStatus = !!(ur.mother && ur.trailer);
+            // if BOTH units submitted → all sessions go to done pool (shown as full card)
+            if (bothHaveStatus) return false;
+            // finished unit: its done sessions go to done pool (partial done card)
             if (rUnitStatus==='pending_review'||rUnitStatus==='approved'||rUnitStatus==='rejected') {
-                return r.record_type!=='draft';
+                return false;
             }
-            // unfinished unit: include its draft sessions so monitor shows real-time progress
+            // unfinished unit: draft sessions stay in live
             return r.record_type==='draft';
         }
         if (!inProgressIds.has(r.order_id)) return false;
@@ -27013,6 +27015,7 @@ function _ldRenderMonitorTable(rows, orders) {
                 orderItems: ord.items||[], sessions:[],
                 is_trailer: ord.is_trailer, trailer_plate: ord.trailer_plate,
                 trailer_split: ord.trailer_split,
+                unit_review: ord.unit_review||{},
                 loop_weigh: !!ord.loop_weigh, orderId: k,
                 isRejected: (ord.review_status||'')==='rejected',
                 rejectionNote: ord.rejection_note||''
@@ -27148,18 +27151,19 @@ function _ldRenderMonitorTable(rows, orders) {
                 var tablesHtml = '';
                 if (g.is_trailer && g.trailer_split) {
                     var split = g.trailer_split;
+                    var liveUr = g.unit_review||{};
                     var motherSess = sess.filter(function(r){ return (r.truck_unit||'mother')==='mother'; });
                     var trailerSess = sess.filter(function(r){ return r.truck_unit==='trailer'; });
-                    // build target items from split
                     var mItems = g.orderItems.map(function(it,_i){
-                        var sp=split[String(_i)]||split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.mother_pcs||0,target_kg:sp.mother_kg||0};
+                        var sp=split[String(_i)]||split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.mother_pcs||0,target_kg:sp.mother_kg||0,can_cut:it.can_cut};
                     }).filter(function(it){return it.qty>0;});
                     var tItems = g.orderItems.map(function(it,_i){
-                        var sp=split[String(_i)]||split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.trailer_pcs||0,target_kg:sp.trailer_kg||0};
+                        var sp=split[String(_i)]||split[it.sku]||{}; return {sku:it.sku,product_name:it.product_name,qty:sp.trailer_pcs||0,target_kg:sp.trailer_kg||0,can_cut:it.can_cut};
                     }).filter(function(it){return it.qty>0;});
-                    var mTable = _buildLiveTable(motherSess, mItems, '#f0fdf4', '#86efac');
-                    var tTable = _buildLiveTable(trailerSess, tItems, '#eff6ff', '#bfdbfe');
-                    // per-unit team/time info
+                    var mDone = !!(liveUr.mother && (liveUr.mother.status==='pending_review'||liveUr.mother.status==='approved'));
+                    var tDone = !!(liveUr.trailer && (liveUr.trailer.status==='pending_review'||liveUr.trailer.status==='approved'));
+                    var mTable = mDone ? null : _buildLiveTable(motherSess, mItems, '#f0fdf4', '#86efac');
+                    var tTable = tDone ? null : _buildLiveTable(trailerSess, tItems, '#eff6ff', '#bfdbfe');
                     function _unitInfo(unitSess) {
                         var uTeam={}, uStaff={};
                         unitSess.forEach(function(r){
@@ -27177,23 +27181,24 @@ function _ldRenderMonitorTable(rows, orders) {
                             +'<span style="margin-left:8px;">'+_monQcBadge()+'</span>'
                             +(ud.pcs||ud.kg ? '<span style="margin-left:6px;">'+_monDunnageChip(ud)+'</span>' : '');
                     }
+                    var _doneBadge = '<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;background:#d1fae5;border:1px solid #6ee7b7;font-size:11px;font-weight:900;color:#065f46;"><i class="fas fa-check-circle"></i> โหลดเสร็จแล้ว — ดูรายละเอียดในส่วนโหลดเสร็จด้านล่าง</span>';
                     tablesHtml =
                         '<div style="background:#dcfce7;padding:8px 14px;border-bottom:1px solid #86efac;">'
                             +'<div style="display:flex;align-items:center;justify-content:space-between;">'
                                 +'<span style="font-size:12px;font-weight:700;color:#15803d;">แม่ · Head · '+_ldEsc(g.truck_plate||'—')+'</span>'
-                                +'<span style="font-size:11px;color:#16a34a;font-weight:700;">'+Math.round(mTable.actWt).toLocaleString()+' KG</span>'
+                                +(mDone ? '' : '<span style="font-size:11px;color:#16a34a;font-weight:700;">'+(mTable?Math.round(mTable.actWt).toLocaleString():0)+' KG</span>')
                             +'</div>'
-                            +'<div style="margin-top:4px;">'+_unitInfo(motherSess)+'</div>'
+                            +'<div style="margin-top:4px;">'+(mDone ? _doneBadge : _unitInfo(motherSess))+'</div>'
                         +'</div>'
-                        +mTable.html
+                        +(mDone ? '' : mTable.html)
                         +'<div style="background:#dbeafe;padding:8px 14px;border-top:1px solid #bfdbfe;border-bottom:1px solid #bfdbfe;">'
                             +'<div style="display:flex;align-items:center;justify-content:space-between;">'
                                 +'<span style="font-size:12px;font-weight:700;color:#1d4ed8;">ลูก · Trailer · '+_ldEsc(g.trailer_plate||'—')+'</span>'
-                                +'<span style="font-size:11px;color:#2563eb;font-weight:700;">'+Math.round(tTable.actWt).toLocaleString()+' KG</span>'
+                                +(tDone ? '' : '<span style="font-size:11px;color:#2563eb;font-weight:700;">'+(tTable?Math.round(tTable.actWt).toLocaleString():0)+' KG</span>')
                             +'</div>'
-                            +'<div style="margin-top:4px;">'+_unitInfo(trailerSess)+'</div>'
+                            +'<div style="margin-top:4px;">'+(tDone ? _doneBadge : _unitInfo(trailerSess))+'</div>'
                         +'</div>'
-                        +tTable.html;
+                        +(tDone ? '' : tTable.html);
                 } else {
                     var t1 = _buildLiveTable(sess, g.orderItems, '#fef2f2', '#fda4af');
                     tablesHtml = t1.html;
@@ -27534,11 +27539,25 @@ function _ldRenderMonitorTable(rows, orders) {
                 };
                 var mDiff=_sdUnit.mother!=null?_sdUnit.mother:null;
                 var tDiff=_sdUnit.trailer!=null?_sdUnit.trailer:null;
+                var mSubmitted = !!(ur.mother);
+                var tSubmitted = !!(ur.trailer);
+                var _stillLoadingPlaceholder = function(label, bgCls, txtCls, borderCls) {
+                    return '<div style="background:'+bgCls+';padding:10px 14px;border-top:1px solid '+borderCls+';display:flex;align-items:center;gap:8px;">'
+                        +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+'</span>'
+                        +'<span style="display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:3px 10px;border-radius:8px;background:#fef3c7;border:1px solid #fcd34d;font-size:11px;font-weight:900;color:#92400e;">'
+                        +'<span style="width:6px;height:6px;background:#f59e0b;border-radius:50%;display:inline-block;animation:pulse 1s infinite;"></span>'
+                        +'กำลังโหลดอยู่ — รอข้อมูลจากหน้างาน</span>'
+                    +'</div>';
+                };
                 doneTableHtml=
-                    _unitBar('mother',mRv,'แม่ · Head · '+_ldEsc(order.truck_plate||''),order.truck_plate||'—','#dcfce7','#15803d','#86efac',mSess)
-                    +_buildDoneTable(mSess,mItems,mDiff)
-                    +_unitBar('trailer',tRv,'ลูก · Trailer · '+_ldEsc(order.trailer_plate||''),order.trailer_plate||'—','#dbeafe','#1d4ed8','#bfdbfe',tSess)
-                    +_buildDoneTable(tSess,tItems,tDiff);
+                    (mSubmitted
+                        ? _unitBar('mother',mRv,'แม่ · Head · '+_ldEsc(order.truck_plate||''),order.truck_plate||'—','#dcfce7','#15803d','#86efac',mSess)
+                          +_buildDoneTable(mSess,mItems,mDiff)
+                        : _stillLoadingPlaceholder('แม่ · Head · '+_ldEsc(order.truck_plate||'—'),'#dcfce7','#15803d','#86efac'))
+                    +(tSubmitted
+                        ? _unitBar('trailer',tRv,'ลูก · Trailer · '+_ldEsc(order.trailer_plate||''),order.trailer_plate||'—','#dbeafe','#1d4ed8','#bfdbfe',tSess)
+                          +_buildDoneTable(tSess,tItems,tDiff)
+                        : _stillLoadingPlaceholder('ลูก · Trailer · '+_ldEsc(order.trailer_plate||'—'),'#dbeafe','#1d4ed8','#bfdbfe'));
             } else {
                 var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
                     return {sku:r.sku, product_name:r.product_name, qty:0, target_weight:0};
