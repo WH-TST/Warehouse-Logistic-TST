@@ -24801,7 +24801,7 @@ function _ldBuildFormMobile(order) {
                 +'</div>'
             +'</td>'
         +'</tr>';
-        var ev='ldCardStats(\''+oid+'\',\''+unit+'\');ldDraftSave(\''+oid+'\')';
+        var ev='ldCardStats(\''+oid+'\',\''+unit+'\');ldDraftSave(\''+oid+'\',\''+unit+'\')';
         var inputRows='';
         for(var grpStart=0;grpStart<itemDisp;grpStart+=CPR){
             var grpEnd=Math.min(grpStart+CPR,itemDisp);
@@ -25064,8 +25064,8 @@ function _ldBuildForm(order) {
             for (var c=0; c<_LFT_COLS; c++) {
                 var colIdx = rg * _LFT_COLS + c;
                 liftCells += '<td style="padding:6px 4px;vertical-align:middle;border-right:1px solid #f1f5f9;background:#fff;">'
-                    +'<input type="number" min="0" step="0.01" placeholder="kg" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+_formUnit+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\',\''+_formUnit+'\');ldDraftSave(\''+oid+'\')">'
-                    +'<input type="number" min="0" step="1" placeholder="pcs" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+_formUnit+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\',\''+_formUnit+'\');ldDraftSave(\''+oid+'\')">'
+                    +'<input type="number" min="0" step="0.01" placeholder="kg" style="'+INP_W+'margin-bottom:4px;" id="ldf-lw-'+oid+'-'+_formUnit+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\',\''+_formUnit+'\');ldDraftSave(\''+oid+'\',\''+_formUnit+'\')">'
+                    +'<input type="number" min="0" step="1" placeholder="pcs" style="'+INP_Q+'" id="ldf-lq-'+oid+'-'+_formUnit+'-'+idx+'-'+colIdx+'" oninput="ldCardStats(\''+oid+'\',\''+_formUnit+'\');ldDraftSave(\''+oid+'\',\''+_formUnit+'\')">'
                 +'</td>';
             }
             var borderStyle = (rg === numRowGroups-1) ? 'border-bottom:2px solid #e2e8f0;' : 'border-bottom:1px dashed #cbd5e1;';
@@ -25332,7 +25332,9 @@ var _ldDraftOrderCache= {};   // {oid: orderData} — cached order for draft ups
 var _ldDraftDBCache   = {};   // {oid: {iIdx: lifts[]}} — lifts from Supabase for cross-device restore
 
 // ── called on every input; debounce 1.5s then upsert to DB ──
-window.ldDraftSave = function(oid) {
+window.ldDraftSave = function(oid, unit) {
+    // lock in the active unit so _ldUpsertDraft reads the right form elements
+    if (unit) _ldTrailerUnit[oid] = unit;
     // save to localStorage immediately (for fast restore)
     _ldLocalSave(oid);
     // debounce DB upsert
