@@ -24437,7 +24437,8 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
     try {
         // If user has already explicitly edited this form, preserve their data
         try {
-            var _localRaw = localStorage.getItem('ld_draft_'+oid);
+            var _rjUnitCheck = _ldTrailerUnit[oid]||'mother';
+            var _localRaw = localStorage.getItem('ld_draft_'+oid+'|'+_rjUnitCheck) || localStorage.getItem('ld_draft_'+oid);
             if (_localRaw) {
                 var _localDraft = JSON.parse(_localRaw);
                 if (_localDraft && _localDraft.userEdited) return;
@@ -24516,7 +24517,7 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
             if (_noteEl2) _preDraft.note = _noteEl2.value;
             _preDraft.startTime = _ldCardStartTimes[oid]||null;
             _preDraft.segments = _ldSegments[oid]||null;
-            try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(_preDraft)); } catch(e){}
+            try { localStorage.setItem('ld_draft_'+oid+'|'+_rjUnit, JSON.stringify(_preDraft)); } catch(e){}
             // Push to DB so monitor sees real-time values — call upsert directly, NOT ldDraftSave,
             // because ldDraftSave calls _ldLocalSave which would overwrite userEdited:false with true
             setTimeout(function(){ if (typeof _ldUpsertDraft==='function') _ldUpsertDraft(oid); }, 200);
@@ -25362,7 +25363,8 @@ function _ldLocalSave(oid) {
     if (noteEl) draft.note = noteEl.value;
     draft.startTime = _ldCardStartTimes[oid] || null;
     draft.segments  = _ldSegments[oid] || null;
-    try { localStorage.setItem('ld_draft_'+oid, JSON.stringify(draft)); } catch(e){}
+    var _lsKey = 'ld_draft_'+oid+'|'+_lsUnit;
+    try { localStorage.setItem(_lsKey, JSON.stringify(draft)); } catch(e){}
 }
 
 var _ldUpsertLock = {};   // prevent concurrent upserts per order
@@ -25479,7 +25481,7 @@ function _ldDraftLoad(oid) {
     var usedLocal = false;
     var userEdited = false;
     try {
-        var raw = localStorage.getItem('ld_draft_'+oid);
+        var raw = localStorage.getItem('ld_draft_'+oid+'|'+_dlUnit) || localStorage.getItem('ld_draft_'+oid);
         if (raw) {
             var draft = JSON.parse(raw);
             userEdited = !!draft.userEdited;
@@ -25518,7 +25520,7 @@ function _ldDraftLoad(oid) {
 }
 
 function _ldDraftClear(oid) {
-    try { localStorage.removeItem('ld_draft_'+oid); } catch(e){}
+    try { localStorage.removeItem('ld_draft_'+oid); localStorage.removeItem('ld_draft_'+oid+'|mother'); localStorage.removeItem('ld_draft_'+oid+'|trailer'); } catch(e){}
     clearTimeout(_ldDraftTimers[oid]);
     delete _ldDraftTimers[oid];
     delete _ldDraftOrderCache[oid];
@@ -28041,7 +28043,7 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
         await window._sb.from('loading_sessions').delete().eq('order_id', orderId);
         await window._sb.from('loading_orders').update({status:'pending', updated_at:new Date().toISOString()}).eq('id', orderId);
         // clear local caches
-        try { localStorage.removeItem('ld_draft_'+orderId); } catch(e){}
+        try { localStorage.removeItem('ld_draft_'+orderId); localStorage.removeItem('ld_draft_'+orderId+'|mother'); localStorage.removeItem('ld_draft_'+orderId+'|trailer'); } catch(e){}
         delete _ldDraftRowIds[orderId];
         delete _ldDraftOrderCache[orderId];
         delete _ldDraftDBCache[orderId];
