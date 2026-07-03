@@ -25642,10 +25642,16 @@ window.ldCardRemovePhoto = function(oid, i) {
 window.ldCardSave = async function(oid) {
     var _saveBtn = document.getElementById('ldf-save-btn-'+oid);
     if (_saveBtn && _saveBtn.disabled) return; // ป้องกันกดซ้ำ
-    // Force commit any focused input (mobile Safari does not commit value before button click)
-    if (document.activeElement && document.activeElement !== document.body) {
-        document.activeElement.blur();
-        await new Promise(function(r){ setTimeout(r, 80); });
+    // Force commit any focused input before reading values (mobile may not commit on tap)
+    var _ae = document.activeElement;
+    if (_ae && _ae.tagName === 'INPUT' && _ae !== document.body) {
+        // Snapshot the value directly from the active element first
+        var _aeId = _ae.id, _aeVal = _ae.value;
+        _ae.blur();
+        await new Promise(function(r){ setTimeout(r, 300); });
+        // Restore the value in case blur reset it
+        var _aeEl2 = document.getElementById(_aeId);
+        if (_aeEl2 && _aeEl2.value === '' && _aeVal !== '') _aeEl2.value = _aeVal;
     }
     if (_saveBtn) {
         _saveBtn.disabled = true;
