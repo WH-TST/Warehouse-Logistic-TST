@@ -980,7 +980,7 @@
           if (failureFn) failureFn(new Error('Script error: ' + action));
         };
 
-        script.src = GAS_URL
+        script.src = (window._WMS_GAS_URL || GAS_URL)
           + '?action='   + encodeURIComponent(action)
           + '&args='     + encodeURIComponent(JSON.stringify(args))
           + '&callback=' + encodeURIComponent(cbName);
@@ -9392,6 +9392,8 @@ const _safeStorage = {
             if (r.key==='production_block_sheet_name') pbSheetName = r.value;
             if (r.key==='production_plan_spreadsheet_id') ppSpreadsheetId = r.value;
           });
+          // อัปเดต GAS URL ให้ Bridge ใช้ URL จาก Settings แทน hardcode
+          if (gasUrl) window._WMS_GAS_URL = gasUrl;
 
           var [logRes, prodRes] = await Promise.all([
             window._sb.from('zone_capacity_log').select('zone,empty_slots').eq('log_date', dateStr),
