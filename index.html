@@ -25913,6 +25913,25 @@ window.ldCardSave = async function(oid) {
                 });
                 var dupIds = allRows.filter(function(r){ return keepIds.indexOf(r.id) < 0; }).map(function(r){ return r.id; });
                 if (dupIds.length) await window._sb.from('loading_sessions').delete().in('id', dupIds);
+
+                // For trailer_split: also delete orphan sessions whose SKU doesn't belong to that unit
+                if (orderData && orderData.is_trailer && orderData.trailer_split) {
+                    var _sp = orderData.trailer_split;
+                    var _validMother = new Set(), _validTrailer = new Set();
+                    (orderData.items||[]).forEach(function(it,_i){
+                        var s = _sp[String(_i)]||_sp[it.sku]||{};
+                        if ((s.mother_pcs||0) > 0) _validMother.add(it.sku);
+                        if ((s.trailer_pcs||0) > 0) _validTrailer.add(it.sku);
+                    });
+                    var orphanIds = allRows.filter(function(r){
+                        if (keepIds.indexOf(r.id) < 0) return false; // already deleting
+                        var ut = r.truck_unit||'mother';
+                        if (ut==='mother') return r.sku && !_validMother.has(r.sku);
+                        if (ut==='trailer') return r.sku && !_validTrailer.has(r.sku);
+                        return false;
+                    }).map(function(r){ return r.id; });
+                    if (orphanIds.length) await window._sb.from('loading_sessions').delete().in('id', orphanIds);
+                }
             }
         } catch(e){}
         var error = null;
