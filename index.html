@@ -18816,6 +18816,7 @@ window.renderLogisticList = function renderLogisticList() {
         const _fixBtn = _isOldTrailer
             ? `<button onclick="fixTrailerPlan('${p.id}')" title="ซ่อมข้อมูลรถพ่วงเก่า" class="w-full mt-1 px-2 py-1 rounded-lg bg-violet-50 border border-violet-300 text-violet-700 hover:bg-violet-600 hover:text-white transition text-[10px] font-black flex items-center justify-center gap-1"><i class="fas fa-wrench"></i> Fix</button>`
             : '';
+        const _isHire = p.truckType === 'hire';
         const actionBtns = (p.isChild || p.id?.endsWith('-C'))
             ? `<div class="text-[10px] text-purple-300 text-center">—</div>`
             : `<div class="flex flex-col gap-1 items-center">
@@ -18827,7 +18828,7 @@ window.renderLogisticList = function renderLogisticList() {
                         ${(p.status !== 'inprogress' || (_cu && _cu.isAdmin)) ? `<button onclick="deleteLogiPlan('${p.id}')" title="${p.isMother ? 'ลบ (แม่+ลูก)' : 'ลบ'}" class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>` : `<div class="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-300 text-xs" title="ล็อค — แผนกำลังดำเนินการ"><i class="fas fa-lock"></i></div>`}
                         <button onclick="printPreShipmentFromPlan('${p.id}')" title="พิมพ์ PRE-SHIPMENT" class="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 text-orange-500 hover:bg-orange-500 hover:text-white transition text-xs"><i class="fas fa-file-invoice"></i></button>
                     </div>
-                    <button onclick="viewTripResult('${p.id}')" title="ดูการส่ง (Driver App)" class="w-full px-2 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-600 hover:text-white transition text-[10px] font-black flex items-center justify-center gap-1"><i class="fas fa-route mr-1"></i>ดูการส่ง</button>
+                    ${_isHire ? `<button onclick="changeHirePlanStatus('${p.id}')" title="เปลี่ยนสถานะ (รถจ้าง)" class="w-full px-2 py-1 rounded-lg bg-violet-50 border border-violet-300 text-violet-700 hover:bg-violet-600 hover:text-white transition text-[10px] font-black flex items-center justify-center gap-1"><i class="fas fa-exchange-alt mr-1"></i>เปลี่ยนสถานะ</button>` : `<button onclick="viewTripResult('${p.id}')" title="ดูการส่ง (Driver App)" class="w-full px-2 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-600 hover:text-white transition text-[10px] font-black flex items-center justify-center gap-1"><i class="fas fa-route mr-1"></i>ดูการส่ง</button>`}
                     ${_fixBtn}
                </div>`;
 
@@ -23146,6 +23147,75 @@ window.calDrop = async function(e, newDate, newTruck) {
     } catch(err) {
         showToast('ย้ายแผนไม่สำเร็จ: ' + (err.message || String(err)), true);
         renderLogiCalendar();
+    }
+};
+
+// ── เปลี่ยนสถานะรถจ้าง (ออฟฟิส) ────────────────────────────────────────────
+window.changeHirePlanStatus = async function(planId) {
+    var allPlans = (logiPlanList || []);
+    var plan = allPlans.find(function(p) { return p.id === planId; });
+    if (!plan) return;
+
+    var curStatus = plan.status || 'planned';
+    var statuses = [
+        { key: 'planned',    label: 'วางแผนแล้ว',      icon: '📋', style: 'background:#ddeef8;color:#1a5f8a;border-color:#8bbbd8;' },
+        { key: 'inprogress', label: 'กำลังดำเนินการ',  icon: '🚛', style: 'background:#fef3d8;color:#8c5c08;border-color:#e8c060;' },
+        { key: 'success',    label: 'สำเร็จ',           icon: '✅', style: 'background:#dff0dc;color:#2a6020;border-color:#88c078;' },
+        { key: 'failed',     label: 'ไม่สำเร็จ',        icon: '❌', style: 'background:#fae8e8;color:#8c2020;border-color:#e09090;' },
+        { key: 'extra',      label: 'เกินแผน',          icon: '➕', style: 'background:#ece8f8;color:#5030a0;border-color:#b898e0;' },
+    ];
+
+    var trucklabel = plan.driverTransport || plan.truckPlate || planId;
+
+    // สร้าง modal
+    var existing = document.getElementById('hire-status-modal');
+    if (existing) existing.remove();
+
+    var btns = statuses.map(function(s) {
+        var isCur = s.key === curStatus;
+        return '<button onclick="window._doChangeHireStatus(\''+planId+'\',\''+s.key+'\')" '
+            + 'style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border-radius:10px;border:2px solid '+(isCur?'#4f46e5':'#e2e8f0')+';'
+            + 'background:'+(isCur?'#eef2ff':'#fff')+';cursor:pointer;font-size:14px;font-weight:700;color:#1e293b;transition:all 0.15s;"'
+            + ' onmouseover="this.style.borderColor=\'#4f46e5\';this.style.background=\'#f5f3ff\'"'
+            + ' onmouseout="this.style.borderColor=\''+(isCur?'#4f46e5':'#e2e8f0')+'\';this.style.background=\''+(isCur?'#eef2ff':'#fff')+'\'">'
+            + '<span style="font-size:18px;">'+s.icon+'</span>'
+            + '<span style="flex:1;text-align:left;">'+s.label+'</span>'
+            + (isCur?'<span style="font-size:11px;font-weight:900;color:#4f46e5;background:#e0e7ff;padding:2px 8px;border-radius:20px;">ปัจจุบัน</span>':'')
+            + '</button>';
+    }).join('');
+
+    var modal = document.createElement('div');
+    modal.id = 'hire-status-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+    modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:24px;width:340px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+            + '<span style="font-size:20px;">🚐</span>'
+            + '<span style="font-size:16px;font-weight:900;color:#1e293b;">เปลี่ยนสถานะ — รถจ้าง</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:#64748b;margin-bottom:18px;padding-left:30px;">'+planId+' · '+_ldEsc(trucklabel)+'</div>'
+        + '<div style="display:flex;flex-direction:column;gap:8px;">'+btns+'</div>'
+        + '<button onclick="document.getElementById(\'hire-status-modal\').remove()" style="margin-top:16px;width:100%;padding:9px;border-radius:10px;border:1.5px solid #e2e8f0;background:#f8fafc;font-size:13px;font-weight:700;color:#64748b;cursor:pointer;">ยกเลิก</button>'
+    + '</div>';
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+};
+
+window._doChangeHireStatus = async function(planId, newStatus) {
+    document.getElementById('hire-status-modal')?.remove();
+    try {
+        var res = await window._sb.from('logistic_plans').update({ status: newStatus }).eq('plan_id', planId);
+        if (res.error) throw res.error;
+        // อัปเดต local list
+        [logiPlanList, typeof logiCalPlanList !== 'undefined' ? logiCalPlanList : null].forEach(function(list) {
+            if (!list) return;
+            list.forEach(function(p) { if (p.id === planId) p.status = newStatus; });
+        });
+        var st = LOGI_STATUS_MAP[newStatus] || { label: newStatus };
+        showToast('เปลี่ยนสถานะเป็น "' + st.label + '" แล้ว', false);
+        if (typeof renderLogisticList === 'function') renderLogisticList();
+        if (typeof renderLogiCalendar  === 'function') renderLogiCalendar();
+    } catch(err) {
+        showToast('เปลี่ยนสถานะไม่สำเร็จ: ' + (err.message || String(err)), true);
     }
 };
 
