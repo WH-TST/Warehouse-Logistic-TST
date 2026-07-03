@@ -11522,40 +11522,106 @@ window.saveTagStartDate = function saveTagStartDate() {
 };
 
 /** ✅ แก้ไข loadPrintTagData() - เพิ่ม Console Log */
-window.loadPrintTagData = function loadPrintTagData() {
+window.loadPrintTagData = async function loadPrintTagData() {
     const dateInput = document.getElementById('tag-date');
     const date = dateInput.value;
-    
-    if(!date) return showToast("กรุณาเลือกวันที่พิมพ์ TAG", true);
+    if (!date) return showToast("กรุณาเลือกวันที่พิมพ์ TAG", true);
 
-    // ใช้ date string โดยตรงถ้าเป็น YYYY-MM-DD อยู่แล้ว
     const formattedDate = date.match(/^\d{4}-\d{2}-\d{2}$/) ? date : (() => {
         const d = new Date(date + 'T00:00:00');
         return isNaN(d) ? date : d.toISOString().split('T')[0];
     })();
-    
+
     const cont = document.getElementById('tag-list-container');
     cont.innerHTML = '<div class="p-20 text-center text-slate-300"><i class="fas fa-spinner fa-spin text-4xl mb-4"></i><p class="font-bold">กำลังคำนวณข้อมูลจากแผนผลิต...</p></div>';
 
-    google.script.run
-        .withSuccessHandler(res => {
-            console.log("✅ Response from Backend:", res);
-            
-            if(res.success && res.items && res.items.length > 0) {
-                tagPrintData = res.items;
-                renderTagList(res); 
-                showToast("คำนวณรายการพิมพ์สำเร็จ");
-            } else {
-                console.warn("⚠️ No data found:", res.message);
-                cont.innerHTML = '<div class="p-20 text-center text-slate-400"><i class="fas fa-info-circle text-5xl mb-4"></i><p>ไม่พบรายการที่ต้องพิมพ์ในวันที่เลือก</p></div>';
-                showToast(res.message || "ไม่มีข้อมูลในวันที่ระบุ", true);
-            }
-        })
-        .withFailureHandler(err => {
-            console.error("❌ Backend Error:", err);
-            showToast("เกิดข้อผิดพลาด: " + err.message, true);
-        })
-        .calculatePrintTagList(formattedDate); // ส่ง yyyy-MM-dd
+    try {
+        // 1. โหลด config จาก Supabase (ใช้ settings เดียวกับ WH Management)
+        const cfgRes = await window._sb.from('app_config').select('key,value')
+            .in('key', ['gas_sync_url', 'production_plan_spreadsheet_id']);
+        var gasUrl = '', ppSpreadsheetId = '';
+        if (cfgRes.data) cfgRes.data.forEach(function(r) {
+            if (r.key === 'gas_sync_url') gasUrl = r.value;
+            if (r.key === 'production_plan_spreadsheet_id') ppSpreadsheetId = r.value;
+        });
+        if (gasUrl) window._WMS_GAS_URL = gasUrl;
+        window._tagPPSpreadsheetId = ppSpreadsheetId;
+
+        if (!ppSpreadsheetId) {
+            cont.innerHTML = '<div class="p-20 text-center text-slate-400"><i class="fas fa-cog text-5xl mb-4"></i><p>กรุณาตั้งค่า Spreadsheet ID ในหน้า Settings ก่อน</p></div>';
+            return;
+        }
+
+        // 2. ดึงแผนผลิตวันนี้ + log การพิมพ์ พร้อมกัน (ผ่าน GAS Bridge เดียวกับ WH Management)
+        const [planRes, logRes, prodRes] = await Promise.all([
+            new Promise(function(resolve) {
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(function() { resolve(null); })
+                    .getProductionPlanByDate(formattedDate, ppSpreadsheetId);
+            }),
+            new Promise(function(resolve) {
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(function() { resolve(null); })
+                    .getPrintTagLog(formattedDate, ppSpreadsheetId);
+            }),
+            window._sb.from('products').select('sku,name,lines_per_bundle')
+        ]);
+
+        // 3. รวม lines ต่อ SKU จากทุกเครื่อง
+        const planLines = {};
+        if (planRes && planRes.success) {
+            (planRes.machines || []).forEach(function(m) {
+                (m.products || []).forEach(function(p) {
+                    const lines = p.daily && p.daily[formattedDate] ? p.daily[formattedDate] : 0;
+                    if (lines > 0) planLines[p.sku] = (planLines[p.sku] || 0) + lines;
+                });
+            });
+        }
+
+        const savedLog = (logRes && logRes.log) ? logRes.log : {};
+
+        // Map products สำหรับ linesPerBundle และชื่อสินค้า
+        const prodMap = {};
+        if (prodRes.data) prodRes.data.forEach(function(p) { prodMap[p.sku] = p; });
+
+        // 4. สร้าง items
+        const items = Object.keys(planLines).map(function(sku) {
+            const prod = prodMap[sku] || {};
+            const linesPerBundle = prod.lines_per_bundle || 1;
+            const planBundles = Math.ceil(planLines[sku] / linesPerBundle);
+            const savedBundles = savedLog[sku] || 0;
+            const needToPrint = Math.max(0, planBundles - savedBundles);
+            return {
+                productId: sku,
+                productName: prod.name || sku,
+                linesPerBundle: linesPerBundle,
+                planToday: planBundles,
+                savedBundlesToday: savedBundles,
+                needToPrintBundles: needToPrint,
+                printedExcludeToday: 0,
+                usedExcludeToday: 0,
+                wStd: '-'
+            };
+        }).filter(function(i) { return i.planToday > 0; });
+
+        items.sort(function(a, b) { return a.productId.localeCompare(b.productId); });
+
+        if (items.length === 0) {
+            cont.innerHTML = '<div class="p-20 text-center text-slate-400"><i class="fas fa-info-circle text-5xl mb-4"></i><p>ไม่พบรายการที่ต้องพิมพ์ในวันที่เลือก</p></div>';
+            showToast("ไม่มีข้อมูลในวันที่ระบุ", true);
+            return;
+        }
+
+        tagPrintData = items;
+        renderTagList({ items: items });
+        showToast("คำนวณรายการพิมพ์สำเร็จ");
+
+    } catch (err) {
+        console.error("❌ loadPrintTagData error:", err);
+        showToast("เกิดข้อผิดพลาด: " + err.message, true);
+    }
 }
 /**
  * ✅ ฟังก์ชันแสดงตาราง (ปรับปรุงใหม่)
@@ -11684,7 +11750,7 @@ window.confirmAndSaveTag = function confirmAndSaveTag(idx) {
             generatePreview(previewItem);
             
         }
-    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: qty });
+    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: qty }, window._tagPPSpreadsheetId || '');
 }
         function generatePreviewFromRow(idx, qty) {
             const item = tagPrintData[idx];
@@ -11731,7 +11797,7 @@ window.saveExtraAndPreview = function saveExtraAndPreview(idx) {
             document.getElementById('tag-preview-area').classList.remove('hidden');
             loadPrintTagData(); 
         }
-    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: extraQty });
+    }).savePrintTagLog({ productionDate: date, productId: item.productId, bundles: extraQty }, window._tagPPSpreadsheetId || '');
 }
 /**
  * ✅ ฟังก์ชันปริ้น TAG (สถานะที่ 2 → Preview)
@@ -12195,11 +12261,11 @@ window.confirmExtraJobPrint = function confirmExtraJobPrint() {
         } else {
             showToast("บันทึกไม่สำเร็จ: " + res.message, true);
         }
-    }).savePrintTagLog({ 
-        productionDate: date, 
-        productId: productInfo.id, 
-        bundles: qty 
-    });
+    }).savePrintTagLog({
+        productionDate: date,
+        productId: productInfo.id,
+        bundles: qty
+    }, window._tagPPSpreadsheetId || '');
 }
 
 // ✅ ฟังก์ชันวาดกราฟ Trend น้ำหนักและจำนวนเส้นคงคลัง (2 แกน Y)

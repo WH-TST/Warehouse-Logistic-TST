@@ -5,7 +5,9 @@
 
 var ALLOWED_ACTIONS = [
   'getProductionPlanByDate',
-  'getProductionBlock'
+  'getProductionBlock',
+  'getPrintTagLog',
+  'savePrintTagLog'
 ];
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
@@ -199,4 +201,71 @@ function getProductionBlock(monthKey, spreadsheetId, sheetName) {
   });
 
   return { success: true, machines: machines, monthKey: monthKey };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  getPrintTagLog
+//  ดึงยอดบันทึกพิมพ์ TAG จาก "Print Tag Log" sheet
+//
+//  params:
+//    dateStr        {string}  'YYYY-MM-DD'
+//    spreadsheetId  {string}  Spreadsheet ID เดียวกับแผนผลิต
+//
+//  Sheet format (Print Tag Log):
+//    col A = Timestamp
+//    col B = PrintDate (YYYY-MM-DD)
+//    col C = SKU
+//    col D = Bundles
+// ════════════════════════════════════════════════════════════════
+function getPrintTagLog(dateStr, spreadsheetId) {
+  if (!dateStr)       return { success: false, message: 'ไม่มี dateStr' };
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี spreadsheetId' };
+
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName('Print Tag Log');
+  if (!sheet || sheet.getLastRow() < 2) return { success: true, log: {} };
+
+  var data = sheet.getDataRange().getValues();
+  var log  = {};
+
+  for (var r = 1; r < data.length; r++) {
+    var row      = data[r];
+    var printDate = String(row[1] || '').trim().slice(0, 10); // YYYY-MM-DD
+    var sku      = String(row[2] || '').trim();
+    var bundles  = parseFloat(row[3]) || 0;
+
+    if (printDate !== dateStr || !sku || bundles <= 0) continue;
+    log[sku] = (log[sku] || 0) + bundles;
+  }
+
+  return { success: true, log: log };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  savePrintTagLog
+//  บันทึกยอดพิมพ์ TAG ลง "Print Tag Log" sheet
+//
+//  params:
+//    data           {object}  { productionDate, productId, bundles }
+//    spreadsheetId  {string}  Spreadsheet ID เดียวกับแผนผลิต
+// ════════════════════════════════════════════════════════════════
+function savePrintTagLog(data, spreadsheetId) {
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี spreadsheetId' };
+  try {
+    var ss    = SpreadsheetApp.openById(spreadsheetId);
+    var sheet = ss.getSheetByName('Print Tag Log');
+    if (!sheet) {
+      sheet = ss.insertSheet('Print Tag Log');
+      sheet.appendRow(['Timestamp', 'PrintDate', 'SKU', 'Bundles', 'User']);
+    }
+    sheet.appendRow([
+      new Date(),
+      String(data.productionDate || ''),
+      String(data.productId || ''),
+      Number(data.bundles) || 0,
+      Session.getActiveUser().getEmail()
+    ]);
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
 }
