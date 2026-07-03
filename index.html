@@ -25338,9 +25338,10 @@ window.ldDraftSave = function(oid, unit) {
     if (unit) _ldTrailerUnit[oid] = unit;
     // save to localStorage immediately (for fast restore)
     _ldLocalSave(oid);
-    // debounce DB upsert
-    clearTimeout(_ldDraftTimers[oid]);
-    _ldDraftTimers[oid] = setTimeout(function(){ _ldUpsertDraft(oid); }, 1500);
+    // debounce DB upsert — key per oid+unit so mother/trailer timers don't cancel each other
+    var _timerKey = oid + '|' + (unit || _ldTrailerUnit[oid] || 'mother');
+    clearTimeout(_ldDraftTimers[_timerKey]);
+    _ldDraftTimers[_timerKey] = setTimeout(function(){ _ldUpsertDraft(oid); }, 1500);
 };
 
 function _ldLocalSave(oid) {
@@ -25476,12 +25477,14 @@ async function _ldUpsertDraft(oid) {
     _ldUpsertLock[oid] = false;
 }
 
-function _ldDraftLoad(oid) {
-    var _dlUnit = _ldTrailerUnit[oid]||'mother';
+function _ldDraftLoad(oid, unit) {
+    var _dlUnit = unit || _ldTrailerUnit[oid]||'mother';
     var usedLocal = false;
     var userEdited = false;
     try {
-        var raw = localStorage.getItem('ld_draft_'+oid+'|'+_dlUnit) || localStorage.getItem('ld_draft_'+oid);
+        // For unit-specific loads (trailer split), never fall back to old shared key
+        var _lsOld = (unit || _ldTrailerUnit[oid]) ? null : localStorage.getItem('ld_draft_'+oid);
+        var raw = localStorage.getItem('ld_draft_'+oid+'|'+_dlUnit) || _lsOld;
         if (raw) {
             var draft = JSON.parse(raw);
             userEdited = !!draft.userEdited;
@@ -25544,6 +25547,13 @@ window.ldToggleTrailerUnit = function(orderId, unit) {
     }
     var today = new Date().toISOString().slice(0,10);
     _ldLoadOrderCards(today);
+    // After re-render, restore form values for all still-open units
+    var _activeSnap = Object.assign({}, _ldTrailerActive[orderId] || {});
+    setTimeout(function(){
+        Object.keys(_activeSnap).forEach(function(u){
+            if (_activeSnap[u]) _ldDraftLoad(orderId, u);
+        });
+    }, 350);
 };
 
 // Build loading form for a specific truck unit (trailer orders)
