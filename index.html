@@ -25357,7 +25357,8 @@ window.ldDraftSave = function(oid, unit) {
     // ── Start timer on FIRST keystroke, not on card-open ──
     var _od = _ldDraftOrderCache[oid];
     var _segKey = (_od && _od.trailer_split) ? oid+'-'+_saveUnit : oid;
-    if (!_ldCardStartTimes[_segKey]) {
+    var _isFirstStroke = !_ldCardStartTimes[_segKey];
+    if (_isFirstStroke) {
         _ldCardStartTimes[_segKey] = new Date().toISOString();
         _ldInitSegment(_segKey);
     }
@@ -25366,7 +25367,12 @@ window.ldDraftSave = function(oid, unit) {
     // debounce DB upsert — keyed per oid+unit so mother/trailer timers are independent
     var _timerKey = oid + '|' + _saveUnit;
     clearTimeout(_ldDraftTimers[_timerKey]);
-    _ldDraftTimers[_timerKey] = setTimeout(function(){ _ldUpsertDraft(oid, _saveUnit); }, 1500);
+    // First keystroke: save to DB immediately (no debounce) so start_time is recorded before card closes
+    if (_isFirstStroke) {
+        _ldUpsertDraft(oid, _saveUnit);
+    } else {
+        _ldDraftTimers[_timerKey] = setTimeout(function(){ _ldUpsertDraft(oid, _saveUnit); }, 1500);
+    }
 };
 
 function _ldLocalSave(oid, unit) {
@@ -25547,6 +25553,11 @@ function _ldDraftLoad(oid, unit) {
         });
     }
     ldCardStats(oid, _dlUnit);
+    // Immediately update timer display so there's no 1s flash of "—" on reopen
+    var _timerEl = document.getElementById('ldf-elapsed-'+oid);
+    if (_timerEl && _ldSegments[_dlSegKey||oid] && _ldSegments[_dlSegKey||oid].length) {
+        _timerEl.textContent = _ldFmtMs(_ldGetWorkMs(_dlSegKey||oid));
+    }
     // Re-apply lock if this order was paused (e.g. another staff opens card mid-break)
     var _dlSegKey = (_dlUnit && _dlUnit !== 'mother' || (window._ldDraftOrderCache && _ldDraftOrderCache[oid] && _ldDraftOrderCache[oid].trailer_split)) ? oid+'-'+_dlUnit : oid;
     if (_ldPaused[oid] || _ldPaused[_dlSegKey]) {
