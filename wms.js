@@ -7,7 +7,9 @@ var ALLOWED_ACTIONS = [
   'getProductionPlanByDate',
   'getProductionBlock',
   'getPrintTagLog',
-  'savePrintTagLog'
+  'savePrintTagLog',
+  'getTagSystemStartDate',
+  'setTagSystemStartDate'
 ];
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
@@ -201,6 +203,30 @@ function getProductionBlock(monthKey, spreadsheetId, sheetName) {
   });
 
   return { success: true, machines: machines, monthKey: monthKey };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  getTagSystemStartDate / setTagSystemStartDate
+//  เก็บวันเริ่มคำนวณยอดสะสมใน Script Properties
+// ════════════════════════════════════════════════════════════════
+function getTagSystemStartDate() {
+  try {
+    var stored = PropertiesService.getScriptProperties().getProperty('TAG_SYSTEM_START_DATE');
+    return { success: true, date: stored || '2026-04-20' };
+  } catch (e) {
+    return { success: true, date: '2026-04-20' };
+  }
+}
+
+function setTagSystemStartDate(payload) {
+  try {
+    var dateStr = String(payload.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { success: false, message: 'รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น yyyy-MM-dd)' };
+    PropertiesService.getScriptProperties().setProperty('TAG_SYSTEM_START_DATE', dateStr);
+    return { success: true, message: 'บันทึกวันเริ่มต้นสำเร็จ: ' + dateStr };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
