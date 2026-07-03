@@ -11545,8 +11545,12 @@ window.loadPrintTagData = async function loadPrintTagData() {
             return;
         }
 
+        // 1b. โหลด tag_system_start_date จาก Supabase
+        const { data: startDateRow } = await window._sb.from('app_config').select('value').eq('key', 'tag_system_start_date').maybeSingle();
+        const startDate = (startDateRow && startDateRow.value) || '2026-04-20';
+
         // 2. ดึงแผนผลิตวันนี้ + log การพิมพ์ พร้อมกัน
-        const [planRes, logRes, prodRes] = await Promise.all([
+        const [planRes, logRes, prodRes, cumulativePrintRes, usedRes] = await Promise.all([
             new Promise(function(resolve) {
                 google.script.run
                     .withSuccessHandler(resolve)
@@ -11554,7 +11558,11 @@ window.loadPrintTagData = async function loadPrintTagData() {
                     .getProductionPlanByDate(formattedDate, ppSpreadsheetId);
             }),
             window._sb.from('print_tag_log').select('sku,bundles').eq('print_date', formattedDate),
-            window._sb.from('products').select('sku,name,lines_per_bundle')
+            window._sb.from('products').select('sku,name,lines_per_bundle'),
+            // ปริ้นสะสม: ตั้งแต่ startDate ถึงก่อนวันที่เลือก
+            window._sb.from('print_tag_log').select('sku,bundles').gte('print_date', startDate).lt('print_date', formattedDate),
+            // ใช้จริง: transection_fg reference = Production ตั้งแต่ startDate ถึงก่อนวันที่เลือก
+            window._sb.from('transection_fg').select('item_number,issue').ilike('reference', '%Production%').gte('tst_pd_date', startDate).lt('tst_pd_date', formattedDate)
         ]);
 
         // 3. รวม lines ต่อ SKU จากทุกเครื่อง
@@ -11571,6 +11579,19 @@ window.loadPrintTagData = async function loadPrintTagData() {
         const savedLog = {};
         if (logRes && logRes.data) logRes.data.forEach(function(r) {
             savedLog[r.sku] = (savedLog[r.sku] || 0) + (r.bundles || 0);
+        });
+
+        // ปริ้นสะสม (ก่อนวันที่เลือก)
+        const cumulativePrint = {};
+        if (cumulativePrintRes && cumulativePrintRes.data) cumulativePrintRes.data.forEach(function(r) {
+            cumulativePrint[r.sku] = (cumulativePrint[r.sku] || 0) + (r.bundles || 0);
+        });
+
+        // ใช้จริง (ก่อนวันที่เลือก, จาก transection_fg)
+        const usedReal = {};
+        if (usedRes && usedRes.data) usedRes.data.forEach(function(r) {
+            const qty = parseFloat(r.issue) || 0;
+            if (qty > 0) usedReal[r.item_number] = (usedReal[r.item_number] || 0) + qty;
         });
 
         // Map products สำหรับ linesPerBundle และชื่อสินค้า
@@ -11591,8 +11612,8 @@ window.loadPrintTagData = async function loadPrintTagData() {
                 planToday: planBundles,
                 savedBundlesToday: savedBundles,
                 needToPrintBundles: needToPrint,
-                printedExcludeToday: 0,
-                usedExcludeToday: 0,
+                printedExcludeToday: cumulativePrint[sku] || 0,
+                usedExcludeToday: usedReal[sku] || 0,
                 wStd: '-'
             };
         }).filter(function(i) { return i.planToday > 0; });
