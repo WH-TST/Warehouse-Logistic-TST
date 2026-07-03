@@ -25804,6 +25804,7 @@ window.ldCardSave = async function(oid) {
         _saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
     }
     var today = new Date().toISOString().slice(0,10);
+    var curUnit = _ldTrailerUnit[oid] || 'mother';
     // collect items from per-lift inputs
     var items = [];
     var idx2 = 0;
@@ -25897,7 +25898,6 @@ window.ldCardSave = async function(oid) {
     // Always map existing done session IDs so we UPDATE instead of INSERT (prevents
     // duplicate rows when multiple staff save from different devices on the same order)
     {
-        var curUnit = _ldTrailerUnit[oid] || 'mother';
         var skuIdMap = {}, skuOldPhotos = {}; // declared here so always in scope for photo merge below
         var {data:existSess} = await window._sb.from('loading_sessions')
             .select('id,sku,photo_urls,truck_unit').eq('order_id', oid).neq('record_type','draft');
