@@ -26970,8 +26970,8 @@ function _ldRenderMonitorTable(rows, orders) {
     var validRows2 = rows.filter(function(r){ return r.order_id && orderIdSet2.has(r.order_id); });
     var _rejectedIds = new Set((orders||[]).filter(function(o){ return (o.review_status||'')==='rejected'; }).map(function(o){ return o.id; }));
     var live = validRows2.filter(function(r){
-        // rejected orders → always show in live (both done + draft sessions as real-time baseline)
-        if (_rejectedIds.has(r.order_id)) return true;
+        // rejected orders → only drafts in live (new re-load progress); old saves go to done pool
+        if (_rejectedIds.has(r.order_id)) return r.record_type==='draft';
         var ord = _liveOrderIdx[r.order_id];
         // trailer_split: one unit may submit while the other is still loading
         if (ord && ord.is_trailer && ord.trailer_split) {
