@@ -25272,6 +25272,20 @@ window.ldPauseHandlePhoto = function(inp, oid) {
     var cb = document.getElementById('ldf-pause-confirm-'+oid);
     if (cb && _ldPausePhotos[oid].length) { cb.disabled = false; cb.style.background = '#d97706'; cb.style.cursor = 'pointer'; }
 };
+// Lock / unlock all form inputs for an order (used during pause)
+function _ldSetFormLocked(oid, locked) {
+    var wrap = document.getElementById('ld-form-wrap-'+oid);
+    if (!wrap) return;
+    wrap.querySelectorAll('input[type="number"], input[type="text"], textarea').forEach(function(el) {
+        el.disabled = locked;
+        el.style.background = locked ? '#f1f5f9' : '';
+        el.style.color = locked ? '#94a3b8' : '';
+        el.style.cursor = locked ? 'not-allowed' : '';
+    });
+    // Grey-out the form area visually
+    var formArea = wrap.querySelector('.ld-form-inputs');
+    if (formArea) formArea.style.opacity = locked ? '0.5' : '1';
+}
 window.ldPauseConfirm = function(oid, unit) {
     if (!(_ldPausePhotos[oid]||[]).length) { showToast('⚠️ Please take a photo before break', true); return; }
     var _pcUnit = unit || _ldTrailerUnit[oid];
@@ -25293,7 +25307,8 @@ window.ldPauseConfirm = function(oid, unit) {
     document.getElementById('ldf-paused-so-far-'+oid).textContent = _ldFmtMs(workMs);
     var lbl = document.getElementById('ldf-timer-label-'+oid);
     if (lbl) { lbl.textContent = 'หยุดพัก'; lbl.style.color = '#d97706'; }
-    showToast('⏸ หยุดพักแล้ว กดเริ่มใหม่เมื่อสินค้าพร้อม');
+    _ldSetFormLocked(oid, true);
+    showToast('⏸ หยุดพักแล้ว — ปลดล็อกเมื่อพร้อมโหลดต่อ');
 };
 window.ldPauseResume = function(oid, unit) {
     var _prUnit = unit || _ldTrailerUnit[oid];
@@ -25306,7 +25321,8 @@ window.ldPauseResume = function(oid, unit) {
     document.getElementById('ldf-pause-btn-'+oid).style.display = 'flex';
     var lbl = document.getElementById('ldf-timer-label-'+oid);
     if (lbl) { lbl.textContent = 'กำลังโหลด'; lbl.style.color = '#16a34a'; }
-    showToast('▶ เริ่มโหลดใหม่แล้ว');
+    _ldSetFormLocked(oid, false);
+    showToast('▶ เริ่มโหลดต่อแล้ว');
 };
 
 // QC checkbox toggle
@@ -25531,6 +25547,11 @@ function _ldDraftLoad(oid, unit) {
         });
     }
     ldCardStats(oid, _dlUnit);
+    // Re-apply lock if this order was paused (e.g. another staff opens card mid-break)
+    var _dlSegKey = (_dlUnit && _dlUnit !== 'mother' || (window._ldDraftOrderCache && _ldDraftOrderCache[oid] && _ldDraftOrderCache[oid].trailer_split)) ? oid+'-'+_dlUnit : oid;
+    if (_ldPaused[oid] || _ldPaused[_dlSegKey]) {
+        setTimeout(function(){ _ldSetFormLocked(oid, true); }, 50);
+    }
 }
 
 function _ldDraftClear(oid) {
