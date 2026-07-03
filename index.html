@@ -25385,12 +25385,12 @@ async function _ldUpsertDraft(oid) {
         var cu = window._cu||{};
         var staffRec = (_ldStaffMaster||[]).find(function(x){ return x.name===cu.name||x.id===cu.username; });
         var staff = { id: staffRec?staffRec.id:(cu.username||''), name: staffRec?staffRec.name:(cu.name||cu.username||''), team: staffRec?staffRec.team:'' };
+        var _curUnit = _ldTrailerUnit[oid] || 'mother';
+        var _uk = oid+'|'+_curUnit;
         if (!_ldDraftRowIds[_uk]) _ldDraftRowIds[_uk] = {};
 
         // Sync: fetch existing draft rows from DB to avoid any duplicate inserts
         // This is the safety net — covers cases where memory was cleared
-        var _curUnit = _ldTrailerUnit[oid] || 'mother';
-        var _uk = oid+'|'+_curUnit;
         var _syncFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_uk];
         var _syncQ = window._sb.from('loading_sessions').select('id,sku,created_at').eq('order_id',oid).eq('record_type','draft');
         if (od.is_trailer && od.trailer_split) _syncQ = _syncQ.eq('truck_unit', _curUnit);
