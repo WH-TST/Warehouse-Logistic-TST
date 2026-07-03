@@ -24289,44 +24289,42 @@ function _ldRenderCards(orders) {
                     +'</div>'
                     +'<div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span></div>'
                 +'</div>'
-                // แม่ sub-row
-                +'<div style="border-top:1px solid #e2e8f0;">'
+                // แม่ sub-row — hidden when approved
+                +(mRvSt==='approved' ? '' :
+                '<div style="border-top:1px solid #e2e8f0;">'
                     +'<div '+(mLocked?'':'onclick="ldToggleTrailerUnit(\''+o.id+'\',\'mother\')" ')+' class="px-4 py-3 flex items-center justify-between '+(mLocked?'':'cursor-pointer select-none active:bg-green-50')+'" style="background:#f0fdf4;">'
                         +'<div class="flex items-center gap-3">'
-                            +'<div style="width:8px;height:8px;background:'+(mRvSt==='approved'?'#16a34a':mRvSt==='pending_review'?'#7c3aed':'#16a34a')+';border-radius:50%;flex-shrink:0;'+(mRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
+                            +'<div style="width:8px;height:8px;background:'+(mRvSt==='pending_review'?'#7c3aed':'#16a34a')+';border-radius:50%;flex-shrink:0;'+(mRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
                             +'<div>'
                                 +'<div style="font-size:13px;font-weight:700;color:#15803d;">แม่ · Head · '+(o.truck_plate||'—')+'</div>'
                                 +'<div style="font-size:11px;color:#86efac;">'+Math.round(mKg).toLocaleString()+' KG · '+mPcs.toLocaleString()+' เส้น</div>'
                             +'</div>'
                         +'</div>'
                         +(mLocked
-                            ? (mRvSt==='approved'
-                                ? '<span style="font-size:10px;font-weight:900;color:#16a34a;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:2px 8px;">✓ อนุมัติแล้ว</span>'
-                                : '<span style="font-size:10px;font-weight:900;color:#7c3aed;background:#ede9fe;border:1px solid #c4b5fd;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#7c3aed;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>')
+                            ? '<span style="font-size:10px;font-weight:900;color:#7c3aed;background:#ede9fe;border:1px solid #c4b5fd;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#7c3aed;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>'
                             : '<i class="fas fa-chevron-'+(mOpen?'up':'down')+' text-green-400 text-xs"></i>')
                     +'</div>'
                     +_unitStatusBanner(mRvSt)
                     +(mOpen ? '<div class="border-t border-dashed border-green-200">'+mFormHtml+'</div>' : '')
-                +'</div>'
-                // ลูก sub-row
-                +'<div style="border-top:1px solid #e2e8f0;">'
+                +'</div>')
+                // ลูก sub-row — hidden when approved
+                +(tRvSt==='approved' ? '' :
+                '<div style="border-top:1px solid #e2e8f0;">'
                     +'<div '+(tLocked?'':'onclick="ldToggleTrailerUnit(\''+o.id+'\',\'trailer\')" ')+' class="px-4 py-3 flex items-center justify-between '+(tLocked?'':'cursor-pointer select-none active:bg-blue-50')+'" style="background:#eff6ff;">'
                         +'<div class="flex items-center gap-3">'
-                            +'<div style="width:8px;height:8px;background:'+(tRvSt==='approved'?'#16a34a':tRvSt==='pending_review'?'#7c3aed':'#2563eb')+';border-radius:50%;flex-shrink:0;'+(tRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
+                            +'<div style="width:8px;height:8px;background:'+(tRvSt==='pending_review'?'#7c3aed':'#2563eb')+';border-radius:50%;flex-shrink:0;'+(tRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
                             +'<div>'
                                 +'<div style="font-size:13px;font-weight:700;color:#1d4ed8;">ลูก · Trailer · '+(o.trailer_plate||'—')+'</div>'
                                 +'<div style="font-size:11px;color:#93c5fd;">'+Math.round(tKg).toLocaleString()+' KG · '+tPcs.toLocaleString()+' เส้น</div>'
                             +'</div>'
                         +'</div>'
                         +(tLocked
-                            ? (tRvSt==='approved'
-                                ? '<span style="font-size:10px;font-weight:900;color:#16a34a;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:2px 8px;">✓ อนุมัติแล้ว</span>'
-                                : '<span style="font-size:10px;font-weight:900;color:#7c3aed;background:#ede9fe;border:1px solid #c4b5fd;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#7c3aed;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>')
+                            ? '<span style="font-size:10px;font-weight:900;color:#7c3aed;background:#ede9fe;border:1px solid #c4b5fd;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#7c3aed;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>'
                             : '<i class="fas fa-chevron-'+(tOpen?'up':'down')+' text-blue-400 text-xs"></i>')
                     +'</div>'
                     +_unitStatusBanner(tRvSt)
                     +(tOpen ? '<div class="border-t border-dashed border-blue-200">'+tFormHtml+'</div>' : '')
-                +'</div>'
+                +'</div>')
             +'</div>';
         }
 
