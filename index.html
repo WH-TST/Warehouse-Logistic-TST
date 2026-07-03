@@ -2405,7 +2405,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                     <i class="fas fa-exclamation-circle"></i> งานแทรก (Extra)
                 </button>
             </div>
-            <!-- Row 2: ตั้งค่าวันเริ่มต้นคำนวณยอดสะสม -->
+            <!-- Row 2: ตั้งค่าวันเริ่มต้น + ปุ่มตั้งค่าสเปคสินค้า -->
             <div class="flex flex-col md:flex-row items-center gap-4 bg-indigo-50 border border-indigo-200 rounded-2xl px-6 py-4">
                 <i class="fas fa-cog text-indigo-500 text-lg"></i>
                 <span class="text-indigo-600 text-xs font-black uppercase tracking-widest whitespace-nowrap">วันเริ่มต้นคำนวณยอดสะสม</span>
@@ -2414,6 +2414,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                     <i class="fas fa-save"></i> บันทึก
                 </button>
                 <span id="tag-start-date-msg" class="text-xs font-semibold text-emerald-600 hidden"></span>
+                <div class="flex-1"></div>
+                <button onclick="openTagSpecSettings()" class="bg-violet-500 hover:bg-violet-600 text-white px-5 py-2 rounded-xl font-black text-sm transition-all flex items-center gap-2 whitespace-nowrap shadow">
+                    <i class="fas fa-table"></i> ตั้งค่าสเปคสินค้าจาก Sheet
+                </button>
             </div>
         </div>
         <div id="tag-list-container" class="min-h-[300px]"></div>
@@ -8944,6 +8948,57 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 </div>
 
 
+<!-- ======= TAG SPEC SETTINGS MODAL ======= -->
+<div id="tag-spec-modal" class="fixed inset-0 bg-slate-900/80 hidden z-[70] flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl border-4 border-violet-100 flex flex-col max-h-[90vh]">
+        <div class="p-8 pb-4">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center text-xl"><i class="fas fa-table"></i></div>
+                <div>
+                    <h3 class="text-xl font-black text-slate-800">ตั้งค่าสเปคสินค้าจาก Google Sheet</h3>
+                    <p class="text-slate-400 text-xs font-bold">ระบบจะดึงข้อมูล Size, Weight ฯลฯ มาใส่ใน Tag อัตโนมัติ</p>
+                </div>
+            </div>
+            <!-- Sheet ID + Sheet Name -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label class="block text-xs font-black text-slate-400 uppercase mb-1">Spreadsheet ID</label>
+                    <input type="text" id="tss-sheet-id" class="w-full bg-slate-50 border-2 border-slate-200 p-3 rounded-xl font-mono text-sm outline-none focus:border-violet-400" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms">
+                </div>
+                <div>
+                    <label class="block text-xs font-black text-slate-400 uppercase mb-1">ชื่อ Sheet</label>
+                    <input type="text" id="tss-sheet-name" class="w-full bg-slate-50 border-2 border-slate-200 p-3 rounded-xl font-bold text-sm outline-none focus:border-violet-400" placeholder="Products">
+                </div>
+            </div>
+            <!-- Column Mappings -->
+            <div class="mb-2">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="text-xs font-black text-slate-400 uppercase">Column Mappings (Field → คอลัมน์ใน Sheet)</label>
+                    <button onclick="addTagSpecFieldRow()" class="bg-violet-500 hover:bg-violet-600 text-white px-3 py-1 rounded-lg text-xs font-black transition-all"><i class="fas fa-plus mr-1"></i>เพิ่มฟิลด์</button>
+                </div>
+                <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead class="bg-violet-50 text-violet-700 text-xs font-black uppercase">
+                            <tr>
+                                <th class="p-3 text-left">Field Key</th>
+                                <th class="p-3 text-left">Label (แสดง)</th>
+                                <th class="p-3 text-center w-24">คอลัมน์</th>
+                                <th class="p-3 text-center w-16"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tss-fields-body"></tbody>
+                    </table>
+                </div>
+                <p class="text-xs text-slate-400 mt-2">Field Key ที่รู้จัก: <code class="bg-slate-100 px-1 rounded">sku</code> (ใช้ค้นหา), <code class="bg-slate-100 px-1 rounded">size</code>, <code class="bg-slate-100 px-1 rounded">wStd</code>, <code class="bg-slate-100 px-1 rounded">wMinMax</code>, <code class="bg-slate-100 px-1 rounded">name</code></p>
+            </div>
+        </div>
+        <div class="flex gap-3 p-8 pt-4 border-t border-slate-100">
+            <button onclick="closeTagSpecSettings()" class="flex-1 py-3 rounded-xl font-black text-slate-500 hover:bg-slate-100 transition-all">ยกเลิก</button>
+            <button onclick="saveTagSpecSettings()" class="flex-1 py-3 rounded-xl font-black text-white bg-violet-600 hover:bg-violet-700 shadow transition-all"><i class="fas fa-save mr-2"></i>บันทึก</button>
+        </div>
+    </div>
+</div>
+
 <!-- ======= INSIGHT MODAL (Stock Analysis) ======= -->
 <div id="insight-modal" class="fixed inset-0 bg-slate-900/85 hidden z-[400] flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white w-full max-w-3xl rounded-[2rem] shadow-2xl border-2 border-violet-100 flex flex-col max-h-[90vh]">
@@ -11750,6 +11805,7 @@ window.confirmAndSaveTag = async function confirmAndSaveTag(idx) {
     if (!qty || qty <= 0) return showToast("กรุณาระบุจำนวนมัด", true);
 
     showToast("กำลังบันทึกและเตรียมพิมพ์...");
+    const spec = await fetchProductSpec(item.productId);
 
     const { error } = await window._sb.from('print_tag_log').insert({
         printed_at: new Date().toISOString(),
@@ -11775,7 +11831,12 @@ window.confirmAndSaveTag = async function confirmAndSaveTag(idx) {
             <i class="fas fa-plus mr-1"></i> ปริ้นเพิ่ม
         </button>`;
 
-    generatePreview({ ...item, needToPrintBundles: qty });
+    generatePreview({ ...item, needToPrintBundles: qty,
+        productSize: spec.size || item.productSize,
+        wStd: spec.wStd || item.wStd,
+        wMinMax: spec.wMinMax || item.wMinMax,
+        productName: spec.name || item.productName
+    });
 }
         function generatePreviewFromRow(idx, qty) {
             const item = tagPrintData[idx];
@@ -11824,7 +11885,13 @@ window.saveExtraAndPreview = async function saveExtraAndPreview(idx) {
     });
     if (error) { showToast("บันทึกไม่สำเร็จ: " + error.message, true); return; }
     showToast("บันทึกสำเร็จ");
-    generatePreview({ ...item, needToPrintBundles: extraQty });
+    const spec2 = await fetchProductSpec(item.productId);
+    generatePreview({ ...item, needToPrintBundles: extraQty,
+        productSize: spec2.size || item.productSize,
+        wStd: spec2.wStd || item.wStd,
+        wMinMax: spec2.wMinMax || item.wMinMax,
+        productName: spec2.name || item.productName
+    });
     document.getElementById('tag-preview-area').classList.remove('hidden');
     loadPrintTagData();
 }
@@ -12325,16 +12392,119 @@ window.confirmExtraJobPrint = async function confirmExtraJobPrint() {
 
     showToast("บันทึกงานแทรกสำเร็จ");
     closeExtraJobModal();
+    const spec3 = await fetchProductSpec(sku);
     generatePreview({
-        productId: productInfo.id,
-        productName: productInfo.name,
-        productSize: productInfo.productSize,
-        wStd: productInfo.wStd,
-        wMinMax: productInfo.wMinMax,
+        productId: sku,
+        productName: spec3.name || productInfo.name,
+        productSize: spec3.size || '',
+        wStd: spec3.wStd || '-',
+        wMinMax: spec3.wMinMax || '-',
         pcsPerBundle: lpb,
         needToPrintBundles: bundles
     });
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  TAG SPEC SETTINGS — load/save/fetch from Google Sheet via GAS
+// ══════════════════════════════════════════════════════════════════
+
+var _tagSpecConfig = null; // cache
+
+var _KNOWN_TAG_FIELDS = [
+    { key: 'sku',    label: 'รหัสสินค้า (SKU)',  hint: 'ใช้เป็น key ค้นหา' },
+    { key: 'size',   label: 'Size / ขนาด',        hint: 'แสดงใน Tag' },
+    { key: 'wStd',   label: 'น้ำหนัก STD (kg)',   hint: 'แสดงใน Tag' },
+    { key: 'wMinMax',label: 'น้ำหนัก Min-Max',    hint: 'แสดงใน Tag' },
+    { key: 'name',   label: 'ชื่อสินค้า',         hint: 'Override ชื่อสินค้า' }
+];
+
+window.openTagSpecSettings = async function openTagSpecSettings() {
+    document.getElementById('tag-spec-modal').classList.remove('hidden');
+    // โหลด config จาก Supabase
+    const { data } = await window._sb.from('app_config').select('value').eq('key', 'tag_spec_config').maybeSingle();
+    if (data && data.value) {
+        try { _tagSpecConfig = JSON.parse(data.value); } catch(e) { _tagSpecConfig = null; }
+    }
+    const cfg = _tagSpecConfig || { spreadsheetId: '', sheetName: '', fields: [
+        { key: 'sku', label: 'รหัสสินค้า (SKU)', col: 'A' },
+        { key: 'size', label: 'Size / ขนาด', col: 'B' }
+    ]};
+    document.getElementById('tss-sheet-id').value   = cfg.spreadsheetId || '';
+    document.getElementById('tss-sheet-name').value = cfg.sheetName || '';
+    // render fields
+    document.getElementById('tss-fields-body').innerHTML = '';
+    (cfg.fields || []).forEach(function(f) { _addTssRow(f.key, f.label, f.col); });
+};
+
+window.closeTagSpecSettings = function closeTagSpecSettings() {
+    document.getElementById('tag-spec-modal').classList.add('hidden');
+};
+
+function _addTssRow(key, label, col) {
+    const tbody = document.getElementById('tss-fields-body');
+    const tr = document.createElement('tr');
+    tr.className = 'border-t border-slate-100';
+    const isFirst = tbody.rows.length === 0;
+    tr.innerHTML = `
+        <td class="p-2">
+            <select class="tss-key bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-mono w-full">
+                ${_KNOWN_TAG_FIELDS.map(function(f) {
+                    return `<option value="${f.key}" ${f.key===key?'selected':''}>${f.key}</option>`;
+                }).join('')}
+                <option value="custom" ${!_KNOWN_TAG_FIELDS.find(function(f){return f.key===key;})?'selected':''}>custom...</option>
+            </select>
+        </td>
+        <td class="p-2"><input type="text" class="tss-label bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm w-full" value="${label||''}" placeholder="Label"></td>
+        <td class="p-2 text-center"><input type="text" class="tss-col bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm w-16 text-center font-mono uppercase" value="${col||''}" maxlength="3" placeholder="A"></td>
+        <td class="p-2 text-center">${isFirst ? '<span class="text-xs text-slate-300">key</span>' : '<button onclick="this.closest(\'tr\').remove()" class="text-rose-400 hover:text-rose-600 font-black text-lg">×</button>'}</td>`;
+    tbody.appendChild(tr);
+}
+
+window.addTagSpecFieldRow = function addTagSpecFieldRow() {
+    _addTssRow('size', '', '');
+};
+
+window.saveTagSpecSettings = async function saveTagSpecSettings() {
+    const spreadsheetId = document.getElementById('tss-sheet-id').value.trim();
+    const sheetName     = document.getElementById('tss-sheet-name').value.trim();
+    if (!spreadsheetId || !sheetName) return showToast('กรุณากรอก Spreadsheet ID และ ชื่อ Sheet', true);
+
+    const rows = document.querySelectorAll('#tss-fields-body tr');
+    const fields = [];
+    rows.forEach(function(tr) {
+        const key   = tr.querySelector('.tss-key').value.trim();
+        const label = tr.querySelector('.tss-label').value.trim();
+        const col   = tr.querySelector('.tss-col').value.trim().toUpperCase();
+        if (key && col) fields.push({ key: key, label: label, col: col });
+    });
+
+    if (!fields.find(function(f){ return f.key === 'sku'; })) return showToast('ต้องมี field key = "sku" เพื่อใช้ค้นหา', true);
+
+    const cfg = { spreadsheetId: spreadsheetId, sheetName: sheetName, fields: fields };
+    _tagSpecConfig = cfg;
+
+    const { error } = await window._sb.from('app_config').upsert({ key: 'tag_spec_config', value: JSON.stringify(cfg) }, { onConflict: 'key' });
+    if (error) return showToast('บันทึกไม่สำเร็จ: ' + error.message, true);
+    showToast('บันทึกตั้งค่าสเปคสินค้าสำเร็จ');
+    closeTagSpecSettings();
+};
+
+// ดึงสเปคสินค้าจาก GAS → Sheet ตาม config
+window.fetchProductSpec = async function fetchProductSpec(sku) {
+    if (!_tagSpecConfig) {
+        const { data } = await window._sb.from('app_config').select('value').eq('key', 'tag_spec_config').maybeSingle();
+        if (data && data.value) { try { _tagSpecConfig = JSON.parse(data.value); } catch(e) {} }
+    }
+    const cfg = _tagSpecConfig;
+    if (!cfg || !cfg.spreadsheetId || !cfg.sheetName || !cfg.fields) return {};
+
+    return new Promise(function(resolve) {
+        google.script.run
+            .withSuccessHandler(function(res) { resolve((res && res.success) ? (res.spec || {}) : {}); })
+            .withFailureHandler(function()    { resolve({}); })
+            .getProductSpec(cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields));
+    });
+};
 
 // ✅ ฟังก์ชันวาดกราฟ Trend น้ำหนักและจำนวนเส้นคงคลัง (2 แกน Y)
 function renderInventoryTrendChart(data) {

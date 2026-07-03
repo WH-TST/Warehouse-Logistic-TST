@@ -5,7 +5,8 @@
 
 var ALLOWED_ACTIONS = [
   'getProductionPlanByDate',
-  'getProductionBlock'
+  'getProductionBlock',
+  'getProductSpec'
 ];
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
@@ -199,5 +200,59 @@ function getProductionBlock(monthKey, spreadsheetId, sheetName) {
   });
 
   return { success: true, machines: machines, monthKey: monthKey };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  getProductSpec
+//  ดึงสเปคสินค้าจาก Sheet ตาม column mapping
+//
+//  params:
+//    spreadsheetId  {string}  Spreadsheet ID
+//    sheetName      {string}  ชื่อ Sheet
+//    sku            {string}  รหัสสินค้าที่ต้องการค้นหา
+//    fieldsJson     {string}  JSON array ของ [{key, label, col}]
+//                             key='sku' ใช้เป็น lookup key
+//
+//  returns: { success: true, spec: { size: '...', wStd: '...', ... } }
+// ════════════════════════════════════════════════════════════════
+function getProductSpec(spreadsheetId, sheetName, sku, fieldsJson) {
+  if (!spreadsheetId) return { success: false, message: 'ไม่มี spreadsheetId' };
+  if (!sheetName)     return { success: false, message: 'ไม่มี sheetName' };
+  if (!sku)           return { success: false, message: 'ไม่มี sku' };
+
+  var fields;
+  try { fields = JSON.parse(fieldsJson); } catch(e) { return { success: false, message: 'fieldsJson parse error' }; }
+
+  var skuField = fields.filter(function(f) { return f.key === 'sku'; })[0];
+  if (!skuField) return { success: false, message: 'ไม่พบ field key=sku' };
+
+  function colToIndex(col) {
+    col = String(col).toUpperCase().trim();
+    var n = 0;
+    for (var i = 0; i < col.length; i++) { n = n * 26 + (col.charCodeAt(i) - 64); }
+    return n - 1;
+  }
+
+  var skuColIdx = colToIndex(skuField.col);
+
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName(sheetName);
+  if (!sheet) return { success: false, message: 'ไม่พบ Sheet: ' + sheetName };
+
+  var data = sheet.getDataRange().getValues();
+  var spec = {};
+
+  for (var r = 0; r < data.length; r++) {
+    var row = data[r];
+    if (String(row[skuColIdx] || '').trim() !== sku.trim()) continue;
+    // พบแถวที่ตรงกัน — ดึงค่าทุก field
+    fields.forEach(function(f) {
+      if (f.key === 'sku') return;
+      var idx = colToIndex(f.col);
+      spec[f.key] = String(row[idx] !== undefined ? row[idx] : '').trim();
+    });
+    break;
+  }
+
+  return { success: true, spec: spec };
 }
 
