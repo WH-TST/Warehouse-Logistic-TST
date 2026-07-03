@@ -11490,35 +11490,28 @@ function renderInputTable() {
             if(!inputValues[rowKey]) inputValues[rowKey] = { planned: 0, other: 0 };
             inputValues[rowKey][key] = parseFloat(val) || 0;
         };
-// ── Tag Start Date: load + save ───────────────────────────────────────────────
-window.loadTagStartDate = function loadTagStartDate() {
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (res && res.success) {
-                const el = document.getElementById('tag-start-date');
-                if (el) el.value = res.date || '2026-04-20';
-            }
-        })
-        .withFailureHandler(function() {})
-        .getTagSystemStartDate();
+// ── Tag Start Date: load + save (Supabase app_config) ────────────────────────
+window.loadTagStartDate = async function loadTagStartDate() {
+    try {
+        const { data } = await window._sb.from('app_config').select('value').eq('key', 'tag_system_start_date').single();
+        const el = document.getElementById('tag-start-date');
+        if (el) el.value = (data && data.value) || '2026-04-20';
+    } catch (e) {}
 };
 
-window.saveTagStartDate = function saveTagStartDate() {
+window.saveTagStartDate = async function saveTagStartDate() {
     const el  = document.getElementById('tag-start-date');
     const msg = document.getElementById('tag-start-date-msg');
     const dateVal = el?.value;
     if (!dateVal) return showToast('กรุณาเลือกวันที่', true);
-    google.script.run
-        .withSuccessHandler(function(res) {
-            if (msg) {
-                msg.textContent = res && res.success ? '✅ ' + res.message : '❌ ' + (res?.message || 'ผิดพลาด');
-                msg.classList.remove('hidden');
-                setTimeout(() => msg.classList.add('hidden'), 3000);
-            }
-            if (res && res.success) showToast('บันทึกวันเริ่มต้นสำเร็จ: ' + dateVal);
-        })
-        .withFailureHandler(function(e) { showToast('ผิดพลาด: ' + e.message, true); })
-        .setTagSystemStartDate({ date: dateVal });
+    const { error } = await window._sb.from('app_config').upsert({ key: 'tag_system_start_date', value: dateVal }, { onConflict: 'key' });
+    if (msg) {
+        msg.textContent = error ? '❌ ' + error.message : '✅ บันทึกวันเริ่มต้นสำเร็จ: ' + dateVal;
+        msg.classList.remove('hidden');
+        setTimeout(() => msg.classList.add('hidden'), 3000);
+    }
+    if (!error) showToast('บันทึกวันเริ่มต้นสำเร็จ: ' + dateVal);
+    else showToast('ผิดพลาด: ' + error.message, true);
 };
 
 /** ✅ แก้ไข loadPrintTagData() - เพิ่ม Console Log */
