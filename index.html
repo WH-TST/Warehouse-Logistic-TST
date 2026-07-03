@@ -12501,12 +12501,19 @@ window.fetchProductSpec = async function fetchProductSpec(sku) {
 
     const gasPromise = (cfg && cfg.spreadsheetId && cfg.sheetName && cfg.fields)
         ? new Promise(function(resolve) {
+            console.log('[TagSpec] calling GAS getProductSpec, sku=', sku, 'url=', window._WMS_GAS_URL);
             google.script.run
-                .withSuccessHandler(function(res) { resolve((res && res.success) ? (res.spec || {}) : {}); })
-                .withFailureHandler(function()    { resolve({}); })
+                .withSuccessHandler(function(res) {
+                    console.log('[TagSpec] GAS response:', JSON.stringify(res));
+                    resolve((res && res.success) ? (res.spec || {}) : {});
+                })
+                .withFailureHandler(function(e) {
+                    console.error('[TagSpec] GAS error:', e);
+                    resolve({});
+                })
                 .getProductSpec(cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields));
           })
-        : Promise.resolve({});
+        : (console.log('[TagSpec] no cfg, skip GAS'), Promise.resolve({}));
 
     const supabasePromise = window._sb.from('products')
         .select('likely_w,min_w,max_w').eq('sku', sku).maybeSingle();
