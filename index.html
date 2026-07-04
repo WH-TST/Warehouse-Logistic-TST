@@ -38095,6 +38095,7 @@ window.viewTripResult = async function(planId) {
   var _scFilterIssue = false; // true = แสดงเฉพาะยังไม่นับ / ไม่ตรง
 
   var _scIssueItems = []; // items ที่กรองแล้วจาก reconcile (DIFF + NO_CYCLE)
+  var _scFilterIssueSKUs = null; // Set ของ sku|wh ที่มีปัญหา ใช้โดย _scRenderSheet
 
   window.scToggleFilterIssue = async function() {
     _scFilterIssue = !_scFilterIssue;
@@ -38111,6 +38112,7 @@ window.viewTripResult = async function(planId) {
       // ปิด filter → คืนค่า _scItems เดิม
       if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง';
       _scIssueItems = [];
+      _scFilterIssueSKUs = null;
       _scRenderSheet();
       return;
     }
@@ -38137,7 +38139,9 @@ window.viewTripResult = async function(planId) {
     });
 
     if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง (' + _scIssueItems.length + ')';
-    _scRenderIssueSheet();
+    // build SKU set แล้วเรียก _scRenderSheet ปกติ → ได้ input fields + save ครบ
+    _scFilterIssueSKUs = new Set(_scIssueItems.map(function(it){ return it.sku; }));
+    _scRenderSheet();
   };
 
   // render เฉพาะ issue items จาก reconcile
@@ -38701,7 +38705,6 @@ window.viewTripResult = async function(planId) {
 
   // ── render Count Sheet table ─────────────────────────────────────
   function _scRenderSheet(){
-    if (_scFilterIssue) { _scRenderIssueSheet(); return; }
     var tbody = document.getElementById('sc-sheet-tbody');
     if(!_scItems.length){
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการ</td></tr>';
