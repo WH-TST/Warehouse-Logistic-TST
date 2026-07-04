@@ -34323,11 +34323,18 @@ window.renderKpiWHTable = function renderKpiWHTable(startStr, endStr) {
                             class="bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
                             <i class="fas fa-sync-alt"></i> บันทึก
                         </button>`
-                    : `<button id="btn-kpi-save-${isoDate}"
-                            onclick="openKpiWHEditModal('${isoDate}')"
-                            class="bg-slate-600 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1 mx-auto">
-                            <i class="fas fa-edit"></i> แก้ไข
-                        </button>`
+                    : `<div class="flex flex-col gap-1 items-center">
+                            <button id="btn-kpi-save-${isoDate}"
+                                onclick="openKpiWHEditModal('${isoDate}')"
+                                class="bg-slate-600 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1">
+                                <i class="fas fa-edit"></i> แก้ไข
+                            </button>
+                            <button onclick="resetKpiWHRow('${isoDate}')"
+                                title="ล้างค่าที่บันทึกไว้ แล้วคำนวณใหม่จากข้อมูลล่าสุด"
+                                class="bg-red-700 hover:bg-red-600 text-white px-4 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1">
+                                <i class="fas fa-redo"></i> รีเซ็ต Auto
+                            </button>
+                        </div>`
                 }
             </td>
         </tr>`;
@@ -34395,6 +34402,20 @@ window.exportKpiWHToGSheet = function exportKpiWHToGSheet() {
             showToast('❌ ส่งข้อมูลล้มเหลว: ' + err.message, true);
         })
         .updateKpiWHToSheet(JSON.stringify(rows));
+};
+
+// ── รีเซ็ตแถวกลับเป็น Auto (ลบ kpi_wh_log แถวนั้น) ────────────────────
+window.resetKpiWHRow = async function resetKpiWHRow(isoDate) {
+    if (!confirm('รีเซ็ตข้อมูลวันที่ ' + isoDate + ' กลับเป็น Auto?\nระบบจะคำนวณใหม่จากข้อมูลล่าสุดทันที')) return;
+    const { error } = await window._sb.from('kpi_wh_log').delete().eq('cycle_date', isoDate);
+    if (error) { showToast('❌ รีเซ็ตล้มเหลว: ' + error.message, true); return; }
+    delete kpiWHSavedData[isoDate];
+    const [y, m, d] = isoDate.split('-');
+    delete kpiWHSavedData[`${d}/${m}/${y}`];
+    showToast('✅ รีเซ็ตสำเร็จ — คำนวณจากข้อมูลล่าสุดแล้ว');
+    const fromEl = safeGet('kpi-wh-date-from');
+    const toEl   = safeGet('kpi-wh-date-to');
+    if (fromEl && toEl) renderKpiWHTable(fromEl.value, toEl.value);
 };
 
 // ── บันทึกแถว ──────────────────────────────────────────────────────────
