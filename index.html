@@ -11731,7 +11731,10 @@ window.loadPrintTagData = async function loadPrintTagData() {
             const linesPerBundle = prod.lines_per_bundle || 1;
             const planBundles = Math.ceil(planLines[sku] / linesPerBundle);
             const savedBundles = savedLog[sku] || 0;
-            const needToPrint = Math.max(0, planBundles - savedBundles);
+            const printedAcc = cumulativePrint[sku] || 0;
+            const usedAcc    = Math.floor((usedCwLines[sku] || 0) / linesPerBundle);
+            const surplus    = Math.max(0, printedAcc - usedAcc);
+            const needToPrint = Math.max(0, planBundles - surplus);
             return {
                 productId: sku,
                 productName: prod.name || sku,
