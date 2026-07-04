@@ -38122,20 +38122,29 @@ window.viewTripResult = async function(planId) {
     await scLoadReconcile();
 
     // กรอง _recItems เฉพาะ DIFF + NO_CYCLE
-    // QC ซ้อนอยู่ใน FG-BP (systemQty รวม QC แล้ว) → skip QC row เสมอ
+    // QC ซ้อนอยู่ใน FG-BP → skip QC row, แต่บวก systemQty QC เข้า FG-BP ก่อน
+    var qcSysMap = {};
+    _recItems.forEach(function(it){ if(it.wh==='QC') qcSysMap[it.sku]=(qcSysMap[it.sku]||0)+it.systemQty; });
+
     _scIssueItems = [];
     var seen = {};
     _recItems.forEach(function(item) {
-      if (item.wh === 'QC') return; // QC รวมอยู่ใน FG-BP เสมอ
+      if (item.wh === 'QC') return;
 
+      // FG-BP: systemQty รวม QC ด้วย
+      var sysQty = item.systemQty + (item.wh === 'FG-BP' ? (qcSysMap[item.sku]||0) : 0);
       var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
       var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0);
-      var isDiff  = !isEmpty && counted !== item.systemQty;
+      var isDiff  = !isEmpty && counted !== sysQty;
 
       if (!isEmpty && !isDiff) return; // MATCH → ข้าม
       if (seen[item.sku+'|'+item.wh]) return;
       seen[item.sku+'|'+item.wh] = true;
-      _scIssueItems.push(item);
+      // clone item ด้วย systemQty ที่รวม QC แล้ว
+      var clone = {};
+      for(var k in item) clone[k] = item[k];
+      clone.systemQty = sysQty;
+      _scIssueItems.push(clone);
     });
 
     if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง (' + _scIssueItems.length + ')';
