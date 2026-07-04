@@ -33381,7 +33381,7 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
     try {
         // ดึง loading_orders ที่ status=done ในช่วงวันที่
         var { data: orders, error: ordErr } = await window._sb.from('loading_orders')
-            .select('id,order_date,truck_plate,is_trailer,trailer_plate')
+            .select('id,order_date,truck_plate,is_trailer,trailer_plate,customer_name,order_no')
             .eq('status','done').gte('order_date',from).lte('order_date',to)
             .order('order_date',{ascending:false}).limit(60);
         if (ordErr) { listEl.innerHTML = '<div class="text-red-400 text-xs text-center py-3">Query error: '+ordErr.message+'</div>'; return; }
@@ -33420,13 +33420,19 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
             if (o.is_trailer && o.trailer_plate) trucks += ' + ' + o.trailer_plate;
             var dateDisp = (o.order_date||'').split('-').reverse().join('/');
             var sf = staffMap[o.id] || {};
-            return '<div class="flex items-center gap-3 bg-white border-2 '+accentBorder+' rounded-xl px-3 py-2 cursor-pointer transition-all" onclick="whaSelectOrder(\''+slug+'\',\''+o.id+'\',\''+o.order_date+'\',\''+trucks.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\',\''+encodeURIComponent(sf.staff_name||'')+'\',\''+encodeURIComponent(sf.team||'')+'\')">'+
-                '<div class="shrink-0"><i class="fas fa-truck '+accentText+'"></i></div>'+
-                '<div class="flex-1 min-w-0">'+
-                  '<div class="font-black text-slate-800 text-sm truncate">🚛 '+trucks+' &nbsp;·&nbsp; 📅 '+dateDisp+'</div>'+
-                  '<div class="text-xs text-slate-500 truncate">'+skuLine+'</div>'+
+            var shopLine = o.customer_name ? '🏪 '+o.customer_name : '';
+            var teamLine = sf.team ? '👥 ทีม '+sf.team : (sf.staff_name ? '👤 '+sf.staff_name : '');
+            var metaLine = [shopLine, teamLine].filter(Boolean).join('  ·  ');
+            return '<div class="bg-white border-2 '+accentBorder+' rounded-xl px-3 py-2 cursor-pointer transition-all" onclick="whaSelectOrder(\''+slug+'\',\''+o.id+'\',\''+o.order_date+'\',\''+trucks.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\',\''+encodeURIComponent(sf.staff_name||'')+'\',\''+encodeURIComponent(sf.team||'')+'\')">'+
+                '<div class="flex items-center gap-3">'+
+                  '<div class="shrink-0"><i class="fas fa-truck '+accentText+'"></i></div>'+
+                  '<div class="flex-1 min-w-0">'+
+                    '<div class="font-black text-slate-800 text-sm truncate">🚛 '+trucks+' &nbsp;·&nbsp; 📅 '+dateDisp+'</div>'+
+                    (metaLine ? '<div class="text-xs font-semibold text-slate-600 truncate mt-0.5">'+metaLine+'</div>' : '')+
+                    '<div class="text-xs text-slate-400 truncate mt-0.5">'+skuLine+'</div>'+
+                  '</div>'+
+                  '<i class="fas fa-chevron-right text-slate-300 shrink-0"></i>'+
                 '</div>'+
-                '<i class="fas fa-chevron-right text-slate-300 shrink-0"></i>'+
               '</div>';
         }).join('');
     } catch(e) {
