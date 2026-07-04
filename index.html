@@ -6744,6 +6744,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <button onclick="scLoadSheet()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition shadow-sm flex items-center gap-2">
           <i class="fas fa-search"></i> โหลดรายการ
         </button>
+        <button id="sc-btn-filter-issue" onclick="scToggleFilterIssue()" class="bg-white border-2 border-slate-300 hover:border-orange-400 text-slate-600 hover:text-orange-600 px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
+          <i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง
+        </button>
         <button onclick="scPrintSheet()" class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2">
           <i class="fas fa-print"></i> พิมพ์ใบนับ
         </button>
@@ -38089,6 +38092,18 @@ window.viewTripResult = async function(planId) {
   var _scSessionId = null; // session ID ที่โหลดไว้ — ใช้ในการ save เพื่อไม่ให้ผิด session
   var _recItems = [];  // Reconcile items (counting + saved counts) — แยกจาก _scItems
   var _scDate  = '';
+  var _scFilterIssue = false; // true = แสดงเฉพาะยังไม่นับ / ไม่ตรง
+
+  window.scToggleFilterIssue = function() {
+    _scFilterIssue = !_scFilterIssue;
+    var btn = document.getElementById('sc-btn-filter-issue');
+    if (btn) {
+      btn.className = _scFilterIssue
+        ? 'bg-orange-500 border-2 border-orange-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2'
+        : 'bg-white border-2 border-slate-300 hover:border-orange-400 text-slate-600 hover:text-orange-600 px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2';
+    }
+    _scRenderSheet();
+  };
 
   // ── main tab switch (FG / ...) ──────────────────────────────────
   var _scMainPanels = ['fg','semi'];
@@ -38607,8 +38622,33 @@ window.viewTripResult = async function(planId) {
     }
     var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309' };
     var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7' };
-    var whGroups = {}, whOrder = [];
+
+    // ── กรองกรณี _scFilterIssue ──
+    // ถ้า SKU มีทั้ง FG-BP และ QC → แสดงแค่ FG-BP (QC ซ้อนอยู่ใน systemQty แล้ว)
+    var skuHasFGBP = {};
+    _scItems.forEach(function(item){ if(item.wh === 'FG-BP') skuHasFGBP[item.sku] = true; });
+
+    var displayIndices = [];
     _scItems.forEach(function(item, i){
+      // ซ่อน QC row ถ้า SKU นั้นมี FG-BP อยู่แล้ว (รวมใน systemQty แล้ว)
+      if(item.wh === 'QC' && skuHasFGBP[item.sku]) return;
+      if(_scFilterIssue){
+        var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2+(item.holdPcs||0);
+        var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
+        var diff = counted - item.systemQty;
+        if(!isEmpty && diff===0) return; // ตรงแล้ว ข้ามไป
+      }
+      displayIndices.push(i);
+    });
+
+    if(!displayIndices.length){
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#15803d;padding:40px;font-weight:700">✅ ทุกรายการนับครบและตรงหมดแล้ว</td></tr>';
+      return;
+    }
+
+    var whGroups = {}, whOrder = [];
+    displayIndices.forEach(function(i){
+      var item = _scItems[i];
       if(!whGroups[item.wh]){ whGroups[item.wh] = []; whOrder.push(item.wh); }
       whGroups[item.wh].push(i);
     });
