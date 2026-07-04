@@ -25956,7 +25956,7 @@ window.ldCardSave = async function(oid, unit) {
     var {data: orderData} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
     var orderItems = orderData?.items||[];
     var planId     = orderData?.plan_id||'';
-    var planDate   = orderData?.order_date||today;
+    var planDate   = orderData?.plan_date||today;
     var truckPlate = orderData?.truck_plate||'';
 
     // staff from session
@@ -25969,8 +25969,8 @@ window.ldCardSave = async function(oid, unit) {
     }];
 
     var endIso = new Date().toISOString();
-    // close open segment if still active (not paused)
-    var segKey = (orderData && orderData.is_trailer) ? oid+'-'+curUnit : oid;
+    // close open segment — segKey ต้องตรงกับที่ ldDraftSave ใช้
+    var segKey = (orderData && orderData.trailer_split) ? oid+'-'+curUnit : oid;
     _ldInitSegment(segKey);
     var segs = _ldSegments[segKey]||[];
     if (segs.length && !segs[segs.length-1].e) segs[segs.length-1].e = endIso;
@@ -33386,9 +33386,14 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
 
         // ดึง SKU จาก loading_sessions ของ orders เหล่านี้
         var oids = orders.map(function(o){ return o.id; });
-        var { data: sessions } = await window._sb.from('loading_sessions')
-            .select('order_id,sku,product_name,qty,truck_unit').in('order_id', oids)
-            .eq('record_type','บันทึกการโหลด');
+        var sessions = [];
+        if (oids.length) {
+            var { data: _sess } = await window._sb.from('loading_sessions')
+                .select('order_id,sku,product_name,qty,truck_unit')
+                .in('order_id', oids)
+                .eq('record_type','บันทึกการโหลด');
+            sessions = _sess || [];
+        }
         var skuMap = {}; // order_id → [{sku, product_name, qty, truck_unit}]
         (sessions||[]).forEach(function(s){
             if (!skuMap[s.order_id]) skuMap[s.order_id] = [];
