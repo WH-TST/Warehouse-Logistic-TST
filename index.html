@@ -39626,6 +39626,16 @@ window.viewTripResult = async function(planId) {
     if(iErr){ showToast('❌ บันทึก items ล้มเหลว: ' + iErr.message, true); return; }
     showToast('✅ บันทึกสำเร็จ — session #'+sessionId);
     _scLogAudit('บันทึก Stock Count ' + _scDate + ' (' + _scItems.length + ' รายการ)');
+    // ถ้า filter "ยังไม่นับ/ไม่ตรง" เปิดอยู่ → reload reconcile แล้ว re-filter ใหม่
+    if(_scFilterIssue){
+      _scFilterIssue = false; // reset ก่อน
+      var btn2 = document.getElementById('sc-btn-filter-issue');
+      if(btn2) btn2.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง';
+      if(btn2) btn2.className = 'bg-white border-2 border-slate-300 hover:border-orange-400 text-slate-600 hover:text-orange-600 px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2';
+      _scFilterIssueSKUs = null;
+      _scIssueItems = [];
+      await scToggleFilterIssue(); // เปิด filter ใหม่ = reload + re-filter
+    }
   };
 
   // ── ประวัติการนับ expand row ────────────────────────────────────
