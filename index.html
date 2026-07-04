@@ -38445,11 +38445,14 @@ window.viewTripResult = async function(planId) {
           if(checkerEl && sessRes.data.checker_name) checkerEl.value = sessRes.data.checker_name;
           // ดึง items ทั้งหมดของ session นั้น
           var savedItemsRes = await window._sb.from('stock_count_items')
-            .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,ppb')
+            .select('sku,wh,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,ppb')
             .eq('session_id', sessId);
           var savedMap = {};
-          // key = sku|wh เพื่อป้องกัน FG-BP ข้ามไป FG-BB
-          (savedItemsRes.data||[]).forEach(function(r){ savedMap[r.sku+'|'+(whFilter||'')] = r; });
+          // key = sku|wh จาก item.wh (ใหม่) หรือ whFilter (เก่า) เพื่อป้องกันข้ามคลัง
+          (savedItemsRes.data||[]).forEach(function(r){
+            var k = r.sku + '|' + (r.wh != null ? r.wh : (whFilter||''));
+            savedMap[k] = r;
+          });
           // ถ้าเป็นวันย้อนหลัง ให้ใช้ system_pcs ที่บันทึกไว้แทนยอด counting live
           var isHistorical = dateVal !== new Date().toISOString().slice(0,10);
           // pre-fill _scItems ที่มีอยู่
@@ -39239,12 +39242,14 @@ window.viewTripResult = async function(planId) {
       try {
         var savedRes = await window._sb
           .from('stock_count_items')
-          .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,session_id,stock_count_sessions(count_date,wh)')
+          .select('sku,wh,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,session_id,stock_count_sessions(count_date,wh)')
           .order('session_id', {ascending: false});
-        // dedup: เก็บเฉพาะ occurrence แรกต่อ sku|wh (= session ล่าสุด แยกคลัง)
+        // dedup: เก็บเฉพาะ occurrence แรกต่อ sku|wh
+        // ใช้ item.wh ก่อน (บันทึกใหม่) fallback ไป sess.wh (ข้อมูลเก่า)
         (savedRes.data||[]).forEach(function(r){
           var sess = r.stock_count_sessions || {};
-          var key  = r.sku + '|' + (sess.wh||'');
+          var itemWh = r.wh != null ? r.wh : (sess.wh||'');
+          var key  = r.sku + '|' + itemWh;
           if(savedMap[key]) return;
           savedMap[key] = {
             bundle1:    Number(r.bundle1)||0,
@@ -39613,6 +39618,7 @@ window.viewTripResult = async function(planId) {
     // insert items ใหม่
     var itemsPayload = _scItems.map(function(item){
       return { session_id: sessionId, sku: item.sku, sku_name: item.name,
+        wh: item.wh||null,
         ppb: item.ppb||0, bundle1: item.bundle1||0, bundle2: item.bundle2||0,
         scrap1: item.pcs1||0, scrap2: item.pcs2||0, hold_pcs: item.holdPcs||0,
         system_pcs: item.systemQtyWH||item.systemQty||0,
@@ -39653,16 +39659,21 @@ window.viewTripResult = async function(planId) {
 
     var inner = document.getElementById(histId+'-inner');
     // ดึง sessions + items สำหรับ SKU+WH นี้ (รวม null-wh session ด้วย)
-    var baseSelect = 'session_id,bundle1,bundle2,scrap1,scrap2,hold_pcs,ppb,system_pcs,system_pcs_qc,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
+    var baseSelect = 'session_id,wh,bundle1,bundle2,scrap1,scrap2,hold_pcs,ppb,system_pcs,system_pcs_qc,note,stock_count_sessions!inner(count_date,movement_date,wh,checker_name)';
     var items, error;
     if(wh){
-      // null-wh session มี hold_pcs และ system_pcs_qc ที่บันทึกจาก Count Sheet
-      var [r1, r2] = await Promise.all([
-        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).eq('stock_count_sessions.wh',wh).order('session_id',{ascending:false}).limit(60),
-        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30)
+      // ดึง: item.wh ตรง, หรือ item.wh null + sess.wh ตรง, หรือ item.wh null + sess.wh null
+      var [r1, r2, r3] = await Promise.all([
+        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).eq('wh',wh).order('session_id',{ascending:false}).limit(60),
+        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('wh',null).eq('stock_count_sessions.wh',wh).order('session_id',{ascending:false}).limit(30),
+        window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).is('wh',null).is('stock_count_sessions.wh',null).order('session_id',{ascending:false}).limit(30)
       ]);
-      error = r1.error || r2.error;
-      items = [...(r1.data||[]), ...(r2.data||[])].sort(function(a,b){ return b.session_id - a.session_id; }).slice(0,60);
+      error = r1.error || r2.error || r3.error;
+      var seen = {};
+      items = [...(r1.data||[]), ...(r2.data||[]), ...(r3.data||[])]
+        .sort(function(a,b){ return b.session_id - a.session_id; })
+        .filter(function(it){ if(seen[it.session_id]) return false; seen[it.session_id]=true; return true; })
+        .slice(0,60);
     } else {
       var r = await window._sb.from('stock_count_items').select(baseSelect).eq('sku',sku).order('session_id',{ascending:false}).limit(60);
       error = r.error; items = r.data;
@@ -39675,10 +39686,10 @@ window.viewTripResult = async function(planId) {
     var rows = items.map(function(it){
       var sess = it.stock_count_sessions || {};
       var isQCrow  = wh === 'QC';
-      var sessWh   = sess.wh || null;
-      var isNullWh = sessWh === null;
+      // item.wh (ใหม่) → sess.wh (เก่า) → null
+      var itemWh   = it.wh != null ? it.wh : (sess.wh || null);
+      var isNullWh = itemWh === null;
       var counted  = isQCrow ? (it.hold_pcs||0) : (it.bundle1+it.bundle2)*(it.ppb||1)+it.scrap1+it.scrap2;
-      // QC null-wh row: ใช้ system_pcs_qc ที่บันทึกไว้ตอน save (ยอดระบบ QC ณ วันนับ)
       var sysPcs   = (isQCrow && isNullWh) ? (it.system_pcs_qc||0) : (it.system_pcs||0);
       var diff     = counted - sysPcs;
       var sysHtml  = '<span style="color:#0f766e">'+sysPcs+'</span>';
@@ -39687,8 +39698,8 @@ window.viewTripResult = async function(planId) {
       var dateStr = sess.count_date||'—';
       var movStr  = sess.movement_date||'—';
       var checker = sess.checker_name||'—';
-      var whLabel = sessWh || 'ทั้งหมด';
-      var whColor = whLabel==='FG-BP'?'#0369a1':whLabel==='FG-BB'?'#7c3aed':whLabel==='QC'?'#b45309':'#475569';
+      var whLabel = itemWh || 'ทั้งหมด';
+      var whColor = whLabel==='FG-BP'?'#0369a1':whLabel==='FG-BB'?'#7c3aed':whLabel==='QC'?'#b45309':whLabel==='QC 2'?'#ea580c':'#475569';
       return '<tr style="border-bottom:1px solid #e0f2fe">'
         + '<td style="padding:4px 8px;font-size:11px;color:#0369a1;font-weight:600;white-space:nowrap">'+dateStr+'</td>'
         + '<td style="padding:4px 8px;font-size:11px;color:#64748b;white-space:nowrap">'+movStr+'</td>'
