@@ -38120,21 +38120,14 @@ window.viewTripResult = async function(planId) {
     await scLoadReconcile();
 
     // กรอง _recItems เฉพาะ DIFF + NO_CYCLE
-    // ถ้า SKU มีทั้ง FG-BP และ QC → แสดงแค่ FG-BP (systemQty รวม QC แล้ว)
-    var skuHasRec = {};
-    _recItems.forEach(function(it) { skuHasRec[it.sku] = (skuHasRec[it.sku] || []).concat(it.wh); });
-
+    // QC ซ้อนอยู่ใน FG-BP (systemQty รวม QC แล้ว) → skip QC row เสมอ
     _scIssueItems = [];
     var seen = {};
     _recItems.forEach(function(item) {
-      var isQC = item.wh === 'QC';
-      // ถ้าเป็น QC และมี FG-BP อยู่แล้ว → ข้าม (รวมใน FG-BP แล้ว)
-      if (isQC && (skuHasRec[item.sku]||[]).indexOf('FG-BP') >= 0) return;
+      if (item.wh === 'QC') return; // QC รวมอยู่ใน FG-BP เสมอ
 
-      var counted = isQC
-        ? (item.holdPcs||0)
-        : (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
-      var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
+      var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+      var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0);
       var isDiff  = !isEmpty && counted !== item.systemQty;
 
       if (!isEmpty && !isDiff) return; // MATCH → ข้าม
