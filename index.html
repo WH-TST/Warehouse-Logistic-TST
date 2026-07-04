@@ -25959,7 +25959,7 @@ window.ldCardSave = async function(oid, unit) {
     var {data: orderData} = await window._sb.from('loading_orders').select('*').eq('id',oid).maybeSingle();
     var orderItems = orderData?.items||[];
     var planId     = orderData?.plan_id||'';
-    var planDate   = orderData?.plan_date||today;
+    var planDate   = orderData?.order_date||today;
     var truckPlate = orderData?.truck_plate||'';
 
     // staff from session
@@ -33379,9 +33379,9 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
     try {
         // ดึง loading_orders ที่ status=done ในช่วงวันที่
         var { data: orders } = await window._sb.from('loading_orders')
-            .select('id,plan_date,truck_plate,child_plate,total_weight,trailer_mode')
-            .eq('status','done').gte('plan_date',from).lte('plan_date',to)
-            .order('plan_date',{ascending:false}).limit(60);
+            .select('id,order_date,truck_plate,child_plate,trailer_mode')
+            .eq('status','done').gte('order_date',from).lte('order_date',to)
+            .order('order_date',{ascending:false}).limit(60);
         if (!orders || !orders.length) {
             listEl.innerHTML = '<div class="text-slate-400 text-xs text-center py-3">ไม่พบข้อมูลในช่วงวันที่เลือก</div>';
             return;
@@ -33413,8 +33413,8 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
                 : '—';
             var trucks = o.truck_plate || '—';
             if (o.trailer_mode && o.child_plate) trucks += ' + ' + o.child_plate;
-            var dateDisp = (o.plan_date||'').split('-').reverse().join('/');
-            return '<div class="flex items-center gap-3 bg-white border-2 '+accentBorder+' rounded-xl px-3 py-2 cursor-pointer transition-all" onclick="whaSelectOrder(\''+slug+'\',\''+o.id+'\',\''+o.plan_date+'\',\''+trucks.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\')">'+
+            var dateDisp = (o.order_date||'').split('-').reverse().join('/');
+            return '<div class="flex items-center gap-3 bg-white border-2 '+accentBorder+' rounded-xl px-3 py-2 cursor-pointer transition-all" onclick="whaSelectOrder(\''+slug+'\',\''+o.id+'\',\''+o.order_date+'\',\''+trucks.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\')">'+
                 '<div class="shrink-0"><i class="fas fa-truck '+accentText+'"></i></div>'+
                 '<div class="flex-1 min-w-0">'+
                   '<div class="font-black text-slate-800 text-sm truncate">🚛 '+trucks+' &nbsp;·&nbsp; 📅 '+dateDisp+'</div>'+
