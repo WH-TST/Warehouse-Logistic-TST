@@ -6735,6 +6735,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <option value="FG-BP">FG-BP</option>
             <option value="FG-BB">FG-BB</option>
             <option value="QC">QC</option>
+            <option value="QC 2">QC 2</option>
           </select>
         </div>
         <div>
@@ -38178,8 +38179,8 @@ window.viewTripResult = async function(planId) {
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#15803d;padding:40px;font-weight:700">✅ ทุกรายการนับครบและตรงหมดแล้ว</td></tr>';
       return;
     }
-    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309' };
-    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7' };
+    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309','QC 2':'#ea580c' };
+    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7','QC 2':'#ffedd5' };
     var whGroups = {}, whOrder = [];
     _scIssueItems.forEach(function(item) {
       if (!whGroups[item.wh]) { whGroups[item.wh] = []; whOrder.push(item.wh); }
@@ -38413,7 +38414,7 @@ window.viewTripResult = async function(planId) {
         // ยอดระบบ = รวมทุกคลัง (FG-BP + QC อยู่แถวเดียวกันใน Count Sheet)
         // FG-BB ไม่มีงาน QC — ไม่รวม QC
         var sysQtyWH = cntMapWH[s.sku+'|'+s.wh]||0;
-        var sysQtyQC = (s.wh === 'FG-BB') ? 0 : (cntMapWH[s.sku+'|QC']||0);
+        var sysQtyQC = (s.wh === 'FG-BB' || s.wh === 'QC 2') ? 0 : (cntMapWH[s.sku+'|QC']||0);
         // ระบบใน Count Sheet = คลังที่นับ + QC (เฉพาะ FG-BP)
         var sysQty   = sysQtyWH + sysQtyQC;
         return {
@@ -38476,8 +38477,8 @@ window.viewTripResult = async function(planId) {
             var savedSys = (isHistorical && s.system_pcs != null) ? Number(s.system_pcs)||0 : null;
             var mSysWH  = savedSys !== null ? savedSys : (cntMapWH[s.sku+'|'+mWH]||0);
             var mSysQC  = (savedSys !== null)
-              ? (mWH !== 'FG-BB' ? (Number(s.system_pcs_qc)||0) : 0)
-              : (mWH === 'FG-BB' ? 0 : (cntMapWH[s.sku+'|QC']||0));
+              ? (mWH !== 'FG-BB' && mWH !== 'QC 2' ? (Number(s.system_pcs_qc)||0) : 0)
+              : (mWH === 'FG-BB' || mWH === 'QC 2' ? 0 : (cntMapWH[s.sku+'|QC']||0));
             _scItems.push({
               sku:         s.sku,
               name:        s.sku,
@@ -38575,6 +38576,14 @@ window.viewTripResult = async function(planId) {
             seenForList[sku+'|FG-BB'] = true;
           }
         }
+        // QC 2 — คลังอิสระ ไม่รวมกับใคร
+        var hasQC2 = (cntMapWH[sku+'|QC 2']||0) > 0;
+        if(hasQC2 && !seenForList[sku+'|QC 2']){
+          if(!whFilter || whFilter === 'QC 2'){
+            skuList.push({ sku: sku, wh: 'QC 2' });
+            seenForList[sku+'|QC 2'] = true;
+          }
+        }
       });
 
       // กรณี whFilter=QC ให้แสดงเป็น FG-BP เหมือนเดิม (QC รวมอยู่แล้ว)
@@ -38603,7 +38612,7 @@ window.viewTripResult = async function(planId) {
       // 5. สร้าง _scItems (logic systemQty เหมือน scLoadSheet)
       _scItems = skuList.map(function(s){
         var sysQtyWH = cntMapWH[s.sku+'|'+s.wh]||0;
-        var sysQtyQC = (s.wh === 'FG-BB') ? 0 : (cntMapWH[s.sku+'|QC']||0);
+        var sysQtyQC = (s.wh === 'FG-BB' || s.wh === 'QC 2') ? 0 : (cntMapWH[s.sku+'|QC']||0);
         var sysQty   = sysQtyWH + sysQtyQC;
         return {
           sku:         s.sku,
@@ -38738,8 +38747,8 @@ window.viewTripResult = async function(planId) {
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการ</td></tr>';
       return;
     }
-    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309' };
-    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7' };
+    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309','QC 2':'#ea580c' };
+    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7','QC 2':'#ffedd5' };
 
     // ── กรองกรณี _scFilterIssue ──
     // ถ้า SKU มีทั้ง FG-BP และ QC → แสดงแค่ FG-BP (QC ซ้อนอยู่ใน systemQty แล้ว)
@@ -39316,8 +39325,8 @@ window.viewTripResult = async function(planId) {
       if(!whGroups[item.wh]){ whGroups[item.wh] = []; whOrder.push(item.wh); }
       whGroups[item.wh].push(item);
     });
-    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309','FG-BP+QC':'#6d28d9' };
-    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7','FG-BP+QC':'#ede9fe' };
+    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309','QC 2':'#ea580c','FG-BP+QC':'#6d28d9' };
+    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7','QC 2':'#ffedd5','FG-BP+QC':'#ede9fe' };
 
     var seqNum = 0;
     var html = whOrder.map(function(wh){
