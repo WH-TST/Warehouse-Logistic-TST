@@ -33380,10 +33380,11 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
 
     try {
         // ดึง loading_orders ที่ status=done ในช่วงวันที่
-        var { data: orders } = await window._sb.from('loading_orders')
-            .select('id,order_date,truck_plate,child_plate,trailer_mode')
+        var { data: orders, error: ordErr } = await window._sb.from('loading_orders')
+            .select('id,order_date,truck_plate,is_trailer,trailer_plate')
             .eq('status','done').gte('order_date',from).lte('order_date',to)
             .order('order_date',{ascending:false}).limit(60);
+        if (ordErr) { listEl.innerHTML = '<div class="text-red-400 text-xs text-center py-3">Query error: '+ordErr.message+'</div>'; return; }
         if (!orders || !orders.length) {
             listEl.innerHTML = '<div class="text-slate-400 text-xs text-center py-3">ไม่พบข้อมูลในช่วงวันที่เลือก</div>';
             return;
@@ -33416,7 +33417,7 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
                 ? skus.map(function(s){ return s.sku + (s.qty ? ' ×'+s.qty : ''); }).join(', ')
                 : '—';
             var trucks = o.truck_plate || '—';
-            if (o.trailer_mode && o.child_plate) trucks += ' + ' + o.child_plate;
+            if (o.is_trailer && o.trailer_plate) trucks += ' + ' + o.trailer_plate;
             var dateDisp = (o.order_date||'').split('-').reverse().join('/');
             var sf = staffMap[o.id] || {};
             return '<div class="flex items-center gap-3 bg-white border-2 '+accentBorder+' rounded-xl px-3 py-2 cursor-pointer transition-all" onclick="whaSelectOrder(\''+slug+'\',\''+o.id+'\',\''+o.order_date+'\',\''+trucks.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\',\''+encodeURIComponent(sf.staff_name||'')+'\',\''+encodeURIComponent(sf.team||'')+'\')">'+
