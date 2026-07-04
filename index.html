@@ -39266,12 +39266,8 @@ window.viewTripResult = async function(planId) {
         var savedExact = savedMap[s.sku+'|'+s.wh] || null;
         var savedNull  = savedMap[s.sku+'|'] || null;
         // เลือก session ที่ใหม่กว่า (session_id สูงกว่า) ระหว่าง exact-wh กับ null-wh
-        var saved;
-        if (savedExact && savedNull) {
-          saved = (savedNull._sessId > savedExact._sessId) ? savedNull : savedExact;
-        } else {
-          saved = savedExact || savedNull || {};
-        }
+        // exact-wh ชนะเสมอ — null-wh ใช้เป็น fallback เท่านั้น
+        var saved = savedExact || savedNull || {};
         // holdPcs ของ QC row → ดึงจาก FG-BP หรือ FG-BB session ล่าสุด
         var holdPcsFinal = 0;
         if (isQCwh) {
