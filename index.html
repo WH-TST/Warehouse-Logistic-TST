@@ -33310,7 +33310,8 @@ window.whaOnTypeChange = function whaOnTypeChange() {
     if (!type) return;
 
     const isTeam = WHA_TEAM_TYPES.has(type);
-    if (isTeam) {
+    const noTeamNeeded = (type === 'เคลมสินค้า' || type === 'โหลดสินค้าผิด');
+    if (isTeam && !noTeamNeeded) {
         safeGet('wha-shared-team')?.classList.remove('hidden');
         if (badge) {
             badge.className = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black bg-indigo-100 text-indigo-700 border border-indigo-200';
@@ -33318,7 +33319,7 @@ window.whaOnTypeChange = function whaOnTypeChange() {
             badge.classList.remove('hidden');
         }
         whaPopulateTeamSelect();
-    } else {
+    } else if (!noTeamNeeded) {
         if (badge) {
             badge.className = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black bg-rose-100 text-rose-700 border border-rose-200';
             badge.innerHTML = '<i class="fas fa-user"></i> บันทึกรายบุคคล';
