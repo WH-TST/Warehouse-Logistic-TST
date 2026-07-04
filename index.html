@@ -38136,9 +38136,13 @@ window.viewTripResult = async function(planId) {
       var isQC = item.wh === 'QC';
       if(isQC && hasFGBP[item.sku]) return; // มี FG-BP อยู่แล้ว
 
-      // ใช้ logic เดียวกับ _scRenderReconcile
-      var c = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
-      var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
+      // ใช้ logic เดียวกับ rec page (row-level): QC ใช้ holdPcs
+      var c = isQC
+        ? (item.holdPcs||0)
+        : (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+      var isEmpty = isQC
+        ? (item.holdPcs===0)
+        : (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0);
       var isDiff  = !isEmpty && c !== item.systemQty;
 
       if(!isEmpty && !isDiff) return; // ตรง → ข้าม
