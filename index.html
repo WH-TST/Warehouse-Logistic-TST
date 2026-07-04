@@ -39251,32 +39251,16 @@ window.viewTripResult = async function(planId) {
         });
       } catch(e){ console.warn('[Rec] stock_count query failed:', e); }
 
-      // memory (Count Sheet session ปัจจุบัน) มีลำดับความสำคัญสูงกว่าข้อมูลที่บันทึกไว้
-      var memMap = {};
-      _scItems.forEach(function(it){ memMap[it.sku+'|'+it.wh] = it; });
-
+      // ใช้เฉพาะ savedMap (DB) — ไม่ใช้ memMap เพื่อป้องกันข้อมูล memory เก่าแทนที่ session ล่าสุด
       _recItems = orderedKeys.map(function(k){ return map[k]; }).map(function(s){
         var isQCwh = s.wh === 'QC';
-        var mem   = memMap[s.sku+'|'+s.wh] || {};
-        // ใช้เฉพาะ exact-wh session — ไม่ fallback null-wh เพื่อป้องกัน FG-BP ข้าม FG-BB
-        var savedExact = savedMap[s.sku+'|'+s.wh] || null;
-        var saved = savedExact || {};
-        // QC row: holdPcs มาจาก Count Sheet ของ FG-BP หรือ FG-BB (แถวเดียวกัน)
-        var holdMem = isQCwh
-          ? (memMap[s.sku+'|FG-BP'] || {})
-          : mem;
-        var holdPcsVal = holdMem.holdPcs||0;
-        var hasMem = isQCwh
-          ? holdPcsVal > 0
-          : (mem.bundle1||mem.bundle2||mem.pcs1||mem.pcs2||mem.holdPcs);
-        var src = hasMem ? mem : saved;
-        // holdPcs: แสดงเฉพาะแถว QC เท่านั้น — WH อื่นเป็น 0
+        var saved  = savedMap[s.sku+'|'+s.wh] || {};
+        // holdPcs ของ QC row → ดึงจาก FG-BP หรือ FG-BB session ล่าสุด
         var holdPcsFinal = 0;
         if (isQCwh) {
-          // เลือก session ที่ใหม่ที่สุด (session_id สูงสุด) จาก FG-BP / FG-BB / null-wh
           var holdCandidates = [savedMap[s.sku+'|FG-BP'], savedMap[s.sku+'|FG-BB']].filter(Boolean);
           var holdSaved = holdCandidates.reduce(function(best, cur){ return (!best || cur._sessId > best._sessId) ? cur : best; }, null) || {};
-          holdPcsFinal = holdPcsVal || holdSaved.holdPcs || 0;
+          holdPcsFinal = holdSaved.holdPcs || 0;
         }
         return {
           sku:       s.sku,
@@ -39284,13 +39268,13 @@ window.viewTripResult = async function(planId) {
           wh:        s.wh,
           ppb:       ppbMap[s.sku]||0,
           systemQty: s.systemQty,
-          bundle1:   src.bundle1||0,  bundle1_expr: mem.bundle1_expr||'',
-          bundle2:   src.bundle2||0,  bundle2_expr: mem.bundle2_expr||'',
-          pcs1:      src.pcs1||0,     pcs1_expr:    mem.pcs1_expr||'',
-          pcs2:      src.pcs2||0,     pcs2_expr:    mem.pcs2_expr||'',
-          holdPcs:   holdPcsFinal,    holdPcs_expr: holdMem.holdPcs_expr||'',
-          note:      src.note||'',
-          count_date: hasMem ? (_scDate||'') : (saved._date||'')
+          bundle1:   saved.bundle1||0,
+          bundle2:   saved.bundle2||0,
+          pcs1:      saved.pcs1||0,
+          pcs2:      saved.pcs2||0,
+          holdPcs:   holdPcsFinal,
+          note:      saved.note||'',
+          count_date: saved._date||''
         };
       });
 
