@@ -34406,12 +34406,14 @@ window.exportKpiWHToGSheet = function exportKpiWHToGSheet() {
 
 // ── รีเซ็ตแถวกลับเป็น Auto (ลบ kpi_wh_log แถวนั้น) ────────────────────
 window.resetKpiWHRow = async function resetKpiWHRow(isoDate) {
-    if (!confirm('รีเซ็ตข้อมูลวันที่ ' + isoDate + ' กลับเป็น Auto?\nระบบจะคำนวณใหม่จากข้อมูลล่าสุดทันที')) return;
-    const { error } = await window._sb.from('kpi_wh_log').delete().eq('cycle_date', isoDate);
+    if (!confirm('รีเซ็ต Load Score วันที่ ' + isoDate + ' กลับเป็น Auto?\n(KPI อื่นในแถวนี้ไม่ได้รับผลกระทบ)')) return;
+    const { error } = await window._sb.from('kpi_wh_log').update({ load_score: null }).eq('cycle_date', isoDate);
     if (error) { showToast('❌ รีเซ็ตล้มเหลว: ' + error.message, true); return; }
-    delete kpiWHSavedData[isoDate];
+    const saved = kpiWHSavedData[isoDate];
+    if (saved) { saved.loadScore = null; }
     const [y, m, d] = isoDate.split('-');
-    delete kpiWHSavedData[`${d}/${m}/${y}`];
+    const ddmm = `${d}/${m}/${y}`;
+    if (kpiWHSavedData[ddmm]) kpiWHSavedData[ddmm].loadScore = null;
     showToast('✅ รีเซ็ตสำเร็จ — คำนวณจากข้อมูลล่าสุดแล้ว');
     const fromEl = safeGet('kpi-wh-date-from');
     const toEl   = safeGet('kpi-wh-date-to');
