@@ -38094,38 +38094,109 @@ window.viewTripResult = async function(planId) {
   var _scDate  = '';
   var _scFilterIssue = false; // true = แสดงเฉพาะยังไม่นับ / ไม่ตรง
 
-  var _scFilterIssueSKUs = null; // Set of SKU ที่ NO_CYCLE / DIFF จาก reconcile
+  var _scIssueItems = []; // items ที่กรองแล้วจาก reconcile (DIFF + NO_CYCLE)
 
   window.scToggleFilterIssue = async function() {
-    if (!_scItems.length) { showToast('กรุณากด "โหลดรายการ" ก่อนกรอง', true); return; }
     _scFilterIssue = !_scFilterIssue;
     var btn = document.getElementById('sc-btn-filter-issue');
-    if (btn) {
-      btn.className = _scFilterIssue
+    var setBtn = function(active) {
+      if (!btn) return;
+      btn.className = active
         ? 'bg-orange-500 border-2 border-orange-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2'
         : 'bg-white border-2 border-slate-300 hover:border-orange-400 text-slate-600 hover:text-orange-600 px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2';
-    }
-    if (_scFilterIssue) {
-      // โหลด reconcile data เพื่อหา SKU ที่ NO_CYCLE / DIFF
-      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังโหลด...';
-      await scLoadReconcile();
-      // build set of problem SKUs
-      _scFilterIssueSKUs = new Set();
-      _recItems.forEach(function(item) {
-        var isQC   = item.wh === 'QC';
-        var counted = isQC
-          ? (item.holdPcs||0)
-          : (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
-        var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
-        if (isEmpty || counted !== item.systemQty) _scFilterIssueSKUs.add(item.sku);
-      });
-      if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง (' + _scFilterIssueSKUs.size + ')';
-    } else {
-      _scFilterIssueSKUs = null;
+    };
+    setBtn(_scFilterIssue);
+
+    if (!_scFilterIssue) {
+      // ปิด filter → คืนค่า _scItems เดิม
       if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง';
+      _scIssueItems = [];
+      _scRenderSheet();
+      return;
     }
-    _scRenderSheet();
+
+    // เปิด filter → โหลด reconcile ทันที ไม่ต้อง load Count Sheet ก่อน
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังโหลด...';
+    await scLoadReconcile();
+
+    // กรอง _recItems เฉพาะ DIFF + NO_CYCLE
+    // ถ้า SKU มีทั้ง FG-BP และ QC → แสดงแค่ FG-BP (systemQty รวม QC แล้ว)
+    var skuHasRec = {};
+    _recItems.forEach(function(it) { skuHasRec[it.sku] = (skuHasRec[it.sku] || []).concat(it.wh); });
+
+    _scIssueItems = [];
+    var seen = {};
+    _recItems.forEach(function(item) {
+      var isQC = item.wh === 'QC';
+      // ถ้าเป็น QC และมี FG-BP อยู่แล้ว → ข้าม (รวมใน FG-BP แล้ว)
+      if (isQC && (skuHasRec[item.sku]||[]).indexOf('FG-BP') >= 0) return;
+
+      var counted = isQC
+        ? (item.holdPcs||0)
+        : (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+      var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
+      var isDiff  = !isEmpty && counted !== item.systemQty;
+
+      if (!isEmpty && !isDiff) return; // MATCH → ข้าม
+      if (seen[item.sku+'|'+item.wh]) return;
+      seen[item.sku+'|'+item.wh] = true;
+      _scIssueItems.push(item);
+    });
+
+    if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง (' + _scIssueItems.length + ')';
+    _scRenderIssueSheet();
   };
+
+  // render เฉพาะ issue items จาก reconcile
+  function _scRenderIssueSheet() {
+    var tbody = document.getElementById('sc-sheet-tbody');
+    if (!_scIssueItems.length) {
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#15803d;padding:40px;font-weight:700">✅ ทุกรายการนับครบและตรงหมดแล้ว</td></tr>';
+      return;
+    }
+    var _whColorMap = { 'FG-BP':'#1d4ed8','FG-BB':'#0f766e','QC':'#b45309' };
+    var _whBgMap    = { 'FG-BP':'#dbeafe','FG-BB':'#ccfbf1','QC':'#fef3c7' };
+    var whGroups = {}, whOrder = [];
+    _scIssueItems.forEach(function(item) {
+      if (!whGroups[item.wh]) { whGroups[item.wh] = []; whOrder.push(item.wh); }
+      whGroups[item.wh].push(item);
+    });
+    var seqNum = 0;
+    var html = whOrder.map(function(wh) {
+      var whColor = _whColorMap[wh]||'#475569';
+      var whBg    = _whBgMap[wh]||'#f1f5f9';
+      var grpHeader = '<tr style="background:'+whBg+';border-bottom:2px solid '+whColor+'">'
+        + '<td colspan="13" style="padding:6px 12px;font-weight:700;font-size:12px;color:'+whColor+'">▸ '+wh+' ('+whGroups[wh].length+' รายการ)</td></tr>';
+      var rows = whGroups[wh].map(function(item) {
+        seqNum++;
+        var isQC = item.wh === 'QC';
+        var counted = isQC ? (item.holdPcs||0) : (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+        var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
+        var diff = counted - item.systemQty;
+        var statusBadge = isEmpty
+          ? '<span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">❓ ยังไม่นับ</span>'
+          : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">⚠️ ไม่ตรง '+(diff>0?'+':'')+diff+'</span>';
+        var countedDisp = isEmpty ? '<span style="color:#cbd5e1">—</span>' : '<span style="font-weight:700">'+counted+'</span>';
+        return '<tr style="border-bottom:1px solid #f1f5f9">'
+          + '<td style="padding:4px;text-align:center;color:#94a3b8;font-size:12px">'+seqNum+'</td>'
+          + '<td style="padding:8px;text-align:center"><span style="background:'+whBg+';color:'+whColor+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">'+wh+'</span></td>'
+          + '<td style="padding:8px 10px;font-family:monospace;font-size:12px;color:#334155">'+item.sku+'</td>'
+          + '<td style="padding:8px 10px;color:#1e293b;font-size:13px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+item.name+'</td>'
+          + '<td style="padding:8px;text-align:center">'+item.bundle1+'</td>'
+          + '<td style="padding:8px;text-align:center">'+item.bundle2+'</td>'
+          + '<td style="padding:8px;text-align:center">'+item.pcs1+'</td>'
+          + '<td style="padding:8px;text-align:center">'+item.pcs2+'</td>'
+          + '<td style="padding:8px;text-align:center">'+item.holdPcs+'</td>'
+          + '<td style="padding:8px;text-align:center;background:#f8f5ff">'+countedDisp+'</td>'
+          + '<td style="padding:8px;text-align:center;color:#0f766e;font-weight:600;background:#f0fdf8">'+item.systemQty+'</td>'
+          + '<td style="padding:8px;text-align:center">'+statusBadge+'</td>'
+          + '<td></td>'
+          + '</tr>';
+      }).join('');
+      return grpHeader + rows;
+    }).join('');
+    tbody.innerHTML = html;
+  }
 
   // ── main tab switch (FG / ...) ──────────────────────────────────
   var _scMainPanels = ['fg','semi'];
@@ -38637,6 +38708,7 @@ window.viewTripResult = async function(planId) {
 
   // ── render Count Sheet table ─────────────────────────────────────
   function _scRenderSheet(){
+    if (_scFilterIssue) { _scRenderIssueSheet(); return; }
     var tbody = document.getElementById('sc-sheet-tbody');
     if(!_scItems.length){
       tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:40px">ไม่พบรายการ</td></tr>';
