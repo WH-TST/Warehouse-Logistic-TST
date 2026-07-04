@@ -24776,8 +24776,14 @@ function _ldBuildFormMobile(order) {
         return 4;
     }
     var maxL=items.reduce(function(m,it){return Math.max(m,_lc(it));},1);
-    _ldOrderCols[oid]=maxL;
     var CPR=4; // columns per row — fixed at 4 (fits portrait without scroll)
+    // itemDisp per item = ceil(max(CPR, lc+1)/CPR)*CPR → always multiple of CPR
+    // _ldOrderCols ต้องเท่ากับ max itemDisp ที่แสดงจริง ไม่ใช่ maxL
+    var maxItemDisp=items.reduce(function(m,it){
+      var lc=_lc(it);
+      return Math.max(m, Math.ceil(Math.max(CPR,lc+1)/CPR)*CPR);
+    },CPR);
+    _ldOrderCols[oid]=maxItemDisp;
     var cu=window._cu||{}, uName=cu.name||cu.username||'';
     var sRec=(_ldStaffMaster||[]).find(function(x){return x.name===cu.name||x.id===cu.username;});
     var teamTxt=sRec?' · '+sRec.team:'';
