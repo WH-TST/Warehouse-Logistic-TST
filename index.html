@@ -38094,7 +38094,10 @@ window.viewTripResult = async function(planId) {
   var _scDate  = '';
   var _scFilterIssue = false; // true = แสดงเฉพาะยังไม่นับ / ไม่ตรง
 
-  window.scToggleFilterIssue = function() {
+  var _scFilterIssueSKUs = null; // Set of SKU ที่ NO_CYCLE / DIFF จาก reconcile
+
+  window.scToggleFilterIssue = async function() {
+    if (!_scItems.length) { showToast('กรุณากด "โหลดรายการ" ก่อนกรอง', true); return; }
     _scFilterIssue = !_scFilterIssue;
     var btn = document.getElementById('sc-btn-filter-issue');
     if (btn) {
@@ -38102,11 +38105,26 @@ window.viewTripResult = async function(planId) {
         ? 'bg-orange-500 border-2 border-orange-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2'
         : 'bg-white border-2 border-slate-300 hover:border-orange-400 text-slate-600 hover:text-orange-600 px-5 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2';
     }
-    if (_scItems.length) {
-      _scRenderSheet();
+    if (_scFilterIssue) {
+      // โหลด reconcile data เพื่อหา SKU ที่ NO_CYCLE / DIFF
+      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังโหลด...';
+      await scLoadReconcile();
+      // build set of problem SKUs
+      _scFilterIssueSKUs = new Set();
+      _recItems.forEach(function(item) {
+        var isQC   = item.wh === 'QC';
+        var counted = isQC
+          ? (item.holdPcs||0)
+          : (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2;
+        var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
+        if (isEmpty || counted !== item.systemQty) _scFilterIssueSKUs.add(item.sku);
+      });
+      if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง (' + _scFilterIssueSKUs.size + ')';
     } else {
-      showToast('กรุณากด "โหลดรายการ" ก่อนกรอง', true);
+      _scFilterIssueSKUs = null;
+      if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง';
     }
+    _scRenderSheet();
   };
 
   // ── main tab switch (FG / ...) ──────────────────────────────────
@@ -38636,12 +38654,8 @@ window.viewTripResult = async function(planId) {
     _scItems.forEach(function(item, i){
       // ซ่อน QC row ถ้า SKU นั้นมี FG-BP อยู่แล้ว (รวมใน systemQty แล้ว)
       if(item.wh === 'QC' && skuHasFGBP[item.sku]) return;
-      if(_scFilterIssue){
-        var counted = (item.bundle1+item.bundle2)*(item.ppb||1)+item.pcs1+item.pcs2+(item.holdPcs||0);
-        var isEmpty = (item.bundle1===0&&item.bundle2===0&&item.pcs1===0&&item.pcs2===0&&item.holdPcs===0);
-        var diff = counted - item.systemQty;
-        if(!isEmpty && diff===0) return; // ตรงแล้ว ข้ามไป
-      }
+      // filter: แสดงเฉพาะ SKU ที่ NO_CYCLE / DIFF จาก reconcile
+      if(_scFilterIssue && _scFilterIssueSKUs && !_scFilterIssueSKUs.has(item.sku)) return;
       displayIndices.push(i);
     });
 
