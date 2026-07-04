@@ -33392,14 +33392,16 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
         var sessions = [];
         if (oids.length) {
             var { data: _sess } = await window._sb.from('loading_sessions')
-                .select('order_id,sku,product_name,qty,truck_unit')
+                .select('order_id,sku,product_name,qty,truck_unit,staff_name,team')
                 .in('order_id', oids)
                 .eq('record_type','บันทึกการโหลด');
             sessions = _sess || [];
         }
-        var skuMap = {}; // order_id → [{sku, product_name, qty, truck_unit}]
+        var skuMap  = {}; // order_id → [{sku, product_name, qty, truck_unit}]
+        var staffMap = {}; // order_id → {staff_name, team}
         (sessions||[]).forEach(function(s){
             if (!skuMap[s.order_id]) skuMap[s.order_id] = [];
+            if (!staffMap[s.order_id] && s.staff_name) staffMap[s.order_id] = { staff_name: s.staff_name, team: s.team||'' };
             skuMap[s.order_id].push(s);
         });
 
@@ -33414,7 +33416,8 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
             var trucks = o.truck_plate || '—';
             if (o.trailer_mode && o.child_plate) trucks += ' + ' + o.child_plate;
             var dateDisp = (o.order_date||'').split('-').reverse().join('/');
-            return '<div class="flex items-center gap-3 bg-white border-2 '+accentBorder+' rounded-xl px-3 py-2 cursor-pointer transition-all" onclick="whaSelectOrder(\''+slug+'\',\''+o.id+'\',\''+o.order_date+'\',\''+trucks.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\')">'+
+            var sf = staffMap[o.id] || {};
+            return '<div class="flex items-center gap-3 bg-white border-2 '+accentBorder+' rounded-xl px-3 py-2 cursor-pointer transition-all" onclick="whaSelectOrder(\''+slug+'\',\''+o.id+'\',\''+o.order_date+'\',\''+trucks.replace(/'/g,'')+'\',\''+skuLine.replace(/'/g,'')+'\',\''+encodeURIComponent(sf.staff_name||'')+'\',\''+encodeURIComponent(sf.team||'')+'\')">'+
                 '<div class="shrink-0"><i class="fas fa-truck '+accentText+'"></i></div>'+
                 '<div class="flex-1 min-w-0">'+
                   '<div class="font-black text-slate-800 text-sm truncate">🚛 '+trucks+' &nbsp;·&nbsp; 📅 '+dateDisp+'</div>'+
@@ -33428,8 +33431,9 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
     }
 };
 
-window.whaSelectOrder = function whaSelectOrder(slug, orderId, planDate, truckPlate, skuSummary) {
-    _whaSelectedOrder[slug] = { orderId:orderId, planDate:planDate, truckPlate:truckPlate, skuSummary:skuSummary };
+window.whaSelectOrder = function whaSelectOrder(slug, orderId, planDate, truckPlate, skuSummary, encStaff, encTeam) {
+    _whaSelectedOrder[slug] = { orderId:orderId, planDate:planDate, truckPlate:truckPlate, skuSummary:skuSummary,
+        staffName: decodeURIComponent(encStaff||''), team: decodeURIComponent(encTeam||'') };
     // ซ่อน list แสดง selected card
     var listEl = safeGet('wha-os-' + slug + '-list');
     var selEl  = safeGet('wha-os-' + slug + '-selected');
@@ -33482,15 +33486,36 @@ window.whaSubmitTeam = function whaSubmitTeam(type) {
         orderId    = sel.orderId;
         truckPlate = sel.truckPlate;
         formData   = { damageQty: g('wha-f-claim-damageQty'), causeP: g('wha-f-claim-causeP'),
-                       remarkQ: g('wha-f-claim-remarkQ'), skuA: sel.skuSummary };
+                       remarkQ: g('wha-f-claim-remarkQ'), skuA: sel.skuSummary,
+                       empName: sel.staffName, team: sel.team };
+        // บันทึก 1 แถว โดยไม่ต้องเลือกทีม
+        whaData.push({ id: Date.now()+Math.random(), type, date: useDate,
+            empId:'', empName: sel.staffName||'', team: sel.team||'',
+            orderId: orderId, truckPlate: truckPlate,
+            timeStart:'', timeEnd:'', qty:'', weight:'', weightPerUnit:'',
+            skuA: sel.skuSummary||'', nameA:'',
+            damageQty: g('wha-f-claim-damageQty'), causeP: g('wha-f-claim-causeP'),
+            remarkQ: g('wha-f-claim-remarkQ'), skuB:'', nameB:'', saved:false });
+        _whaSaveDraft(); whaRenderTable();
+        showToast('✅ บันทึกเคลมสินค้า');
+        _whaFormClear(type); whaClearOrderSelect('claim'); return;
     } else if (type === 'โหลดสินค้าผิด') {
         const sel = _whaSelectedOrder['wl'];
         if (!sel) { showToast('⚠️ กรุณาเลือกรถก่อนบันทึก', true); return; }
         useDate    = sel.planDate;
         orderId    = sel.orderId;
         truckPlate = sel.truckPlate;
-        formData   = { qty: g('wha-f-wl-qty'), damageQty: g('wha-f-wl-damageQty'),
-                       causeP: g('wha-f-wl-causeP'), skuA: sel.skuSummary };
+        // บันทึก 1 แถว โดยไม่ต้องเลือกทีม
+        whaData.push({ id: Date.now()+Math.random(), type, date: useDate,
+            empId:'', empName: sel.staffName||'', team: sel.team||'',
+            orderId: orderId, truckPlate: truckPlate,
+            timeStart:'', timeEnd:'', qty: g('wha-f-wl-qty'), weight:'', weightPerUnit:'',
+            skuA: sel.skuSummary||'', nameA:'',
+            damageQty: g('wha-f-wl-damageQty'), causeP: g('wha-f-wl-causeP'),
+            remarkQ:'', skuB:'', nameB:'', saved:false });
+        _whaSaveDraft(); whaRenderTable();
+        showToast('✅ บันทึกโหลดสินค้าผิด');
+        _whaFormClear(type); whaClearOrderSelect('wl'); return;
     } else if (type === 'ปัญหาน้ำหนักสินค้า') {
         if (!useDate) { showToast('⚠️ กรุณาเลือกวันที่ก่อน', true); return; }
         formData = { skuA: g('wha-f-wgt-skuA').toUpperCase(), nameA: g('wha-f-wgt-nameA'),
