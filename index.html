@@ -38447,12 +38447,13 @@ window.viewTripResult = async function(planId) {
             .select('sku,bundle1,bundle2,scrap1,scrap2,hold_pcs,system_pcs,system_pcs_qc,note,ppb')
             .eq('session_id', sessId);
           var savedMap = {};
-          (savedItemsRes.data||[]).forEach(function(r){ savedMap[r.sku] = r; });
+          // key = sku|wh เพื่อป้องกัน FG-BP ข้ามไป FG-BB
+          (savedItemsRes.data||[]).forEach(function(r){ savedMap[r.sku+'|'+(whFilter||'')] = r; });
           // ถ้าเป็นวันย้อนหลัง ให้ใช้ system_pcs ที่บันทึกไว้แทนยอด counting live
           var isHistorical = dateVal !== new Date().toISOString().slice(0,10);
           // pre-fill _scItems ที่มีอยู่
           _scItems.forEach(function(item){
-            var s = savedMap[item.sku];
+            var s = savedMap[item.sku+'|'+(item.wh||'')];
             if(!s) return;
             item.bundle1  = Number(s.bundle1)||0;
             item.bundle2  = Number(s.bundle2)||0;
@@ -39257,17 +39258,9 @@ window.viewTripResult = async function(planId) {
       _recItems = orderedKeys.map(function(k){ return map[k]; }).map(function(s){
         var isQCwh = s.wh === 'QC';
         var mem   = memMap[s.sku+'|'+s.wh] || {};
-        // เลือก session ที่ใหม่กว่า (session_id สูงกว่า) ระหว่าง exact-wh กับ null-wh session
+        // ใช้เฉพาะ exact-wh session — ไม่ fallback null-wh เพื่อป้องกัน FG-BP ข้าม FG-BB
         var savedExact = savedMap[s.sku+'|'+s.wh] || null;
-        var savedNull  = savedMap[s.sku+'|'] || null;
-        var saved;
-        if (!isQCwh && savedExact && savedNull) {
-          saved = (savedNull._sessId > savedExact._sessId) ? savedNull : savedExact;
-        } else if (!isQCwh && savedNull && !savedExact) {
-          saved = savedNull;
-        } else {
-          saved = savedExact || {};
-        }
+        var saved = savedExact || {};
         // QC row: holdPcs มาจาก Count Sheet ของ FG-BP หรือ FG-BB (แถวเดียวกัน)
         var holdMem = isQCwh
           ? (memMap[s.sku+'|FG-BP'] || {})
@@ -39281,7 +39274,7 @@ window.viewTripResult = async function(planId) {
         var holdPcsFinal = 0;
         if (isQCwh) {
           // เลือก session ที่ใหม่ที่สุด (session_id สูงสุด) จาก FG-BP / FG-BB / null-wh
-          var holdCandidates = [savedMap[s.sku+'|FG-BP'], savedMap[s.sku+'|']].filter(Boolean);
+          var holdCandidates = [savedMap[s.sku+'|FG-BP'], savedMap[s.sku+'|FG-BB']].filter(Boolean);
           var holdSaved = holdCandidates.reduce(function(best, cur){ return (!best || cur._sessId > best._sessId) ? cur : best; }, null) || {};
           holdPcsFinal = holdPcsVal || holdSaved.holdPcs || 0;
         }
