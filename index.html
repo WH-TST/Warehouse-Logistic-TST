@@ -38159,16 +38159,19 @@ window.viewTripResult = async function(planId) {
       var clone = {};
       for(var k in item) clone[k] = item[k];
       clone.wh = displayWH;
-      // systemQty แสดง = FG-BP + QC รวม (เพื่อ info เท่านั้น ไม่ใช้เทียบ)
       clone.systemQty = item.systemQty + (displayWH==='FG-BP' ? (qcSysMap[item.sku]||0) : 0);
+      // แสดงตารางว่าง — ไม่ pre-fill ค่าที่เคยบันทึก
+      clone.bundle1 = 0; clone.bundle2 = 0;
+      clone.pcs1 = 0; clone.pcs2 = 0;
+      clone.holdPcs = 0; clone.note = '';
       _scIssueItems.push(clone);
     });
 
     if (btn) btn.innerHTML = '<i class="fas fa-filter"></i> ยังไม่นับ / ไม่ตรง (' + _scIssueItems.length + ')';
-    // build SKU set แล้วเรียก _scRenderSheet ปกติ → ได้ input fields + save ครบ
     _scFilterIssueSKUs = new Set(_scIssueItems.map(function(it){ return it.sku+'|'+it.wh; }));
-    // ถ้า _scItems ว่าง (ยังไม่ได้โหลด Count Sheet) → ใช้ _scIssueItems แทน
     if (!_scItems.length) _scItems = _scIssueItems.slice();
+    // บันทึกจาก filter → สร้าง session ใหม่เสมอ ไม่ต่อ session เดิม
+    _scSessionId = null;
     _scRenderSheet();
   };
 
