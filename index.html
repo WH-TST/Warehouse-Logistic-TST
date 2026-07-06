@@ -27485,7 +27485,7 @@ function _ldRenderMonitorTable(rows, orders) {
                 if (r.staff_name) staffSet[r.staff_name] = 1;
                 if (r.team) teamSet[r.team] = 1;
             });
-            // totals + times + photos — use latest row per sku to avoid multiply-counting
+            // totals + times + photos — key by session id to support duplicate SKU rows (multiple SO)
             var minStart = null, maxEnd = null;
             var totalQty = 0, totalWt = 0;
             var allPhotos = [];
@@ -27496,7 +27496,8 @@ function _ldRenderMonitorTable(rows, orders) {
                 if (r.photo_urls && r.photo_urls.length) {
                     r.photo_urls.forEach(function(u){ if (u && allPhotos.indexOf(u)<0) allPhotos.push(u); });
                 }
-                var sk = r.sku||('__'+r.id);
+                // key by session id so same SKU from different SO counts separately
+                var sk = r.id != null ? String(r.id) : (r.sku||('__idx'));
                 if (!_latestPerSku[sk] || (r.updated_at||'') >= (_latestPerSku[sk].updated_at||'')) _latestPerSku[sk] = r;
             });
             Object.keys(_latestPerSku).forEach(function(sk){
