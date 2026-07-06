@@ -24479,10 +24479,10 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         } catch(e){}
 
         var {data:done} = await window._sb.from('loading_sessions')
-            .select('sku,qty,weight,lifts')
+            .select('sku,qty,weight,lifts,created_at')
             .eq('order_id', oid)
             .neq('record_type', 'draft')
-            .order('created_at', {ascending:false});
+            .order('created_at', {ascending:true});
         if (!done || !done.length) return;
 
         // Group done sessions by SKU, sorted oldest-first for positional matching
@@ -26009,26 +26009,34 @@ window.ldCardSave = async function(oid, unit) {
     {
         var skuIdMap = {}, skuOldPhotos = {}; // declared here so always in scope for photo merge below
         var {data:existSess} = await window._sb.from('loading_sessions')
-            .select('id,sku,photo_urls,truck_unit').eq('order_id', oid).neq('record_type','draft');
+            .select('id,sku,photo_urls,truck_unit,updated_at').eq('order_id', oid).neq('record_type','draft')
+            .order('updated_at', {ascending:true});
         if (existSess && existSess.length) {
-            // For trailer split: match by sku+truck_unit so each unit keeps its own session
+            // Key by sku|unit|position so duplicate SKU rows each get their own session ID
+            var _eSkuPos = {};
             existSess.forEach(function(r){
-                var key = r.sku+(r.truck_unit?'|'+r.truck_unit:'');
-                var matchKey = r.sku+'|'+curUnit;
-                if(!skuIdMap[matchKey] && key===matchKey){ skuIdMap[matchKey]=r.id; skuOldPhotos[matchKey]=r.photo_urls||[]; }
+                var unit_r = r.truck_unit||'mother';
+                if (unit_r !== curUnit) return;
+                var sk = r.sku||'';
+                if (!_eSkuPos[sk]) _eSkuPos[sk] = 0;
+                var posKey = sk+'|'+curUnit+'|'+_eSkuPos[sk];
+                _eSkuPos[sk]++;
+                skuIdMap[posKey] = r.id;
+                skuOldPhotos[posKey] = r.photo_urls||[];
             });
             var _fOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_saveUk];
+            var _iSkuPos = {};
+            var _assignDraft = function(oi, iIdx) {
+                var sk = oi.sku||'';
+                if (!_iSkuPos[sk]) _iSkuPos[sk] = 0;
+                var posKey = sk+'|'+curUnit+'|'+_iSkuPos[sk];
+                _iSkuPos[sk]++;
+                if (oi.sku && skuIdMap[posKey] && !draftIds[iIdx]) draftIds[iIdx] = skuIdMap[posKey];
+            };
             if (_fOrigIdx) {
-                _fOrigIdx.forEach(function(origIdx, formIdx){
-                    var oi = orderItems[origIdx]||{};
-                    var matchKey = (oi.sku||'')+'|'+curUnit;
-                    if(oi.sku && skuIdMap[matchKey] && !draftIds[origIdx]) draftIds[origIdx]=skuIdMap[matchKey];
-                });
+                _fOrigIdx.forEach(function(origIdx){ _assignDraft(orderItems[origIdx]||{}, origIdx); });
             } else {
-                orderItems.forEach(function(oi, iIdx){
-                    var matchKey = (oi.sku||'')+'|'+curUnit;
-                    if(oi.sku && skuIdMap[matchKey] && !draftIds[iIdx]) draftIds[iIdx]=skuIdMap[matchKey];
-                });
+                orderItems.forEach(function(oi, iIdx){ _assignDraft(oi, iIdx); });
             }
             // Photos are NEVER deleted — keep all photos including from rejected orders
         }
