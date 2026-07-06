@@ -27138,7 +27138,7 @@ function _ldRenderMonKpi(rows, orders) {
     var approvedIds = new Set((orders||[]).filter(function(o){ return (o.review_status||'')==='approved'; }).map(function(o){ return o.id; }));
     var _kpiLatest = {};
     done.forEach(function(r){
-        var k = (r.order_id||'')+'__'+(r.sku||r.id);
+        var k = r.id != null ? String(r.id) : (r.order_id||'')+'__'+(r.sku||r.id);
         if (!_kpiLatest[k] || (r.updated_at||'') >= (_kpiLatest[k].updated_at||'')) _kpiLatest[k] = r;
     });
     var totalWt  = Object.keys(_kpiLatest).reduce(function(a,k){ return approvedIds.has(_kpiLatest[k].order_id) ? a+(parseFloat(_kpiLatest[k].weight)||0) : a; },0);
