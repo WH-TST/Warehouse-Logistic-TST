@@ -27588,7 +27588,8 @@ function _ldRenderMonitorTable(rows, orders) {
                     }
                     var finalCells='';
                     if (hasFinal) {
-                        var fm=finalMap[it.sku]||{finalKg:aW,finalAvg:avg||0};
+                        var _sessKey=_sr&&_sr.id!=null?String(_sr.id):null;
+                        var fm=(_sessKey&&finalMap[_sessKey])?finalMap[_sessKey]:{finalKg:aW,finalAvg:avg||0};
                         var fKg=fm.finalKg, fAvg=fm.finalAvg;
                         tTotFinal+=fKg;
                         var fOor=fAvg>0&&minW!=null&&maxW!=null&&(fAvg<minW||fAvg>maxW);
@@ -27979,52 +27980,51 @@ window.ldCalcFinal = async function(oid) {
 };
 
 // Compute final weights distribution across sessions
-// Returns {sku: {finalKg, finalAvg}}
+// Returns {sessionKey: {finalKg, finalAvg}} — keyed by session ID to support duplicate SKU rows
 function _ldComputeFinalWeights(sessions, diff) {
-    // aggregate by sku
-    var sm = {};
-    sessions.forEach(function(r){
+    // key per session (not per SKU) so duplicate SKU rows each get their own final weight
+    var sm = {}, keys = [];
+    sessions.forEach(function(r, idx){
         if (!r.sku) return;
-        if (!sm[r.sku]) sm[r.sku] = {qty:0, weight:0, product_name:r.product_name};
-        sm[r.sku].qty    += parseFloat(r.qty)||0;
-        sm[r.sku].weight += parseFloat(r.weight)||0;
+        var k = r.id != null ? String(r.id) : 'i'+idx;
+        sm[k] = {sku: r.sku, qty: parseFloat(r.qty)||0, weight: parseFloat(r.weight)||0};
+        keys.push(k);
     });
-    var skus = Object.keys(sm);
-    if (!skus.length) return {};
-    var adds = {}; skus.forEach(function(sk){ adds[sk]=0; });
+    if (!keys.length) return {};
+    var adds = {}; keys.forEach(function(k){ adds[k]=0; });
     var rem = diff;
 
     if (diff > 0) {
-        // ① bring below-min items up to MIN (full gap)
-        skus.filter(function(sk){
-            var p=_ldProductMap[sk]||{}, r=sm[sk];
+        // ① bring below-min sessions up to MIN (full gap)
+        keys.filter(function(k){
+            var p=_ldProductMap[sm[k].sku]||{}, r=sm[k];
             return p.min_w!=null && r.qty>0 && (r.weight/r.qty)<p.min_w;
-        }).forEach(function(sk){
+        }).forEach(function(k){
             if (rem<=0) return;
-            var r=sm[sk], p=_ldProductMap[sk]||{};
+            var r=sm[k], p=_ldProductMap[r.sku]||{};
             var give=Math.min((p.min_w - r.weight/r.qty)*r.qty, rem);
-            adds[sk]+=give; rem-=give;
+            adds[k]+=give; rem-=give;
         });
-        // ② distribute remaining proportionally by PCS, cap each item at MAX
+        // ② distribute remaining proportionally by PCS, cap each session at MAX
         var iter=0;
         while (rem>0.01 && iter++<30) {
-            var elig=skus.filter(function(sk){
-                var p=_ldProductMap[sk]||{}, r=sm[sk];
+            var elig=keys.filter(function(k){
+                var p=_ldProductMap[sm[k].sku]||{}, r=sm[k];
                 if (!r.qty) return false;
-                return p.max_w==null || (r.weight+adds[sk])/r.qty < p.max_w-0.0001;
+                return p.max_w==null || (r.weight+adds[k])/r.qty < p.max_w-0.0001;
             });
             if (!elig.length) {
-                var tAll=skus.reduce(function(s,sk){return s+sm[sk].qty;},0);
-                skus.forEach(function(sk){adds[sk]+=tAll>0?rem*(sm[sk].qty/tAll):rem/skus.length;});
+                var tAll=keys.reduce(function(s,k){return s+sm[k].qty;},0);
+                keys.forEach(function(k){adds[k]+=tAll>0?rem*(sm[k].qty/tAll):rem/keys.length;});
                 rem=0; break;
             }
-            var tQ=elig.reduce(function(s,sk){return s+sm[sk].qty;},0);
+            var tQ=elig.reduce(function(s,k){return s+sm[k].qty;},0);
             var used=0;
-            elig.forEach(function(sk){
-                var p=_ldProductMap[sk]||{}, r=sm[sk];
+            elig.forEach(function(k){
+                var p=_ldProductMap[sm[k].sku]||{}, r=sm[k];
                 var share=rem*(r.qty/tQ);
-                if (p.max_w!=null) share=Math.min(share, Math.max(0,(p.max_w-(r.weight+adds[sk])/r.qty)*r.qty));
-                adds[sk]+=share; used+=share;
+                if (p.max_w!=null) share=Math.min(share, Math.max(0,(p.max_w-(r.weight+adds[k])/r.qty)*r.qty));
+                adds[k]+=share; used+=share;
             });
             rem-=used;
             if (used<0.001) break;
@@ -28032,58 +28032,58 @@ function _ldComputeFinalWeights(sessions, diff) {
     } else {
         // negative diff
         var rem2=diff;
-        // ① bring above-max items down to MAX (full gap)
-        skus.filter(function(sk){
-            var p=_ldProductMap[sk]||{}, r=sm[sk];
+        // ① bring above-max sessions down to MAX (full gap)
+        keys.filter(function(k){
+            var p=_ldProductMap[sm[k].sku]||{}, r=sm[k];
             return p.max_w!=null && r.qty>0 && (r.weight/r.qty)>p.max_w;
-        }).forEach(function(sk){
+        }).forEach(function(k){
             if (rem2>=0) return;
-            var r=sm[sk], p=_ldProductMap[sk]||{};
+            var r=sm[k], p=_ldProductMap[r.sku]||{};
             var take=Math.max(-((r.weight/r.qty)-p.max_w)*r.qty, rem2);
-            adds[sk]+=take; rem2-=take;
+            adds[k]+=take; rem2-=take;
         });
-        // ② distribute remaining deduction proportionally by PCS, cap each item at MIN
+        // ② distribute remaining deduction proportionally by PCS, cap each session at MIN
         var iter2=0;
         while (rem2<-0.01 && iter2++<30) {
-            var elig2=skus.filter(function(sk){
-                var p=_ldProductMap[sk]||{}, r=sm[sk];
+            var elig2=keys.filter(function(k){
+                var p=_ldProductMap[sm[k].sku]||{}, r=sm[k];
                 if (!r.qty) return false;
-                return p.min_w==null || (r.weight+adds[sk])/r.qty > p.min_w+0.0001;
+                return p.min_w==null || (r.weight+adds[k])/r.qty > p.min_w+0.0001;
             });
             if (!elig2.length) {
-                var tAll2=skus.reduce(function(s,sk){return s+sm[sk].qty;},0);
-                skus.forEach(function(sk){adds[sk]+=tAll2>0?rem2*(sm[sk].qty/tAll2):rem2/skus.length;});
+                var tAll2=keys.reduce(function(s,k){return s+sm[k].qty;},0);
+                keys.forEach(function(k){adds[k]+=tAll2>0?rem2*(sm[k].qty/tAll2):rem2/keys.length;});
                 rem2=0; break;
             }
-            var tQ2=elig2.reduce(function(s,sk){return s+sm[sk].qty;},0);
+            var tQ2=elig2.reduce(function(s,k){return s+sm[k].qty;},0);
             var used2=0;
-            elig2.forEach(function(sk){
-                var p=_ldProductMap[sk]||{}, r=sm[sk];
+            elig2.forEach(function(k){
+                var p=_ldProductMap[sm[k].sku]||{}, r=sm[k];
                 var share=rem2*(r.qty/tQ2);
-                if (p.min_w!=null) share=Math.max(share, -Math.max(0,((r.weight+adds[sk])/r.qty-p.min_w)*r.qty));
-                adds[sk]+=share; used2+=share;
+                if (p.min_w!=null) share=Math.max(share, -Math.max(0,((r.weight+adds[k])/r.qty-p.min_w)*r.qty));
+                adds[k]+=share; used2+=share;
             });
             rem2-=used2;
             if (Math.abs(used2)<0.001) break;
         }
     }
 
-    // largest remainder method — floor แต่ละ item แล้วแจก +1 ตามลำดับ fractional สูงสุด จนผลรวม = target พอดี
-    var target = Math.round(skus.reduce(function(s,sk){return s+sm[sk].weight;},0) + diff);
+    // largest remainder method — floor แต่ละ session แล้วแจก +1 ตามลำดับ fractional สูงสุด จนผลรวม = target พอดี
+    var target = Math.round(keys.reduce(function(s,k){return s+sm[k].weight;},0) + diff);
     var floors = {}; var fracs = [];
-    skus.forEach(function(sk){
-        var raw = Math.max(0, sm[sk].weight + adds[sk]);
-        floors[sk] = Math.floor(raw);
-        fracs.push({sk:sk, frac: raw - Math.floor(raw)});
+    keys.forEach(function(k){
+        var raw = Math.max(0, sm[k].weight + adds[k]);
+        floors[k] = Math.floor(raw);
+        fracs.push({k:k, frac: raw - Math.floor(raw)});
     });
-    var floorSum = skus.reduce(function(s,sk){return s+floors[sk];},0);
+    var floorSum = keys.reduce(function(s,k){return s+floors[k];},0);
     var remainder = target - floorSum;
     fracs.sort(function(a,b){return b.frac-a.frac;});
-    for (var i=0;i<remainder&&i<fracs.length;i++) floors[fracs[i].sk]++;
+    for (var i=0;i<remainder&&i<fracs.length;i++) floors[fracs[i].k]++;
     var result={};
-    skus.forEach(function(sk){
-        var fKg=floors[sk];
-        result[sk]={finalKg:fKg, finalAvg:sm[sk].qty>0?fKg/sm[sk].qty:0};
+    keys.forEach(function(k){
+        var fKg=floors[k];
+        result[k]={finalKg:fKg, finalAvg:sm[k].qty>0?fKg/sm[k].qty:0};
     });
     return result;
 }
