@@ -42548,10 +42548,41 @@ window.daShowDetail=function(driverKey,metric){
     html=tbl(['ทะเบียน','จำนวนเที่ยว'],Object.entries(tc).sort(function(a,b){return b[1]-a[1];}).map(function(t){return['🚛 '+t[0],t[1]+' เที่ยว'];}));
   } else if(metric==='inspect'||metric==='inspect_issue'){
     var list=metric==='inspect_issue'?dInspects.filter(function(i){return i.overall==='issue';}):dInspects;
-    html=tbl(['วันที่','ทะเบียน','ผล','หมายเหตุ'],list.map(function(i){
-      var ok=i.overall!=='issue';
-      return[i.inspect_date||'-',i.truck_plate||'-',ok?'<span style="color:#16a34a;font-weight:700;">✔ ปกติ</span>':'<span style="color:#dc2626;font-weight:700;">⚠ พบปัญหา</span>',i.note||'-'];
-    }));
+    if(!list.length){html='<div style="text-align:center;padding:40px;color:#94a3b8;font-weight:700;">ไม่มีข้อมูล</div>';}
+    else{
+      html=list.map(function(i){
+        var ok=i.overall!=='issue';
+        var issueItems=(i.items||[]).filter(function(it){return it.status==='issue';});
+        var headerBg=ok?'#f0fdf4':'#fff9f9';
+        var borderCol=ok?'#86efac':'#fca5a5';
+        var out='<div style="border:1px solid '+borderCol+';border-radius:12px;overflow:hidden;margin-bottom:12px;">'
+          +'<div style="background:'+headerBg+';padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+          +'<span style="font-size:13px;font-weight:800;color:#0f172a;">'+dmEsc(i.truck_plate||'-')+'</span>'
+          +'<span style="font-size:12px;color:#64748b;">'+dmEsc(i.inspect_date||'-')+'</span>'
+          +(ok
+            ?'<span style="background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;">✔ ปกติ</span>'
+            :'<span style="background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;">⚠ พบปัญหา '+issueItems.length+' รายการ</span>')
+          +(i.note?'<span style="font-size:11px;color:#64748b;margin-left:auto;">'+dmEsc(i.note)+'</span>':'')
+          +'</div>';
+        if(!ok&&issueItems.length){
+          out+='<div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px;">';
+          issueItems.forEach(function(it){
+            out+='<div style="display:flex;align-items:flex-start;gap:10px;">'
+              +'<div style="flex:1;">'
+              +'<div style="font-size:12px;font-weight:700;color:#1e293b;">'+dmEsc((it.name||'').replace('⭐ ',''))+'</div>'
+              +(it.symptom?'<div style="font-size:11px;color:#dc2626;margin-top:2px;">'+dmEsc(it.symptom)+'</div>':'')
+              +'</div>'
+              +(it.photo_url
+                ?'<a href="'+it.photo_url+'" target="_blank"><img src="'+it.photo_url+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid #fca5a5;flex-shrink:0;" onerror="this.style.display=\'none\'"></a>'
+                :'<div style="width:72px;height:72px;border-radius:8px;border:1px dashed #fca5a5;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-image" style="color:#fca5a5;font-size:20px;"></i></div>')
+              +'</div>';
+          });
+          out+='</div>';
+        }
+        out+='</div>';
+        return out;
+      }).join('');
+    }
   } else if(metric==='failed'){
     html=tbl(['วันที่','ทะเบียน','สถานะ'],dPlans.filter(function(p){return p.status==='failed'||p.status==='cancelled';}).map(function(p){return[p.plan_date||'-',p.truck_plate||'-',statusBadge(p.status)];}));
   } else if(metric==='ticket'||metric==='fine'){
