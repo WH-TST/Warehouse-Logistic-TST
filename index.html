@@ -10696,9 +10696,9 @@ window.loadAnalytics = async function loadAnalytics() {
         // ── INBOUND + INVENTORY: ดึงตรงจาก Supabase ──
         const [txRes, ohRes] = await Promise.all([
             window._sb.from('transection_fg')
-                .select('physical_date,reference,cw_quantity,quantity')
-                .gte('physical_date', startVal)
-                .lte('physical_date', endVal)
+                .select('tst_pd_date,reference,cw_quantity,quantity')
+                .gte('tst_pd_date', startVal)
+                .lte('tst_pd_date', endVal)
                 .eq('reference', 'Production'),
             window._sb.from('onhand_fg')
                 .select('item_number,cw_physical_inventory,physical_inventory')
@@ -10711,7 +10711,7 @@ window.loadAnalytics = async function loadAnalytics() {
         window._analyticsDailyInMap = dailyInMap;
         let totalInKg = 0, totalInLines = 0;
         (txRes.data || []).forEach(function(r) {
-            const d  = r.physical_date;
+            const d  = r.tst_pd_date;
             const kg = Math.abs(parseFloat(r.quantity)    || 0);
             const ln = Math.abs(parseFloat(r.cw_quantity) || 0);
             if (!dailyInMap[d]) dailyInMap[d] = { kg:0, lines:0 };
