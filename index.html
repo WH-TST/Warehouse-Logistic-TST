@@ -10732,9 +10732,9 @@ window.loadAnalytics = async function loadAnalytics() {
             invLines += Math.abs(parseFloat(r.cw_physical_inventory) || 0);
         });
 
-        // บันทึก snapshot วันนี้
+        // บันทึก snapshot วันนี้ (await ก่อนดึง)
         var todaySnap = new Date().toISOString().slice(0,10);
-        window._sb.from('inventory_daily_snapshot').upsert(
+        await window._sb.from('inventory_daily_snapshot').upsert(
             { snapshot_date: todaySnap, total_kg: invKg, total_lines: invLines },
             { onConflict: 'snapshot_date' }
         );
