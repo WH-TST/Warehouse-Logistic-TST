@@ -33964,6 +33964,10 @@ window.loadKpiWH = function loadKpiWH() {
     kpiWHSavedData = {};
 
     // ดึงข้อมูลทั้งหมดจาก Supabase พร้อมกัน
+    // baseline window = 60 วันย้อนหลังจาก endStr (สำหรับคำนวณ median เท่านั้น ไม่ขึ้นกับช่วงที่แสดง)
+    var baselineStart = (function() {
+        var d = new Date(endStr); d.setDate(d.getDate() - 60); return d.toISOString().slice(0,10);
+    })();
     Promise.all([
         // 0. kpi_inventory → FG/SEMI Checker, Prod KPI, Final Adj
         window._sb.from('kpi_inventory').select('cycle_date,type,kpi_checker,kpi_prd,kpi_final')
@@ -33997,20 +34001,28 @@ window.loadKpiWH = function loadKpiWH() {
             Object.keys(planMap2).forEach(function(k) { planMap2[k] = Math.round(planMap2[k] * 60); });
             return { data: Object.keys(planMap2).map(function(k){ return { plan_date: k, total_mins: planMap2[k] }; }) };
         })(),
-        // 4. loading_sessions → ข้อมูลโหลดจริง (Speed Score)
+        // 4. loading_sessions → ข้อมูลโหลดจริง (Speed Score) เฉพาะช่วงที่แสดงผล
         window._sb.from('loading_sessions')
             .select('plan_date,work_time_min,weight,qty,record_type')
             .gte('plan_date', startStr).lte('plan_date', endStr)
             .eq('record_type', 'บันทึกการโหลด')
             .not('work_time_min', 'is', null)
+            .gt('work_time_min', 0),
+        // 5. loading_sessions → 60 วันย้อนหลัง สำหรับคำนวณ median baseline (แยกจากช่วงแสดงผล)
+        window._sb.from('loading_sessions')
+            .select('plan_date,work_time_min,weight,qty,record_type')
+            .gte('plan_date', baselineStart).lte('plan_date', endStr)
+            .eq('record_type', 'บันทึกการโหลด')
+            .not('work_time_min', 'is', null)
             .gt('work_time_min', 0)
     ]).then(function(results) {
-        var kpiRows   = (results[0].data || []);
-        var actRows   = (results[1].data || []);
-        var savedRows = (results[2].data || []);
-        var planRows  = (results[3].data || []);
-        var lsRows    = (results[4].data || []);
-        console.log('[KPI-WH] actRows:', actRows.length, 'lsRows:', lsRows.length, 'err:', results[1].error);
+        var kpiRows      = (results[0].data || []);
+        var actRows      = (results[1].data || []);
+        var savedRows    = (results[2].data || []);
+        var planRows     = (results[3].data || []);
+        var lsRows       = (results[4].data || []);
+        var lsBaseRows   = (results[5].data || []); // baseline สำหรับ median เท่านั้น
+        console.log('[KPI-WH] actRows:', actRows.length, 'lsRows:', lsRows.length, 'lsBaseRows:', lsBaseRows.length, 'err:', results[1].error);
 
         // ── Build kpiWHSavedData จาก kpi_wh_log ──
         savedRows.forEach(function(r) {
@@ -34059,8 +34071,7 @@ window.loadKpiWH = function loadKpiWH() {
             else if (r.type === 'สินค้าเสียหาย-การเก็บ') { whaMap[key].dmgStore++; }
         });
 
-        // ── Build lsMap จาก loading_sessions (Speed Score) ──
-        var allMpiKgA=[], allMpiKgB=[], allMpiKgC=[], allMpiKgD=[];
+        // ── Build lsMap จาก loading_sessions (Speed Score ของแต่ละวันในช่วงแสดงผล) ──
         var lsMap = {}; // key=yyyy-MM-dd → { wpuList, mpiList }
         lsRows.forEach(function(r) {
             var key = (r.plan_date || '').slice(0, 10);
@@ -34072,6 +34083,17 @@ window.loadKpiWH = function loadKpiWH() {
             if (wpu <= 0 || mpi <= 0) return;
             lsMap[key].wpuList.push(wpu);
             lsMap[key].mpiList.push(mpi);
+        });
+
+        // ── คำนวณ median baseline จาก lsBaseRows (60 วันย้อนหลัง) ──
+        // แยกจาก lsRows เพื่อให้ข้อมูลวันอื่นในช่วงแสดงผลไม่กระทบ baseline
+        var allMpiKgA=[], allMpiKgB=[], allMpiKgC=[], allMpiKgD=[];
+        lsBaseRows.forEach(function(r) {
+            var qty = parseFloat(r.qty) || 0;
+            if (qty <= 0) return;
+            var wpu = (parseFloat(r.weight) || 0) / qty;
+            var mpi = (parseFloat(r.work_time_min) || 0) / qty;
+            if (wpu <= 0 || mpi <= 0) return;
             var mpkg = mpi / wpu;
             if      (wpu < 3000)   allMpiKgA.push(mpkg);
             else if (wpu <= 8000)  allMpiKgB.push(mpkg);
