@@ -10708,6 +10708,7 @@ window.loadAnalytics = async function loadAnalytics() {
 
         // aggregate inbound รายวัน
         const dailyInMap = {};
+        window._analyticsDailyInMap = dailyInMap;
         let totalInKg = 0, totalInLines = 0;
         (txRes.data || []).forEach(function(r) {
             const d  = r.physical_date;
@@ -10816,11 +10817,12 @@ window.loadAnalytics = async function loadAnalytics() {
             // align daily arrays to the same date axis used by inbound chart
             var chartLabels = window.flowChartInstance ? window.flowChartInstance.data.labels : [];
             // rebuild merged date list
+            var _dailyInMap = window._analyticsDailyInMap || {};
             var allDates = Array.from(new Set(
-                Object.keys(dailyInMap).concat(Object.keys(dailyOutMap))
+                Object.keys(_dailyInMap).concat(Object.keys(dailyOutMap))
             )).sort();
             var allLabels = allDates.map(function(d){ var p=d.split('-'); return p[2]+'/'+p[1]; });
-            var dailyInboundAligned  = allDates.map(function(d){ return (dailyInMap[d]||{}).kg||0; });
+            var dailyInboundAligned  = allDates.map(function(d){ return (_dailyInMap[d]||{}).kg||0; });
             var dailyOutboundAligned = allDates.map(function(d){ return (dailyOutMap[d]||{}).kg||0; });
 
             // update flow chart with merged date axis
