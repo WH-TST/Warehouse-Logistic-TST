@@ -10763,18 +10763,95 @@ window.loadAnalytics = async function loadAnalytics() {
         showToast('เกิดข้อผิดพลาด (Inbound): ' + (e.message || String(e)), true);
     }
 
-    // ── OUTBOUND: ยังใช้ GAS เหมือนเดิม ──
-    google.script.run
-        .withSuccessHandler(function(delivData) {
-            if (delivData && delivData.success) {
-                _renderDeliverySection(delivData);
-                showToast('โหลด Outbound สำเร็จ');
+    // ── OUTBOUND: ดึงจาก loading_orders ที่อนุมัติแล้ว ──
+    (async function() {
+        try {
+            var {data: approvedOrders, error: aoErr} = await window._sb.from('loading_orders')
+                .select('id,order_date')
+                .eq('review_status', 'approved')
+                .gte('order_date', startVal)
+                .lte('order_date', endVal);
+            if (aoErr) throw aoErr;
+
+            var approvedIds = (approvedOrders || []).map(function(o){ return o.id; });
+            var orderDateMap = {};
+            (approvedOrders || []).forEach(function(o){ orderDateMap[o.id] = o.order_date; });
+
+            var outSessions = [];
+            if (approvedIds.length > 0) {
+                var chunkSize = 200, chunks = [];
+                for (var i = 0; i < approvedIds.length; i += chunkSize)
+                    chunks.push(approvedIds.slice(i, i + chunkSize));
+                var sessResults = await Promise.all(chunks.map(function(chunk) {
+                    return window._sb.from('loading_sessions')
+                        .select('id,order_id,weight,qty,updated_at')
+                        .in('order_id', chunk)
+                        .neq('record_type', 'draft');
+                }));
+                sessResults.forEach(function(r){ if (r.data) outSessions = outSessions.concat(r.data); });
             }
-        })
-        .withFailureHandler(function(err) {
-            showToast('Outbound error: ' + (err.message || String(err)), true);
-        })
-        .getDeliveryTypeData(startVal, endVal);
+
+            // deduplicate by session id (latest)
+            var _sessLatest = {};
+            outSessions.forEach(function(r) {
+                var k = r.id != null ? String(r.id) : (r.order_id + '__idx');
+                if (!_sessLatest[k] || (r.updated_at||'') >= (_sessLatest[k].updated_at||'')) _sessLatest[k] = r;
+            });
+
+            // aggregate by date
+            var dailyOutMap = {};
+            var totalOutKg = 0, totalOutLines = 0;
+            Object.values(_sessLatest).forEach(function(r) {
+                var d = orderDateMap[r.order_id];
+                if (!d) return;
+                var kg = parseFloat(r.weight)||0;
+                var ln = parseFloat(r.qty)||0;
+                if (!dailyOutMap[d]) dailyOutMap[d] = {kg:0, lines:0};
+                dailyOutMap[d].kg    += kg;
+                dailyOutMap[d].lines += ln;
+                totalOutKg    += kg;
+                totalOutLines += ln;
+            });
+
+            // align daily arrays to the same date axis used by inbound chart
+            var chartLabels = window.flowChartInstance ? window.flowChartInstance.data.labels : [];
+            // rebuild merged date list
+            var allDates = Array.from(new Set(
+                Object.keys(dailyInMap).concat(Object.keys(dailyOutMap))
+            )).sort();
+            var allLabels = allDates.map(function(d){ var p=d.split('-'); return p[2]+'/'+p[1]; });
+            var dailyInboundAligned  = allDates.map(function(d){ return (dailyInMap[d]||{}).kg||0; });
+            var dailyOutboundAligned = allDates.map(function(d){ return (dailyOutMap[d]||{}).kg||0; });
+
+            // update flow chart with merged date axis
+            if (window.flowChartInstance) {
+                window.flowChartInstance.data.labels = allLabels;
+                window.flowChartInstance.data.datasets[0].data = dailyInboundAligned;
+                window.flowChartInstance.data.datasets[1].data = dailyOutboundAligned;
+                window.flowChartInstance.update();
+                window._pendingOutbound = null;
+            } else {
+                window._pendingOutbound = dailyOutboundAligned;
+            }
+
+            _renderDeliverySection({
+                outWeight:         totalOutKg,
+                outLines:          totalOutLines,
+                ownDeliveryWeight: totalOutKg,
+                ownDeliveryLines:  totalOutLines,
+                pickupWeight:      0,
+                pickupLines:       0,
+                dates:             allLabels,
+                dailyOutbound:     dailyOutboundAligned,
+                dailyOwnDelivery:  dailyOutboundAligned,
+                dailyPickup:       allDates.map(function(){ return 0; }),
+            });
+
+            showToast('โหลด Outbound สำเร็จ (' + approvedIds.length + ' คำสั่ง อนุมัติแล้ว)');
+        } catch(e) {
+            showToast('Outbound error: ' + (e.message || String(e)), true);
+        }
+    })();
 }
 
 // ── อัพเดต KPI Outbound + Net Flow + Flow Chart + Delivery Type จากข้อมูล getDeliveryTypeData ──
