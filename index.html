@@ -42274,26 +42274,63 @@ window.daLoad=async function(){
     shopVisitMap[pid].sort(function(a,b){return a.shop_seq-b.shop_seq;});
   });
 
-  // ── คำนวณ GPS ระยะทางจริง (waypoint-to-waypoint) ──────
-  function calcGpsDist(log){
+  // ── สร้าง waypoint array ต่อ trip_log ───────────────────
+  function buildWaypoints(log){
     var visits=shopVisitMap[log.plan_id]||[];
     var pts=[];
-    if(log.lat_start&&log.lng_start) pts.push({lat:log.lat_start,lng:log.lng_start});
+    if(log.lat_start&&log.lng_start) pts.push([log.lng_start,log.lat_start]);
     visits.forEach(function(sv){
-      if(sv.lat_arrival&&sv.lng_arrival) pts.push({lat:sv.lat_arrival,lng:sv.lng_arrival});
-      if(sv.lat_depart&&sv.lng_depart) pts.push({lat:sv.lat_depart,lng:sv.lng_depart});
+      if(sv.lat_arrival&&sv.lng_arrival) pts.push([sv.lng_arrival,sv.lat_arrival]);
+      if(sv.lat_depart&&sv.lng_depart)   pts.push([sv.lng_depart,sv.lat_depart]);
     });
-    if(log.lat_end&&log.lng_end) pts.push({lat:log.lat_end,lng:log.lng_end});
+    if(log.lat_end&&log.lng_end) pts.push([log.lng_end,log.lat_end]);
+    return pts;
+  }
+
+  // ── Haversine fallback ──────────────────────────────────
+  function calcGpsDistHaversine(log){
+    var pts=buildWaypoints(log);
     var dist=0;
-    for(var i=1;i<pts.length;i++) dist+=_daHaversine(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);
+    for(var i=1;i<pts.length;i++) dist+=_daHaversine(pts[i-1][1],pts[i-1][0],pts[i][1],pts[i][0]);
     return dist;
   }
 
-  // expose calcGpsDist สำหรับ daShowDetail
-  window._daCalcGpsDist=calcGpsDist;
+  // ── OSRM road distance ──────────────────────────────────
+  async function fetchOsrmDist(pts){
+    if(pts.length<2) return 0;
+    var coords=pts.map(function(p){return p[0]+','+p[1];}).join(';');
+    try{
+      var r=await fetch('https://router.project-osrm.org/route/v1/driving/'+coords+'?overview=false',{signal:AbortSignal.timeout(8000)});
+      var d=await r.json();
+      if(d.code==='Ok'&&d.routes&&d.routes[0]) return d.routes[0].distance/1000;
+    }catch(e){}
+    return null; // null = fallback to haversine
+  }
+
+  // ── pre-compute OSRM ระยะทางทุก trip ────────────────────
+  var gpsDistMap={}; // plan_id → km
+  var logMap={};(logs||[]).forEach(function(l){logMap[l.plan_id]=l;});
+
+  var logsWithGps=(logs||[]).filter(function(l){return l.lat_start&&l.lng_start;});
+  if(logsWithGps.length>0){
+    showToast('กำลังคำนวณระยะทาง (OSRM) '+logsWithGps.length+' เที่ยว...');
+    // batch 5 ทีละรอบ เพื่อไม่ให้ rate-limit
+    var BATCH=5;
+    for(var bi=0;bi<logsWithGps.length;bi+=BATCH){
+      var chunk=logsWithGps.slice(bi,bi+BATCH);
+      await Promise.all(chunk.map(async function(log){
+        var pts=buildWaypoints(log);
+        var km=await fetchOsrmDist(pts);
+        gpsDistMap[log.plan_id]=km!=null?km:calcGpsDistHaversine(log);
+      }));
+    }
+  }
+
+  // expose ให้ daShowDetail ใช้
+  window._daGpsDistMap=gpsDistMap;
+  window._daCalcGpsDist=function(log){ return gpsDistMap[log.plan_id]||calcGpsDistHaversine(log); };
 
   // ── เก็บ raw data ไว้สำหรับ drill-down ─────────────────
-  var logMap={};(logs||[]).forEach(function(l){logMap[l.plan_id]=l;});
   window._daRaw={plans:plans||[],logs:logs||[],logMap:logMap,inspects:inspects||[],incidents:incidents||[],maintPlans:maintPlans||[]};
 
   // ── จัดกลุ่มตามคนขับ ─────────────────────────────────
