@@ -27282,14 +27282,19 @@ function _ldRenderMonitorTable(rows, orders) {
                             var itemIdx=idx;
                             var sw=parseFloat(oIt.scale_weight)||0;
                             totScale+=sw;
+                            var _swAvg=sw>0&&actQ>0?sw/actQ:null;
+                            var _swOor=_swAvg!=null&&minW!=null&&maxW!=null&&(_swAvg<minW||_swAvg>maxW);
+                            var _swBorder=_swOor?'#dc2626':sw>0?'#22c55e':'#fde68a';
+                            var _swBtnBg=sw>0?'#16a34a':'#f59e0b';
+                            var _swAvgColor=_swOor?'#dc2626':sw>0?'#15803d':'#b45309';
                             swCell='<td style="padding:6px 8px;text-align:center;">'
                                 +'<div style="display:flex;align-items:center;gap:3px;justify-content:center;">'
                                 +'<input id="ld-sw-'+lwOid+'-'+itemIdx+'" type="number" min="0" step="0.1" value="'+(oIt.scale_weight||'')+'" placeholder="—"'
-                                +' style="width:72px;border:1.5px solid #fde68a;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;background:#fffbeb;">'
-                                +'<button onclick="_ldSaveScaleWeight(\''+lwOid+'\','+itemIdx+')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;cursor:pointer;">✔</button>'
+                                +' style="width:72px;border:2px solid '+_swBorder+';border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;background:#fffbeb;">'
+                                +'<button onclick="_ldSaveScaleWeight(\''+lwOid+'\','+itemIdx+')" style="background:'+_swBtnBg+';color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:900;cursor:pointer;">✔</button>'
                                 +'</div>'
                                 +(sw>0?'<div style="font-size:10px;font-weight:900;color:#92400e;text-align:center;">'+sw.toLocaleString()+' KG</div>':'')
-                                +(sw>0&&actQ>0?'<div style="font-size:10px;color:#b45309;text-align:center;">'+(sw/actQ).toFixed(2)+' kg/pcs</div>':'')
+                                +(_swAvg!=null?'<div style="font-size:10px;font-weight:900;color:'+_swAvgColor+';text-align:center;">'+_swAvg.toFixed(2)+' kg/pcs'+(_swOor?' ⚠':'')+'</div>':'')
                             +'</td>';
                         }
                         var canCut = oIt.can_cut;
@@ -27587,11 +27592,13 @@ function _ldRenderMonitorTable(rows, orders) {
                         var swAvgCell=swAvg!=null
                             ?'<span style="color:'+swAvgColor+';font-weight:900;">'+swAvg.toFixed(2)+(swAvgOor?' ⚠':'')+'</span>'
                             :'<span style="color:#cbd5e1;">—</span>';
+                        var _dBorder=swAvgOor?'#dc2626':sw>0?'#22c55e':'#fde68a';
+                        var _dBtnBg=sw>0?'#16a34a':'#f59e0b';
                         scaleCell='<td style="padding:7px 8px;text-align:right;background:#fffbeb;">'
                             +'<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;">'
                             +'<input id="ld-sw-'+orderId+'-'+idx+'" type="number" min="0" step="0.1" value="'+(it.scale_weight||'')+'" placeholder="—"'
-                            +' style="width:68px;border:1.5px solid #fde68a;border-radius:6px;padding:2px 5px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;">'
-                            +'<button onclick="_ldSaveScaleWeight(\''+orderId+'\','+idx+')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:900;cursor:pointer;">✔</button>'
+                            +' style="width:68px;border:2px solid '+_dBorder+';border-radius:6px;padding:2px 5px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;">'
+                            +'<button onclick="_ldSaveScaleWeight(\''+orderId+'\','+idx+')" style="background:'+_dBtnBg+';color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:900;cursor:pointer;">✔</button>'
                             +'</div></td>'
                             +'<td style="padding:7px 8px;font-size:11px;text-align:right;background:#fffbeb;">'+swAvgCell+'</td>';
                     }
