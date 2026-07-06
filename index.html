@@ -42289,6 +42289,9 @@ window.daLoad=async function(){
     return dist;
   }
 
+  // expose calcGpsDist สำหรับ daShowDetail
+  window._daCalcGpsDist=calcGpsDist;
+
   // ── เก็บ raw data ไว้สำหรับ drill-down ─────────────────
   var logMap={};(logs||[]).forEach(function(l){logMap[l.plan_id]=l;});
   window._daRaw={plans:plans||[],logs:logs||[],logMap:logMap,inspects:inspects||[],incidents:incidents||[],maintPlans:maintPlans||[]};
@@ -42494,7 +42497,8 @@ window.daShowDetail=function(driverKey,metric){
       dPlans.map(function(p){
         var log=logMap[p.plan_id];
         var mi=log&&log.mileage_start&&log.mileage_end?fmtN(Number(log.mileage_end)-Number(log.mileage_start))+' กม.':'-';
-        var gps=log&&log.lat_start&&log.lat_end?_daHaversine(log.lat_start,log.lng_start,log.lat_end,log.lng_end).toFixed(1)+' กม.':'-';
+        var _gpsDist=log&&window._daCalcGpsDist?window._daCalcGpsDist(log):0;
+        var gps=_gpsDist>0?_gpsDist.toFixed(1)+' กม.':'-';
         var dur=log?fmtDur(log.started_at,log.completed_at):'-';
         var spd='-';
         if(log&&log.mileage_start&&log.mileage_end&&log.started_at&&log.completed_at){var s=(new Date(log.completed_at)-new Date(log.started_at))/1000;if(s>0)spd=((Number(log.mileage_end)-Number(log.mileage_start))/(s/3600)).toFixed(1)+' กม/ชม';}
