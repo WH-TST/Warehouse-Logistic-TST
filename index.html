@@ -33964,9 +33964,13 @@ window.loadKpiWH = function loadKpiWH() {
     kpiWHSavedData = {};
 
     // ดึงข้อมูลทั้งหมดจาก Supabase พร้อมกัน
-    // baseline window = 60 วันย้อนหลังจาก endStr (สำหรับคำนวณ median เท่านั้น ไม่ขึ้นกับช่วงที่แสดง)
+    // baseline window = 60 วันก่อน startStr (ไม่ทับช่วงที่แสดงผลเลย)
+    // → ข้อมูลโหลดในช่วงที่แสดงจะไม่กระทบ median ของวันอื่นในช่วงเดียวกัน
+    var baselineEnd = (function() {
+        var d = new Date(startStr); d.setDate(d.getDate() - 1); return d.toISOString().slice(0,10);
+    })();
     var baselineStart = (function() {
-        var d = new Date(endStr); d.setDate(d.getDate() - 60); return d.toISOString().slice(0,10);
+        var d = new Date(startStr); d.setDate(d.getDate() - 61); return d.toISOString().slice(0,10);
     })();
     Promise.all([
         // 0. kpi_inventory → FG/SEMI Checker, Prod KPI, Final Adj
@@ -34008,10 +34012,11 @@ window.loadKpiWH = function loadKpiWH() {
             .eq('record_type', 'บันทึกการโหลด')
             .not('work_time_min', 'is', null)
             .gt('work_time_min', 0),
-        // 5. loading_sessions → 60 วันย้อนหลัง สำหรับคำนวณ median baseline (แยกจากช่วงแสดงผล)
+        // 5. loading_sessions → 60 วัน ก่อน startStr สำหรับคำนวณ median baseline
+        //    ช่วงนี้ไม่ทับกับช่วงแสดงผลเลย → ข้อมูลในช่วงแสดงผลไม่กระทบ median
         window._sb.from('loading_sessions')
             .select('plan_date,work_time_min,weight,qty,record_type')
-            .gte('plan_date', baselineStart).lte('plan_date', endStr)
+            .gte('plan_date', baselineStart).lte('plan_date', baselineEnd)
             .eq('record_type', 'บันทึกการโหลด')
             .not('work_time_min', 'is', null)
             .gt('work_time_min', 0)
