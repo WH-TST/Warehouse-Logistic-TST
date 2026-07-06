@@ -10880,27 +10880,31 @@ window.loadAnalytics = async function loadAnalytics() {
                 var today = new Date().toISOString().slice(0,10);
                 var sortedDesc = allDates.slice().sort().reverse();
 
-                var runKg = window._analyticsCurrentInvKg || 0;
+                var runKg    = window._analyticsCurrentInvKg    || 0;
+                var runLines = window._analyticsCurrentInvLines || 0;
                 var backfillRows = [];
 
                 sortedDesc.forEach(function(d) {
-                    var inKg  = (_dailyInMap[d]||{}).kg  || 0;
-                    var outKg = (dailyOutMap[d]||{}).kg  || 0;
+                    var inKg    = (_dailyInMap[d]||{}).kg    || 0;
+                    var outKg   = (dailyOutMap[d]||{}).kg    || 0;
+                    var inLines = (_dailyInMap[d]||{}).lines || 0;
+                    var outLines= (dailyOutMap[d]||{}).lines || 0;
 
                     if (d !== today) {
-                        // ประมาณ inventory สิ้นวัน d = inv สิ้นวัน d+1 - inbound[d+1] + outbound[d+1]
-                        // ตอนนี้ runKg = inv สิ้นวัน d (คำนวณมาจากวันถัดไปแล้ว)
-                        if (!existMap[d]) {
+                        var ex = existMap[d];
+                        // เขียนทับถ้าไม่มีข้อมูล หรือ total_lines ยังเป็น 0 (backfill เก่าที่ยังไม่มี lines)
+                        if (!ex || !ex.total_lines) {
                             backfillRows.push({
                                 snapshot_date: d,
                                 total_kg:    Math.round(Math.max(0, runKg)),
-                                total_lines: 0,
-                                total_sku:   0,
+                                total_lines: Math.round(Math.max(0, runLines)),
+                                total_sku:   ex ? (ex.total_sku||0) : 0,
                             });
                         }
                     }
                     // ย้อนวัน: inv[d-1] = inv[d] - inbound[d] + outbound[d]
-                    runKg = runKg - inKg + outKg;
+                    runKg    = runKg    - inKg    + outKg;
+                    runLines = runLines - inLines + outLines;
                 });
 
                 if (backfillRows.length > 0) {
