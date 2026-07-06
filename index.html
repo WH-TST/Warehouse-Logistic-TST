@@ -42346,17 +42346,33 @@ window.daLoad=async function(){
     return h+'ชม. '+m+'น.';
   }
 
-  // ── helper: compact metric cell ──────────────────────────
-  function mCell(icon,color,label,val,dk,key){
-    return '<div style="display:flex;flex-direction:column;gap:2px;padding:8px 10px;cursor:pointer;border-radius:8px;transition:background .12s;min-width:0;" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'transparent\'" onclick="daShowDetail(\''+dk+'\',\''+key+'\')">'
-      +'<div style="display:flex;align-items:center;gap:4px;">'
-      +'<i class="fas '+icon+'" style="color:'+color+';font-size:11px;flex-shrink:0;"></i>'
-      +'<span style="font-size:10px;font-weight:700;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+label+'</span></div>'
-      +'<div style="font-size:14px;font-weight:900;color:#0f172a;white-space:nowrap;">'+val+'</div>'
-      +'</div>';
+  // ── helper: table cell with drill-down ───────────────────
+  function tCell(val,dk,key,align,color){
+    align=align||'center'; color=color||'#0f172a';
+    return '<td style="padding:8px 10px;text-align:'+align+';font-size:13px;font-weight:700;color:'+color+';white-space:nowrap;cursor:pointer;transition:background .12s;" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'\'" onclick="daShowDetail(\''+dk+'\',\''+key+'\')">'+val+'</td>';
   }
 
-  var html=drivers.map(function(d){
+  var COL_STYLE='padding:8px 10px;font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;text-align:center;border-bottom:2px solid #e2e8f0;background:#f8fafc;';
+  var thead='<thead><tr>'
+    +'<th style="'+COL_STYLE+'text-align:left;min-width:140px;">คนขับ</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-route" style="color:#2563eb;"></i><br>ระยะ(ไมล์)</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-map-marker-alt" style="color:#7c3aed;"></i><br>ระยะ(GPS)</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-clock" style="color:#0891b2;"></i><br>เวลารวม</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-gauge-high" style="color:#059669;"></i><br>ความเร็ว</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-check-circle" style="color:#16a34a;"></i><br>เที่ยวสำเร็จ</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-truck" style="color:#d97706;"></i><br>รถ(คัน)</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-clipboard-check" style="color:#be185d;"></i><br>ตรวจสภาพ</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-triangle-exclamation" style="color:#dc2626;"></i><br>พบปัญหา</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-store-slash" style="color:#b45309;"></i><br>ไม่สำเร็จ</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-file-invoice" style="color:#7c3aed;"></i><br>ใบสั่ง</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-baht-sign" style="color:#9d174d;"></i><br>ค่าปรับ(฿)</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-car-burst" style="color:#dc2626;"></i><br>อุบัติเหตุ</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-screwdriver-wrench" style="color:#c2410c;"></i><br>ซ่อม(ครั้ง)</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-receipt" style="color:#92400e;"></i><br>ค่าซ่อม(฿)</th>'
+    +'<th style="'+COL_STYLE+'">สถานะ</th>'
+    +'</tr></thead>';
+
+  var rows=drivers.map(function(d){
     var iKey=Object.keys(inspectMap).find(function(k){
       var dr=_daDrivers.find(function(x){return x.driver_id===k||x.driver_name===k;});
       return dr&&(dr.driver_name===d.name||dr.driver_id===(d.plans[0]||{}).driver_id);
@@ -42368,61 +42384,52 @@ window.daLoad=async function(){
     var truckCount=truckList.length;
     var dk=d.driverKey;
     var hasAlert=ins.issue||d.failedShops||inc.tickets||inc.accidents||d.maintTrips;
-    var initial=d.name.replace(/^นาย|^นางสาว|^น\.ส\.|^นาง/,'').trim().charAt(0);
+    var rowBg=hasAlert?'#fff8f8':'#fff';
+    var borderLeft=hasAlert?'3px solid #ef4444':'3px solid transparent';
 
-    return '<div style="background:#fff;border:1px solid '+(hasAlert?'#fca5a5':'#e2e8f0')+';border-left:4px solid '+(hasAlert?'#ef4444':'#2563eb')+';border-radius:14px;overflow:hidden;margin-bottom:10px;">'
+    // status badge
+    var statusBadge=!hasAlert
+      ?'<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">✅ ปกติ</span>'
+      :[
+        ins.issue?'<span style="background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">⚠ ตรวจ</span>':'',
+        d.failedShops?'<span style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">🚫 ไม่สำเร็จ</span>':'',
+        inc.tickets?'<span style="background:#ede9fe;color:#6d28d9;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">🗒 ใบสั่ง</span>':'',
+        inc.accidents?'<span style="background:#fee2e2;color:#7f1d1d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">💥 อุบัติ</span>':'',
+        d.maintTrips?'<span style="background:#ffedd5;color:#9a3412;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">🔧 ซ่อม</span>':''
+      ].filter(Boolean).join(' ');
 
-      // ── Header row ──
-      +'<div style="background:'+(hasAlert?'linear-gradient(135deg,#1e293b,#1e293b)':'linear-gradient(135deg,#0f172a,#1e293b)')+';padding:10px 16px;display:flex;align-items:center;gap:10px;">'
-      +'<div style="width:36px;height:36px;border-radius:10px;background:'+(hasAlert?'#b91c1c':'#1d4ed8')+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#fff;flex-shrink:0;">'+initial+'</div>'
-      +'<div style="flex:1;min-width:0;">'
-      +'<div style="font-size:14px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+d.name+'</div>'
-      +'<div style="font-size:11px;color:#64748b;">'+dateFrom+' – '+dateTo+'</div>'
-      +'</div>'
-      // trip counter
-      +'<div style="display:flex;gap:12px;flex-shrink:0;">'
-      +'<div style="text-align:center;"><div style="font-size:18px;font-weight:900;color:#fff;">'+d.doneTrips+'<span style="font-size:12px;color:#64748b;">/'+d.trips+'</span></div><div style="font-size:9px;color:#64748b;font-weight:700;">เที่ยว</div></div>'
-      +(truckCount?'<div style="text-align:center;"><div style="font-size:18px;font-weight:900;color:#fff;">'+truckCount+'</div><div style="font-size:9px;color:#64748b;font-weight:700;">คัน</div></div>':'')
-      +'</div>'
-      +'</div>'
+    var truckBadges=truckList.map(function(t){
+      return '🚛 '+t[0]+(t[1]>1?' ×'+t[1]:'');
+    }).join(', ')||'-';
 
-      // ── Metrics: 2 rows ──
-      +'<div style="padding:8px 12px 4px;border-bottom:1px solid #f1f5f9;">'
-      // row1: operational
-      +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-bottom:1px dashed #f1f5f9;margin-bottom:2px;">'
-      +mCell('fa-tachometer-alt','#2563eb','ระยะ(ไมล์)',fmt(d.totalMileage)+' กม.',dk,'mileage')
-      +mCell('fa-map-marker-alt','#7c3aed','ระยะ(GPS)',fmt(d.totalGpsDist,1)+' กม.',dk,'gps')
-      +mCell('fa-clock','#0891b2','เวลารวม',fmtTime(d.totalTimeSec),dk,'time')
-      +mCell('fa-gauge-high','#059669','ความเร็ว',avgSpeed!=='-'?avgSpeed+' กม/ชม':'-',dk,'speed')
-      +mCell('fa-clipboard-check','#be185d','ตรวจสภาพ',ins.total?ins.total+' ครั้ง':'-',dk,'inspect')
-      +'</div>'
-      // row2: incidents/finance
-      +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;">'
-      +mCell('fa-triangle-exclamation','#dc2626','พบปัญหา',ins.issue?ins.issue+' ครั้ง':'ปกติ',dk,'inspect_issue')
-      +mCell('fa-store-slash','#b45309','ไม่สำเร็จ',d.failedShops?d.failedShops+' ร้าน':'-',dk,'failed')
-      +mCell('fa-file-invoice','#7c3aed','ใบสั่ง',inc.tickets?inc.tickets+' ใบ':'-',dk,'ticket')
-      +mCell('fa-car-burst','#dc2626','อุบัติเหตุ',inc.accidents?inc.accidents+' ครั้ง':'-',dk,'accident')
-      +mCell('fa-screwdriver-wrench','#c2410c','ซ่อมรถ',d.maintTrips?d.maintTrips+' ครั้ง'+(d.maintCost?' / '+fmt(d.maintCost)+'฿':''):'-',dk,'maint')
-      +'</div>'
-      +'</div>'
-
-      // ── Footer: trucks + status badges ──
-      +'<div style="padding:6px 16px 8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;">'
-      +truckList.map(function(t){
-        return '<span style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;color:#334155;">🚛 '+t[0]+' <span style="color:#2563eb;">×'+t[1]+'</span></span>';
-      }).join('')
-      +(ins.total&&!ins.issue?'<span style="background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">✔ ตรวจปกติ '+ins.ok+'</span>':'')
-      +(ins.issue?'<span style="background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">⚠ พบปัญหา '+ins.issue+'</span>':'')
-      +(inc.fines?'<span style="background:#ede9fe;color:#6d28d9;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">🗒 ค่าปรับ '+fmt(inc.fines)+' ฿</span>':'')
-      +(inc.damage?'<span style="background:#fee2e2;color:#7f1d1d;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">💥 เสียหาย '+fmt(inc.damage)+' ฿</span>':'')
-      +(d.maintCost?'<span style="background:#ffedd5;color:#9a3412;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">🔧 ค่าซ่อม '+fmt(d.maintCost)+' ฿</span>':'')
-      +(!hasAlert?'<span style="background:#f0fdf4;color:#15803d;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;">✅ ไม่มีเหตุการณ์</span>':'')
-      +'</div>'
-
-      +'</div>';
+    return '<tr style="background:'+rowBg+';border-left:'+borderLeft+';transition:background .12s;" onmouseover="this.style.background=\''+(hasAlert?'#fff0f0':'#f8faff')+'\';" onmouseout="this.style.background=\''+rowBg+'\';">'
+      // ชื่อ
+      +'<td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;min-width:140px;">'
+      +'<div style="font-size:13px;font-weight:800;color:#0f172a;">'+d.name+'</div>'
+      +'<div style="font-size:10px;color:#94a3b8;margin-top:1px;">'+truckBadges+'</div>'
+      +'</td>'
+      +tCell(fmt(d.totalMileage)+' กม.',dk,'mileage')
+      +tCell(fmt(d.totalGpsDist,1)+' กม.',dk,'gps')
+      +tCell(fmtTime(d.totalTimeSec),dk,'time')
+      +tCell(avgSpeed!=='-'?avgSpeed+' กม/ชม':'-',dk,'speed')
+      +tCell(d.doneTrips+'/'+d.trips,dk,'trips','center',d.doneTrips<d.trips?'#b45309':'#15803d')
+      +tCell(truckCount||'-',dk,'trucks')
+      +tCell(ins.total?ins.total+' ครั้ง':'-',dk,'inspect')
+      +tCell(ins.issue?'<span style="color:#dc2626;">'+ins.issue+' ครั้ง</span>':'ปกติ',dk,'inspect_issue')
+      +tCell(d.failedShops?'<span style="color:#b45309;">'+d.failedShops+' ร้าน</span>':'-',dk,'failed')
+      +tCell(inc.tickets?inc.tickets+' ใบ':'-',dk,'ticket','center',inc.tickets?'#7c3aed':'#94a3b8')
+      +tCell(inc.fines?fmt(inc.fines)+' ฿':'-',dk,'fine','center',inc.fines?'#9d174d':'#94a3b8')
+      +tCell(inc.accidents?'<span style="color:#dc2626;">'+inc.accidents+'</span>':'-',dk,'accident')
+      +tCell(d.maintTrips||'-',dk,'maint','center',d.maintTrips?'#c2410c':'#94a3b8')
+      +tCell(d.maintCost?fmt(d.maintCost)+' ฿':'-',dk,'repair_cost','center',d.maintCost?'#92400e':'#94a3b8')
+      +'<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">'+statusBadge+'</td>'
+      +'</tr>';
   }).join('');
 
-  body.innerHTML=html;
+  body.innerHTML='<div style="overflow-x:auto;border-radius:14px;border:1px solid #e2e8f0;background:#fff;">'
+    +'<table style="width:100%;border-collapse:collapse;font-family:\'Sarabun\',sans-serif;">'
+    +thead+'<tbody>'+rows+'</tbody>'
+    +'</table></div>';
 };
 
 window.daShowDetail=function(driverKey,metric){
