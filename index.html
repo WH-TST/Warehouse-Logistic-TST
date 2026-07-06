@@ -10701,7 +10701,7 @@ window.loadAnalytics = async function loadAnalytics() {
                 .lte('physical_date', endVal)
                 .eq('reference', 'Production'),
             window._sb.from('onhand_fg')
-                .select('cw_physical_inventory,physical_inventory')
+                .select('item_number,cw_physical_inventory,physical_inventory')
         ]);
 
         if (txRes.error) throw txRes.error;
@@ -10726,22 +10726,35 @@ window.loadAnalytics = async function loadAnalytics() {
         const dailyInbound = inDates.map(function(d){ return dailyInMap[d].kg; });
 
         // current inventory จาก onhand_fg
-        let invKg = 0, invLines = 0;
+        let invKg = 0, invLines = 0, invSkuSet = new Set();
         (ohRes.data || []).forEach(function(r) {
-            invKg    += Math.abs(parseFloat(r.physical_inventory)    || 0);
-            invLines += Math.abs(parseFloat(r.cw_physical_inventory) || 0);
+            var kg = Math.abs(parseFloat(r.physical_inventory)    || 0);
+            var ln = Math.abs(parseFloat(r.cw_physical_inventory) || 0);
+            invKg    += kg;
+            invLines += ln;
+            if (r.item_number && (kg > 0 || ln > 0)) invSkuSet.add(r.item_number);
         });
+        var invSku = invSkuSet.size;
+        window._analyticsCurrentInvKg    = invKg;
+        window._analyticsCurrentInvLines = invLines;
 
-        // บันทึก snapshot วันนี้ (await ก่อนดึง)
+        // บันทึก snapshot วันนี้ — เก็บค่าสูงสุด (max) ของวัน
         var todaySnap = new Date().toISOString().slice(0,10);
-        await window._sb.from('inventory_daily_snapshot').upsert(
-            { snapshot_date: todaySnap, total_kg: invKg, total_lines: invLines },
-            { onConflict: 'snapshot_date' }
-        );
+        var {data: existToday} = await window._sb.from('inventory_daily_snapshot')
+            .select('total_kg,total_lines,total_sku')
+            .eq('snapshot_date', todaySnap)
+            .maybeSingle();
+        var snapPayload = {
+            snapshot_date: todaySnap,
+            total_kg:    Math.max(invKg,    (existToday?.total_kg    || 0)),
+            total_lines: Math.max(invLines, (existToday?.total_lines || 0)),
+            total_sku:   Math.max(invSku,   (existToday?.total_sku   || 0)),
+        };
+        await window._sb.from('inventory_daily_snapshot').upsert(snapPayload, { onConflict: 'snapshot_date' });
 
         // ดึง snapshot ย้อนหลังสำหรับ Inventory Trend
         var {data: snapRows} = await window._sb.from('inventory_daily_snapshot')
-            .select('snapshot_date,total_kg,total_lines')
+            .select('snapshot_date,total_kg,total_lines,total_sku')
             .gte('snapshot_date', startVal)
             .lte('snapshot_date', endVal)
             .order('snapshot_date');
