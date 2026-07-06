@@ -34093,30 +34093,39 @@ window.loadKpiWH = function loadKpiWH() {
             lsMap[key].mpiList.push(mpi);
         });
 
-        // ── คำนวณ median baseline จาก lsBaseRows (60 วันย้อนหลัง) ──
-        // แยกจาก lsRows เพื่อให้ข้อมูลวันอื่นในช่วงแสดงผลไม่กระทบ baseline
-        var allMpiKgA=[], allMpiKgB=[], allMpiKgC=[], allMpiKgD=[];
-        lsBaseRows.forEach(function(r) {
-            var qty = parseFloat(r.qty) || 0;
-            if (qty <= 0) return;
-            var wpu = (parseFloat(r.weight) || 0) / qty;
-            var mpi = (parseFloat(r.work_time_min) || 0) / qty;
-            if (wpu <= 0 || mpi <= 0) return;
-            var mpkg = mpi / wpu;
-            if      (wpu < 3000)   allMpiKgA.push(mpkg);
-            else if (wpu <= 8000)  allMpiKgB.push(mpkg);
-            else if (wpu <= 16000) allMpiKgC.push(mpkg);
-            else                   allMpiKgD.push(mpkg);
-        });
-
+        // ── คำนวณ median baseline ──
+        // ลำดับความสำคัญ: lsBaseRows (60 วันก่อน startStr) → fallback lsRows (ช่วงแสดงผล)
+        // lsRows ใช้เป็น fallback ได้เพราะตอนนี้ attribution ถูกต้องแล้ว (created_at ต่างวันไม่ปะปนกัน)
+        function buildMpiKgBuckets(rows) {
+            var a=[], b=[], c=[], d=[];
+            rows.forEach(function(r) {
+                var qty = parseFloat(r.qty) || 0;
+                if (qty <= 0) return;
+                var wpu = (parseFloat(r.weight) || 0) / qty;
+                var mpi = (parseFloat(r.work_time_min) || 0) / qty;
+                if (wpu <= 0 || mpi <= 0) return;
+                var mpkg = mpi / wpu;
+                if      (wpu < 3000)   a.push(mpkg);
+                else if (wpu <= 8000)  b.push(mpkg);
+                else if (wpu <= 16000) c.push(mpkg);
+                else                   d.push(mpkg);
+            });
+            return { a:a, b:b, c:c, d:d };
+        }
         function median(arr) {
             if (!arr.length) return null;
             var s = arr.slice().sort(function(a,b){return a-b;});
             var mid = Math.floor(s.length/2);
             return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
         }
-        var medA = median(allMpiKgA), medB = median(allMpiKgB), medC = median(allMpiKgC), medD = median(allMpiKgD);
-        var medAll = median(allMpiKgA.concat(allMpiKgB,allMpiKgC,allMpiKgD));
+
+        // ใช้ baseline ก่อน — ถ้าว่าง (ระบบเพิ่งเริ่ม) fallback มาใช้ช่วงแสดงผล
+        var bk = buildMpiKgBuckets(lsBaseRows);
+        var hasBaseline = (bk.a.length + bk.b.length + bk.c.length + bk.d.length) > 0;
+        if (!hasBaseline) bk = buildMpiKgBuckets(lsRows);
+
+        var medA = median(bk.a), medB = median(bk.b), medC = median(bk.c), medD = median(bk.d);
+        var medAll = median(bk.a.concat(bk.b, bk.c, bk.d));
         function groupMedian(wpu) {
             if (wpu < 3000)   return medA || medAll;
             if (wpu <= 8000)  return medB || medAll;
