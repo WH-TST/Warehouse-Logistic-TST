@@ -42255,13 +42255,39 @@ window.daLoad=async function(){
     .select('plan_id,driver_id,driver_transport,truck_plate,plan_date,status,job_type')
     .gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false);
   if(driverSel) planQ=planQ.or('driver_id.eq.'+driverSel+',driver_transport.ilike.%'+(_daDrivers.find(function(d){return d.username===driverSel;})||{}).driver_name+'%');
-  var [{data:plans},{data:logs},{data:inspects},{data:incidents},{data:maintPlans}]=await Promise.all([
+  var [{data:plans},{data:logs},{data:inspects},{data:incidents},{data:maintPlans},{data:shopVisits}]=await Promise.all([
     planQ,
     window._sb.from('trip_logs').select('*').gte('started_at',dateFrom+'T00:00:00').lte('started_at',dateTo+'T23:59:59'),
     window._sb.from('truck_inspections').select('*').gte('inspect_date',dateFrom).lte('inspect_date',dateTo),
     window._sb.from('driver_incidents').select('*').gte('incident_date',dateFrom).lte('incident_date',dateTo).then(function(r){return r;},function(){return{data:[]};}),
-    window._sb.from('logistic_plans').select('plan_id,driver_id,driver_transport,status').eq('job_type','maintenance_pm').gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false)
+    window._sb.from('logistic_plans').select('plan_id,driver_id,driver_transport,status').eq('job_type','maintenance_pm').gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false),
+    window._sb.from('shop_visits').select('plan_id,shop_seq,lat_arrival,lng_arrival,lat_depart,lng_depart').gte('arrived_at',dateFrom+'T00:00:00').lte('arrived_at',dateTo+'T23:59:59')
   ]);
+
+  // ── shop_visits grouped by plan_id (sorted by seq) ──────
+  var shopVisitMap={};
+  (shopVisits||[]).forEach(function(sv){
+    if(!shopVisitMap[sv.plan_id]) shopVisitMap[sv.plan_id]=[];
+    shopVisitMap[sv.plan_id].push(sv);
+  });
+  Object.keys(shopVisitMap).forEach(function(pid){
+    shopVisitMap[pid].sort(function(a,b){return a.shop_seq-b.shop_seq;});
+  });
+
+  // ── คำนวณ GPS ระยะทางจริง (waypoint-to-waypoint) ──────
+  function calcGpsDist(log){
+    var visits=shopVisitMap[log.plan_id]||[];
+    var pts=[];
+    if(log.lat_start&&log.lng_start) pts.push({lat:log.lat_start,lng:log.lng_start});
+    visits.forEach(function(sv){
+      if(sv.lat_arrival&&sv.lng_arrival) pts.push({lat:sv.lat_arrival,lng:sv.lng_arrival});
+      if(sv.lat_depart&&sv.lng_depart) pts.push({lat:sv.lat_depart,lng:sv.lng_depart});
+    });
+    if(log.lat_end&&log.lng_end) pts.push({lat:log.lat_end,lng:log.lng_end});
+    var dist=0;
+    for(var i=1;i<pts.length;i++) dist+=_daHaversine(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);
+    return dist;
+  }
 
   // ── เก็บ raw data ไว้สำหรับ drill-down ─────────────────
   var logMap={};(logs||[]).forEach(function(l){logMap[l.plan_id]=l;});
@@ -42294,7 +42320,7 @@ window.daLoad=async function(){
     var log=logMap[p.plan_id];
     if(log){
       if(log.mileage_start&&log.mileage_end) d.totalMileage+=Number(log.mileage_end)-Number(log.mileage_start);
-      if(log.lat_start&&log.lat_end) d.totalGpsDist+=_daHaversine(log.lat_start,log.lng_start,log.lat_end,log.lng_end);
+      d.totalGpsDist+=calcGpsDist(log);
       if(log.started_at&&log.completed_at){
         d.totalTimeSec+=(new Date(log.completed_at)-new Date(log.started_at))/1000;
       }
