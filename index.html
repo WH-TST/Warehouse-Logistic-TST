@@ -7891,13 +7891,27 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
 <!-- ============================================================ -->
-<div id="view-user-preview-content" class="hidden space-y-5">
-  <div class="rounded-2xl p-5 shadow-sm" style="background:#f0f4ff;border:1px solid #c7d2fe;border-left:4px solid #6366f1;">
-    <h2 class="text-lg font-black text-slate-800 flex items-center gap-2 mb-1"><i class="fas fa-eye text-indigo-600"></i> User Preview — มุมมองของผู้ใช้แต่ละคน</h2>
-    <p class="text-sm text-slate-500">เลือกผู้ใช้เพื่อดูว่าเขาเห็นเมนูและสิทธิ์อะไรบ้างในระบบ</p>
+<div id="view-user-preview-content" class="hidden" style="height:calc(100vh - 64px);display:flex;flex-direction:column;">
+  <!-- Top bar -->
+  <div style="padding:12px 20px;background:#1e293b;border-bottom:1px solid #334155;display:flex;align-items:center;gap:14px;flex-shrink:0;">
+    <i class="fas fa-eye" style="color:#818cf8;font-size:16px;"></i>
+    <span style="color:#fff;font-weight:800;font-size:14px;">User Preview</span>
+    <span style="color:#64748b;font-size:13px;">— เห็นหน้าจอเหมือนผู้ใช้คนนี้</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+      <span style="color:#94a3b8;font-size:12px;">เลือกผู้ใช้:</span>
+      <select id="up-user-select" onchange="upShowUser(this.value)" style="background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;outline:none;min-width:200px;">
+        <option value="">— เลือกผู้ใช้ —</option>
+      </select>
+    </div>
   </div>
-  <div id="up-content">
-    <div class="text-center py-10 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>
+  <!-- Preview frame -->
+  <div id="up-frame" style="flex:1;display:flex;overflow:hidden;">
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#475569;">
+      <div style="text-align:center;">
+        <i class="fas fa-user-circle" style="font-size:48px;color:#334155;margin-bottom:12px;display:block;"></i>
+        <div style="font-size:14px;font-weight:700;">เลือกผู้ใช้เพื่อดูมุมมอง</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -36094,64 +36108,174 @@ async function _applySession(){
 window.openUserMgmt=function(){if(!_cu||!_cu.isAdmin)return;switchView('user-accounts');uaSwitchTab('wms');};
 
 // ── User Preview (Admin only) ────────────────────────────────
-window.upLoad = async function() {
-  if(!_cu||!_cu.isAdmin) return;
-  var el = document.getElementById('up-content');
-  if(!el) return;
-  el.innerHTML = '<div class="text-center py-10 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+var _upUsers = []; // cache
 
-  // โหลด users จาก Supabase
-  var {data: users} = await window._sb.from('wms_users').select('username,name,role,is_admin,perms,active').order('name');
-  if(!users||!users.length){ el.innerHTML='<div class="text-center py-10 text-slate-400">ไม่พบผู้ใช้</div>'; return; }
+var UP_NAV = [
+  {id:'wm-manage',    label:'WH Management',    icon:'fa-layer-group'},
+  {id:'printtag',     label:'Print Tag FG',      icon:'fa-tags'},
+  {id:'analytics',    label:'Analytics',         icon:'fa-chart-line'},
+  {id:'whactivity',   label:'WH Activity Log',   icon:'fa-clipboard-list'},
+  {id:'products',     label:'Products',          icon:'fa-boxes'},
+  {id:'stock-count',  label:'Stock Count',       icon:'fa-clipboard-check'},
+  {id:'kpi-stock',    label:'KPI Inventory',     icon:'fa-boxes'},
+  {id:'logistic-plan',label:'วางแผนส่งมอบ',       icon:'fa-route'},
+  {id:'loading-order',label:'Loading Order',     icon:'fa-clipboard-list'},
+  {id:'loading',      label:'Loading (WH)',       icon:'fa-dolly'},
+  {id:'truck-dispatch',label:'จัดรถส่งสินค้า',   icon:'fa-truck'},
+  {id:'driver-monitor',label:'Driver Monitor',   icon:'fa-satellite-dish'},
+  {id:'driver-analytics',label:'Driver Analytics',icon:'fa-chart-line'},
+  {id:'kpi-wh',       label:'KPI WH & Logistic', icon:'fa-chart-bar'},
+  {id:'training',     label:'Training',          icon:'fa-chalkboard-teacher'},
+  {id:'user-accounts',label:'User Accounts',     icon:'fa-users-cog'},
+  {id:'audit-log',    label:'Audit Log',         icon:'fa-history'},
+  {id:'device-control',label:'Device Control',  icon:'fa-mobile-alt'},
+];
 
-  var html = '<div style="display:grid;gap:16px;">';
-  users.forEach(function(u) {
-    var isAdmin = u.is_admin||false;
-    var perms = u.perms||[];
-    var visibleViews = isAdmin ? WMS_VIEWS : WMS_VIEWS.filter(function(v){ return perms.indexOf(v.id)>=0; });
-    var hiddenViews  = isAdmin ? [] : WMS_VIEWS.filter(function(v){ return perms.indexOf(v.id)<0; });
-    var activeDot = u.active!==false
-      ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:5px;"></span>'
-      : '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#94a3b8;margin-right:5px;"></span>';
-
-    html += '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.05);">';
-    // Header
-    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">';
-    html += '<div style="width:40px;height:40px;border-radius:50%;background:'+(isAdmin?'#6366f1':'#0ea5e9')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
-          + '<span style="color:#fff;font-weight:900;font-size:16px;">'+(u.name||u.username||'?').charAt(0).toUpperCase()+'</span></div>';
-    html += '<div style="flex:1;min-width:0;">'
-          + '<div style="font-size:14px;font-weight:800;color:#0f172a;">'+activeDot+(u.name||u.username)+'</div>'
-          + '<div style="font-size:11px;color:#64748b;margin-top:1px;">'+(u.role||'—')+' &nbsp;·&nbsp; @'+(u.username||'')
-          + (isAdmin?' &nbsp;·&nbsp; <span style="background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;">Admin</span>':'')+'</div></div>';
-    html += '<div style="font-size:12px;font-weight:700;color:'+(isAdmin?'#6366f1':'#0ea5e9')+'">'+(isAdmin?'ทุกเมนู':visibleViews.length+'/'+WMS_VIEWS.length+' เมนู')+'</div>';
-    html += '</div>';
-
-    // Visible menus
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
-    visibleViews.forEach(function(v){
-      html += '<span style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;">'
-            + '<i class="fas fa-check" style="font-size:9px;"></i> '+v.label+'</span>';
-    });
-    hiddenViews.forEach(function(v){
-      html += '<span style="background:#f8fafc;color:#cbd5e1;border:1px solid #e2e8f0;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;">'
-            + '<i class="fas fa-minus" style="font-size:9px;"></i> '+v.label+'</span>';
-    });
-    html += '</div>';
-    html += '</div>';
-  });
-  html += '</div>';
-  el.innerHTML = html;
+var UP_TYPE_COLOR = {
+  wms:    '#0f172a',
+  wh:     '#064e3b',
+  driver: '#1e1b4b',
 };
 
-// ซ่อน nav-user-preview ถ้าไม่ใช่ admin (run หลัง login)
-(function _hideUpNav(){
-  var orig = window.applyUserSession;
-  window.applyUserSession = function(){
-    orig && orig.apply(this, arguments);
-    var btn = document.getElementById('nav-user-preview');
-    if(btn){ btn.style.display = (_cu&&_cu.isAdmin)?'':'none'; }
-  };
-})();
+window.upLoad = async function() {
+  if(!_cu||!_cu.isAdmin) return;
+
+  // โหลด WMS users
+  var [{data:wmsU}, {data:whU}, {data:drvU}] = await Promise.all([
+    window._sb.from('wms_users').select('username,name,role,is_admin,perms,active').order('name'),
+    window._sb.from('wh_staff').select('id,name,team,username').order('name'),
+    window._sb.from('driver_users').select('driver_id,driver_name,username').order('driver_name'),
+  ]);
+
+  _upUsers = [];
+  (wmsU||[]).forEach(function(u){ _upUsers.push({type:'wms',key:u.username,label:u.name||u.username,role:u.role||'WMS User',isAdmin:u.is_admin||false,perms:u.perms||[],active:u.active!==false,extra:u.is_admin?'Admin':''}); });
+  (whU||[]).forEach(function(u){  _upUsers.push({type:'wh', key:u.id,       label:u.name||u.username, role:'ทีมคลัง (Team '+u.team+')',  isAdmin:false, perms:[],      active:true, extra:'WH Staff'}); });
+  (drvU||[]).forEach(function(u){ _upUsers.push({type:'driver',key:u.driver_id,label:u.driver_name||u.username,role:'คนขับรถ',isAdmin:false,perms:[],active:true,extra:'Driver'}); });
+
+  var sel = document.getElementById('up-user-select');
+  if(!sel) return;
+  var optHtml = '<option value="">— เลือกผู้ใช้ —</option>';
+  optHtml += '<optgroup label="── WMS Users ──">';
+  _upUsers.filter(function(u){return u.type==='wms';}).forEach(function(u){
+    optHtml += '<option value="'+u.key+'">'+u.label+(u.isAdmin?' (Admin)':'')+'</option>';
+  });
+  optHtml += '</optgroup><optgroup label="── ทีมคลัง (WH Staff) ──">';
+  _upUsers.filter(function(u){return u.type==='wh';}).forEach(function(u){
+    optHtml += '<option value="'+u.key+'">'+u.label+'</option>';
+  });
+  optHtml += '</optgroup><optgroup label="── คนขับรถ ──">';
+  _upUsers.filter(function(u){return u.type==='driver';}).forEach(function(u){
+    optHtml += '<option value="'+u.key+'">'+u.label+'</option>';
+  });
+  optHtml += '</optgroup>';
+  sel.innerHTML = optHtml;
+};
+
+window.upShowUser = function(key) {
+  var frame = document.getElementById('up-frame');
+  if(!frame) return;
+  if(!key){ frame.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#475569;"><div style="text-align:center;"><i class="fas fa-user-circle" style="font-size:48px;color:#334155;margin-bottom:12px;display:block;"></i><div style="font-size:14px;font-weight:700;">เลือกผู้ใช้เพื่อดูมุมมอง</div></div></div>'; return; }
+
+  var u = _upUsers.find(function(x){ return x.key===key; });
+  if(!u) return;
+
+  // ── WH Staff view ─────────────────────────────────────────
+  if(u.type==='wh') {
+    frame.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;background:#0f172a;overflow:auto;">'
+      +'<div style="background:#1e293b;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #334155;">'
+      +'<div><div style="color:#fff;font-weight:900;font-size:16px;">'+u.label+'</div><div style="color:#34d399;font-size:12px;font-weight:700;">'+u.role+'</div></div>'
+      +'<div style="background:#064e3b;border:1px solid #065f46;border-radius:10px;padding:6px 14px;color:#34d399;font-size:12px;font-weight:700;"><i class="fas fa-warehouse" style="margin-right:6px;"></i>WH Staff Portal</div>'
+      +'</div>'
+      +'<div style="padding:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;">'
+      +_upWhCard('fa-dolly','Loading','รับงานโหลดสินค้า','#34d399','#064e3b')
+      +_upWhCard('fa-clipboard-check','Stock Count','ตรวจนับสินค้า','#60a5fa','#1e3a5f')
+      +_upWhCard('fa-box-open','จัดสินค้า','หยิบสินค้าตามใบสั่ง','#fbbf24','#4b3800')
+      +'</div>'
+      +'<div style="padding:0 24px;color:#475569;font-size:12px;font-weight:700;border-top:1px solid #1e293b;padding-top:16px;margin-top:auto;">ระบบจะแสดงเฉพาะงานที่ได้รับมอบหมายในทีม '+u.role+'</div>'
+      +'</div>';
+    return;
+  }
+
+  // ── Driver view ────────────────────────────────────────────
+  if(u.type==='driver') {
+    frame.innerHTML = '<div style="flex:1;display:flex;flex-direction:column;background:#0f172a;overflow:auto;">'
+      +'<div style="background:#1e1b4b;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #312e81;">'
+      +'<div><div style="color:#fff;font-weight:900;font-size:16px;">'+u.label+'</div><div style="color:#a5b4fc;font-size:12px;font-weight:700;">คนขับรถ</div></div>'
+      +'<div style="background:#1e1b4b;border:1px solid #4338ca;border-radius:10px;padding:6px 14px;color:#a5b4fc;font-size:12px;font-weight:700;"><i class="fas fa-truck" style="margin-right:6px;"></i>Driver App</div>'
+      +'</div>'
+      +'<div style="padding:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;">'
+      +_upWhCard('fa-route','แผนเส้นทาง','ดูแผนส่งสินค้าวันนี้','#a5b4fc','#1e1b4b')
+      +_upWhCard('fa-map-marker-alt','บันทึก GPS','เช็คอิน-เช็คเอาท์ร้าน','#34d399','#064e3b')
+      +_upWhCard('fa-car-crash','รายงานปัญหา','แจ้งอุบัติเหตุ/ปัญหา','#fca5a5','#7f1d1d')
+      +_upWhCard('fa-clipboard-list','ตรวจสภาพรถ','ก่อน-หลังเดินทาง','#fbbf24','#4b3800')
+      +'</div>'
+      +'<div style="padding:16px 24px;color:#475569;font-size:12px;font-weight:700;border-top:1px solid #1e293b;">เข้าถึงผ่าน Driver App — แสดงเฉพาะแผนที่ได้รับมอบหมาย</div>'
+      +'</div>';
+    return;
+  }
+
+  // ── WMS User view ──────────────────────────────────────────
+  var perms = u.perms||[];
+  var visibleNav = u.isAdmin ? UP_NAV : UP_NAV.filter(function(v){ return perms.indexOf(v.id)>=0; });
+  var firstView = visibleNav[0] || null;
+
+  var sidebarHtml = '<div style="width:200px;flex-shrink:0;background:#0f172a;display:flex;flex-direction:column;border-right:1px solid #1e293b;overflow-y:auto;">';
+  // sidebar header
+  sidebarHtml += '<div style="padding:16px 14px;border-bottom:1px solid #1e293b;">'
+    +'<div style="color:#fff;font-weight:900;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+u.label+'</div>'
+    +'<div style="color:#64748b;font-size:10px;margin-top:2px;">'+u.role+(u.isAdmin?' · Admin':'')+'</div>'
+    +'</div>';
+  // nav items
+  sidebarHtml += '<div style="padding:8px 8px;flex:1;">';
+  visibleNav.forEach(function(v, idx){
+    var active = idx===0;
+    sidebarHtml += '<div onclick="upSelectNav(\''+v.id+'\')" id="up-nav-'+v.id+'" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;margin-bottom:2px;cursor:pointer;background:'+(active?'rgba(99,102,241,.25)':'transparent')+';color:'+(active?'#a5b4fc':'#94a3b8')+';font-size:12px;font-weight:700;transition:background .12s;" onmouseover="this.style.background=\'rgba(99,102,241,.15)\';this.style.color=\'#c7d2fe\';" onmouseout="if(!this.classList.contains(\'up-active\')){this.style.background=\''+(active?'rgba(99,102,241,.25)':'transparent')+'\';this.style.color=\''+(active?'#a5b4fc':'#94a3b8')+'\';}"><i class="fas '+v.icon+'" style="width:14px;text-align:center;flex-shrink:0;"></i>'+v.label+'</div>';
+  });
+  sidebarHtml += '</div></div>';
+
+  // content area
+  var contentHtml = '<div id="up-content-area" style="flex:1;background:#f1f5f9;overflow:auto;padding:28px;">'
+    +(firstView
+      ? '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;text-align:center;max-width:500px;margin:auto;">'
+        +'<i class="fas '+firstView.icon+'" style="font-size:36px;color:#6366f1;margin-bottom:14px;display:block;"></i>'
+        +'<div style="font-size:20px;font-weight:900;color:#0f172a;margin-bottom:8px;">'+firstView.label+'</div>'
+        +'<div style="font-size:13px;color:#64748b;">หน้าแรกที่ผู้ใช้จะเห็นหลังจาก Login</div>'
+        +'<div style="margin-top:20px;padding:14px;background:#f8fafc;border-radius:10px;font-size:12px;color:#475569;font-weight:700;">'
+        +'<i class="fas fa-info-circle" style="color:#6366f1;margin-right:6px;"></i>'
+        +'เมนูที่เข้าถึงได้: '+visibleNav.length+' / '+UP_NAV.length+' เมนู'
+        +'</div></div>'
+      : '<div style="text-align:center;color:#94a3b8;padding:60px 0;"><i class="fas fa-ban" style="font-size:36px;margin-bottom:12px;display:block;"></i><div style="font-size:14px;font-weight:700;">ไม่มีสิทธิ์เข้าถึงเมนูใดเลย</div></div>')
+    +'</div>';
+
+  frame.innerHTML = '<div style="display:flex;height:100%;width:100%;">'+sidebarHtml+contentHtml+'</div>';
+};
+
+window.upSelectNav = function(id) {
+  var v = UP_NAV.find(function(x){return x.id===id;});
+  if(!v) return;
+  // update active state
+  UP_NAV.forEach(function(n){
+    var el=document.getElementById('up-nav-'+n.id);
+    if(!el)return;
+    var active=n.id===id;
+    el.style.background=active?'rgba(99,102,241,.25)':'transparent';
+    el.style.color=active?'#a5b4fc':'#94a3b8';
+  });
+  var ca=document.getElementById('up-content-area');
+  if(!ca)return;
+  ca.innerHTML='<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;text-align:center;max-width:500px;margin:auto;">'
+    +'<i class="fas '+v.icon+'" style="font-size:36px;color:#6366f1;margin-bottom:14px;display:block;"></i>'
+    +'<div style="font-size:20px;font-weight:900;color:#0f172a;margin-bottom:8px;">'+v.label+'</div>'
+    +'<div style="font-size:13px;color:#64748b;">ผู้ใช้สามารถเข้าถึงหน้านี้ได้</div>'
+    +'</div>';
+};
+
+function _upWhCard(icon, title, desc, color, bg) {
+  return '<div style="background:'+bg+';border:1px solid '+color+'33;border-radius:14px;padding:20px;text-align:center;cursor:pointer;">'
+    +'<i class="fas '+icon+'" style="font-size:28px;color:'+color+';margin-bottom:10px;display:block;"></i>'
+    +'<div style="color:#fff;font-weight:800;font-size:14px;margin-bottom:4px;">'+title+'</div>'
+    +'<div style="color:#94a3b8;font-size:11px;">'+desc+'</div></div>';
+}
 
 function _renderPermCb(id,checked){
   var el=document.getElementById(id);if(!el)return;var h='';
