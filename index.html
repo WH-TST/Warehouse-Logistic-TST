@@ -42364,7 +42364,7 @@ window.daLoad=async function(){
     : _daDrivers.filter(function(d){return !/ทดสอบ|test/i.test(d.driver_name||'');});
   _activeDrivers.forEach(function(dr){
     var key=dr.driver_id||dr.username;
-    driverMap[key]={name:dr.driver_name,driverKey:key,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0,failedShops:0,maintTrips:0,maintCost:0};
+    driverMap[key]={name:dr.driver_name,driverKey:key,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0,failedShops:0,maintTrips:0,maintCost:0,totalPoints:0};
   });
   var _driverIdSet=new Set(_activeDrivers.map(function(d){return d.driver_id||d.username;}));
   (plans||[]).forEach(function(p){
@@ -42372,10 +42372,11 @@ window.daLoad=async function(){
     // เฉพาะคนที่อยู่ใน driver_users เท่านั้น (ตัดรถจ้างออก)
     if(!_driverIdSet.has(key)) return;
     var dName=(_daDrivers.find(function(d){return d.driver_id===p.driver_id;})||{}).driver_name||key;
-    if(!driverMap[key]) driverMap[key]={name:dName,driverKey:key,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0,failedShops:0,maintTrips:0,maintCost:0};
+    if(!driverMap[key]) driverMap[key]={name:dName,driverKey:key,plans:[],trucks:{},totalMileage:0,totalGpsDist:0,totalTimeSec:0,trips:0,doneTrips:0,failedShops:0,maintTrips:0,maintCost:0,totalPoints:0};
     var d=driverMap[key];
     d.plans.push(p);
     if(p.job_type==='maintenance_pm') return; // นับซ่อมแยกใน maintTrips
+    d.totalPoints+=(shopVisitMap[p.plan_id]||[]).length;
     d.trips++;
     if(p.status==='completed'||p.status==='success') d.doneTrips++;
     else if(p.status==='failed'||p.status==='cancelled') d.failedShops++;
@@ -42448,6 +42449,7 @@ window.daLoad=async function(){
     +'<th style="'+COL_STYLE+'"><i class="fas fa-map-marker-alt" style="color:#7c3aed;"></i><br>ระยะ(GPS)</th>'
     +'<th style="'+COL_STYLE+'"><i class="fas fa-clock" style="color:#0891b2;"></i><br>เวลารวม</th>'
     +'<th style="'+COL_STYLE+'"><i class="fas fa-gauge-high" style="color:#059669;"></i><br>ความเร็ว</th>'
+    +'<th style="'+COL_STYLE+'"><i class="fas fa-map-pin" style="color:#8b5cf6;"></i><br>จุดส่ง</th>'
     +'<th style="'+COL_STYLE+'"><i class="fas fa-check-circle" style="color:#16a34a;"></i><br>เที่ยวสำเร็จ</th>'
     +'<th style="'+COL_STYLE+'"><i class="fas fa-truck" style="color:#d97706;"></i><br>รถ(คัน)</th>'
     +'<th style="'+COL_STYLE+'"><i class="fas fa-clipboard-check" style="color:#be185d;"></i><br>ตรวจสภาพ</th>'
@@ -42501,6 +42503,7 @@ window.daLoad=async function(){
       +tCell(fmt(d.totalGpsDist,1)+' กม.',dk,'gps')
       +tCell(fmtTime(d.totalTimeSec),dk,'time')
       +tCell(avgSpeed!=='-'?avgSpeed+' กม/ชม':'-',dk,'speed')
+      +tCell(d.totalPoints||'-',dk,'trips','center','#7c3aed')
       +tCell(d.doneTrips+'/'+d.trips,dk,'trips','center',d.doneTrips<d.trips?'#b45309':'#15803d')
       +tCell(truckCount||'-',dk,'trucks')
       +tCell(ins.total?ins.total+' ครั้ง':'-',dk,'inspect')
