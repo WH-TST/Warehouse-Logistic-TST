@@ -37500,27 +37500,15 @@ if (false)(function(){
   var _prodList = [];
   var _prodEditSku = null; // null = add mode, string = edit mode
 
-  var _fgSemiMap = {}; // sku → [semi_item, ...]
-
   async function prodLoad() {
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="10" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
-    var [prodRes, mapRes] = await Promise.all([
-      window._sb.from('products').select('sku,name,search_name,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w').order('sku'),
-      window._sb.from('semi_fg_mapping').select('semi_item,fg_code_1,fg_code_2')
-    ]);
-    if (prodRes.error) { tbody.innerHTML = '<tr><td colspan="15" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + prodRes.error.message + '</td></tr>'; return; }
-    _prodList = prodRes.data || [];
-    // build reverse map fg → [semi...]
-    _fgSemiMap = {};
-    (mapRes.data || []).forEach(function(m) {
-      [m.fg_code_1, m.fg_code_2].forEach(function(fg) {
-        if (!fg) return;
-        if (!_fgSemiMap[fg]) _fgSemiMap[fg] = [];
-        if (!_fgSemiMap[fg].includes(m.semi_item)) _fgSemiMap[fg].push(m.semi_item);
-      });
-    });
+    var { data, error } = await window._sb.from('products')
+      .select('sku,name,search_name,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w,semi_code')
+      .order('sku');
+    if (error) { tbody.innerHTML = '<tr><td colspan="15" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
+    _prodList = data || [];
     prodRender();
   }
 
@@ -37699,7 +37687,7 @@ if (false)(function(){
         + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.min_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.max_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center font-bold text-emerald-700 text-xs">' + (p.likely_w||'–') + '</td>'
-        + '<td class="px-4 py-2.5 text-center text-xs font-mono text-purple-700">' + ((_fgSemiMap[p.sku]||[]).join(', ')||'<span style="color:#cbd5e1">–</span>') + '</td>'
+        + '<td class="px-4 py-2.5 text-center text-xs font-mono text-purple-700">' + (p.semi_code ? esc(p.semi_code) : '<span style="color:#cbd5e1">–</span>') + '</td>'
         + '<td class="px-4 py-2.5 text-center">'
           + '<div class="flex justify-center gap-1">'
           + '<button onclick="prodOpenEdit(\'' + skuSafe + '\')" class="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>'
@@ -38287,21 +38275,16 @@ if (false)(function(){
         statusEl.textContent = '⏳ กำลัง upsert ' + rows.length + ' รายการ...';
         var now = new Date().toISOString();
         // group by semi_item — เพราะ semi_fg_mapping key คือ semi_item
-        var semiMap = {};
-        rows.forEach(function(r) {
-          var fg = String(r[0]).trim(), semi = String(r[1]).trim();
-          if (!semiMap[semi]) semiMap[semi] = [];
-          semiMap[semi].push(fg);
-        });
-        var upsertRows = Object.keys(semiMap).map(function(semi) {
-          var fgs = semiMap[semi];
-          return { semi_item: semi, fg_code_1: fgs[0]||'', fg_code_2: fgs[1]||'', updated_at: now };
-        });
-        var res = await window._sb.from('semi_fg_mapping').upsert(upsertRows, { onConflict: 'semi_item' });
-        if (res.error) throw res.error;
+        var ok = 0, fail = 0;
+        for (var i = 0; i < rows.length; i++) {
+          var fg = String(rows[i][0]).trim(), semi = String(rows[i][1]).trim();
+          if (!fg || !semi) continue;
+          var res = await window._sb.from('products').update({ semi_code: semi }).eq('sku', fg);
+          if (res.error) fail++; else ok++;
+        }
         input.value = '';
         statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-emerald-50 border-emerald-200 text-emerald-700';
-        statusEl.textContent = '✅ MAP SEMI สำเร็จ ' + upsertRows.length + ' SEMI items';
+        statusEl.textContent = '✅ MAP SEMI สำเร็จ ' + ok + ' รายการ' + (fail ? ' (ไม่พบ SKU ' + fail + ' รายการ)' : '');
         await prodLoad();
       } catch(err) {
         statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700';
