@@ -6514,6 +6514,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <input type="file" id="prod-import-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="prodImport(this)">
       </label>
       <button onclick="prodOpenUpdate()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-700 font-bold text-sm hover:bg-amber-100 transition"><i class="fas fa-upload"></i> Update จากไฟล์</button>
+      <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-50 border border-purple-300 text-purple-700 font-bold text-sm hover:bg-purple-100 transition cursor-pointer" title="นำเข้าไฟล์ Excel 2 คอลัมน์: รหัส FG, รหัส SEMI">
+        <i class="fas fa-link"></i> MAP SEMI
+        <input type="file" id="fg-semi-map-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="fgSemiMapImport(this)">
+      </label>
       <button onclick="prodOpenAdd()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500 transition shadow"><i class="fas fa-plus"></i> เพิ่มสินค้า</button>
     </div>
   </div>
@@ -37496,15 +37500,27 @@ if (false)(function(){
   var _prodList = [];
   var _prodEditSku = null; // null = add mode, string = edit mode
 
+  var _fgSemiMap = {}; // sku → [semi_item, ...]
+
   async function prodLoad() {
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="10" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
-    var { data, error } = await window._sb.from('products')
-      .select('sku,name,search_name,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w')
-      .order('sku');
-    if (error) { tbody.innerHTML = '<tr><td colspan="14" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
-    _prodList = data || [];
+    var [prodRes, mapRes] = await Promise.all([
+      window._sb.from('products').select('sku,name,search_name,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w').order('sku'),
+      window._sb.from('semi_fg_mapping').select('semi_item,fg_code_1,fg_code_2')
+    ]);
+    if (prodRes.error) { tbody.innerHTML = '<tr><td colspan="15" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + prodRes.error.message + '</td></tr>'; return; }
+    _prodList = prodRes.data || [];
+    // build reverse map fg → [semi...]
+    _fgSemiMap = {};
+    (mapRes.data || []).forEach(function(m) {
+      [m.fg_code_1, m.fg_code_2].forEach(function(fg) {
+        if (!fg) return;
+        if (!_fgSemiMap[fg]) _fgSemiMap[fg] = [];
+        if (!_fgSemiMap[fg].includes(m.semi_item)) _fgSemiMap[fg].push(m.semi_item);
+      });
+    });
     prodRender();
   }
 
@@ -37526,7 +37542,8 @@ if (false)(function(){
     { key:'bundle_height',    label:'สูง (cm)',    align:'center' },
     { key:'min_w',            label:'W Min',        align:'center' },
     { key:'max_w',            label:'W Max',        align:'center' },
-    { key:'likely_w',         label:'W(STD)',       align:'center' }
+    { key:'likely_w',         label:'W(STD)',       align:'center' },
+    { key:'semi_code',         label:'SEMI',         align:'center' }
   ];
 
   function prodRenderHead() {
@@ -37682,6 +37699,7 @@ if (false)(function(){
         + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.min_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.max_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center font-bold text-emerald-700 text-xs">' + (p.likely_w||'–') + '</td>'
+        + '<td class="px-4 py-2.5 text-center text-xs font-mono text-purple-700">' + ((_fgSemiMap[p.sku]||[]).join(', ')||'<span style="color:#cbd5e1">–</span>') + '</td>'
         + '<td class="px-4 py-2.5 text-center">'
           + '<div class="flex justify-center gap-1">'
           + '<button onclick="prodOpenEdit(\'' + skuSafe + '\')" class="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>'
@@ -38242,6 +38260,51 @@ if (false)(function(){
         _mapLoaded = true;
       } catch(err) {
         statusEl.className = 'mt-2 rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700';
+        statusEl.textContent = '❌ ' + (err.message || err);
+        input.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // ── MAP SEMI import (FG code | SEMI code) ─────────────────────
+  window.fgSemiMapImport = async function(input) {
+    var file = input.files[0]; if (!file) return;
+    var statusEl = document.getElementById('prod-import-status');
+    if (!statusEl) return;
+    statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-blue-50 border-blue-200 text-blue-700';
+    statusEl.textContent = '⏳ กำลังอ่านไฟล์...';
+    statusEl.classList.remove('hidden');
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var wb = XLSX.read(e.target.result, { type: 'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        // คอลัมน์ 0 = FG code, คอลัมน์ 1 = SEMI code
+        var rows = raw.slice(1).filter(function(r){ return r[0] && r[1]; });
+        if (!rows.length) throw new Error('ไม่พบข้อมูล (ต้องมีอย่างน้อย 2 คอลัมน์: รหัส FG, รหัส SEMI)');
+        statusEl.textContent = '⏳ กำลัง upsert ' + rows.length + ' รายการ...';
+        var now = new Date().toISOString();
+        // group by semi_item — เพราะ semi_fg_mapping key คือ semi_item
+        var semiMap = {};
+        rows.forEach(function(r) {
+          var fg = String(r[0]).trim(), semi = String(r[1]).trim();
+          if (!semiMap[semi]) semiMap[semi] = [];
+          semiMap[semi].push(fg);
+        });
+        var upsertRows = Object.keys(semiMap).map(function(semi) {
+          var fgs = semiMap[semi];
+          return { semi_item: semi, fg_code_1: fgs[0]||'', fg_code_2: fgs[1]||'', updated_at: now };
+        });
+        var res = await window._sb.from('semi_fg_mapping').upsert(upsertRows, { onConflict: 'semi_item' });
+        if (res.error) throw res.error;
+        input.value = '';
+        statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-emerald-50 border-emerald-200 text-emerald-700';
+        statusEl.textContent = '✅ MAP SEMI สำเร็จ ' + upsertRows.length + ' SEMI items';
+        await prodLoad();
+      } catch(err) {
+        statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700';
         statusEl.textContent = '❌ ' + (err.message || err);
         input.value = '';
       }
