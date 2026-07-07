@@ -13434,6 +13434,9 @@ window.switchView = function switchView(view) {
     }
     if (activeNav) activeNav.classList.add('active');
 
+    var _mh = document.getElementById('main-header');
+    if (_mh) _mh.style.display = (view === 'user-preview') ? 'none' : '';
+
     if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
     // Bring the active view into view, compensating for sticky header — works in Chrome + Safari
     requestAnimationFrame(function() {
@@ -36146,7 +36149,7 @@ window.upLoad = async function() {
   // โหลด WMS users
   var [{data:wmsU}, {data:whU}, {data:drvU}] = await Promise.all([
     window._sb.from('wms_users').select('username,name,role,is_admin,perms,active').order('name'),
-    window._sb.from('wh_staff').select('id,name,team,username').order('name'),
+    window._sb.from('logi_wh_staff').select('id,name,team,username').order('name'),
     window._sb.from('driver_users').select('driver_id,driver_name,username').order('driver_name'),
   ]);
 
