@@ -34159,7 +34159,7 @@ window.loadKpiWH = function loadKpiWH() {
         window._sb.from('wh_activity_log').select('type,date,min_per_item,weight_per_unit,truck_plate').gte('date', startStr).lte('date', endStr),
         // 2. kpi_wh_log → ข้อมูลที่เคยบันทึกไว้
         window._sb.from('kpi_wh_log').select('*').gte('cycle_date', startStr).lte('cycle_date', endStr),
-        // 3. production_plan_cache → planMinutes per date
+        // 3. production_plan_cache → planMinutes per date (auto-sync ถ้า cache เก่าหรือหายไป)
         (async function() {
             var planMap2 = {};
             var months = {};
@@ -34169,6 +34169,29 @@ window.loadKpiWH = function loadKpiWH() {
                 months[mk] = { y: cur0.getFullYear(), m: cur0.getMonth()+1 };
                 cur0.setDate(cur0.getDate()+1);
             }
+            // ── Auto-sync: ถ้าเดือนใดไม่มีหรือ sync เกิน 24 ชม. ให้ trigger GAS ใน background ──
+            (async function() {
+                var gasUrl = '';
+                try {
+                    var cfgRes = await window._sb.from('app_config').select('key,value').eq('key','gas_sync_url').maybeSingle();
+                    gasUrl = cfgRes?.data?.value || '';
+                } catch(e) {}
+                if (!gasUrl) return;
+                var now = Date.now();
+                var staleMonths = [];
+                await Promise.all(Object.keys(months).map(async function(mk) {
+                    try {
+                        var r = await window._sb.from('production_plan_cache').select('updated_at').eq('month_key', mk).maybeSingle();
+                        if (!r.data || (now - new Date(r.data.updated_at).getTime()) > 24*60*60*1000) {
+                            staleMonths.push(mk);
+                        }
+                    } catch(e) { staleMonths.push(mk); }
+                }));
+                if (staleMonths.length > 0) {
+                    showToast('🔄 Auto-sync แผนผลิต ' + staleMonths.join(', ') + '...');
+                    try { fetch(gasUrl + '?action=syncProductionPlan', { method:'GET', mode:'no-cors' }); } catch(e) {}
+                }
+            })();
             await Promise.all(Object.values(months).map(function(mo) {
                 return window._sbGetProductionPlan(mo.m, mo.y).then(function(res) {
                     if (!res || !res.machines) return;
