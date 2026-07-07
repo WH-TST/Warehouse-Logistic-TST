@@ -38275,12 +38275,15 @@ if (false)(function(){
         statusEl.textContent = '⏳ กำลัง upsert ' + rows.length + ' รายการ...';
         var now = new Date().toISOString();
         // group by semi_item — เพราะ semi_fg_mapping key คือ semi_item
-        var ok = 0, fail = 0;
-        for (var i = 0; i < rows.length; i++) {
-          var fg = String(rows[i][0]).trim(), semi = String(rows[i][1]).trim();
-          if (!fg || !semi) continue;
-          var res = await window._sb.from('products').update({ semi_code: semi }).eq('sku', fg);
-          if (res.error) fail++; else ok++;
+        var pairs = rows.map(function(r){ return { fg: String(r[0]).trim(), semi: String(r[1]).trim() }; }).filter(function(r){ return r.fg && r.semi; });
+        var CHUNK = 20, ok = 0, fail = 0;
+        for (var i = 0; i < pairs.length; i += CHUNK) {
+          var chunk = pairs.slice(i, i + CHUNK);
+          statusEl.textContent = '⏳ กำลัง update ' + Math.min(i + CHUNK, pairs.length) + '/' + pairs.length + ' รายการ...';
+          var results = await Promise.all(chunk.map(function(p){
+            return window._sb.from('products').update({ semi_code: p.semi }).eq('sku', p.fg);
+          }));
+          results.forEach(function(r){ if (r.error) fail++; else ok++; });
         }
         input.value = '';
         statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-emerald-50 border-emerald-200 text-emerald-700';
