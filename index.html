@@ -7891,7 +7891,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
 <!-- ============================================================ -->
-<div id="view-user-preview-content" class="hidden" style="height:calc(100vh - 64px);display:flex;flex-direction:column;">
+<div id="view-user-preview-content" class="hidden" style="height:calc(100vh - 64px);flex-direction:column;">
   <!-- Top bar -->
   <div style="padding:12px 20px;background:#1e293b;border-bottom:1px solid #334155;display:flex;align-items:center;gap:14px;flex-shrink:0;">
     <i class="fas fa-eye" style="color:#818cf8;font-size:16px;"></i>
@@ -13417,18 +13417,21 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control'];
-    
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview'];
+
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
         const navBtn = document.getElementById(`nav-${v}`);
-        if (content) content.classList.add('hidden');
+        if (content) { content.classList.add('hidden'); content.style.display = ''; }
         if (navBtn) navBtn.classList.remove('active');
     });
 
     const activeContent = document.getElementById(`view-${view}-content`);
     const activeNav = document.getElementById(`nav-${view}`);
-    if (activeContent) activeContent.classList.remove('hidden');
+    if (activeContent) {
+        activeContent.classList.remove('hidden');
+        if (view === 'user-preview') activeContent.style.display = 'flex';
+    }
     if (activeNav) activeNav.classList.add('active');
 
     if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
