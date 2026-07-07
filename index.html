@@ -2133,6 +2133,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <button onclick="switchView('device-control');setTimeout(dcLoadRules,100);" id="nav-device-control" class="nav-btn" data-tip="Device Control">
                 <span class="nav-icon"><i class="fas fa-mobile-alt"></i></span> Device Control
             </button>
+            <button onclick="switchView('user-preview');upLoad();" id="nav-user-preview" class="nav-btn" data-tip="User Preview">
+                <span class="nav-icon"><i class="fas fa-eye"></i></span> User Preview
+            </button>
 
         </nav>
 
@@ -7888,6 +7891,16 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 
 <!-- KPI WAREHOUSE & LOGISTIC (Supervisor)                        -->
 <!-- ============================================================ -->
+<div id="view-user-preview-content" class="hidden space-y-5">
+  <div class="rounded-2xl p-5 shadow-sm" style="background:#f0f4ff;border:1px solid #c7d2fe;border-left:4px solid #6366f1;">
+    <h2 class="text-lg font-black text-slate-800 flex items-center gap-2 mb-1"><i class="fas fa-eye text-indigo-600"></i> User Preview — มุมมองของผู้ใช้แต่ละคน</h2>
+    <p class="text-sm text-slate-500">เลือกผู้ใช้เพื่อดูว่าเขาเห็นเมนูและสิทธิ์อะไรบ้างในระบบ</p>
+  </div>
+  <div id="up-content">
+    <div class="text-center py-10 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>
+  </div>
+</div>
+
 <div id="view-device-control-content" class="hidden space-y-5">
   <div class="rounded-2xl p-5 shadow-sm" style="background:#f0f9ff;border:1px solid #bae6fd;border-left:4px solid #0284c7;">
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -36069,6 +36082,7 @@ async function _applySession(){
     if(mh2) mh2.classList.remove('hidden');
     if(wh2) wh2.classList.add('hidden');
     WMS_VIEWS.forEach(function(v){var btn=document.getElementById('nav-'+v.id);if(!btn)return;btn.style.display=(_cu.isAdmin||(_cu.perms||[]).indexOf(v.id)>=0)?'':'none';});
+    var upBtn=document.getElementById('nav-user-preview');if(upBtn)upBtn.style.display=_cu.isAdmin?'':'none';
     var fv=_cu.isAdmin?'input':((_cu.perms||[])[0]||'input');
     if(typeof switchView==='function')switchView(fv);
   }
@@ -36078,6 +36092,66 @@ async function _applySession(){
 }
 
 window.openUserMgmt=function(){if(!_cu||!_cu.isAdmin)return;switchView('user-accounts');uaSwitchTab('wms');};
+
+// ── User Preview (Admin only) ────────────────────────────────
+window.upLoad = async function() {
+  if(!_cu||!_cu.isAdmin) return;
+  var el = document.getElementById('up-content');
+  if(!el) return;
+  el.innerHTML = '<div class="text-center py-10 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+
+  // โหลด users จาก Supabase
+  var {data: users} = await window._sb.from('wms_users').select('username,name,role,is_admin,perms,active').order('name');
+  if(!users||!users.length){ el.innerHTML='<div class="text-center py-10 text-slate-400">ไม่พบผู้ใช้</div>'; return; }
+
+  var html = '<div style="display:grid;gap:16px;">';
+  users.forEach(function(u) {
+    var isAdmin = u.is_admin||false;
+    var perms = u.perms||[];
+    var visibleViews = isAdmin ? WMS_VIEWS : WMS_VIEWS.filter(function(v){ return perms.indexOf(v.id)>=0; });
+    var hiddenViews  = isAdmin ? [] : WMS_VIEWS.filter(function(v){ return perms.indexOf(v.id)<0; });
+    var activeDot = u.active!==false
+      ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:5px;"></span>'
+      : '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#94a3b8;margin-right:5px;"></span>';
+
+    html += '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.05);">';
+    // Header
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">';
+    html += '<div style="width:40px;height:40px;border-radius:50%;background:'+(isAdmin?'#6366f1':'#0ea5e9')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+          + '<span style="color:#fff;font-weight:900;font-size:16px;">'+(u.name||u.username||'?').charAt(0).toUpperCase()+'</span></div>';
+    html += '<div style="flex:1;min-width:0;">'
+          + '<div style="font-size:14px;font-weight:800;color:#0f172a;">'+activeDot+(u.name||u.username)+'</div>'
+          + '<div style="font-size:11px;color:#64748b;margin-top:1px;">'+(u.role||'—')+' &nbsp;·&nbsp; @'+(u.username||'')
+          + (isAdmin?' &nbsp;·&nbsp; <span style="background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;">Admin</span>':'')+'</div></div>';
+    html += '<div style="font-size:12px;font-weight:700;color:'+(isAdmin?'#6366f1':'#0ea5e9')+'">'+(isAdmin?'ทุกเมนู':visibleViews.length+'/'+WMS_VIEWS.length+' เมนู')+'</div>';
+    html += '</div>';
+
+    // Visible menus
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    visibleViews.forEach(function(v){
+      html += '<span style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;">'
+            + '<i class="fas fa-check" style="font-size:9px;"></i> '+v.label+'</span>';
+    });
+    hiddenViews.forEach(function(v){
+      html += '<span style="background:#f8fafc;color:#cbd5e1;border:1px solid #e2e8f0;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;">'
+            + '<i class="fas fa-minus" style="font-size:9px;"></i> '+v.label+'</span>';
+    });
+    html += '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+};
+
+// ซ่อน nav-user-preview ถ้าไม่ใช่ admin (run หลัง login)
+(function _hideUpNav(){
+  var orig = window.applyUserSession;
+  window.applyUserSession = function(){
+    orig && orig.apply(this, arguments);
+    var btn = document.getElementById('nav-user-preview');
+    if(btn){ btn.style.display = (_cu&&_cu.isAdmin)?'':'none'; }
+  };
+})();
 
 function _renderPermCb(id,checked){
   var el=document.getElementById(id);if(!el)return;var h='';
