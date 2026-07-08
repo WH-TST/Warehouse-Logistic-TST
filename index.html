@@ -45426,7 +45426,14 @@ window.whEvalCalcSalary = function() {
   var sBox=document.getElementById('whe-salary-box');
   var sShow=document.getElementById('whe-salary-show');
   var sCmt=document.getElementById('whe-salary-comment');
-  if(!role||!sal){ stEl.textContent='กรอกเงินเดือนและเลือกระดับ'; stEl.style.cssText=''; return; }
+  if(sShow) sShow.textContent = sal ? sal.toLocaleString()+' ฿' : '—';
+  if(!role||!sal){
+    stEl.textContent = !sal ? 'กรอกเงินเดือนเพื่อประเมิน' : 'เลือกระดับตำแหน่งก่อน';
+    stEl.style.cssText='';
+    if(sCmt){ sCmt.textContent = !sal ? 'ยังไม่ได้กรอกเงินเดือน' : 'เลือกระดับตำแหน่งเพื่อเทียบตลาด'; sCmt.style.color='#94a3b8'; }
+    if(sBox){ sBox.style.background='#f8fafc'; sBox.style.borderColor='#e2e8f0'; }
+    return;
+  }
   var r=SALARY_RANGE[role];
   var status,stColor,stBg,cmt;
   if(sal<r.fair){status='ต่ำกว่าตลาด';stColor='#b91c1c';stBg='#fef2f2';cmt='ตลาด '+r.market+' — ควรพิจารณาปรับ';}
