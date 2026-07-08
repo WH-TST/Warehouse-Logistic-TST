@@ -8046,6 +8046,42 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       </div>
     </div>
 
+    <!-- Manage custom skills -->
+    <div class="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm">
+      <div class="flex items-center justify-between cursor-pointer" onclick="whEvalToggleManage()">
+        <div class="text-xs font-black uppercase tracking-widest text-slate-400">จัดการหัวข้อประเมิน (เพิ่มเอง)</div>
+        <i id="whe-manage-chev" class="fas fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+      </div>
+      <div id="whe-manage-panel" class="hidden mt-4 space-y-3">
+        <div class="flex flex-wrap gap-2 items-end">
+          <div class="flex flex-col gap-1 flex-1 min-w-[220px]">
+            <label class="text-xs font-bold text-slate-500">หัวข้อประเมินใหม่</label>
+            <input type="text" id="whe-new-skill-label" placeholder="เช่น ใช้งานรถโฟล์คลิฟท์ได้"
+              class="rounded-xl border-2 border-slate-200 px-3 py-2 font-medium text-slate-700 text-sm outline-none focus:border-emerald-400">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-bold text-slate-500">ใช้กับระดับ</label>
+            <select id="whe-new-skill-role" class="rounded-xl border-2 border-slate-200 px-3 py-2 font-bold text-slate-700 text-sm outline-none focus:border-emerald-400">
+              <option value="both">ทั้งสองระดับ</option>
+              <option value="lead">⭐ Lead เท่านั้น</option>
+              <option value="checker">💪 Checker เท่านั้น</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-bold text-slate-500">น้ำหนัก</label>
+            <select id="whe-new-skill-weight" class="rounded-xl border-2 border-slate-200 px-3 py-2 font-bold text-slate-700 text-sm outline-none focus:border-emerald-400">
+              <option value="1">เสริม (1 คะแนน)</option>
+              <option value="2">หลัก (2 คะแนน)</option>
+            </select>
+          </div>
+          <button onclick="whEvalAddSkill()" class="px-4 py-2 rounded-xl font-black text-sm text-white" style="background:#059669;">
+            <i class="fas fa-plus mr-1"></i>เพิ่ม
+          </button>
+        </div>
+        <div id="whe-custom-list" class="space-y-1"></div>
+      </div>
+    </div>
+
     <!-- Skills checklist -->
     <div id="whe-skills-wrap" class="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm">
       <div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">แบบประเมินทักษะ</div>
@@ -45343,6 +45379,25 @@ function _wheCurrentScore() {
 }
 
 var _wheStaff = [];
+var _wheCustom = [];
+
+// custom skills ที่ใช้กับ role นี้ (รวม 'both')
+function _wheCustomFor(role){
+  return _wheCustom.filter(function(c){ return c.apply_role===role || c.apply_role==='both'; })
+    .map(function(c){ return {key:'c_'+c.id, label:c.label, tag:'เพิ่มเอง', weight:c.weight||1}; });
+}
+
+// รวมทักษะทั้งหมด (มาตรฐาน + custom) สำหรับ lookup ชื่อ
+function _wheAllItems(role){
+  var items = (WH_SKILLS[role]||[]).flatMap(function(g){return g.items;});
+  return items.concat(_wheCustomFor(role));
+}
+
+async function _wheLoadCustom(){
+  var res = await window._sb.from('wh_eval_skills').select('*').order('created_at');
+  if(!res.error) _wheCustom = res.data || [];
+  _wheRenderCustomList();
+}
 
 window.whEvalInit = async function() {
   var now = new Date();
@@ -45352,6 +45407,7 @@ window.whEvalInit = async function() {
   var mfEl = document.getElementById('wher-month-filter');
   if(mfEl && !mfEl.value) mfEl.value = m;
 
+  _wheLoadCustom();
   var res = await window._sb.from('logi_wh_staff').select('id,name,team').order('name');
   _wheStaff = res.data || [];
 
@@ -45363,6 +45419,49 @@ window.whEvalInit = async function() {
       return '<option value="'+s.id+'">'+s.name+(s.team?' ('+s.team+')':'')+'</option>';
     }).join('');
   });
+};
+
+// ── จัดการหัวข้อประเมิน custom ─────────────────────────
+window.whEvalToggleManage = function() {
+  var p = document.getElementById('whe-manage-panel');
+  var c = document.getElementById('whe-manage-chev');
+  p.classList.toggle('hidden');
+  c.style.transform = p.classList.contains('hidden') ? '' : 'rotate(180deg)';
+};
+
+function _wheRenderCustomList(){
+  var el = document.getElementById('whe-custom-list');
+  if(!el) return;
+  if(!_wheCustom.length){ el.innerHTML='<div class="text-xs text-slate-400 py-2">ยังไม่มีหัวข้อที่เพิ่มเอง</div>'; return; }
+  var roleTxt={both:'ทั้งสองระดับ',lead:'⭐ Lead',checker:'💪 Checker'};
+  el.innerHTML = _wheCustom.map(function(c){
+    return '<div class="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-slate-50 border border-slate-100">'
+      +'<span class="flex-1 text-sm text-slate-700">'+c.label+'</span>'
+      +'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">'+(roleTxt[c.apply_role]||c.apply_role)+'</span>'
+      +'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">'+(c.weight===2?'หลัก':'เสริม')+'</span>'
+      +'<button onclick="whEvalDelSkill(\''+c.id+'\')" class="text-xs px-2 py-1 rounded-lg text-red-500 hover:bg-red-50 transition-all" title="ลบหัวข้อนี้"><i class="fas fa-trash"></i></button>'
+      +'</div>';
+  }).join('');
+}
+
+window.whEvalAddSkill = async function() {
+  var label = document.getElementById('whe-new-skill-label').value.trim();
+  var role = document.getElementById('whe-new-skill-role').value;
+  var weight = parseInt(document.getElementById('whe-new-skill-weight').value)||1;
+  if(!label){ alert('กรอกหัวข้อประเมินก่อน'); return; }
+  var res = await window._sb.from('wh_eval_skills').insert({label:label, apply_role:role, weight:weight});
+  if(res.error){ alert('เพิ่มไม่สำเร็จ: '+res.error.message); return; }
+  document.getElementById('whe-new-skill-label').value='';
+  await _wheLoadCustom();
+  whEvalRenderSkills(); // refresh checklist ถ้าเปิดอยู่
+};
+
+window.whEvalDelSkill = async function(id) {
+  if(!confirm('ลบหัวข้อนี้?')) return;
+  var res = await window._sb.from('wh_eval_skills').delete().eq('id', id);
+  if(res.error){ alert('ลบไม่สำเร็จ: '+res.error.message); return; }
+  await _wheLoadCustom();
+  whEvalRenderSkills();
 };
 
 window.whEvalSwitchTab = function(tab) {
@@ -45398,9 +45497,13 @@ window.whEvalRenderSkills = function() {
     'ประสานงาน':'background:#ccfbf1;color:#0f4c44;',
     'B/C':'background:#ffedd5;color:#7c2d12;',
     'สถานการณ์':'background:#dbeafe;color:#1e40af;',
+    'เพิ่มเอง':'background:#fce7f3;color:#9d174d;',
   };
   var html='';
-  (WH_SKILLS[role]||[]).forEach(function(g){
+  var groups = (WH_SKILLS[role]||[]).slice();
+  var customs = _wheCustomFor(role);
+  if(customs.length) groups = groups.concat([{group:'หัวข้อเพิ่มเติม', items:customs}]);
+  groups.forEach(function(g){
     html+='<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest mb-3 pb-1 border-b border-slate-100" style="color:#059669;">'+g.group+'</div><div class="space-y-1">';
     g.items.forEach(function(it){
       var ts=tagStyles[it.tag]||'background:#f1f5f9;color:#475569;';
@@ -45551,7 +45654,7 @@ function _wheRenderMonth(rows){
   var html='<div class="space-y-4" id="whe-print-area">';
   rows.forEach(function(r){
     var sc=_wheGradeColor(r.score), skills=r.skills_done||[];
-    var allItems=(WH_SKILLS[r.role]||[]).flatMap(function(g){return g.items;});
+    var allItems=_wheAllItems(r.role);
     var sb=_wheSalBg[r.salary_status]||'#f8fafc', sf=_wheSalFg[r.salary_status]||'#94a3b8';
     html+='<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">'
       +'<div class="flex items-center justify-between px-5 py-3 border-b border-slate-100" style="background:#f8fafc;">'
@@ -45632,7 +45735,9 @@ window.whEvalPrintPerson = function(evalId) {
   if(!r){ alert('ไม่พบข้อมูล'); return; }
 
   var roleLabel = r.role==='lead' ? 'หัวหน้าทีมคลัง (Warehouse Lead)' : 'เช็คเกอร์ / เจ้าหน้าที่คลัง (Warehouse Checker)';
-  var groups = WH_SKILLS[r.role]||[];
+  var groups = (WH_SKILLS[r.role]||[]).slice();
+  var customs = _wheCustomFor(r.role);
+  if(customs.length) groups = groups.concat([{group:'หัวข้อเพิ่มเติม', items:customs}]);
   var doneKeys = r.skills_done||[];
   var grade = _wheGradeLabel(r.score);
   var gradeColor = _wheGradeColor(r.score);
