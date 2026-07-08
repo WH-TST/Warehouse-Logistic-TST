@@ -45975,19 +45975,41 @@ window.whEvalSendEmail = async function(evalId) {
 
     var canvas = await html2canvas(idoc.body, {scale:2, backgroundColor:'#ffffff', windowWidth:794});
 
-    // หั่นเป็นหน้า A4
+    // หั่นเป็นหน้า A4 — เลือกจุดตัดตรงแถวสีขาว ไม่ตัดกลางตัวหนังสือ
     var A4W = 595.28, A4H = 841.89;
     var pagePx = Math.floor(canvas.width * (A4H / A4W));
+    var cctx = canvas.getContext('2d');
+    function isBlankRow(yy){
+      var d = cctx.getImageData(0, yy, canvas.width, 1).data;
+      for(var i=0; i<d.length; i+=8){ // sample ทุก 2 พิกเซล
+        if(d[i]<245 || d[i+1]<245 || d[i+2]<245) return false;
+      }
+      return true;
+    }
     var pdfDoc = await PDFLib.PDFDocument.create();
-    for(var y=0; y<canvas.height; y+=pagePx){
-      var sliceH = Math.min(pagePx, canvas.height - y);
+    var y = 0;
+    while(y < canvas.height){
+      var end = Math.min(y + pagePx, canvas.height);
+      if(end < canvas.height){
+        // ถอยขึ้นหาแถวว่างใกล้สุด (ไม่เกิน 250px) เพื่อไม่ตัดกลางบรรทัด
+        for(var k=end; k>end-250 && k>y+200; k-=2){
+          if(isBlankRow(k)){ end = k; break; }
+        }
+      }
+      var sliceH = end - y;
+      // วาดลงหน้า A4 เต็ม (พื้นขาว) เพื่อให้ทุกหน้าขนาดเท่ากัน
       var pc = document.createElement('canvas');
-      pc.width = canvas.width; pc.height = sliceH;
-      pc.getContext('2d').drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      pc.width = canvas.width; pc.height = pagePx;
+      var pctx = pc.getContext('2d');
+      pctx.fillStyle = '#ffffff';
+      pctx.fillRect(0, 0, pc.width, pc.height);
+      pctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
       var png = await pdfDoc.embedPng(pc.toDataURL('image/png'));
       var page = pdfDoc.addPage([A4W, A4H]);
-      var h = A4H * (sliceH / pagePx);
-      page.drawImage(png, {x:0, y:A4H-h, width:A4W, height:h});
+      page.drawImage(png, {x:0, y:0, width:A4W, height:A4H});
+      // ข้ามแถวว่างต่อเนื่อง เพื่อไม่ให้หน้าใหม่เริ่มด้วยช่องโล่งยาว
+      y = end;
+      while(y < canvas.height && isBlankRow(y)) y += 2;
     }
 
     // ล็อกรหัสผ่านด้วยรหัสพนักงาน
