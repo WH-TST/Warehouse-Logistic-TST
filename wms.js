@@ -6,8 +6,60 @@
 var ALLOWED_ACTIONS = [
   'getProductionPlanByDate',
   'getProductionBlock',
-  'getProductSpec'
+  'getProductSpec',
+  'sendEvalEmail'
 ];
+
+// ── doPost — รับ payload ใหญ่ (เช่น PDF base64) ──────────────────────────────
+function doPost(e) {
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    var action  = payload.action;
+    var args    = payload.args || [];
+
+    if (ALLOWED_ACTIONS.indexOf(action) === -1) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Unknown action: ' + action }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var fn = this[action];
+    if (typeof fn !== 'function') {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, message: action + ' not defined' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var result = fn.apply(null, args);
+    return ContentService.createTextOutput(JSON.stringify(result !== undefined ? result : { success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  sendEvalEmail — ส่งผลประเมินเป็นไฟล์ PDF เข้าเมลพนักงาน
+//  p: { to, subject, body, filename, pdfBase64 }
+// ════════════════════════════════════════════════════════════════
+function sendEvalEmail(p) {
+  if (!p || !p.to)        return { success: false, message: 'ไม่มีอีเมลปลายทาง' };
+  if (!p.pdfBase64)       return { success: false, message: 'ไม่มีไฟล์ PDF' };
+  try {
+    var blob = Utilities.newBlob(
+      Utilities.base64Decode(p.pdfBase64),
+      'application/pdf',
+      p.filename || 'evaluation.pdf'
+    );
+    MailApp.sendEmail({
+      to: p.to,
+      subject: p.subject || 'ผลการประเมินทักษะ',
+      htmlBody: p.body || 'เอกสารผลการประเมินตามแนบ (เปิดไฟล์ด้วยรหัสพนักงานของคุณ)',
+      attachments: [blob],
+      name: 'WMS — ฝ่ายคลังสินค้าและจัดส่ง'
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.toString() };
+  }
+}
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
 function doGet(e) {

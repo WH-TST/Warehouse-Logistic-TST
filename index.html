@@ -8082,6 +8082,18 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       </div>
     </div>
 
+    <!-- Staff email settings -->
+    <div class="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm">
+      <div class="flex items-center justify-between cursor-pointer" onclick="whEvalToggleEmailPanel()">
+        <div class="text-xs font-black uppercase tracking-widest text-slate-400"><i class="fas fa-envelope mr-1"></i>ตั้งค่าอีเมล / รหัสพนักงาน (สำหรับส่งผลประเมิน)</div>
+        <i id="whe-email-chev" class="fas fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+      </div>
+      <div id="whe-email-panel" class="hidden mt-4">
+        <div class="text-xs text-slate-400 mb-2">รหัสพนักงานใช้เป็นรหัสผ่านเปิดไฟล์ PDF</div>
+        <div id="whe-email-list" class="space-y-1.5"></div>
+      </div>
+    </div>
+
     <!-- Skills checklist -->
     <div id="whe-skills-wrap" class="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm">
       <div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">แบบประเมินทักษะ</div>
@@ -45408,8 +45420,10 @@ window.whEvalInit = async function() {
   if(mfEl && !mfEl.value) mfEl.value = m;
 
   _wheLoadCustom();
-  var res = await window._sb.from('logi_wh_staff').select('id,name,team').order('name');
+  var res = await window._sb.from('logi_wh_staff').select('id,name,team,email,emp_code').order('name');
+  if(res.error) res = await window._sb.from('logi_wh_staff').select('id,name,team').order('name'); // ยังไม่ได้เพิ่มคอลัมน์
   _wheStaff = res.data || [];
+  _wheRenderEmailList();
 
   ['whe-staff-sel','wher-staff-filter'].forEach(function(id){
     var el = document.getElementById(id);
@@ -45688,6 +45702,7 @@ function _wheRenderMonth(rows){
       +'<span class="text-sm font-black" style="color:'+sc+'">'+r.score+'%</span>'
       +'<span class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:'+sc+'18;color:'+sc+'">'+_wheGradeLabel(r.score)+'</span>'
       +'<button onclick="whEvalPrintPerson(\''+r.id+'\')" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:border-emerald-500 hover:text-emerald-700 transition-all" title="พิมพ์เอกสารประเมินรายบุคคล"><i class="fas fa-print mr-1"></i>พิมพ์</button>'
+      +'<button onclick="whEvalSendEmail(\''+r.id+'\')" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 transition-all" title="ส่ง PDF เข้าเมลพนักงาน (ล็อกรหัสด้วยรหัสพนักงาน)"><i class="fas fa-paper-plane mr-1"></i>ส่งเมล</button>'
       +'</div></div>'
       +'<div class="px-5 py-4 flex flex-wrap gap-4">'
       +'<div style="min-width:160px;">'
@@ -45750,11 +45765,8 @@ function _wheRenderQuarter(rows){
   return html+'</div>';
 }
 
-// ── พิมพ์เอกสารประเมินรายบุคคล ────────────────────────
-window.whEvalPrintPerson = function(evalId) {
-  var r = _wheLastRows.find(function(x){ return String(x.id)===String(evalId); });
-  if(!r){ alert('ไม่พบข้อมูล'); return; }
-
+// ── สร้าง HTML เอกสารประเมินรายบุคคล (ใช้ทั้งพิมพ์และส่งเมล) ──
+function _wheBuildDocHTML(r) {
   var roleLabel = r.role==='lead' ? 'หัวหน้าทีมคลัง (Warehouse Lead)' : 'เช็คเกอร์ / เจ้าหน้าที่คลัง (Warehouse Checker)';
   var groups = (WH_SKILLS[r.role]||[]).slice();
   var customs = _wheCustomFor(r.role);
@@ -45791,8 +45803,7 @@ window.whEvalPrintPerson = function(evalId) {
     ? '<ol>'+devItems.map(function(it){ return '<li>'+it.label+'</li>'; }).join('')+'</ol>'
     : '<div class="allpass">— ผ่านครบทุกทักษะ ไม่มีหัวข้อที่ต้องพัฒนาเพิ่มเติม —</div>';
 
-  var w = window.open('','_blank','width=860,height=1000');
-  w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">'
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">'
     +'<title>แบบประเมิน — '+r.staff_name+'</title>'
     +'<style>'
     +'@page{size:A4;margin:18mm 16mm;}'
@@ -45875,9 +45886,144 @@ window.whEvalPrintPerson = function(evalId) {
     +'<div class="sig"><div class="line"></div>ลงชื่อหัวหน้าแผนกผู้ประเมิน<br>( ........................................ )</div>'
     +'</div>'
 
-    +'</body></html>');
+    +'</body></html>';
+}
+
+window.whEvalPrintPerson = function(evalId) {
+  var r = _wheLastRows.find(function(x){ return String(x.id)===String(evalId); });
+  if(!r){ alert('ไม่พบข้อมูล'); return; }
+  var w = window.open('','_blank','width=860,height=1000');
+  w.document.write(_wheBuildDocHTML(r));
   w.document.close();
   w.focus();
+};
+
+// ── ตั้งค่าอีเมล/รหัสพนักงาน ───────────────────────────
+window.whEvalToggleEmailPanel = function() {
+  var p = document.getElementById('whe-email-panel');
+  var c = document.getElementById('whe-email-chev');
+  p.classList.toggle('hidden');
+  c.style.transform = p.classList.contains('hidden') ? '' : 'rotate(180deg)';
+};
+
+function _wheRenderEmailList(){
+  var el = document.getElementById('whe-email-list');
+  if(!el) return;
+  el.innerHTML = _wheStaff.map(function(s){
+    return '<div class="flex flex-wrap items-center gap-2 py-1.5 px-3 rounded-lg bg-slate-50 border border-slate-100">'
+      +'<span class="font-bold text-sm text-slate-700 min-w-[180px]">'+s.name+'</span>'
+      +'<input type="email" id="whe-em-'+s.id+'" value="'+(s.email||'')+'" placeholder="อีเมล Gmail" class="flex-1 min-w-[200px] rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-emerald-400">'
+      +'<input type="text" id="whe-ec-'+s.id+'" value="'+(s.emp_code||'')+'" placeholder="รหัสพนักงาน" class="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-mono outline-none focus:border-emerald-400">'
+      +'<button onclick="whEvalSaveStaffEmail(\''+s.id+'\')" class="text-xs font-bold px-3 py-1.5 rounded-lg text-white" style="background:#059669;">บันทึก</button>'
+      +'</div>';
+  }).join('');
+}
+
+window.whEvalSaveStaffEmail = async function(id) {
+  var email = document.getElementById('whe-em-'+id).value.trim();
+  var code = document.getElementById('whe-ec-'+id).value.trim();
+  var res = await window._sb.from('logi_wh_staff').update({email:email||null, emp_code:code||null}).eq('id', id);
+  if(res.error){ alert('บันทึกไม่สำเร็จ: '+res.error.message); return; }
+  var s = _wheStaff.find(function(x){ return String(x.id)===String(id); });
+  if(s){ s.email=email; s.emp_code=code; }
+  alert('✅ บันทึกแล้ว');
+};
+
+// ── ส่งผลประเมินเข้าเมลเป็น PDF (ล็อกรหัสด้วยรหัสพนักงาน) ──
+function _wheLoadLibs(){
+  if(window.__wheLibsP) return window.__wheLibsP;
+  window.__wheLibsP = new Promise(function(resolve, reject){
+    var need = [];
+    if(!window.html2canvas) need.push('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+    if(!(window.PDFLib && window.PDFLib.PDFDocument)) need.push('https://cdn.jsdelivr.net/npm/@cantoo/pdf-lib@2.5.2/dist/pdf-lib.min.js');
+    if(!need.length) return resolve();
+    var left = need.length;
+    need.forEach(function(src){
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function(){ if(--left===0) resolve(); };
+      s.onerror = function(){ window.__wheLibsP=null; reject(new Error('โหลดไลบรารีไม่สำเร็จ')); };
+      document.head.appendChild(s);
+    });
+  });
+  return window.__wheLibsP;
+}
+
+window.whEvalSendEmail = async function(evalId) {
+  var r = _wheLastRows.find(function(x){ return String(x.id)===String(evalId); });
+  if(!r){ alert('ไม่พบข้อมูล'); return; }
+  var staff = _wheStaff.find(function(s){ return String(s.id)===String(r.staff_id); });
+  if(!staff || !staff.email){ alert('ยังไม่ได้ตั้งค่าอีเมลของ '+r.staff_name+'\nไปที่แผง "ตั้งค่าอีเมล / รหัสพนักงาน" ก่อน'); return; }
+  if(!staff.emp_code){ alert('ยังไม่ได้ตั้งรหัสพนักงานของ '+r.staff_name+' (ใช้เป็นรหัสเปิดไฟล์ PDF)'); return; }
+  if(!window._WMS_GAS_URL){ alert('ไม่พบ GAS URL — ตั้งค่าในระบบก่อน'); return; }
+  if(!confirm('ส่งผลประเมิน '+r.eval_month+' ของ '+r.staff_name+'\nไปที่ '+staff.email+' ?')) return;
+
+  var toast = function(m){ if(typeof showToast==='function') showToast(m); };
+  toast('⏳ กำลังสร้าง PDF...');
+  var iframe = null;
+  try {
+    await _wheLoadLibs();
+
+    // render เอกสารใน iframe ซ่อน
+    iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;height:1200px;border:0;';
+    document.body.appendChild(iframe);
+    var idoc = iframe.contentDocument;
+    idoc.open(); idoc.write(_wheBuildDocHTML(r)); idoc.close();
+    await new Promise(function(res){ setTimeout(res, 600); }); // รอ font/render
+    var pb = idoc.querySelector('.print-btn'); if(pb) pb.style.display='none';
+
+    var canvas = await html2canvas(idoc.body, {scale:2, backgroundColor:'#ffffff', windowWidth:794});
+
+    // หั่นเป็นหน้า A4
+    var A4W = 595.28, A4H = 841.89;
+    var pagePx = Math.floor(canvas.width * (A4H / A4W));
+    var pdfDoc = await PDFLib.PDFDocument.create();
+    for(var y=0; y<canvas.height; y+=pagePx){
+      var sliceH = Math.min(pagePx, canvas.height - y);
+      var pc = document.createElement('canvas');
+      pc.width = canvas.width; pc.height = sliceH;
+      pc.getContext('2d').drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      var png = await pdfDoc.embedPng(pc.toDataURL('image/png'));
+      var page = pdfDoc.addPage([A4W, A4H]);
+      var h = A4H * (sliceH / pagePx);
+      page.drawImage(png, {x:0, y:A4H-h, width:A4W, height:h});
+    }
+
+    // ล็อกรหัสผ่านด้วยรหัสพนักงาน
+    if(typeof pdfDoc.encrypt === 'function'){
+      await pdfDoc.encrypt({ userPassword: String(staff.emp_code), ownerPassword: String(staff.emp_code) });
+    }
+    var bytes = await pdfDoc.save({ useObjectStreams: false });
+
+    // แปลง base64 แบบ chunk
+    var b64 = '', chunk = 0x8000;
+    for(var i=0; i<bytes.length; i+=chunk){
+      b64 += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk));
+    }
+    b64 = btoa(b64);
+
+    toast('📤 กำลังส่งเมล...');
+    var resp = await fetch(window._WMS_GAS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'sendEvalEmail', args: [{
+        to: staff.email,
+        subject: 'ผลการประเมินทักษะ ประจำเดือน '+r.eval_month+' — '+r.staff_name,
+        body: 'เรียน '+r.staff_name+'<br><br>แนบผลการประเมินทักษะประจำเดือน '+r.eval_month
+          +'<br><b>เปิดไฟล์ PDF ด้วยรหัสพนักงานของคุณ</b><br><br>ฝ่ายคลังสินค้าและจัดส่ง',
+        filename: 'eval_'+r.eval_month+'_'+r.staff_name.replace(/[^a-zA-Z0-9ก-๙]/g,'_')+'.pdf',
+        pdfBase64: b64
+      }]})
+    });
+    var out = await resp.json();
+    if(out && out.success){ alert('✅ ส่งเมลสำเร็จ → '+staff.email); }
+    else { alert('ส่งไม่สำเร็จ: '+((out&&out.message)||'unknown')); }
+  } catch(err) {
+    alert('เกิดข้อผิดพลาด: '+err.message);
+  } finally {
+    if(iframe) iframe.remove();
+  }
 };
 
 window.whEvalPrint = function() {
