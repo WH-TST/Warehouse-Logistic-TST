@@ -2115,6 +2115,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                 <i class="fas fa-user-tie" style="color:#475569;font-size:8px;"></i>&nbsp;SUPERVISOR
                 <span class="line"></span>
             </div>
+            <button onclick="switchView('wh-eval');whEvalInit();" id="nav-wh-eval" class="nav-btn" data-tip="ประเมินทีมคลัง">
+                <span class="nav-icon"><i class="fas fa-clipboard-check"></i></span> ประเมินทีม
+            </button>
+            <div style="height:1px;background:rgba(255,255,255,0.08);margin:6px 0;"></div>
             <button onclick="switchView('training');setTimeout(trLoadSessions,100);" id="nav-training" class="nav-btn" data-tip="Training">
                 <span class="nav-icon"><i class="fas fa-chalkboard-teacher"></i></span> Training
             </button>
@@ -7975,6 +7979,161 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
   </div>
 </div>
 
+<div id="view-wh-eval-content" class="hidden space-y-5">
+
+  <!-- Header -->
+  <div class="rounded-2xl p-5 shadow-sm" style="background:#f0faf4;border:1px solid #6ee7b7;border-left:4px solid #059669;">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg" style="background:linear-gradient(135deg,#065f46,#059669);">
+          <i class="fas fa-clipboard-check"></i>
+        </div>
+        <div>
+          <h2 class="text-2xl font-black tracking-tight text-slate-800">ประเมินทักษะทีมคลังสินค้า</h2>
+          <p class="text-xs font-bold uppercase tracking-widest text-emerald-600 mt-0.5">Warehouse Staff Skill Evaluation</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="whEvalSwitchTab('form')" id="whe-tab-form" class="px-4 py-2 rounded-xl font-black text-sm bg-emerald-600 text-white border-2 border-emerald-600 transition-all">
+          <i class="fas fa-pen mr-1"></i>ประเมิน
+        </button>
+        <button onclick="whEvalSwitchTab('results')" id="whe-tab-results" class="px-4 py-2 rounded-xl font-black text-sm bg-white text-slate-500 border-2 border-slate-200 hover:border-emerald-400 hover:text-emerald-600 transition-all">
+          <i class="fas fa-chart-bar mr-1"></i>ผลการประเมิน
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: FORM -->
+  <div id="whe-panel-form" class="space-y-5">
+
+    <!-- Staff & Role selector -->
+    <div class="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm space-y-4">
+      <div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">ข้อมูลพนักงาน</div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">ชื่อพนักงาน</label>
+          <select id="whe-staff-sel" class="rounded-xl border-2 border-slate-200 px-3 py-2.5 font-bold text-slate-700 focus:border-emerald-400 outline-none text-sm" onchange="whEvalOnStaffChange()">
+            <option value="">— เลือกพนักงาน —</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">ระดับตำแหน่ง</label>
+          <select id="whe-role-sel" class="rounded-xl border-2 border-slate-200 px-3 py-2.5 font-bold text-slate-700 focus:border-emerald-400 outline-none text-sm" onchange="whEvalRenderSkills()">
+            <option value="">— เลือกระดับ —</option>
+            <option value="lead">⭐ Warehouse Lead (หัวหน้าทีม)</option>
+            <option value="checker">💪 Warehouse Checker (เช็คเกอร์)</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">เดือนที่ประเมิน</label>
+          <input type="month" id="whe-month" class="rounded-xl border-2 border-slate-200 px-3 py-2.5 font-bold text-slate-700 focus:border-emerald-400 outline-none text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">เงินเดือนปัจจุบัน (บาท)</label>
+          <input type="number" id="whe-salary" placeholder="เช่น 13500" min="0" step="100"
+            class="rounded-xl border-2 border-slate-200 px-3 py-2.5 font-bold text-slate-700 focus:border-emerald-400 outline-none text-sm"
+            oninput="whEvalCalcSalary()">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">สถานะเงินเดือน</label>
+          <div id="whe-salary-status" class="rounded-xl border-2 border-slate-100 bg-slate-50 px-3 py-2.5 font-bold text-slate-400 text-sm min-h-[42px] flex items-center">
+            กรอกเงินเดือนเพื่อประเมิน
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills checklist -->
+    <div id="whe-skills-wrap" class="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm">
+      <div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">แบบประเมินทักษะ</div>
+      <div id="whe-skills-body" class="text-sm text-slate-400 text-center py-8">
+        เลือกพนักงานและระดับตำแหน่งเพื่อแสดงแบบประเมิน
+      </div>
+    </div>
+
+    <!-- Score summary -->
+    <div id="whe-score-wrap" class="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm hidden">
+      <div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">สรุปผลการประเมิน</div>
+      <div class="flex flex-col sm:flex-row gap-4 items-stretch">
+        <div class="flex-1 rounded-xl p-4 text-center" style="background:#f0fdf4;border:1.5px solid #6ee7b7;">
+          <div class="text-3xl font-black text-emerald-700" id="whe-score-pct">—</div>
+          <div class="text-xs font-bold text-emerald-600 uppercase tracking-wider mt-1">คะแนนทักษะ</div>
+          <div class="text-xs text-slate-500 mt-1" id="whe-score-detail"></div>
+        </div>
+        <div class="flex-1 rounded-xl p-4 text-center" id="whe-salary-box" style="background:#f8fafc;border:1.5px solid #e2e8f0;">
+          <div class="text-3xl font-black text-slate-700" id="whe-salary-show">—</div>
+          <div class="text-xs font-bold uppercase tracking-wider mt-1 text-slate-500">เงินเดือน</div>
+          <div class="text-xs mt-1" id="whe-salary-comment"></div>
+        </div>
+        <div class="flex-1 rounded-xl p-4 text-center" id="whe-grade-box" style="background:#f8fafc;border:1.5px solid #e2e8f0;">
+          <div class="text-2xl font-black" id="whe-grade-label">—</div>
+          <div class="text-xs font-bold uppercase tracking-wider mt-1 text-slate-500">ระดับผล</div>
+          <div class="text-xs mt-1 text-slate-400" id="whe-grade-sub"></div>
+        </div>
+      </div>
+      <div class="mt-4 flex flex-col gap-1">
+        <label class="text-xs font-bold text-slate-500">หมายเหตุ / ข้อเสนอแนะ (ไม่บังคับ)</label>
+        <textarea id="whe-notes" rows="2" placeholder="เพิ่มหมายเหตุ..."
+          class="rounded-xl border-2 border-slate-200 px-3 py-2 font-medium text-slate-700 focus:border-emerald-400 outline-none text-sm resize-none"></textarea>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-3 justify-end">
+      <button onclick="whEvalReset()" class="px-5 py-2.5 rounded-xl font-black text-sm border-2 border-slate-200 text-slate-500 hover:border-slate-400 transition-all">
+        <i class="fas fa-undo mr-1"></i>ล้างฟอร์ม
+      </button>
+      <button onclick="whEvalSave()" id="whe-save-btn"
+        class="px-6 py-2.5 rounded-xl font-black text-sm text-white shadow transition-all disabled:opacity-40"
+        style="background:#059669;" disabled>
+        <i class="fas fa-save mr-1"></i>ประเมินและบันทึก
+      </button>
+    </div>
+
+  </div><!-- /panel-form -->
+
+  <!-- TAB: RESULTS -->
+  <div id="whe-panel-results" class="hidden space-y-5">
+
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-3 items-end bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-bold text-slate-500">เดือน</label>
+        <input type="month" id="wher-month-filter" class="rounded-xl border-2 border-slate-200 px-3 py-2 font-bold text-slate-700 text-sm outline-none focus:border-emerald-400" onchange="whEvalLoadResults()">
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-bold text-slate-500">พนักงาน</label>
+        <select id="wher-staff-filter" class="rounded-xl border-2 border-slate-200 px-3 py-2 font-bold text-slate-700 text-sm outline-none focus:border-emerald-400" onchange="whEvalLoadResults()">
+          <option value="">ทั้งหมด</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-bold text-slate-500">ดูแบบ</label>
+        <select id="wher-view-type" class="rounded-xl border-2 border-slate-200 px-3 py-2 font-bold text-slate-700 text-sm outline-none focus:border-emerald-400" onchange="whEvalLoadResults()">
+          <option value="month">รายเดือน</option>
+          <option value="quarter">สรุปรายไตรมาส</option>
+        </select>
+      </div>
+      <button onclick="whEvalLoadResults()" class="px-4 py-2 rounded-xl font-black text-sm text-white" style="background:#059669;">
+        <i class="fas fa-search mr-1"></i>แสดงผล
+      </button>
+      <button onclick="whEvalPrint()" class="px-4 py-2 rounded-xl font-black text-sm border-2 border-slate-200 text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-all">
+        <i class="fas fa-print mr-1"></i>พิมพ์
+      </button>
+    </div>
+
+    <!-- Results area -->
+    <div id="wher-results-area">
+      <div class="text-center text-slate-400 py-12 text-sm font-bold">เลือกเดือนแล้วกด "แสดงผล"</div>
+    </div>
+
+  </div><!-- /panel-results -->
+
+</div><!-- /view-wh-eval-content -->
+
 <div id="view-kpi-wh-content" class="hidden space-y-6">
 
   <!-- Header -->
@@ -13421,7 +13580,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13481,7 +13640,8 @@ window.switchView = function switchView(view) {
             'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
             'products': 'จัดการสินค้า — Product Master',
             'user-accounts': 'ตั้งค่าบัญชีผู้ใช้ — Driver & WH Staff',
-            'stock-count': 'Stock Count — นับและเทียบสต๊อก'
+            'stock-count': 'Stock Count — นับและเทียบสต๊อก',
+            'wh-eval': 'ประเมินทักษะทีมคลังสินค้า — Skill Evaluation'
         }[view] || 'WL Management';
     }
 
@@ -35933,6 +36093,7 @@ var WMS_VIEWS=[
   {id:'user-accounts',label:'ตั้งค่าบัญชีผู้ใช้'},
   {id:'audit-log',label:'Audit Log'},
   {id:'device-control',label:'Device Control'},
+  {id:'wh-eval',label:'ประเมินทีมคลัง'},
 ];
 function _hashPw(s){var h=0x811c9dc5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h.toString(16);}
 // ── Users cache (โหลดจาก GAS ตอนเริ่ม, sync ทุกเครื่อง) ──────────────────────
@@ -45110,6 +45271,338 @@ if(_origInvSWT){
     }
   };
 }
+
+})();
+
+// ══════════════════════════════════════════════════════
+//  WH EVAL — ระบบประเมินทักษะทีมคลังสินค้า
+// ══════════════════════════════════════════════════════
+(function(){
+
+var WH_SKILLS = {
+  lead: [
+    { group:'งานหลักหน้างาน', items:[
+      {key:'crane_ops',   label:'บังคับเครนเหนือศีรษะได้คล่อง ปลอดภัย',               tag:'บังคับ',     weight:2},
+      {key:'wms_entry',   label:'กรอกข้อมูลโหลดใน WMS ได้ถูกต้อง',                   tag:'บังคับ',     weight:2},
+      {key:'stock_count', label:'นับสต็อก FG และ SEMI ได้ถูกต้อง',                   tag:'บังคับ',     weight:2},
+      {key:'prod_check',  label:'ตรวจสินค้าก่อนโหลด — แยกชื่อ รหัส สี ขนาดได้',     tag:'บังคับ',     weight:2},
+      {key:'zone_arr',    label:'จัดพื้นที่วางสินค้าใน Zone ได้ตามโครงสร้างคลัง',     tag:'บังคับ',     weight:2},
+    ]},
+    { group:'ทักษะควบคุมและประสานงาน', items:[
+      {key:'team_assign', label:'มอบหมายงานให้เช็คเกอร์ประจำวันได้',                  tag:'Lead',       weight:1},
+      {key:'recv_dec',    label:'ตัดสินใจรับ/ไม่รับสินค้าโดยไม่ต้องรอหัวหน้า',       tag:'Lead',       weight:1},
+      {key:'del_coord',   label:'ประสานงานกับจัดส่งเรื่องลำดับโหลดและปัญหาหน้างาน',   tag:'Lead',       weight:1},
+      {key:'stock_coord', label:'รับเรื่องจากจนท สต็อก และจ่ายงานให้ทีมดำเนินการได้', tag:'ใหม่',       weight:1},
+      {key:'store_req',   label:'เบิกอุปกรณ์สิ้นเปลืองจาก Store และติดตามสต็อกอุปกรณ์', tag:'ใหม่',    weight:1},
+      {key:'equip_mgr',   label:'มอบหมายให้ทีมดูแลรักษาอุปกรณ์ใช้งานในคลัง',         tag:'อุปกรณ์',   weight:1},
+      {key:'truck_req',   label:'กรณีย้ายกองสินค้า — ประสานขอรถและพนักงานขับรถจากทีมจัดส่ง', tag:'ประสานงาน', weight:1},
+      {key:'daily_rpt',   label:'สรุปงานประจำวันรายงานหัวหน้าแผนกได้',               tag:'Lead',       weight:1},
+    ]},
+    { group:'สินค้าเกรด B / C', items:[
+      {key:'bc_id',       label:'ระบุและแยกสินค้าเกรด B/C ออกจาก A ได้ถูกต้อง',     tag:'B/C',        weight:1},
+      {key:'bc_zone',     label:'รับผิดชอบจัดเก็บและควบคุม Zone สินค้าเกรด B/C',     tag:'B/C',        weight:1},
+      {key:'bc_assign',   label:'จ่ายงานให้ทีมจัดเตรียมสินค้าเกรด B/C',             tag:'B/C',        weight:1},
+      {key:'bc_report',   label:'รวบรวมและส่งข้อมูล B/C ให้จนท สต็อกเพื่อเสนอขาย', tag:'B/C',        weight:1},
+    ]},
+  ],
+  checker: [
+    { group:'งานที่ต้องทำเป็น', items:[
+      {key:'crane_ops',   label:'บังคับเครนเหนือศีรษะได้ ปลอดภัย',                   tag:'บังคับ',     weight:2},
+      {key:'wms_entry',   label:'กรอกข้อมูลโหลดใน WMS ได้ถูกต้อง',                   tag:'บังคับ',     weight:2},
+      {key:'stock_count', label:'นับสต็อก FG และ SEMI ได้ถูกต้อง',                   tag:'บังคับ',     weight:2},
+      {key:'prod_check',  label:'ตรวจสินค้าก่อนโหลด — แยกชื่อ รหัส สี ขนาดได้',     tag:'บังคับ',     weight:2},
+      {key:'zone_arr',    label:'จัดเรียงสินค้าใน Zone ตามที่ Lead สั่ง รวมถึง Zone B/C', tag:'บังคับ', weight:2},
+      {key:'equip_care',  label:'ดูแลรักษาอุปกรณ์ที่รับมอบหมาย ตรวจสอบและแจ้ง Lead เมื่อชำรุด', tag:'อุปกรณ์', weight:1},
+      {key:'issue_rpt',   label:'รายงานปัญหา ของเสีย หรือยอดไม่ตรงต่อ Lead ทันที',   tag:'บังคับ',     weight:2},
+      {key:'del_coord',   label:'ประสานงานกับจัดส่งได้เมื่อถือโทรศัพท์อยู่',          tag:'สถานการณ์',  weight:1},
+    ]},
+  ],
+};
+
+var SALARY_RANGE = {
+  lead:    {fair:15000, max:17000, market:'15,000–22,000'},
+  checker: {fair:12000, max:14000, market:'12,000–15,000'},
+};
+
+var _wheStaff = [];
+
+window.whEvalInit = async function() {
+  var now = new Date();
+  var m = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  var mEl = document.getElementById('whe-month');
+  if(mEl && !mEl.value) mEl.value = m;
+  var mfEl = document.getElementById('wher-month-filter');
+  if(mfEl && !mfEl.value) mfEl.value = m;
+
+  var res = await window._sb.from('logi_wh_staff').select('id,name,team').order('name');
+  _wheStaff = res.data || [];
+
+  ['whe-staff-sel','wher-staff-filter'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    var base = id==='wher-staff-filter' ? '<option value="">ทั้งหมด</option>' : '<option value="">— เลือกพนักงาน —</option>';
+    el.innerHTML = base + _wheStaff.map(function(s){
+      return '<option value="'+s.id+'">'+s.name+(s.team?' ('+s.team+')':'')+'</option>';
+    }).join('');
+  });
+};
+
+window.whEvalSwitchTab = function(tab) {
+  document.getElementById('whe-panel-form').classList.toggle('hidden', tab!=='form');
+  document.getElementById('whe-panel-results').classList.toggle('hidden', tab!=='results');
+  var fBtn=document.getElementById('whe-tab-form'), rBtn=document.getElementById('whe-tab-results');
+  if(tab==='form'){
+    fBtn.style.cssText='background:#059669;color:#fff;border-color:#059669;';
+    rBtn.style.cssText='background:#fff;color:#64748b;border-color:#e2e8f0;';
+  } else {
+    rBtn.style.cssText='background:#059669;color:#fff;border-color:#059669;';
+    fBtn.style.cssText='background:#fff;color:#64748b;border-color:#e2e8f0;';
+    whEvalLoadResults();
+  }
+};
+
+window.whEvalRenderSkills = function() {
+  var role = document.getElementById('whe-role-sel').value;
+  var body = document.getElementById('whe-skills-body');
+  var scoreWrap = document.getElementById('whe-score-wrap');
+  var saveBtn = document.getElementById('whe-save-btn');
+  if(!role){ body.innerHTML='<div class="text-sm text-slate-400 text-center py-8">เลือกระดับตำแหน่งเพื่อแสดงแบบประเมิน</div>'; return; }
+  var tagStyles = {
+    'บังคับ':'background:#fef3c7;color:#92400e;',
+    'Lead':'background:#d1fae5;color:#065f46;',
+    'ใหม่':'background:#fae8ff;color:#7e22ce;',
+    'อุปกรณ์':'background:#e0e7ff;color:#3730a3;',
+    'ประสานงาน':'background:#ccfbf1;color:#0f4c44;',
+    'B/C':'background:#ffedd5;color:#7c2d12;',
+    'สถานการณ์':'background:#dbeafe;color:#1e40af;',
+  };
+  var html='';
+  (WH_SKILLS[role]||[]).forEach(function(g){
+    html+='<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest mb-3 pb-1 border-b border-slate-100" style="color:#059669;">'+g.group+'</div><div class="space-y-1">';
+    g.items.forEach(function(it){
+      var ts=tagStyles[it.tag]||'background:#f1f5f9;color:#475569;';
+      html+='<label class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-all">'
+        +'<input type="checkbox" class="whe-skill-cb w-4 h-4 rounded flex-shrink-0" style="accent-color:#059669;" data-key="'+it.key+'" data-weight="'+it.weight+'" onchange="whEvalUpdateScore()">'
+        +'<span class="flex-1 text-sm text-slate-700">'+it.label+'</span>'
+        +'<span class="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0" style="'+ts+'">'+it.tag+'</span>'
+        +'</label>';
+    });
+    html+='</div></div>';
+  });
+  body.innerHTML=html;
+  scoreWrap.classList.remove('hidden');
+  saveBtn.disabled=false;
+  whEvalUpdateScore();
+  whEvalCalcSalary();
+};
+
+window.whEvalUpdateScore = function() {
+  var cbs=document.querySelectorAll('.whe-skill-cb');
+  var total=0,done=0;
+  cbs.forEach(function(cb){ var w=parseInt(cb.dataset.weight)||1; total+=w; if(cb.checked) done+=w; });
+  var pct=total?Math.round(done/total*100):0;
+  document.getElementById('whe-score-pct').textContent=pct+'%';
+  document.getElementById('whe-score-detail').textContent=done+' / '+total+' คะแนน';
+  var grade,bg,fg;
+  if(pct>=85){grade='ดีเยี่ยม';bg='#f0fdf4';fg='#15803d';}
+  else if(pct>=70){grade='ผ่าน';bg='#fefce8';fg='#a16207';}
+  else if(pct>=50){grade='ต้องพัฒนา';bg='#fff7ed';fg='#c2410c';}
+  else{grade='ต้องฝึกเพิ่ม';bg='#fef2f2';fg='#b91c1c';}
+  var gl=document.getElementById('whe-grade-label'), gb=document.getElementById('whe-grade-box'), gs=document.getElementById('whe-grade-sub');
+  gl.textContent=grade; gl.style.color=fg;
+  gb.style.background=bg; gb.style.borderColor=fg+'44';
+  gs.textContent=pct+'%'; gs.style.color=fg;
+};
+
+window.whEvalCalcSalary = function() {
+  var role=document.getElementById('whe-role-sel').value;
+  var sal=parseInt(document.getElementById('whe-salary').value)||0;
+  var stEl=document.getElementById('whe-salary-status');
+  var sBox=document.getElementById('whe-salary-box');
+  var sShow=document.getElementById('whe-salary-show');
+  var sCmt=document.getElementById('whe-salary-comment');
+  if(!role||!sal){ stEl.textContent='กรอกเงินเดือนและเลือกระดับ'; stEl.style.cssText=''; return; }
+  var r=SALARY_RANGE[role];
+  var status,stColor,stBg,cmt;
+  if(sal<r.fair){status='ต่ำกว่าตลาด';stColor='#b91c1c';stBg='#fef2f2';cmt='ตลาด '+r.market+' — ควรพิจารณาปรับ';}
+  else if(sal<=r.max){status='สมเหตุสมผล ✓';stColor='#15803d';stBg='#f0fdf4';cmt='อยู่ในช่วงที่เหมาะสม (สูงสุด '+r.max.toLocaleString()+' ฿)';}
+  else{status='สูงกว่าเพดาน';stColor='#a16207';stBg='#fefce8';cmt='เกินเพดาน '+r.max.toLocaleString()+' ฿ ที่กำหนด';}
+  stEl.textContent=status; stEl.style.cssText='color:'+stColor+';background:'+stBg+';border-color:'+stColor+'44;';
+  if(sShow) sShow.textContent=sal.toLocaleString()+' ฿';
+  if(sCmt){ sCmt.textContent=cmt; sCmt.style.color=stColor; }
+  if(sBox){ sBox.style.background=stBg; sBox.style.borderColor=stColor+'44'; }
+};
+
+window.whEvalSave = async function() {
+  var staffId=document.getElementById('whe-staff-sel').value;
+  var role=document.getElementById('whe-role-sel').value;
+  var month=document.getElementById('whe-month').value;
+  var salary=parseInt(document.getElementById('whe-salary').value)||0;
+  var notes=document.getElementById('whe-notes').value.trim();
+  if(!staffId||!role||!month){ alert('กรุณากรอกข้อมูลให้ครบก่อนบันทึก'); return; }
+  var staffObj=_wheStaff.find(function(s){return String(s.id)===String(staffId);});
+  var staffName=staffObj?staffObj.name:staffId;
+  var cbs=document.querySelectorAll('.whe-skill-cb');
+  var skillsDone=[],total=0,done=0;
+  cbs.forEach(function(cb){ var w=parseInt(cb.dataset.weight)||1; total+=w; if(cb.checked){done+=w;skillsDone.push(cb.dataset.key);} });
+  var score=total?Math.round(done/total*100):0;
+  var r=SALARY_RANGE[role];
+  var salaryStatus=!salary?'unknown':salary<r.fair?'low':salary<=r.max?'fair':'high';
+  var btn=document.getElementById('whe-save-btn');
+  btn.disabled=true; btn.textContent='⏳ กำลังบันทึก...';
+  var res=await window._sb.from('wh_evaluations').insert({
+    staff_id:String(staffId), staff_name:staffName, role:role,
+    eval_month:month, salary_current:salary||null,
+    skills_done:skillsDone, score:score,
+    salary_status:salaryStatus, notes:notes||null
+  });
+  btn.disabled=false; btn.innerHTML='<i class="fas fa-save mr-1"></i>ประเมินและบันทึก';
+  if(res.error){ alert('บันทึกไม่สำเร็จ: '+res.error.message); return; }
+  alert('✅ บันทึกสำเร็จ — '+staffName+' คะแนน '+score+'%');
+  whEvalReset();
+};
+
+window.whEvalReset = function() {
+  ['whe-staff-sel','whe-role-sel','whe-salary','whe-notes'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('whe-skills-body').innerHTML='<div class="text-sm text-slate-400 text-center py-8">เลือกพนักงานและระดับตำแหน่งเพื่อแสดงแบบประเมิน</div>';
+  document.getElementById('whe-score-wrap').classList.add('hidden');
+  document.getElementById('whe-save-btn').disabled=true;
+  var stEl=document.getElementById('whe-salary-status');
+  if(stEl){ stEl.textContent='กรอกเงินเดือนเพื่อประเมิน'; stEl.style.cssText=''; }
+};
+
+window.whEvalLoadResults = async function() {
+  var month=document.getElementById('wher-month-filter').value;
+  var staffId=document.getElementById('wher-staff-filter').value;
+  var viewType=document.getElementById('wher-view-type').value;
+  var area=document.getElementById('wher-results-area');
+  area.innerHTML='<div class="text-center text-slate-400 py-12 text-sm font-bold"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
+  var query=window._sb.from('wh_evaluations').select('*').order('eval_month',{ascending:false}).order('created_at',{ascending:false});
+  if(viewType==='month'&&month) query=query.eq('eval_month',month);
+  else if(viewType==='quarter'&&month){
+    var parts=month.split('-'); var y=parseInt(parts[0]),mo=parseInt(parts[1]);
+    var q=Math.ceil(mo/3);
+    var qStart=y+'-'+String((q-1)*3+1).padStart(2,'0');
+    var qEnd=y+'-'+String(q*3).padStart(2,'0');
+    query=query.gte('eval_month',qStart).lte('eval_month',qEnd);
+  }
+  if(staffId) query=query.eq('staff_id',staffId);
+  var res=await query;
+  if(res.error){ area.innerHTML='<div class="text-red-500 text-center py-8">'+res.error.message+'</div>'; return; }
+  var rows=res.data||[];
+  if(!rows.length){ area.innerHTML='<div class="text-center text-slate-400 py-12 text-sm font-bold">ไม่พบข้อมูลในช่วงที่เลือก</div>'; return; }
+  area.innerHTML=viewType==='quarter'?_wheRenderQuarter(rows):_wheRenderMonth(rows);
+};
+
+function _wheGradeColor(pct){ return pct>=85?'#15803d':pct>=70?'#a16207':pct>=50?'#c2410c':'#b91c1c'; }
+function _wheGradeLabel(pct){ return pct>=85?'ดีเยี่ยม':pct>=70?'ผ่าน':pct>=50?'ต้องพัฒนา':'ต้องฝึกเพิ่ม'; }
+var _wheSalBg={low:'#fef2f2',fair:'#f0fdf4',high:'#fefce8',unknown:'#f8fafc'};
+var _wheSalFg={low:'#b91c1c',fair:'#15803d',high:'#a16207',unknown:'#94a3b8'};
+var _wheSalTxt={low:'ต่ำกว่าตลาด',fair:'สมเหตุสมผล ✓',high:'สูงกว่าเพดาน',unknown:'—'};
+
+function _wheRenderMonth(rows){
+  var html='<div class="space-y-4" id="whe-print-area">';
+  rows.forEach(function(r){
+    var sc=_wheGradeColor(r.score), skills=r.skills_done||[];
+    var allItems=(WH_SKILLS[r.role]||[]).flatMap(function(g){return g.items;});
+    var sb=_wheSalBg[r.salary_status]||'#f8fafc', sf=_wheSalFg[r.salary_status]||'#94a3b8';
+    html+='<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">'
+      +'<div class="flex items-center justify-between px-5 py-3 border-b border-slate-100" style="background:#f8fafc;">'
+      +'<div class="flex items-center gap-3">'
+      +'<span class="font-black text-slate-800">'+r.staff_name+'</span>'
+      +'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">'+(r.role==='lead'?'⭐ Lead':'💪 Checker')+'</span>'
+      +'</div>'
+      +'<div class="flex items-center gap-3">'
+      +'<span class="text-xs text-slate-400 font-bold">'+r.eval_month+'</span>'
+      +'<span class="text-sm font-black" style="color:'+sc+'">'+r.score+'%</span>'
+      +'<span class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:'+sc+'18;color:'+sc+'">'+_wheGradeLabel(r.score)+'</span>'
+      +'</div></div>'
+      +'<div class="px-5 py-4 flex flex-wrap gap-4">'
+      +'<div style="min-width:160px;">'
+      +'<div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">เงินเดือน</div>'
+      +'<div class="rounded-xl px-3 py-2 text-sm font-black" style="background:'+sb+';color:'+sf+'">'
+      +(r.salary_current?r.salary_current.toLocaleString()+' ฿ — '+(_wheSalTxt[r.salary_status]||'—'):'—')
+      +'</div></div>'
+      +'<div style="flex:1;min-width:200px;">'
+      +'<div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">ทักษะที่ผ่าน ('+skills.length+' รายการ)</div>'
+      +'<div class="flex flex-wrap gap-1">'
+      +skills.map(function(k){
+        var it=allItems.find(function(x){return x.key===k;});
+        var lbl=it?it.label:''+k;
+        return '<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">'+(lbl.length>22?lbl.slice(0,22)+'…':lbl)+'</span>';
+      }).join('')
+      +'</div></div>'
+      +(r.notes?'<div class="w-full"><div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">หมายเหตุ</div><div class="text-sm text-slate-600">'+r.notes+'</div></div>':'')
+      +'</div></div>';
+  });
+  return html+'</div>';
+}
+
+function _wheRenderQuarter(rows){
+  var byStaff={};
+  rows.forEach(function(r){ if(!byStaff[r.staff_name]) byStaff[r.staff_name]={name:r.staff_name,role:r.role,evals:[]}; byStaff[r.staff_name].evals.push(r); });
+  var html='<div class="space-y-4" id="whe-print-area"><div class="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">สรุปไตรมาส</div>';
+  Object.values(byStaff).forEach(function(s){
+    var evals=s.evals;
+    var avgScore=Math.round(evals.reduce(function(a,r){return a+r.score;},0)/evals.length);
+    var salRows=evals.filter(function(r){return r.salary_current;});
+    var avgSal=salRows.length?Math.round(salRows.reduce(function(a,r){return a+r.salary_current;},0)/salRows.length):0;
+    var sc=_wheGradeColor(avgScore);
+    var trend=evals.length>1?(evals[0].score>evals[evals.length-1].score?'↑ ดีขึ้น':evals[0].score<evals[evals.length-1].score?'↓ ลดลง':'→ คงที่'):'—';
+    html+='<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">'
+      +'<div class="flex items-center justify-between mb-4">'
+      +'<div class="font-black text-slate-800 text-lg">'+s.name+'</div>'
+      +'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">'+(s.role==='lead'?'⭐ Lead':'💪 Checker')+'</span>'
+      +'</div>'
+      +'<div class="grid grid-cols-3 gap-3 mb-4">'
+      +'<div class="rounded-xl p-3 text-center" style="background:#f0fdf4;border:1px solid #6ee7b7;">'
+      +'<div class="text-2xl font-black" style="color:'+sc+'">'+avgScore+'%</div>'
+      +'<div class="text-xs font-bold text-emerald-600 mt-0.5">คะแนนเฉลี่ย</div></div>'
+      +'<div class="rounded-xl p-3 text-center" style="background:#f8fafc;border:1px solid #e2e8f0;">'
+      +'<div class="text-xl font-black text-slate-700">'+(avgSal?avgSal.toLocaleString()+'฿':'—')+'</div>'
+      +'<div class="text-xs font-bold text-slate-400 mt-0.5">เฉลี่ย ฿/เดือน</div></div>'
+      +'<div class="rounded-xl p-3 text-center" style="background:#f8fafc;border:1px solid #e2e8f0;">'
+      +'<div class="text-xl font-black text-slate-700">'+trend+'</div>'
+      +'<div class="text-xs font-bold text-slate-400 mt-0.5">แนวโน้ม</div></div>'
+      +'</div>'
+      +'<div class="text-xs font-bold text-slate-400 mb-2">รายเดือน ('+evals.length+' ครั้ง)</div>'
+      +'<div class="flex gap-2 flex-wrap">'
+      +evals.slice().reverse().map(function(r){
+        var c=_wheGradeColor(r.score);
+        return '<div class="rounded-xl px-3 py-2 text-center border" style="border-color:'+c+'44;background:'+c+'09;">'
+          +'<div class="text-sm font-black" style="color:'+c+'">'+r.score+'%</div>'
+          +'<div class="text-xs text-slate-400">'+r.eval_month+'</div></div>';
+      }).join('')
+      +'</div></div>';
+  });
+  return html+'</div>';
+}
+
+window.whEvalPrint = function() {
+  var area=document.getElementById('whe-print-area');
+  if(!area){ alert('ไม่มีข้อมูลให้พิมพ์'); return; }
+  var w=window.open('','_blank','width=900,height=700');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ผลการประเมินทีมคลังสินค้า</title>'
+    +'<style>body{font-family:sans-serif;padding:24px;color:#0f1e36;font-size:13px;line-height:1.5;}'
+    +'h1{font-size:18px;font-weight:900;margin-bottom:8px;}'
+    +'.card{border:1px solid #cbd5e1;border-radius:10px;margin-bottom:14px;overflow:hidden;page-break-inside:avoid;}'
+    +'.card-head{background:#f0fdf4;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d1fae5;font-size:13px;}'
+    +'.card-body{padding:12px 14px;font-size:12px;}'
+    +'.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#d1fae5;color:#065f46;margin:2px;}'
+    +'.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0;}'
+    +'.box{border:1px solid #e2e8f0;border-radius:8px;padding:8px;text-align:center;}'
+    +'@media print{button{display:none!important;}}'
+    +'</style></head><body>'
+    +'<h1>ผลการประเมินทักษะทีมคลังสินค้า</h1>'
+    +'<div style="font-size:11px;color:#64748b;margin-bottom:14px;">พิมพ์เมื่อ '+new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})+'</div>'
+    +area.innerHTML
+    +'<br><button onclick="window.print()" style="background:#059669;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-weight:900;font-size:14px;cursor:pointer;margin-top:12px;">🖨 พิมพ์</button>'
+    +'</body></html>');
+  w.document.close();
+  w.focus();
+};
 
 })();
 </script>
