@@ -45322,9 +45322,24 @@ var WH_SKILLS = {
 };
 
 var SALARY_RANGE = {
-  lead:    {fair:15000, max:17000, market:'15,000–22,000'},
-  checker: {fair:12000, max:14000, market:'12,000–15,000'},
+  lead:    {base:10000, fair:15000, max:17000, market:'15,000–22,000'},
+  checker: {base:9000,  fair:12000, max:14000, market:'12,000–15,000'},
 };
+
+// เงินเดือนที่ "ควรได้" ตามคะแนนทักษะ: base + (max-base) × score%
+function _wheExpectedSalary(role, pct) {
+  var r = SALARY_RANGE[role];
+  if(!r) return 0;
+  return Math.round((r.base + (r.max - r.base) * pct / 100) / 100) * 100;
+}
+
+function _wheCurrentScore() {
+  var total=0, done=0;
+  document.querySelectorAll('.whe-skill-cb').forEach(function(cb){
+    var w=parseInt(cb.dataset.weight)||1; total+=w; if(cb.checked) done+=w;
+  });
+  return total ? Math.round(done/total*100) : 0;
+}
 
 var _wheStaff = [];
 
@@ -45419,6 +45434,7 @@ window.whEvalUpdateScore = function() {
   gl.textContent=grade; gl.style.color=fg;
   gb.style.background=bg; gb.style.borderColor=fg+'44';
   gs.textContent=pct+'%'; gs.style.color=fg;
+  whEvalCalcSalary(); // เทียบเงินเดือนใหม่ทุกครั้งที่คะแนนเปลี่ยน
 };
 
 window.whEvalCalcSalary = function() {
@@ -45436,11 +45452,21 @@ window.whEvalCalcSalary = function() {
     if(sBox){ sBox.style.background='#f8fafc'; sBox.style.borderColor='#e2e8f0'; }
     return;
   }
-  var r=SALARY_RANGE[role];
+  // เทียบผลงาน (คะแนนทักษะ) กับเงินที่จ่ายจริง
+  var pct=_wheCurrentScore();
+  var expected=_wheExpectedSalary(role,pct);
+  var diff=sal-expected;
   var status,stColor,stBg,cmt;
-  if(sal<r.fair){status='ต่ำกว่าตลาด';stColor='#b91c1c';stBg='#fef2f2';cmt='ตลาด '+r.market+' — ควรพิจารณาปรับ';}
-  else if(sal<=r.max){status='สมเหตุสมผล ✓';stColor='#15803d';stBg='#f0fdf4';cmt='อยู่ในช่วงที่เหมาะสม (สูงสุด '+r.max.toLocaleString()+' ฿)';}
-  else{status='สูงกว่าเพดาน';stColor='#a16207';stBg='#fefce8';cmt='เกินเพดาน '+r.max.toLocaleString()+' ฿ ที่กำหนด';}
+  if(diff>1000){
+    status='จ่ายเกินผลงาน';stColor='#b91c1c';stBg='#fef2f2';
+    cmt='คะแนน '+pct+'% ควรได้ ~'+expected.toLocaleString()+' ฿ — จ่ายเกิน '+diff.toLocaleString()+' ฿ (ต้องพัฒนาทักษะเพิ่ม)';
+  } else if(diff<-1000){
+    status='คุ้มเกินเงิน — ควรปรับขึ้น';stColor='#1d4ed8';stBg='#eff6ff';
+    cmt='คะแนน '+pct+'% ควรได้ ~'+expected.toLocaleString()+' ฿ — จ่ายต่ำกว่าผลงาน '+Math.abs(diff).toLocaleString()+' ฿';
+  } else {
+    status='คุ้มค่า สมเหตุสมผล ✓';stColor='#15803d';stBg='#f0fdf4';
+    cmt='คะแนน '+pct+'% เหมาะกับ ~'+expected.toLocaleString()+' ฿ — เงินที่จ่ายสอดคล้องกับผลงาน';
+  }
   stEl.textContent=status; stEl.style.cssText='color:'+stColor+';background:'+stBg+';border-color:'+stColor+'44;';
   if(sShow) sShow.textContent=sal.toLocaleString()+' ฿';
   if(sCmt){ sCmt.textContent=cmt; sCmt.style.color=stColor; }
@@ -45460,8 +45486,9 @@ window.whEvalSave = async function() {
   var skillsDone=[],total=0,done=0;
   cbs.forEach(function(cb){ var w=parseInt(cb.dataset.weight)||1; total+=w; if(cb.checked){done+=w;skillsDone.push(cb.dataset.key);} });
   var score=total?Math.round(done/total*100):0;
-  var r=SALARY_RANGE[role];
-  var salaryStatus=!salary?'unknown':salary<r.fair?'low':salary<=r.max?'fair':'high';
+  var expected=_wheExpectedSalary(role,score);
+  var diff=salary-expected;
+  var salaryStatus=!salary?'unknown':diff>1000?'overpaid':diff<-1000?'underpaid':'fair';
   var btn=document.getElementById('whe-save-btn');
   btn.disabled=true; btn.textContent='⏳ กำลังบันทึก...';
   var res=await window._sb.from('wh_evaluations').insert({
@@ -45512,9 +45539,9 @@ window.whEvalLoadResults = async function() {
 
 function _wheGradeColor(pct){ return pct>=85?'#15803d':pct>=70?'#a16207':pct>=50?'#c2410c':'#b91c1c'; }
 function _wheGradeLabel(pct){ return pct>=85?'ดีเยี่ยม':pct>=70?'ผ่าน':pct>=50?'ต้องพัฒนา':'ต้องฝึกเพิ่ม'; }
-var _wheSalBg={low:'#fef2f2',fair:'#f0fdf4',high:'#fefce8',unknown:'#f8fafc'};
-var _wheSalFg={low:'#b91c1c',fair:'#15803d',high:'#a16207',unknown:'#94a3b8'};
-var _wheSalTxt={low:'ต่ำกว่าตลาด',fair:'สมเหตุสมผล ✓',high:'สูงกว่าเพดาน',unknown:'—'};
+var _wheSalBg={low:'#fef2f2',fair:'#f0fdf4',high:'#fefce8',unknown:'#f8fafc',overpaid:'#fef2f2',underpaid:'#eff6ff'};
+var _wheSalFg={low:'#b91c1c',fair:'#15803d',high:'#a16207',unknown:'#94a3b8',overpaid:'#b91c1c',underpaid:'#1d4ed8'};
+var _wheSalTxt={low:'ต่ำกว่าตลาด',fair:'คุ้มค่า สมเหตุสมผล ✓',high:'สูงกว่าเพดาน',unknown:'—',overpaid:'จ่ายเกินผลงาน',underpaid:'คุ้มเกินเงิน — ควรปรับขึ้น'};
 
 function _wheRenderMonth(rows){
   var html='<div class="space-y-4" id="whe-print-area">';
