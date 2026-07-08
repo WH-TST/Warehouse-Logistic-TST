@@ -45515,6 +45515,8 @@ window.whEvalReset = function() {
   if(stEl){ stEl.textContent='กรอกเงินเดือนเพื่อประเมิน'; stEl.style.cssText=''; }
 };
 
+var _wheLastRows = [];
+
 window.whEvalLoadResults = async function() {
   var month=document.getElementById('wher-month-filter').value;
   var staffId=document.getElementById('wher-staff-filter').value;
@@ -45534,6 +45536,7 @@ window.whEvalLoadResults = async function() {
   var res=await query;
   if(res.error){ area.innerHTML='<div class="text-red-500 text-center py-8">'+res.error.message+'</div>'; return; }
   var rows=res.data||[];
+  _wheLastRows = rows;
   if(!rows.length){ area.innerHTML='<div class="text-center text-slate-400 py-12 text-sm font-bold">ไม่พบข้อมูลในช่วงที่เลือก</div>'; return; }
   area.innerHTML=viewType==='quarter'?_wheRenderQuarter(rows):_wheRenderMonth(rows);
 };
@@ -45560,6 +45563,7 @@ function _wheRenderMonth(rows){
       +'<span class="text-xs text-slate-400 font-bold">'+r.eval_month+'</span>'
       +'<span class="text-sm font-black" style="color:'+sc+'">'+r.score+'%</span>'
       +'<span class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:'+sc+'18;color:'+sc+'">'+_wheGradeLabel(r.score)+'</span>'
+      +'<button onclick="whEvalPrintPerson(\''+r.id+'\')" class="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:border-emerald-500 hover:text-emerald-700 transition-all" title="พิมพ์เอกสารประเมินรายบุคคล"><i class="fas fa-print mr-1"></i>พิมพ์</button>'
       +'</div></div>'
       +'<div class="px-5 py-4 flex flex-wrap gap-4">'
       +'<div style="min-width:160px;">'
@@ -45621,6 +45625,134 @@ function _wheRenderQuarter(rows){
   });
   return html+'</div>';
 }
+
+// ── พิมพ์เอกสารประเมินรายบุคคล ────────────────────────
+window.whEvalPrintPerson = function(evalId) {
+  var r = _wheLastRows.find(function(x){ return String(x.id)===String(evalId); });
+  if(!r){ alert('ไม่พบข้อมูล'); return; }
+
+  var roleLabel = r.role==='lead' ? 'หัวหน้าทีมคลัง (Warehouse Lead)' : 'เช็คเกอร์ / เจ้าหน้าที่คลัง (Warehouse Checker)';
+  var groups = WH_SKILLS[r.role]||[];
+  var doneKeys = r.skills_done||[];
+  var grade = _wheGradeLabel(r.score);
+  var gradeColor = _wheGradeColor(r.score);
+  var expected = _wheExpectedSalary(r.role, r.score);
+  var salTxt = _wheSalTxt[r.salary_status]||'—';
+  var salColor = _wheSalFg[r.salary_status]||'#94a3b8';
+
+  // แปลงเดือนเป็นไทย
+  var thMonths=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  var mp = r.eval_month.split('-');
+  var thMonth = thMonths[parseInt(mp[1])-1]+' '+(parseInt(mp[0])+543);
+
+  // สร้างตารางทักษะแยกกลุ่ม
+  var skillRows = '';
+  var devItems = [];
+  groups.forEach(function(g){
+    skillRows += '<tr><td colspan="3" class="grp">'+g.group+'</td></tr>';
+    g.items.forEach(function(it){
+      var passed = doneKeys.indexOf(it.key)>=0;
+      if(!passed) devItems.push(it);
+      skillRows += '<tr>'
+        + '<td>'+it.label+'</td>'
+        + '<td class="ctr">'+(it.weight===2?'หลัก':'เสริม')+'</td>'
+        + '<td class="ctr '+(passed?'pass':'fail')+'">'+(passed?'✓ ทำได้':'✗ ยังไม่ผ่าน')+'</td>'
+        + '</tr>';
+    });
+  });
+
+  var devSection = devItems.length
+    ? '<ol>'+devItems.map(function(it){ return '<li>'+it.label+'</li>'; }).join('')+'</ol>'
+    : '<div class="allpass">— ผ่านครบทุกทักษะ ไม่มีหัวข้อที่ต้องพัฒนาเพิ่มเติม —</div>';
+
+  var w = window.open('','_blank','width=860,height=1000');
+  w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">'
+    +'<title>แบบประเมิน — '+r.staff_name+'</title>'
+    +'<style>'
+    +'@page{size:A4;margin:18mm 16mm;}'
+    +'*{box-sizing:border-box;margin:0;padding:0;}'
+    +'body{font-family:"Sarabun","Leelawadee UI",sans-serif;color:#1a2332;font-size:13px;line-height:1.55;padding:24px;max-width:800px;margin:0 auto;}'
+    +'.doc-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #065f46;padding-bottom:14px;margin-bottom:18px;}'
+    +'.doc-title{font-size:19px;font-weight:800;color:#065f46;}'
+    +'.doc-sub{font-size:11px;color:#64748b;letter-spacing:.08em;text-transform:uppercase;margin-top:2px;}'
+    +'.doc-no{text-align:right;font-size:11px;color:#64748b;}'
+    +'.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin-bottom:16px;}'
+    +'.info-grid div{display:flex;gap:8px;}'
+    +'.info-grid b{min-width:110px;font-weight:700;color:#475569;}'
+    +'.sec-title{font-size:13px;font-weight:800;color:#065f46;border-left:4px solid #059669;padding-left:8px;margin:18px 0 8px;}'
+    +'.score-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px;}'
+    +'.score-box{border:1.5px solid #d1d5db;border-radius:8px;padding:10px;text-align:center;}'
+    +'.score-box .big{font-size:22px;font-weight:800;}'
+    +'.score-box .lbl{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}'
+    +'table{width:100%;border-collapse:collapse;margin-top:6px;}'
+    +'th{background:#065f46;color:#fff;font-size:11.5px;padding:7px 10px;text-align:left;font-weight:700;}'
+    +'th.ctr,td.ctr{text-align:center;width:90px;}'
+    +'td{border-bottom:1px solid #e5e7eb;padding:6px 10px;font-size:12px;}'
+    +'td.grp{background:#ecfdf5;font-weight:800;color:#065f46;font-size:11.5px;letter-spacing:.03em;}'
+    +'td.pass{color:#15803d;font-weight:700;}'
+    +'td.fail{color:#b91c1c;font-weight:700;}'
+    +'.dev-box{border:1.5px solid #fdba74;background:#fff7ed;border-radius:8px;padding:12px 16px;}'
+    +'.dev-box ol{padding-left:20px;}'
+    +'.dev-box li{margin:4px 0;font-size:12.5px;}'
+    +'.allpass{color:#15803d;font-weight:700;text-align:center;padding:8px;}'
+    +'.sal-box{border:1.5px solid #e2e8f0;border-radius:8px;padding:12px 16px;background:#f8fafc;}'
+    +'.notes-box{border:1px dashed #cbd5e1;border-radius:8px;padding:10px 14px;min-height:48px;color:#475569;font-size:12px;}'
+    +'.sig-row{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px;}'
+    +'.sig{text-align:center;font-size:12px;color:#475569;}'
+    +'.sig .line{border-bottom:1px dotted #94a3b8;height:36px;margin-bottom:6px;}'
+    +'.print-btn{position:fixed;top:12px;right:12px;background:#059669;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}'
+    +'@media print{.print-btn{display:none;}body{padding:0;}}'
+    +'</style></head><body>'
+    +'<button class="print-btn" onclick="window.print()">🖨 พิมพ์</button>'
+
+    +'<div class="doc-head">'
+    +'<div><div class="doc-title">แบบประเมินทักษะพนักงานรายบุคคล</div>'
+    +'<div class="doc-sub">Warehouse Staff Skill Evaluation Report</div></div>'
+    +'<div class="doc-no">ฝ่ายคลังสินค้าและจัดส่ง<br>ประจำเดือน '+thMonth+'</div>'
+    +'</div>'
+
+    +'<div class="info-grid">'
+    +'<div><b>ชื่อพนักงาน</b> '+r.staff_name+'</div>'
+    +'<div><b>ตำแหน่ง</b> '+roleLabel+'</div>'
+    +'<div><b>รอบประเมิน</b> '+thMonth+'</div>'
+    +'<div><b>วันที่พิมพ์</b> '+new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})+'</div>'
+    +'</div>'
+
+    +'<div class="sec-title">1. สรุปผลการประเมิน</div>'
+    +'<div class="score-row">'
+    +'<div class="score-box"><div class="big" style="color:'+gradeColor+'">'+r.score+'%</div><div class="lbl">คะแนนทักษะ</div></div>'
+    +'<div class="score-box"><div class="big" style="color:'+gradeColor+'">'+grade+'</div><div class="lbl">ระดับผล</div></div>'
+    +'<div class="score-box"><div class="big" style="color:'+salColor+';font-size:16px;padding-top:5px;">'+salTxt+'</div><div class="lbl">ความคุ้มค่าเงินเดือน</div></div>'
+    +'</div>'
+
+    +'<div class="sec-title">2. รายละเอียดทักษะ — สิ่งที่ทำได้แล้ว</div>'
+    +'<table><tr><th>ทักษะ</th><th class="ctr">ประเภท</th><th class="ctr">ผล</th></tr>'
+    +skillRows
+    +'</table>'
+
+    +'<div class="sec-title">3. หัวข้อที่ต้องพัฒนา ('+devItems.length+' รายการ)</div>'
+    +'<div class="dev-box">'+devSection+'</div>'
+
+    +'<div class="sec-title">4. การประเมินเงินเดือน</div>'
+    +'<div class="sal-box">'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">'
+    +'<div><div style="font-size:16px;font-weight:800;">'+(r.salary_current?r.salary_current.toLocaleString()+' ฿':'—')+'</div><div style="font-size:10px;color:#64748b;">เงินเดือนปัจจุบัน</div></div>'
+    +'<div><div style="font-size:16px;font-weight:800;">'+expected.toLocaleString()+' ฿</div><div style="font-size:10px;color:#64748b;">เงินเดือนตามผลงาน ('+r.score+'%)</div></div>'
+    +'<div><div style="font-size:14px;font-weight:800;color:'+salColor+';padding-top:2px;">'+salTxt+'</div><div style="font-size:10px;color:#64748b;">ผลการเทียบ</div></div>'
+    +'</div></div>'
+
+    +'<div class="sec-title">5. หมายเหตุ / ข้อเสนอแนะ</div>'
+    +'<div class="notes-box">'+(r.notes||'')+'</div>'
+
+    +'<div class="sig-row">'
+    +'<div class="sig"><div class="line"></div>ลงชื่อพนักงานผู้รับการประเมิน<br>( '+r.staff_name+' )</div>'
+    +'<div class="sig"><div class="line"></div>ลงชื่อหัวหน้าแผนกผู้ประเมิน<br>( ........................................ )</div>'
+    +'</div>'
+
+    +'</body></html>');
+  w.document.close();
+  w.focus();
+};
 
 window.whEvalPrint = function() {
   var area=document.getElementById('whe-print-area');
