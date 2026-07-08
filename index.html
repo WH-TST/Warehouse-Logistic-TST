@@ -45439,6 +45439,7 @@ function _wheRenderCustomList(){
       +'<span class="flex-1 text-sm text-slate-700">'+c.label+'</span>'
       +'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">'+(roleTxt[c.apply_role]||c.apply_role)+'</span>'
       +'<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">'+(c.weight===2?'หลัก':'เสริม')+'</span>'
+      +'<button onclick="whEvalEditSkill(\''+c.id+'\')" class="text-xs px-2 py-1 rounded-lg text-blue-500 hover:bg-blue-50 transition-all" title="แก้ไขหัวข้อนี้"><i class="fas fa-pen"></i></button>'
       +'<button onclick="whEvalDelSkill(\''+c.id+'\')" class="text-xs px-2 py-1 rounded-lg text-red-500 hover:bg-red-50 transition-all" title="ลบหัวข้อนี้"><i class="fas fa-trash"></i></button>'
       +'</div>';
   }).join('');
@@ -45454,6 +45455,26 @@ window.whEvalAddSkill = async function() {
   document.getElementById('whe-new-skill-label').value='';
   await _wheLoadCustom();
   whEvalRenderSkills(); // refresh checklist ถ้าเปิดอยู่
+};
+
+window.whEvalEditSkill = async function(id) {
+  var c = _wheCustom.find(function(x){ return String(x.id)===String(id); });
+  if(!c) return;
+  var label = prompt('แก้ไขหัวข้อประเมิน:', c.label);
+  if(label===null) return; // ยกเลิก
+  label = label.trim();
+  if(!label){ alert('หัวข้อว่างไม่ได้'); return; }
+  var roleIn = prompt('ใช้กับระดับ — พิมพ์ both / lead / checker:', c.apply_role);
+  if(roleIn===null) return;
+  roleIn = roleIn.trim().toLowerCase();
+  if(['both','lead','checker'].indexOf(roleIn)<0){ alert('ระดับต้องเป็น both, lead หรือ checker'); return; }
+  var wIn = prompt('น้ำหนัก — พิมพ์ 1 (เสริม) หรือ 2 (หลัก):', String(c.weight||1));
+  if(wIn===null) return;
+  var weight = parseInt(wIn)===2 ? 2 : 1;
+  var res = await window._sb.from('wh_eval_skills').update({label:label, apply_role:roleIn, weight:weight}).eq('id', id);
+  if(res.error){ alert('แก้ไขไม่สำเร็จ: '+res.error.message); return; }
+  await _wheLoadCustom();
+  whEvalRenderSkills();
 };
 
 window.whEvalDelSkill = async function(id) {
