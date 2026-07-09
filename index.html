@@ -45766,7 +45766,9 @@ function _wheRenderQuarter(rows){
 }
 
 // ── สร้าง HTML เอกสารประเมินรายบุคคล (ใช้ทั้งพิมพ์และส่งเมล) ──
-function _wheBuildDocHTML(r) {
+// opts.hideSalary = true → ตัดส่วนประเมินเงินเดือน (ฉบับส่งพนักงาน)
+function _wheBuildDocHTML(r, opts) {
+  opts = opts || {};
   var roleLabel = r.role==='lead' ? 'หัวหน้าทีมคลัง (Warehouse Lead)' : 'เช็คเกอร์ / เจ้าหน้าที่คลัง (Warehouse Checker)';
   var groups = (WH_SKILLS[r.role]||[]).slice();
   var customs = _wheCustomFor(r.role);
@@ -45856,10 +45858,10 @@ function _wheBuildDocHTML(r) {
     +'</div>'
 
     +'<div class="sec-title">1. สรุปผลการประเมิน</div>'
-    +'<div class="score-row">'
+    +'<div class="score-row" style="grid-template-columns:repeat('+(opts.hideSalary?2:3)+',1fr);">'
     +'<div class="score-box"><div class="big" style="color:'+gradeColor+'">'+r.score+'%</div><div class="lbl">คะแนนทักษะ</div></div>'
     +'<div class="score-box"><div class="big" style="color:'+gradeColor+'">'+grade+'</div><div class="lbl">ระดับผล</div></div>'
-    +'<div class="score-box"><div class="big" style="color:'+salColor+';font-size:16px;padding-top:5px;">'+salTxt+'</div><div class="lbl">ความคุ้มค่าเงินเดือน</div></div>'
+    +(opts.hideSalary?'':'<div class="score-box"><div class="big" style="color:'+salColor+';font-size:16px;padding-top:5px;">'+salTxt+'</div><div class="lbl">ความคุ้มค่าเงินเดือน</div></div>')
     +'</div>'
 
     +'<div class="sec-title">2. รายละเอียดทักษะ — สิ่งที่ทำได้แล้ว</div>'
@@ -45870,15 +45872,16 @@ function _wheBuildDocHTML(r) {
     +'<div class="sec-title">3. หัวข้อที่ต้องพัฒนา ('+devItems.length+' รายการ)</div>'
     +'<div class="dev-box">'+devSection+'</div>'
 
-    +'<div class="sec-title">4. การประเมินเงินเดือน</div>'
-    +'<div class="sal-box">'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">'
-    +'<div><div style="font-size:16px;font-weight:800;">'+(r.salary_current?r.salary_current.toLocaleString()+' ฿':'—')+'</div><div style="font-size:10px;color:#64748b;">เงินเดือนปัจจุบัน</div></div>'
-    +'<div><div style="font-size:16px;font-weight:800;">'+expected.toLocaleString()+' ฿</div><div style="font-size:10px;color:#64748b;">เงินเดือนตามผลงาน ('+r.score+'%)</div></div>'
-    +'<div><div style="font-size:14px;font-weight:800;color:'+salColor+';padding-top:2px;">'+salTxt+'</div><div style="font-size:10px;color:#64748b;">ผลการเทียบ</div></div>'
-    +'</div></div>'
+    +(opts.hideSalary?'':
+      '<div class="sec-title">4. การประเมินเงินเดือน</div>'
+      +'<div class="sal-box">'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">'
+      +'<div><div style="font-size:16px;font-weight:800;">'+(r.salary_current?r.salary_current.toLocaleString()+' ฿':'—')+'</div><div style="font-size:10px;color:#64748b;">เงินเดือนปัจจุบัน</div></div>'
+      +'<div><div style="font-size:16px;font-weight:800;">'+expected.toLocaleString()+' ฿</div><div style="font-size:10px;color:#64748b;">เงินเดือนตามผลงาน ('+r.score+'%)</div></div>'
+      +'<div><div style="font-size:14px;font-weight:800;color:'+salColor+';padding-top:2px;">'+salTxt+'</div><div style="font-size:10px;color:#64748b;">ผลการเทียบ</div></div>'
+      +'</div></div>')
 
-    +'<div class="sec-title">5. หมายเหตุ / ข้อเสนอแนะ</div>'
+    +'<div class="sec-title">'+(opts.hideSalary?'4':'5')+'. หมายเหตุ / ข้อเสนอแนะ</div>'
     +'<div class="notes-box">'+(r.notes||'')+'</div>'
 
     +'<div class="sig-row">'
@@ -45969,7 +45972,7 @@ window.whEvalSendEmail = async function(evalId) {
     iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;height:1200px;border:0;';
     document.body.appendChild(iframe);
     var idoc = iframe.contentDocument;
-    idoc.open(); idoc.write(_wheBuildDocHTML(r)); idoc.close();
+    idoc.open(); idoc.write(_wheBuildDocHTML(r, {hideSalary:true})); idoc.close();
     await new Promise(function(res){ setTimeout(res, 600); }); // รอ font/render
     var pb = idoc.querySelector('.print-btn'); if(pb) pb.style.display='none';
 
