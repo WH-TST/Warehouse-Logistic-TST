@@ -8171,6 +8171,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       <button onclick="whEvalPrint()" class="px-4 py-2 rounded-xl font-black text-sm border-2 border-slate-200 text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-all">
         <i class="fas fa-print mr-1"></i>พิมพ์
       </button>
+      <button id="whe-sendall-btn" onclick="whEvalSendAll()" class="px-4 py-2 rounded-xl font-black text-sm border-2 border-blue-300 text-blue-600 hover:bg-blue-50 transition-all" title="ส่ง PDF ผลประเมินเข้าเมลพนักงานทุกคนที่แสดงอยู่">
+        <i class="fas fa-paper-plane mr-1"></i>ส่งเมลทุกคน
+      </button>
     </div>
 
     <!-- Results area -->
@@ -45952,17 +45955,18 @@ function _wheLoadLibs(){
   return window.__wheLibsP;
 }
 
-window.whEvalSendEmail = async function(evalId) {
+// ส่งหนึ่งคน — silent=true จะไม่ confirm/alert (ใช้กับส่งทุกคน) คืนค่า {ok, msg}
+window.whEvalSendEmail = async function(evalId, silent) {
   var r = _wheLastRows.find(function(x){ return String(x.id)===String(evalId); });
-  if(!r){ alert('ไม่พบข้อมูล'); return; }
+  if(!r){ if(!silent)alert('ไม่พบข้อมูล'); return {ok:false, msg:'ไม่พบข้อมูล'}; }
   var staff = _wheStaff.find(function(s){ return String(s.id)===String(r.staff_id); });
-  if(!staff || !staff.email){ alert('ยังไม่ได้ตั้งค่าอีเมลของ '+r.staff_name+'\nไปที่แผง "ตั้งค่าอีเมล / รหัสพนักงาน" ก่อน'); return; }
-  if(!staff.emp_code){ alert('ยังไม่ได้ตั้งรหัสพนักงานของ '+r.staff_name+' (ใช้เป็นรหัสเปิดไฟล์ PDF)'); return; }
-  if(!window._WMS_GAS_URL){ alert('ไม่พบ GAS URL — ตั้งค่าในระบบก่อน'); return; }
-  if(!confirm('ส่งผลประเมิน '+r.eval_month+' ของ '+r.staff_name+'\nไปที่ '+staff.email+' ?')) return;
+  if(!staff || !staff.email){ if(!silent)alert('ยังไม่ได้ตั้งค่าอีเมลของ '+r.staff_name+'\nไปที่แผง "ตั้งค่าอีเมล / รหัสพนักงาน" ก่อน'); return {ok:false, msg:r.staff_name+': ไม่มีอีเมล'}; }
+  if(!staff.emp_code){ if(!silent)alert('ยังไม่ได้ตั้งรหัสพนักงานของ '+r.staff_name+' (ใช้เป็นรหัสเปิดไฟล์ PDF)'); return {ok:false, msg:r.staff_name+': ไม่มีรหัสพนักงาน'}; }
+  if(!window._WMS_GAS_URL){ if(!silent)alert('ไม่พบ GAS URL — ตั้งค่าในระบบก่อน'); return {ok:false, msg:'ไม่มี GAS URL'}; }
+  if(!silent && !confirm('ส่งผลประเมิน '+r.eval_month+' ของ '+r.staff_name+'\nไปที่ '+staff.email+' ?')) return {ok:false, msg:'ยกเลิก'};
 
   var toast = function(m){ if(typeof showToast==='function') showToast(m); };
-  toast('⏳ กำลังสร้าง PDF...');
+  if(!silent) toast('⏳ กำลังสร้าง PDF...');
   var iframe = null;
   try {
     await _wheLoadLibs();
@@ -46042,13 +46046,47 @@ window.whEvalSendEmail = async function(evalId) {
       }]})
     });
     var out = await resp.json();
-    if(out && out.success){ alert('✅ ส่งเมลสำเร็จ → '+staff.email); }
-    else { alert('ส่งไม่สำเร็จ: '+((out&&out.message)||'unknown')); }
+    if(out && out.success){
+      if(!silent) alert('✅ ส่งเมลสำเร็จ → '+staff.email);
+      return {ok:true, msg:r.staff_name+' → '+staff.email};
+    } else {
+      var m = (out&&out.message)||'unknown';
+      if(!silent) alert('ส่งไม่สำเร็จ: '+m);
+      return {ok:false, msg:r.staff_name+': '+m};
+    }
   } catch(err) {
-    alert('เกิดข้อผิดพลาด: '+err.message);
+    if(!silent) alert('เกิดข้อผิดพลาด: '+err.message);
+    return {ok:false, msg:r.staff_name+': '+err.message};
   } finally {
     if(iframe) iframe.remove();
   }
+};
+
+// ── ส่งผลประเมินทุกคนในผลที่แสดงอยู่ ──────────────────
+window.whEvalSendAll = async function() {
+  if(!_wheLastRows.length){ alert('ยังไม่มีผลการประเมิน — กด "แสดงผล" ก่อน'); return; }
+  var sendable = _wheLastRows.filter(function(r){
+    var s = _wheStaff.find(function(x){ return String(x.id)===String(r.staff_id); });
+    return s && s.email && s.emp_code;
+  });
+  var skipped = _wheLastRows.length - sendable.length;
+  if(!sendable.length){ alert('ไม่มีใครพร้อมส่ง — ตั้งค่าอีเมล/รหัสพนักงานก่อน'); return; }
+  if(!confirm('ส่งผลประเมินเข้าเมล '+sendable.length+' คน'
+    +(skipped?'\n(ข้าม '+skipped+' คนที่ยังไม่ได้ตั้งอีเมล/รหัสพนักงาน)':'')
+    +'\n\nยืนยัน?')) return;
+
+  var btn = document.getElementById('whe-sendall-btn');
+  if(btn){ btn.disabled = true; }
+  var ok=0, fails=[];
+  for(var i=0; i<sendable.length; i++){
+    if(btn) btn.innerHTML = '⏳ '+(i+1)+'/'+sendable.length+'...';
+    var res = await whEvalSendEmail(sendable[i].id, true);
+    if(res && res.ok) ok++; else fails.push(res ? res.msg : 'unknown');
+  }
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-paper-plane mr-1"></i>ส่งเมลทุกคน'; }
+  alert('✅ ส่งสำเร็จ '+ok+'/'+sendable.length+' คน'
+    +(skipped?'\nข้าม (ไม่ได้ตั้งค่า): '+skipped+' คน':'')
+    +(fails.length?'\n\nไม่สำเร็จ:\n'+fails.join('\n'):''));
 };
 
 window.whEvalPrint = function() {
