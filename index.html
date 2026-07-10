@@ -30447,6 +30447,11 @@ window.exportLogisticImage = async function exportLogisticImage() {
             </td>`;
 
         // rightCells: น.น.รวม + หมายเหตุ — rowspan whole trip (matches web layout)
+        // หมายเหตุ = remark ต่อร้านที่กรอกตอนวางแผน + failReason (ถ้ามี)
+        const _expRemarks = (shops || [])
+            .filter(s => s.remark && String(s.remark).trim())
+            .map(s => `<div style="font-size:11px;font-weight:700;color:#d97706;line-height:1.4;margin-bottom:3px">${(shops.length > 1 && (s.name || s.shopName)) ? `<span style="color:#94a3b8">${s.name || s.shopName}:</span> ` : ''}${s.remark}</div>`)
+            .join('');
         const rightCells = (rs) => `
             <td rowspan="${rs}" style="${C};${sepT}text-align:right;background:${rowBg}">
               <div style="font-size:15px;font-weight:900;font-family:monospace;color:#059669;white-space:nowrap">${wt}</div>
@@ -30454,9 +30459,9 @@ window.exportLogisticImage = async function exportLogisticImage() {
               ${firstDist ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">${firstDist} กม.</div>` : ''}
             </td>
             <td rowspan="${rs}" style="${C};${sepT}text-align:center;background:${rowBg}">
-              ${(_expFR && !_expFR.startsWith('['))
+              ${_expRemarks}${(_expFR && !_expFR.startsWith('['))
                 ? `<span style="font-size:11px;font-weight:700;color:#e11d48;line-height:1.4">${_expFR}</span>`
-                : `<span style="color:#94a3b8;font-size:11px">—</span>`}
+                : (_expRemarks ? '' : `<span style="color:#94a3b8;font-size:11px">—</span>`)}
             </td>`;
 
         shops.forEach((sh, si) => {
