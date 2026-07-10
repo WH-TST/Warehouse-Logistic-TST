@@ -3863,6 +3863,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
           <i class="fas fa-check-circle text-emerald-500"></i>
           <span id="lo-plan-info-text"></span>
         </div>
+        <div id="lo-shop-picker" class="hidden mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+          <div class="text-xs font-black text-amber-700 mb-2"><i class="fas fa-store mr-1"></i>แผนนี้ส่งหลายร้าน — เลือกร้านที่จะขึ้นสินค้า (ขึ้นเสร็จทีละร้าน)</div>
+          <div id="lo-shop-picker-btns" class="flex flex-wrap gap-2"></div>
+        </div>
       </div>
 
       <!-- รายการสินค้า -->
@@ -19289,6 +19293,11 @@ window.renderLogisticList = function renderLogisticList() {
             </td>`;
 
         // col 7-9: น.น.รวม / หมายเหตุ / จัดการ — rowspan whole trip
+        // หมายเหตุ = remark ที่กรอกตอนวางแผน (ต่อร้าน) + failReason (ถ้ามี)
+        const shopRemarks = (p.shops || [])
+            .filter(s => s.remark && String(s.remark).trim())
+            .map(s => `<div class="text-[11px] font-bold text-amber-600 leading-snug mb-1">${(p.shops.length > 1 && s.name) ? `<span class="text-slate-400">${s.name}:</span> ` : ''}${s.remark}</div>`)
+            .join('');
         const rightCells = (rs, dist) => `
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-right align-top border-l border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
                 <div class="text-sm font-black text-emerald-700 font-mono whitespace-nowrap">${wt}</div>
@@ -19296,9 +19305,9 @@ window.renderLogisticList = function renderLogisticList() {
                 ${dist ? `<div class="text-[9px] text-slate-400 mt-1">${dist} กม.</div>` : ''}
             </td>
             <td rowspan="${rs}" class="px-2 py-2 text-center align-top border-l border-slate-100" style="vertical-align:top;${sepTop}background:${rowBgColor}">
-                ${(p.failReason && !p.failReason.startsWith('['))
+                ${shopRemarks}${(p.failReason && !p.failReason.startsWith('['))
                     ? `<span class="text-[11px] font-bold text-rose-600 leading-snug">${p.failReason}</span>`
-                    : `<span class="text-slate-300 text-[11px]">—</span>`}
+                    : (shopRemarks ? '' : `<span class="text-slate-300 text-[11px]">—</span>`)}
             </td>
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 text-center align-top" style="vertical-align:top;${sepTop}background:${rowBgColor}">
                 ${actionBtns}
@@ -36702,6 +36711,43 @@ window.umDeleteUser = async function(un){
 var _loPlans  = [];   // แผนที่โหลดมา
 var _loItems  = [];   // รายการสินค้าในออเดอร์ปัจจุบัน [{so,sku,name,lines,weight,validated,ok,error}]
 var _loPlanId = '';   // plan ที่เลือก (ถ้ามี)
+var _loPlanShops = []; // ร้านในแผนที่เลือก [{name,items,imported}]
+
+// ── เลือกขึ้นสินค้าทีละร้าน (แผนหลายร้าน) ───────────────────────
+function _loRenderShopPicker() {
+    var box = document.getElementById('lo-shop-picker-btns');
+    if (!box) return;
+    box.innerHTML = _loPlanShops.map(function(s, i) {
+        var wt = s.items.reduce(function(a, it){ return a + (it.weight||0); }, 0);
+        return '<button onclick="loImportShop(' + i + ')" ' + (s.imported ? 'disabled' : '')
+            + ' class="px-3 py-2 rounded-lg text-xs font-black border-2 transition-all '
+            + (s.imported
+                ? 'bg-emerald-100 border-emerald-300 text-emerald-700 cursor-default'
+                : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-100 cursor-pointer')
+            + '">'
+            + (s.imported ? '<i class="fas fa-check mr-1"></i>' : '<i class="fas fa-store mr-1"></i>')
+            + (i+1) + '. ' + s.name
+            + ' <span class="font-bold opacity-70">(' + s.items.length + ' รายการ · ' + wt.toLocaleString() + ' กก.)</span>'
+            + '</button>';
+    }).join('');
+}
+
+window.loImportShop = function(i) {
+    var s = _loPlanShops[i];
+    if (!s || s.imported) return;
+    var added = 0;
+    s.items.forEach(function(item) {
+        _loItems.push({ so: '', sku: item.sku, name: item.productName || '', lines: item.qty,
+            weight: item.weight || 0, validated: true, ok: true, error: '',
+            fromPlan: true, shopName: s.name });
+        added++;
+    });
+    s.imported = true;
+    _loRenderShopPicker();
+    if (added) showToast('นำเข้า ' + added + ' รายการ — ' + s.name);
+    loRenderItems();
+    loUpdateCreateBtn();
+};
 
 // แสดง/ซ่อน tab ตาม role
 (function _loInitTabVisibility() {
@@ -36749,6 +36795,9 @@ window.loOnPlanChange = function() {
     _loPlanId  = planId;
     if (!planId) {
         if (info) info.classList.add('hidden');
+        _loPlanShops = [];
+        var pk = document.getElementById('lo-shop-picker');
+        if (pk) pk.classList.add('hidden');
         return;
     }
     window._sb.from('logistic_plans')
@@ -36767,21 +36816,26 @@ window.loOnPlanChange = function() {
                 infoTx.textContent = 'แผน ' + row.plan_id + ' · ' + (row.truck_plate || '—') + ' · ' + (row.plan_date || '—');
                 info.classList.remove('hidden');
             }
-            var added = 0;
+            // รวบรวมร้านทั้งหมดในแผน (เฉพาะร้านที่มีสินค้า)
+            _loPlanShops = [];
             qr.data.forEach(function(r) {
                 (r.shops || []).forEach(function(shop) {
-                    (shop.items || []).forEach(function(item) {
-                        var sku   = item.sku || '';
-                        var lines = item.qty || 0;
-                        if (!sku || !lines) return;
-                        _loItems.push({ so: '', sku: sku, name: item.productName || '', lines: lines,
-                            weight: item.weight || 0, validated: true, ok: true, error: '',
-                            fromPlan: true });
-                        added++;
+                    var items = (shop.items || []).filter(function(it){ return (it.sku||'') && (it.qty||0); });
+                    if (items.length) _loPlanShops.push({
+                        name: shop.name || shop.shopName || 'ร้านไม่ระบุ',
+                        items: items, imported: false
                     });
                 });
             });
-            if (added) showToast('นำเข้า ' + added + ' รายการจากแผนแล้ว');
+            var picker = document.getElementById('lo-shop-picker');
+            if (_loPlanShops.length > 1) {
+                // หลายร้าน → ให้เลือกขึ้นทีละร้าน
+                _loRenderShopPicker();
+                if (picker) picker.classList.remove('hidden');
+            } else {
+                if (picker) picker.classList.add('hidden');
+                if (_loPlanShops.length === 1) loImportShop(0);
+            }
             loRenderItems();
             loUpdateCreateBtn();
         })
@@ -36937,7 +36991,8 @@ window.loRenderItems = function() {
     tbody.innerHTML = _loItems.map(function(it, i) {
         var statusCell = '';
         if (it.fromPlan) {
-            statusCell = '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">จากแผน</span>';
+            statusCell = '<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">'
+                + (it.shopName ? 'จากแผน · ' + it.shopName : 'จากแผน') + '</span>';
         } else if (!it.validated) {
             statusCell = '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">รอตรวจ</span>';
         } else if (it.ok) {
@@ -37008,6 +37063,9 @@ window.loSubmitOrder = function() {
                 if (sel) sel.value = '';
                 var info = document.getElementById('lo-plan-info');
                 if (info) info.classList.add('hidden');
+                _loPlanShops = [];
+                var pk = document.getElementById('lo-shop-picker');
+                if (pk) pk.classList.add('hidden');
                 loRenderItems(); loUpdateCreateBtn();
                 loRefreshOrderList();
             } else {
