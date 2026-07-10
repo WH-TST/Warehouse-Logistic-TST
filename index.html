@@ -36769,19 +36769,32 @@ window.loRefreshPlans = function() {
     if (!sel) return;
     sel.innerHTML = '<option value="">— กำลังโหลด... —</option>';
     window._sb.from('logistic_plans')
-        .select('plan_id,plan_date,status,truck_plate')
+        .select('plan_id,plan_date,status,truck_plate,shops')
         .neq('status', 'success')
         .order('plan_id', { ascending: false })
         .limit(100)
         .then(function(res) {
             if (res.error) { sel.innerHTML = '<option value="">— โหลดไม่สำเร็จ —</option>'; return; }
             _loPlans = (res.data || []).map(function(r) {
-                return { id: r.plan_id, date: r.plan_date, truck: r.truck_plate || '', status: r.status };
+                return { id: r.plan_id, date: r.plan_date, truck: r.truck_plate || '', status: r.status, shops: r.shops || [] };
             });
-            sel.innerHTML = '<option value="">— ไม่เลือกแผน / กรอกเอง —</option>' +
-                _loPlans.map(function(p) {
-                    return '<option value="' + p.id + '">' + p.id + ' · ' + p.date + ' · ' + (p.truck || '—') + '</option>';
-                }).join('');
+            // แผนหลายร้าน → แยกเป็น option ต่อร้าน (ขึ้นทีละร้าน)
+            var opts = '<option value="">— ไม่เลือกแผน / กรอกเอง —</option>';
+            _loPlans.forEach(function(p) {
+                var shopsWithItems = (p.shops || []).filter(function(s) {
+                    return (s.items || []).some(function(it){ return (it.sku||'') && (it.qty||0); });
+                });
+                if (shopsWithItems.length > 1) {
+                    shopsWithItems.forEach(function(s, i) {
+                        opts += '<option value="' + p.id + '::' + i + '">'
+                            + p.id + ' · ' + (p.truck || '—') + ' · 🏪 ' + (i+1) + '/' + shopsWithItems.length
+                            + ' — ' + (s.name || s.shopName || '?') + '</option>';
+                    });
+                } else {
+                    opts += '<option value="' + p.id + '">' + p.id + ' · ' + p.date + ' · ' + (p.truck || '—') + '</option>';
+                }
+            });
+            sel.innerHTML = opts;
         })
         .catch(function() { sel.innerHTML = '<option value="">— เกิดข้อผิดพลาด —</option>'; });
 };
@@ -36789,9 +36802,13 @@ window.loRefreshPlans = function() {
 // ── เมื่อเลือกแผน (นำเข้าสินค้าจากแผน) ─────────────────────────
 window.loOnPlanChange = function() {
     var sel    = document.getElementById('lo-plan-select');
-    var planId = sel ? sel.value : '';
+    var rawVal = sel ? sel.value : '';
     var info   = document.getElementById('lo-plan-info');
     var infoTx = document.getElementById('lo-plan-info-text');
+    // ค่าอาจเป็น "planId" หรือ "planId::shopIdx" (แผนหลายร้าน — ขึ้นทีละร้าน)
+    var parts   = rawVal.split('::');
+    var planId  = parts[0];
+    var shopIdx = parts.length > 1 ? parseInt(parts[1]) : -1;
     _loPlanId  = planId;
     if (!planId) {
         if (info) info.classList.add('hidden');
@@ -36828,13 +36845,14 @@ window.loOnPlanChange = function() {
                 });
             });
             var picker = document.getElementById('lo-shop-picker');
-            if (_loPlanShops.length > 1) {
-                // หลายร้าน → ให้เลือกขึ้นทีละร้าน
-                _loRenderShopPicker();
-                if (picker) picker.classList.remove('hidden');
-            } else {
-                if (picker) picker.classList.add('hidden');
-                if (_loPlanShops.length === 1) loImportShop(0);
+            if (picker) picker.classList.add('hidden');
+            if (shopIdx >= 0 && _loPlanShops[shopIdx]) {
+                // เลือกร้านจาก dropdown แล้ว → ขึ้นเฉพาะร้านนั้น
+                loImportShop(shopIdx);
+                if (infoTx) infoTx.textContent += ' · 🏪 ' + _loPlanShops[shopIdx].name;
+            } else if (_loPlanShops.length >= 1) {
+                // ร้านเดียว (หรือแผนเก่า) → ขึ้นทั้งหมด
+                _loPlanShops.forEach(function(s, i){ loImportShop(i); });
             }
             loRenderItems();
             loUpdateCreateBtn();
