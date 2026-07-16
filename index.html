@@ -7514,6 +7514,14 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
           <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">W(std) (kg)</label>
           <input id="prod-f-wstd" type="number" step="0.1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="10.2">
         </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">SEMI</label>
+          <input id="prod-f-semi" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="FLG...">
+        </div>
+        <div>
+          <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">SEMI 2</label>
+          <input id="prod-f-semi2" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="FLG...">
+        </div>
       </div>
     </div>
     <div class="px-6 pb-5 flex gap-3 justify-end">
@@ -37800,9 +37808,9 @@ if (false)(function(){
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="10" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
     var { data, error } = await window._sb.from('products')
-      .select('sku,name,search_name,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w,semi_code')
+      .select('sku,name,search_name,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w,semi_code,semi_code2')
       .order('sku');
-    if (error) { tbody.innerHTML = '<tr><td colspan="15" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
+    if (error) { tbody.innerHTML = '<tr><td colspan="16" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
     _prodList = data || [];
     prodRender();
   }
@@ -37826,7 +37834,8 @@ if (false)(function(){
     { key:'min_w',            label:'W Min',        align:'center' },
     { key:'max_w',            label:'W Max',        align:'center' },
     { key:'likely_w',         label:'W(STD)',       align:'center' },
-    { key:'semi_code',         label:'SEMI',         align:'center' }
+    { key:'semi_code',         label:'SEMI',         align:'center' },
+    { key:'semi_code2',        label:'SEMI 2',       align:'center' }
   ];
 
   function prodRenderHead() {
@@ -37954,7 +37963,7 @@ if (false)(function(){
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="14" class="text-center py-12 text-slate-400">ไม่พบสินค้า</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="16" class="text-center py-12 text-slate-400">ไม่พบสินค้า</td></tr>';
       return;
     }
     var statusStyle = {
@@ -37983,6 +37992,7 @@ if (false)(function(){
         + '<td class="px-4 py-2.5 text-center text-slate-600 text-xs">' + (p.max_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center font-bold text-emerald-700 text-xs">' + (p.likely_w||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center text-xs font-mono text-purple-700">' + (p.semi_code ? esc(p.semi_code) : '<span style="color:#cbd5e1">–</span>') + '</td>'
+        + '<td class="px-4 py-2.5 text-center text-xs font-mono text-fuchsia-700">' + (p.semi_code2 ? esc(p.semi_code2) : '<span style="color:#cbd5e1">–</span>') + '</td>'
         + '<td class="px-4 py-2.5 text-center">'
           + '<div class="flex justify-center gap-1">'
           + '<button onclick="prodOpenEdit(\'' + skuSafe + '\')" class="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>'
@@ -37995,7 +38005,7 @@ if (false)(function(){
   window.prodOpenAdd = function() {
     _prodEditSku = null;
     document.getElementById('prod-modal-title').textContent = '➕ เพิ่มสินค้าใหม่';
-    ['sku','name','searchname','pool','status','group','lpb','lpr','bw','bh','wmin','wmax','wstd'].forEach(function(k) {
+    ['sku','name','searchname','pool','status','group','lpb','lpr','bw','bh','wmin','wmax','wstd','semi','semi2'].forEach(function(k) {
       var el = document.getElementById('prod-f-' + k);
       if (el) el.value = '';
     });
@@ -38022,6 +38032,8 @@ if (false)(function(){
     document.getElementById('prod-f-wmin').value = p.min_w || '';
     document.getElementById('prod-f-wmax').value = p.max_w || '';
     document.getElementById('prod-f-wstd').value = p.likely_w || '';
+    document.getElementById('prod-f-semi').value = p.semi_code || '';
+    document.getElementById('prod-f-semi2').value = p.semi_code2 || '';
     document.getElementById('prod-modal').classList.remove('hidden');
   };
 
@@ -38046,6 +38058,8 @@ if (false)(function(){
       min_w:    parseFloat(document.getElementById('prod-f-wmin').value) || 0,
       max_w:    parseFloat(document.getElementById('prod-f-wmax').value) || 0,
       likely_w: parseFloat(document.getElementById('prod-f-wstd').value) || 0,
+      semi_code:  document.getElementById('prod-f-semi').value.trim() || null,
+      semi_code2: document.getElementById('prod-f-semi2').value.trim() || null,
       updated_at: new Date().toISOString()
     };
     var { error } = await window._sb.from('products').upsert(row, { onConflict: 'sku' });
@@ -38255,9 +38269,9 @@ if (false)(function(){
 
   window.prodExport = function() {
     if (!_prodList.length) { showToast('ไม่มีข้อมูลให้ export', true); return; }
-    var rows = [['ITem','Product name','เส้นต่อมัด','มัดต่อรอบยก','W(Min)','W(Max)','W(std)']];
+    var rows = [['ITem','Product name','เส้นต่อมัด','มัดต่อรอบยก','W(Min)','W(Max)','W(std)','SEMI','SEMI 2']];
     _prodList.forEach(function(p) {
-      rows.push([p.sku, p.name, p.lines_per_bundle, p.lifts_per_round, p.min_w, p.max_w, p.likely_w]);
+      rows.push([p.sku, p.name, p.lines_per_bundle, p.lifts_per_round, p.min_w, p.max_w, p.likely_w, p.semi_code||'', p.semi_code2||'']);
     });
     var ws = XLSX.utils.aoa_to_sheet(rows);
     var wb = XLSX.utils.book_new();
