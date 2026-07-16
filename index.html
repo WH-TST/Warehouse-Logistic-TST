@@ -6526,6 +6526,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <i class="fas fa-link"></i> MAP SEMI
         <input type="file" id="fg-semi-map-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="fgSemiMapImport(this)">
       </label>
+      <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-fuchsia-50 border border-fuchsia-300 text-fuchsia-700 font-bold text-sm hover:bg-fuchsia-100 transition cursor-pointer" title="นำเข้าไฟล์ Excel 2 คอลัมน์: รหัส FG, รหัส SEMI 2">
+        <i class="fas fa-link"></i> MAP SEMI 2
+        <input type="file" id="fg-semi2-map-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="fgSemi2MapImport(this)">
+      </label>
       <button onclick="prodOpenAdd()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500 transition shadow"><i class="fas fa-plus"></i> เพิ่มสินค้า</button>
     </div>
   </div>
@@ -38597,6 +38601,47 @@ if (false)(function(){
         input.value = '';
         statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-emerald-50 border-emerald-200 text-emerald-700';
         statusEl.textContent = '✅ MAP SEMI สำเร็จ ' + ok + ' รายการ' + (fail ? ' (ไม่พบ SKU ' + fail + ' รายการ)' : '');
+        await prodLoad();
+      } catch(err) {
+        statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700';
+        statusEl.textContent = '❌ ' + (err.message || err);
+        input.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // ── MAP SEMI 2 import (FG code | SEMI 2 code) ─────────────────────
+  window.fgSemi2MapImport = async function(input) {
+    var file = input.files[0]; if (!file) return;
+    var statusEl = document.getElementById('prod-import-status');
+    if (!statusEl) return;
+    statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-blue-50 border-blue-200 text-blue-700';
+    statusEl.textContent = '⏳ กำลังอ่านไฟล์...';
+    statusEl.classList.remove('hidden');
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var wb = XLSX.read(e.target.result, { type: 'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        // คอลัมน์ 0 = FG code, คอลัมน์ 1 = SEMI 2 code
+        var rows = raw.slice(1).filter(function(r){ return r[0] && r[1]; });
+        if (!rows.length) throw new Error('ไม่พบข้อมูล (ต้องมีอย่างน้อย 2 คอลัมน์: รหัส FG, รหัส SEMI 2)');
+        statusEl.textContent = '⏳ กำลัง update ' + rows.length + ' รายการ...';
+        var pairs = rows.map(function(r){ return { fg: String(r[0]).trim(), semi: String(r[1]).trim() }; }).filter(function(r){ return r.fg && r.semi; });
+        var CHUNK = 20, ok = 0, fail = 0;
+        for (var i = 0; i < pairs.length; i += CHUNK) {
+          var chunk = pairs.slice(i, i + CHUNK);
+          statusEl.textContent = '⏳ กำลัง update ' + Math.min(i + CHUNK, pairs.length) + '/' + pairs.length + ' รายการ...';
+          var results = await Promise.all(chunk.map(function(p){
+            return window._sb.from('products').update({ semi_code2: p.semi }).eq('sku', p.fg);
+          }));
+          results.forEach(function(r){ if (r.error) fail++; else ok++; });
+        }
+        input.value = '';
+        statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-emerald-50 border-emerald-200 text-emerald-700';
+        statusEl.textContent = '✅ MAP SEMI 2 สำเร็จ ' + ok + ' รายการ' + (fail ? ' (ไม่พบ SKU ' + fail + ' รายการ)' : '');
         await prodLoad();
       } catch(err) {
         statusEl.className = 'rounded-xl border p-4 text-sm font-bold bg-rose-50 border-rose-200 text-rose-700';
