@@ -28048,8 +28048,10 @@ function _ldRenderMonitorTable(rows, orders) {
                             +'<td style="padding:7px 8px;font-size:11px;font-weight:900;color:'+fAvgColor+';text-align:right;background:#f0fdfa;">'+fAvg.toFixed(2)+(fOor?' ⚠':'')+'</td>';
                     }
                     if (aQ > 0) {
+                        // งานวนชั่ง → ใช้ Scale (KG); ไม่งั้นใช้ Final ถ้ามี ไม่งั้น Loaded
+                        var _copyW = isLW ? (parseFloat(it.scale_weight)||0) : (hasFinal ? fKg : aW);
                         (_ldCopyRegistry[orderId] = _ldCopyRegistry[orderId] || []).push({
-                            sku: it.sku || '', qty: aQ, weight: Math.round(hasFinal ? fKg : aW)
+                            sku: it.sku || '', qty: aQ, weight: Math.round(_copyW)
                         });
                     }
                     var canCutDone = it.can_cut;
