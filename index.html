@@ -28047,6 +28047,11 @@ function _ldRenderMonitorTable(rows, orders) {
                             '<td style="padding:7px 8px;font-size:12px;font-weight:900;color:#0d9488;text-align:right;background:#f0fdfa;">'+fKg.toLocaleString(undefined,{maximumFractionDigits:1})+diffBadge+'</td>'
                             +'<td style="padding:7px 8px;font-size:11px;font-weight:900;color:'+fAvgColor+';text-align:right;background:#f0fdfa;">'+fAvg.toFixed(2)+(fOor?' ⚠':'')+'</td>';
                     }
+                    if (aQ > 0) {
+                        (_ldCopyRegistry[orderId] = _ldCopyRegistry[orderId] || []).push({
+                            sku: it.sku || '', qty: aQ, weight: Math.round(hasFinal ? fKg : aW)
+                        });
+                    }
                     var canCutDone = it.can_cut;
                     return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
                         +'<td style="padding:7px 10px;font-size:11px;color:#94a3b8;text-align:center;">'+(idx+1)+'</td>'
@@ -28103,6 +28108,7 @@ function _ldRenderMonitorTable(rows, orders) {
             }
 
             // build item table(s) — trailer: 2 sections; normal: 1
+            _ldCopyRegistry[orderId] = [];
             var doneTableHtml = '';
             if (order.is_trailer && order.trailer_split) {
                 var sp=order.trailer_split;
@@ -28248,6 +28254,9 @@ function _ldRenderMonitorTable(rows, orders) {
                                 : (order.review_status||'')==='rejected'
                                 ? '<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;">↩ ตีกลับ — รอหน้างาน</span>'
                                 : '<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#d1fae5;color:#065f46;border:1.5px solid #6ee7b7;">✓ โหลดเสร็จแล้ว</span>')
+                            +(((order.review_status||'')!=='pending_review' && (order.review_status||'')!=='rejected')
+                                ? '<button onclick="ldCopyLoadData(\''+orderId+'\',this)" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#0ea5e9;color:#fff;border:none;cursor:pointer;"><i class="fas fa-copy"></i> คัดลอกข้อมูล</button>'
+                                : '')
                             +(allPhotos.length
                                 ? (function(){ var k='ph_'+orderId; _ldPhotoRegistry[k]=allPhotos; return '<button onclick="ldShowPhotos(\''+k+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#7c3aed;color:#fff;border:none;cursor:pointer;"><i class="fas fa-images"></i> รูปภาพ ('+allPhotos.length+')</button>'; })()
                                 : '<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;background:#1e293b;color:#475569;border:1px solid #334155;"><i class="fas fa-image" style="margin-right:4px;"></i>ไม่มีรูป</span>')
@@ -28558,6 +28567,30 @@ function _monQcBadge() {
 
 // ── Photo lightbox ──────────────────────────────────────────────────
 var _ldPhotoRegistry = {};   // {key: [url,...]} — avoids passing JSON in onclick
+var _ldCopyRegistry = {};    // {orderId: [{sku,qty,weight},...]} — for copy button
+
+window.ldCopyLoadData = function(orderId, btn) {
+    var rows = _ldCopyRegistry[orderId] || [];
+    if (!rows.length) { showToast('ไม่มีข้อมูลให้คัดลอก', true); return; }
+    // รูปแบบ: รหัสสินค้า \t จำนวน \t น้ำหนัก \t FG-BP \t BATCH-FG
+    var text = rows.map(function(r){
+        return [r.sku, r.qty, r.weight, 'FG-BP', 'BATCH-FG'].join('\t');
+    }).join('\n');
+    var done = function(){
+        showToast('✅ คัดลอกแล้ว ' + rows.length + ' รายการ');
+        if (btn) { var o=btn.innerHTML; btn.innerHTML='<i class="fas fa-check"></i> คัดลอกแล้ว'; setTimeout(function(){ btn.innerHTML=o; },1500); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function(){ _ldCopyFallback(text); done(); });
+    } else { _ldCopyFallback(text); done(); }
+};
+function _ldCopyFallback(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.left='-9999px';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+}
 
 window.ldShowPhotos = function(key) {
     var urls = _ldPhotoRegistry[key] || [];
