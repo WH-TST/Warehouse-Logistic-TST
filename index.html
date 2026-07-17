@@ -24676,11 +24676,28 @@ async function _ldLoadOrderCards(dateVal) {
         return;
     }
     try {
-        var {data} = await window._sb.from('loading_orders').select('*')
+        var today = new Date().toISOString().slice(0,10);
+        var data;
+        // งานของวันที่เลือก (active / under review / rejected)
+        var r1 = await window._sb.from('loading_orders').select('*')
             .eq('order_date', dateVal)
             .or('status.in.(pending,in_progress),review_status.eq.pending_review,review_status.eq.rejected')
             .order('created_at');
-        _ldRenderCards(data||[]);
+        if (dateVal === today) {
+            // ── ยกงานค้างข้ามวันมาแสดงด้วย: pending/in_progress ที่ order_date < วันนี้ (ย้อนหลังไม่เกิน 14 วัน) ──
+            var winStart = new Date(Date.now() - 14*86400000).toISOString().slice(0,10);
+            var r2 = await window._sb.from('loading_orders').select('*')
+                .lt('order_date', dateVal).gte('order_date', winStart)
+                .in('status', ['pending','in_progress'])
+                .order('order_date');
+            var seen = {};
+            data = [];
+            // งานค้างขึ้นก่อน (บนสุด) แล้วตามด้วยงานวันนี้
+            (r2.data||[]).concat(r1.data||[]).forEach(function(o){ if(!seen[o.id]){ seen[o.id]=1; data.push(o); } });
+        } else {
+            data = r1.data||[];
+        }
+        _ldRenderCards(data);
     } catch(e) {
         wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">Failed to load: '+(e?.message||'')+'</div>';
     }
@@ -24693,11 +24710,18 @@ function _ldRenderCards(orders) {
         wrap.innerHTML = '<div class="text-center py-16 text-slate-300"><i class="fas fa-inbox text-5xl mb-3 block"></i><p class="font-bold text-slate-400 text-sm">No loading orders for today</p><p class="text-xs text-slate-300 mt-1">Waiting for orders from dispatch</p></div>';
         return;
     }
+    var _todayStr = new Date().toISOString().slice(0,10);
     wrap.innerHTML = orders.map(function(o) {
         var items = o.items||[];
         var totalWt  = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
         var totalQty = items.reduce(function(a,i){ return a+(parseFloat(i.qty)||0); },0);
         var _rv = o.review_status||'';
+        // ป้ายงานค้างข้ามวัน
+        var _carryBadge = '';
+        if (o.order_date && o.order_date < _todayStr) {
+            var _dp = o.order_date.split('-');
+            _carryBadge = '<span style="background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;font-size:10px;font-weight:900;border-radius:8px;padding:2px 8px;white-space:nowrap;">⏳ ยกมา '+_dp[2]+'/'+_dp[1]+'</span>';
+        }
         var isActive = _ldActiveOrderId === o.id;
         var stColor = _rv==='rejected'?'border-rose-500':_rv==='pending_review'?'border-violet-400':o.status==='in_progress'?'border-sky-400':'border-amber-400';
         var stBadge = _rv==='rejected'
@@ -24759,7 +24783,7 @@ function _ldRenderCards(orders) {
                             +'<div style="font-size:11px;color:#64748b;">'+(o.customer_name||'')+'</div>'
                         +'</div>'
                     +'</div>'
-                    +'<div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span></div>'
+                    +'<div class="flex items-center gap-2">'+_carryBadge+'<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span></div>'
                 +'</div>'
                 // แม่ sub-row — hidden when approved
                 +(mRvSt==='approved' ? '' :
@@ -24814,7 +24838,7 @@ function _ldRenderCards(orders) {
                             +'<div style="font-size:12px;color:#f59e0b;margin-top:2px;font-weight:700;">⚠ กดเพื่อจัดรายการก่อนโหลด</div>'
                         +'</div>'
                     +'</div>'
-                    +'<div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span>'+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
+                    +'<div class="flex items-center gap-2">'+_carryBadge+'<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">รถพ่วง</span>'+stBadge+'<i class="fas fa-chevron-'+(isActive?'up':'down')+' text-slate-300 text-xs ml-1"></i></div>'
                 +'</div>'
                 +(isActive ? '<div class="border-t-2 border-dashed border-blue-200">'+formHtml+'</div>' : '')
             +'</div>';
@@ -24869,6 +24893,7 @@ function _ldRenderCards(orders) {
                 +'</div>'
                 // Right: badge + chevron
                 +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'
+                    +_carryBadge
                     +(o.loop_weigh?'<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#fff;font-size:10px;font-weight:900;border-radius:8px;padding:2px 8px;">🔄 Loop Weigh</span>':'')
                     +stBadge
                     +(canToggle?'<i class="fas fa-chevron-'+(isActive?'up':'down')+'" style="color:#cbd5e1;font-size:11px;margin-left:2px;"></i>':'')
