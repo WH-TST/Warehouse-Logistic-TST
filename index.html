@@ -27376,12 +27376,31 @@ async function _ldMonFetch(dateVal, showSpinner) {
     if (showSpinner && wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
         if (!Object.keys(_ldProductMap).length) await _ldLoadProductMap();
-        var [{data:orders},{data:sessions}] = await Promise.all([
+        var [{data:ordToday},{data:sessToday}] = await Promise.all([
             window._sb.from('loading_orders').select('*').eq('order_date', dateVal),
             window._sb.from('loading_sessions').select('*').eq('plan_date', dateVal)
         ]);
-        _ldRenderMonitorTable(sessions||[], orders||[]);
-        _ldRenderMonKpi(sessions||[], orders||[]);
+        var orders = ordToday||[], sessions = sessToday||[];
+        // ── ยกงานค้างข้ามวันมาแสดงในหน้า "วันนี้" ด้วย (real-time ไม่ต้องกลับไปดูย้อนหลัง) ──
+        var today = new Date().toISOString().slice(0,10);
+        if (dateVal === today) {
+            var winStart = new Date(Date.now() - 14*86400000).toISOString().slice(0,10);
+            var {data:carried} = await window._sb.from('loading_orders').select('*')
+                .lt('order_date', dateVal).gte('order_date', winStart)
+                .or('status.in.(pending,in_progress),review_status.eq.pending_review,review_status.eq.rejected');
+            carried = carried||[];
+            var have = {}; orders.forEach(function(o){ have[o.id]=1; });
+            var newOnes = carried.filter(function(o){ return !have[o.id]; });
+            if (newOnes.length) {
+                orders = newOnes.concat(orders); // งานค้างขึ้นบนสุด
+                var cids = newOnes.map(function(o){ return o.id; });
+                var {data:cSess} = await window._sb.from('loading_sessions').select('*').in('order_id', cids);
+                var sHave = {}; sessions.forEach(function(s){ if(s.id!=null) sHave[s.id]=1; });
+                (cSess||[]).forEach(function(s){ if(s.id==null || !sHave[s.id]) sessions.push(s); });
+            }
+        }
+        _ldRenderMonitorTable(sessions, orders);
+        _ldRenderMonKpi(sessions, orders);
         var badge = document.getElementById('ld-mon-realtime-badge');
         if (badge) badge.classList.remove('hidden');
     } catch(e) {
@@ -28275,6 +28294,7 @@ function _ldRenderMonitorTable(rows, orders) {
                             +'</div>'
                         +'</div>'
                         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+                            +(function(){ var _t=new Date().toISOString().slice(0,10); if(order.order_date&&order.order_date<_t){ var d=order.order_date.split('-'); return '<span style="padding:4px 10px;border-radius:999px;font-size:11px;font-weight:900;background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;">⏳ ยกมา '+d[2]+'/'+d[1]+'</span>'; } return ''; })()
                             +(order.is_trailer?'<span style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#1d4ed8;color:#bfdbfe;">รถพ่วง</span>':'')
                             +((order.review_status||'')==='rejected' && _hasDrafts
                                 ? '<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#fff7ed;color:#c2410c;border:1.5px solid #fb923c;display:inline-flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;background:#f97316;border-radius:50%;display:inline-block;animation:pulse 1s infinite;"></span>↩ กำลังโหลดใหม่</span>'
