@@ -10951,12 +10951,27 @@ window.loadAnalytics = async function loadAnalytics() {
 
     try {
         // ── INBOUND + INVENTORY: ดึงตรงจาก Supabase ──
+        // Supabase คืนสูงสุด 1000 แถว/ครั้ง → ต้อง paginate ให้ครบทุกแถว
+        // ไม่งั้นวันหลังๆ จะหลุด (เขียวเป็น 0)
+        async function _fetchAllTx() {
+            var all = [], from = 0, PAGE = 1000;
+            while (true) {
+                var { data, error } = await window._sb.from('transection_fg')
+                    .select('tst_pd_date,reference,cw_quantity,quantity')
+                    .gte('tst_pd_date', startVal)
+                    .lte('tst_pd_date', endVal)
+                    .eq('reference', 'Production')
+                    .order('tst_pd_date')
+                    .range(from, from + PAGE - 1);
+                if (error) return { error: error };
+                all = all.concat(data || []);
+                if (!data || data.length < PAGE) break;
+                from += PAGE;
+            }
+            return { data: all };
+        }
         const [txRes, ohRes] = await Promise.all([
-            window._sb.from('transection_fg')
-                .select('tst_pd_date,reference,cw_quantity,quantity')
-                .gte('tst_pd_date', startVal)
-                .lte('tst_pd_date', endVal)
-                .eq('reference', 'Production'),
+            _fetchAllTx(),
             window._sb.from('onhand_fg')
                 .select('item_number,cw_physical_inventory,physical_inventory')
         ]);
