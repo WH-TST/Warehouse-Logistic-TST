@@ -24991,6 +24991,7 @@ async function _ldApplyInspectionGate(oid) {
     if (saveBtn) { saveBtn.disabled=true; saveBtn.style.opacity='0.5'; saveBtn.style.filter='grayscale(1)'; saveBtn.style.cursor='not-allowed'; }
 }
 window._ldApplyInspectionGate = _ldApplyInspectionGate;
+window._ldCheckInspectionAllowed = _ldCheckInspectionAllowed;
 
 async function _ldRestoreRejectedForm(oid, orderItems) {
     try {
@@ -29707,6 +29708,15 @@ window.loSaveOrder = async function() {
         updated_at:     new Date().toISOString(),
     };
     if (_loEditId) delete payload.status;
+
+    // ── Gate: รถบริษัทต้องผ่านตรวจสภาพรถ (approved) ก่อน จึงจะสร้าง/แก้ออเดอร์โหลดได้ ──
+    if (typeof window._ldCheckInspectionAllowed === 'function') {
+        var _insp = await window._ldCheckInspectionAllowed({ truck_plate: truck, order_date: dateVal, plan_id: planId });
+        if (_insp.gated && !_insp.allowed) {
+            showToast('🚫 สร้างออเดอร์ไม่ได้ — รถทะเบียน '+_insp.plate+' ยังไม่ผ่านตรวจสภาพของวันที่ '+dateVal+' (ต้องตรวจและอนุมัติก่อน)', true);
+            return;
+        }
+    }
 
     try {
         var {error} = _loEditId
