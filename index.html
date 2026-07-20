@@ -29283,29 +29283,59 @@ window.loModalLoadPlans = async function() {
             .order('plan_date').order('plan_id');
         _loPlansCache = data || [];
         _loPlansCache.forEach(function(p){
-            var opt = document.createElement('option');
-            opt.value = p.plan_id;
             var dateDisp = (p.plan_date||'').slice(5).replace('-','/');
-            var shops = (p.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
-            opt.textContent = '['+dateDisp+'] '+p.plan_id+' | '+(p.truck_plate||'—')+' | '+shops.slice(0,30);
-            sel.appendChild(opt);
+            // ร้านที่มีสินค้าจริง
+            var shopsWithItems = (p.shops||[]).filter(function(s){
+                return (s.items||[]).some(function(it){ return (it.sku||it.productCode) && (parseFloat(it.qty)||0); });
+            });
+            if (shopsWithItems.length > 1) {
+                // แผนหลายร้าน → แยก option ต่อร้าน (ขึ้นทีละร้าน)
+                shopsWithItems.forEach(function(s, i){
+                    var opt = document.createElement('option');
+                    opt.value = p.plan_id + '::' + i;
+                    opt.textContent = '['+dateDisp+'] '+p.plan_id+' | '+(p.truck_plate||'—')+' | 🏪 '+(i+1)+'/'+shopsWithItems.length+' '+(s.shopName||s.name||'?').slice(0,22);
+                    sel.appendChild(opt);
+                });
+            } else {
+                var opt = document.createElement('option');
+                opt.value = p.plan_id;
+                var shops = (p.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean).join(', ');
+                opt.textContent = '['+dateDisp+'] '+p.plan_id+' | '+(p.truck_plate||'—')+' | '+shops.slice(0,30);
+                sel.appendChild(opt);
+            }
         });
     } catch(e) {}
 };
 
 window.loImportFromPlan = async function() {
-    var planId = document.getElementById('lo-m-plan')?.value;
-    if (!planId) return;
+    var rawVal = document.getElementById('lo-m-plan')?.value;
+    if (!rawVal) return;
+    // ค่าอาจเป็น "planId" หรือ "planId::shopIdx" (แผนหลายร้าน — ดึงทีละร้าน)
+    var parts   = rawVal.split('::');
+    var planId  = parts[0];
+    var shopIdx = parts.length > 1 ? parseInt(parts[1]) : -1;
     var plan = _loPlansCache.find(function(p){ return p.plan_id === planId; });
     if (!plan) return;
 
     // ใส่ทะเบียนรถ (แม่)
     document.getElementById('lo-m-truck').value = plan.truck_plate || '';
 
-    // ใส่ชื่อลูกค้าจากแผน
-    var shopNames = (plan.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean);
+    // ร้านเป้าหมาย (ถ้าเลือกดึงทีละร้าน)
+    var shopsWithItems = (plan.shops||[]).filter(function(s){
+        return (s.items||[]).some(function(it){ return (it.sku||it.productCode) && (parseFloat(it.qty)||0); });
+    });
+    var targetShopName = (shopIdx >= 0 && shopsWithItems[shopIdx])
+        ? (shopsWithItems[shopIdx].shopName || shopsWithItems[shopIdx].name || '')
+        : null;
+
+    // ใส่ชื่อลูกค้าจากแผน — ถ้าเลือกทีละร้านใช้ชื่อร้านนั้น
     var custEl = document.getElementById('lo-m-customer');
-    if (custEl && shopNames.length) custEl.value = shopNames.join(', ');
+    if (targetShopName) {
+        if (custEl) custEl.value = targetShopName;
+    } else {
+        var shopNames = (plan.shops||[]).map(function(s){ return s.shopName||''; }).filter(Boolean);
+        if (custEl && shopNames.length) custEl.value = shopNames.join(', ');
+    }
 
     // ตรวจว่าเป็น trailer plan ไหม
     var isTrailerPlan = !!(plan.is_mother || plan.pair_id);
@@ -29335,6 +29365,10 @@ window.loImportFromPlan = async function() {
     _loItemCount = 0;
     var seen = {};
     var allShops = (plan.shops||[]).concat(childShops);
+    // ถ้าเลือกดึงทีละร้าน → เอาเฉพาะร้านนั้น (รวมทั้งฝั่งแม่+ลูกที่ชื่อร้านตรงกัน)
+    if (targetShopName) {
+        allShops = allShops.filter(function(s){ return (s.shopName||s.name||'') === targetShopName; });
+    }
     allShops.forEach(function(shop){
         (shop.items||[]).forEach(function(it){
             var sku = it.sku || it.productCode || '';
