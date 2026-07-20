@@ -24963,15 +24963,16 @@ async function _ldCheckInspectionAllowed(order) {
     // คืน {gated:bool, allowed:bool, plate}
     var plate = (order.truck_plate||'').trim();
     var odate = order.order_date;
-    if (!plate || !odate) return { gated:false, allowed:true, plate:plate }; // ไม่มีทะเบียน (รถจ้าง) → ไม่ gate
-    // ตรวจว่าเป็นรถจ้างไหม (รถจ้างไม่ต้องตรวจสภาพ)
-    if (order.plan_id) {
-        try {
-            var {data:pl} = await window._sb.from('logistic_plans')
-                .select('truck_type').eq('plan_id', order.plan_id).maybeSingle();
-            if (pl && pl.truck_type === 'hire') return { gated:false, allowed:true, plate:plate };
-        } catch(e){}
-    }
+    if (!plate || !odate) return { gated:false, allowed:true, plate:plate }; // ไม่มีทะเบียน → ไม่ gate
+    // gate เฉพาะ "รถบริษัท" = ทะเบียนที่อยู่ในตาราง logi_trucks เท่านั้น
+    // รถจ้าง/รถนอก (ไม่อยู่ใน master) → ไม่ต้องตรวจสภาพ แล้วแต่เขาเลย
+    var isFleet = false;
+    try {
+        var {data:tk} = await window._sb.from('logi_trucks')
+            .select('plate').eq('plate', plate).maybeSingle();
+        isFleet = !!tk;
+    } catch(e) { return { gated:false, allowed:true, plate:plate }; } // เช็คไม่ได้ → ไม่บล็อก
+    if (!isFleet) return { gated:false, allowed:true, plate:plate }; // ไม่ใช่รถบริษัท → ไม่ gate
     // รถบริษัท → ต้องมีผลตรวจ approved ของ ทะเบียน+วันที่
     try {
         var {data:insp} = await window._sb.from('truck_inspections')
