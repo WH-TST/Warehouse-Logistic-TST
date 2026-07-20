@@ -24937,7 +24937,60 @@ function _ldRenderCards(orders) {
             _ldRestoreRejectedForm(o.id, o.items||[]);
         }
     });
+    // cache orders for inspection-gate lookup
+    window._ldOrdersById = {};
+    orders.forEach(function(o){ window._ldOrdersById[o.id] = o; });
+    // gate: รถบริษัทต้องผ่านตรวจสภาพก่อนจึงโหลดได้ — เช็คฟอร์มที่เปิดอยู่
+    if (_ldActiveOrderId) setTimeout(function(){ _ldApplyInspectionGate(_ldActiveOrderId); }, 220);
+    Object.keys(_ldTrailerActive).forEach(function(oid){
+        var ta = _ldTrailerActive[oid];
+        if (ta.mother || ta.trailer) setTimeout(function(){ _ldApplyInspectionGate(oid); }, 220);
+    });
 }
+
+// ── Gate: รถบริษัทต้องผ่านตรวจสภาพรถ (approved) ของวันนั้นก่อน ทีมโหลดถึงจะโหลดได้ ──
+async function _ldCheckInspectionAllowed(order) {
+    // คืน {gated:bool, allowed:bool, plate}
+    var plate = (order.truck_plate||'').trim();
+    var odate = order.order_date;
+    if (!plate || !odate) return { gated:false, allowed:true, plate:plate }; // ไม่มีทะเบียน (รถจ้าง) → ไม่ gate
+    // ตรวจว่าเป็นรถจ้างไหม (รถจ้างไม่ต้องตรวจสภาพ)
+    if (order.plan_id) {
+        try {
+            var {data:pl} = await window._sb.from('logistic_plans')
+                .select('truck_type').eq('plan_id', order.plan_id).maybeSingle();
+            if (pl && pl.truck_type === 'hire') return { gated:false, allowed:true, plate:plate };
+        } catch(e){}
+    }
+    // รถบริษัท → ต้องมีผลตรวจ approved ของ ทะเบียน+วันที่
+    try {
+        var {data:insp} = await window._sb.from('truck_inspections')
+            .select('approval_status').eq('inspect_date', odate).eq('truck_plate', plate)
+            .eq('approval_status','approved').limit(1);
+        return { gated:true, allowed:!!(insp && insp.length), plate:plate };
+    } catch(e){ return { gated:false, allowed:true, plate:plate }; } // เช็คไม่ได้ → ไม่บล็อก
+}
+
+async function _ldApplyInspectionGate(oid) {
+    var o = (window._ldOrdersById||{})[oid];
+    if (!o) return;
+    var res = await _ldCheckInspectionAllowed(o);
+    var gate    = document.getElementById('ldf-inspect-gate-'+oid);
+    var saveBtn = document.getElementById('ldf-save-btn-'+oid);
+    if (!res.gated || res.allowed) {
+        if (gate) gate.innerHTML = '';
+        if (saveBtn) { saveBtn.disabled=false; saveBtn.style.opacity=''; saveBtn.style.filter=''; saveBtn.style.cursor='pointer'; }
+        return;
+    }
+    // ถูกบล็อก — รถบริษัทยังไม่ผ่านตรวจสภาพ
+    if (gate) gate.innerHTML = '<div style="margin:12px 12px 0;background:linear-gradient(135deg,#7f1d1d,#dc2626);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;">'
+        +'<i class="fas fa-triangle-exclamation" style="color:#fecaca;font-size:20px;flex-shrink:0;"></i>'
+        +'<div><div style="font-size:14px;font-weight:900;color:#fff;">ยังโหลดไม่ได้ — รถยังไม่ผ่านตรวจสภาพ</div>'
+        +'<div style="font-size:12px;color:#fecaca;margin-top:2px;">ทะเบียน '+_ldEsc(res.plate)+' ต้องตรวจสภาพรถและได้รับการอนุมัติก่อน จึงจะโหลดสินค้าได้</div></div>'
+        +'</div>';
+    if (saveBtn) { saveBtn.disabled=true; saveBtn.style.opacity='0.5'; saveBtn.style.filter='grayscale(1)'; saveBtn.style.cursor='not-allowed'; }
+}
+window._ldApplyInspectionGate = _ldApplyInspectionGate;
 
 async function _ldRestoreRejectedForm(oid, orderItems) {
     try {
@@ -25383,7 +25436,7 @@ function _ldBuildFormMobile(order) {
           +'<div style="font-size:11px;color:#fde68a;margin-top:2px;">โหลดทีละรายการแล้วนำรถวนชั่งตราชั่งใหญ่ก่อนรายการถัดไป</div></div>'
           +'</div>'
         : '';
-    return _mLoopBanner+'<div style="padding:10px;background:#f0fdf4;display:flex;flex-direction:column;gap:10px;">'
+    return _mLoopBanner+'<div id="ldf-inspect-gate-'+oid+'"></div>'+'<div style="padding:10px;background:#f0fdf4;display:flex;flex-direction:column;gap:10px;">'
         +'<div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px 14px;border:1px solid #d1fae5;">'
             +'<i class="fas fa-user-circle" style="color:#10b981;font-size:18px;"></i>'
             +'<span style="font-size:14px;font-weight:900;color:#1e293b;">'+_ldEsc(uName)+_ldEsc(teamTxt)+'</span>'
@@ -25623,7 +25676,7 @@ function _ldBuildForm(order) {
         return rows;
     }).join('');
 
-    return _loopWeighBanner+'<div style="padding:12px;background:#f0fdf4;display:flex;flex-direction:column;gap:12px;">'
+    return _loopWeighBanner+'<div id="ldf-inspect-gate-'+oid+'"></div>'+'<div style="padding:12px;background:#f0fdf4;display:flex;flex-direction:column;gap:12px;">'
         // user badge
         +'<div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px 14px;border:1px solid #d1fae5;">'
             +'<i class="fas fa-user-circle" style="color:#10b981;font-size:18px;"></i>'
@@ -26452,6 +26505,16 @@ window.ldCardSave = async function(oid, unit) {
     var planId     = orderData?.plan_id||'';
     var planDate   = orderData?.order_date||today;
     var truckPlate = orderData?.truck_plate||'';
+
+    // ── Gate: รถบริษัทต้องผ่านตรวจสภาพรถ (approved) ของวันนั้นก่อน ทีมโหลดถึงจะบันทึกได้ ──
+    if (orderData) {
+        var _insp = await _ldCheckInspectionAllowed(orderData);
+        if (_insp.gated && !_insp.allowed) {
+            showToast('🚫 รถยังไม่ผ่านตรวจสภาพ — ทะเบียน '+_insp.plate+' ต้องตรวจสภาพรถและได้รับอนุมัติก่อนจึงจะโหลดได้', true);
+            if (typeof _ldApplyInspectionGate==='function') _ldApplyInspectionGate(oid);
+            return;
+        }
+    }
 
     // staff from session
     var cu = window._cu||{};
