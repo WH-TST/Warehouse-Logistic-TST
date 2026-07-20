@@ -24952,11 +24952,19 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         } catch(e){}
 
         var {data:done} = await window._sb.from('loading_sessions')
-            .select('sku,qty,weight,lifts,created_at')
+            .select('sku,qty,weight,lifts,created_at,note')
             .eq('order_id', oid)
             .neq('record_type', 'draft')
             .order('created_at', {ascending:true});
         if (!done || !done.length) return;
+
+        // ── parse เหล็กรอง (dunnage) จาก note เดิม เพื่อ restore ──
+        var _rjDun = null;
+        done.forEach(function(r){
+            if (_rjDun) return;
+            var m = (r.note||'').match(/\[เหล็กรอง:\s*(\d+)\s*ท่อน\s*\/\s*([\d.]+)\s*KG\]/);
+            if (m) _rjDun = { pcs: m[1], kg: m[2] };
+        });
 
         // Group done sessions by SKU, sorted oldest-first for positional matching
         // (supports duplicate SKU order items — each iIdx gets its own session)
@@ -25004,6 +25012,21 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
                     if (qEl && !qEl.value && cell.qty) qEl.value = cell.qty;
                 });
             });
+            // restore เหล็กรอง (dunnage) จากงานครั้งแรก
+            if (_rjDun) {
+                var _dpEl = document.getElementById('ldf-dunnage-pcs-'+oid);
+                var _dkEl = document.getElementById('ldf-dunnage-kg-'+oid);
+                if (_dpEl && !_dpEl.value) _dpEl.value = _rjDun.pcs;
+                if (_dkEl && !_dkEl.value) _dkEl.value = _rjDun.kg;
+            }
+            // restore QC — งานที่เคยบันทึกได้ = เคยติ๊กครบทั้ง 5 ข้อ → ติ๊กกลับให้
+            _ldQcState[oid] = [true,true,true,true,true];
+            for (var _qi=0; _qi<5; _qi++) {
+                var _qbox = document.getElementById('ldf-qc-box-'+oid+'-'+_qi);
+                var _qlbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+_qi);
+                if (_qbox) { _qbox.style.background='#16a34a'; _qbox.style.borderColor='#16a34a'; var _qic=_qbox.querySelector('i'); if(_qic) _qic.style.display='block'; }
+                if (_qlbl) { _qlbl.style.background='#f0fdf4'; _qlbl.style.borderColor='#86efac'; }
+            }
             ldCardStats(oid, _rjUnit);
             // Save pre-fill to localStorage WITHOUT userEdited flag so DB cache re-applies on next tab switch
             var _preDraft = {lifts:[], note:'', userEdited:false};
