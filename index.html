@@ -43878,8 +43878,8 @@ window.drvLoadPlan=async function(){
     }
   }
   drvHideL();drvRenderPlanCards(_dPlans);
-  // ตรวจสอบว่าต้องแสดง popup ตรวจสภาพรถไหม (เฉพาะเมื่อมีแผนวันนี้)
-  if(_dPlans.length) drvInspectCheck();
+  // ตรวจสภาพรถ: เด้งครั้งแรกของวัน ไม่ว่าจะมีงานหรือไม่ (เตรียมพร้อมกรณีมีงานแทรก)
+  drvInspectDailyPrompt();
 };
 
 // ─── Vehicle Inspection ────────────────────────────────────────────────────
@@ -43954,7 +43954,46 @@ async function drvInspectCheck(){
   drvInspectShow(today,plate);
 }
 
+// เด้งป๊อบอัพตรวจสภาพครั้งแรกของวัน — ไม่ว่าจะมีงานหรือไม่ (ไม่มีงาน = ให้เลือกทะเบียนเอง)
+async function drvInspectDailyPrompt(){
+  var today=new Date().toISOString().split('T')[0];
+  var driverKey=_dSess?.driver_id||_dSess?.username||'x';
+  var guardKey='drv_inspect_prompt_'+driverKey+'_'+today;
+  try{ if(localStorage.getItem(guardKey)) return; }catch(e){}
+  // ถ้ามีแผนค้างคืนที่ออกรถไปแล้ว → ไม่ต้องตรวจซ้ำ
+  var hasActiveOvernight=_dPlans.some(function(p){return p._isOvernight&&_dTripLogs[p.plan_id];});
+  if(hasActiveOvernight){ try{localStorage.setItem(guardKey,'1');}catch(e){} return; }
+  // ตรวจไปแล้ววันนี้ไหม (ต่อคนขับ)
+  var driverId=_dSess?.driver_id||'';
+  try{
+    var q=window._sb.from('truck_inspections').select('id').eq('inspect_date',today);
+    if(driverId) q=q.eq('driver_id',driverId);
+    var {data:done}=await q.limit(1);
+    if(done&&done.length){ try{localStorage.setItem(guardKey,'1');}catch(e){} return; }
+  }catch(e){}
+  // มีงานส่งของ → ใช้ทะเบียนจากงาน; ไม่มีงาน → ให้เลือกทะเบียนเอง (plate='')
+  var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
+  var plate = (hasDelivery && _dPlans[0]?.truck_plate) ? _dPlans[0].truck_plate : '';
+  _dInspectType=_drvDetectInspectType();
+  try{ localStorage.setItem(guardKey,'1'); }catch(e){} // เด้งครั้งเดียว/วัน
+  drvInspectShow(today, plate);
+}
+
+// เลือกทะเบียนรถในป๊อบอัพ (กรณีไม่มีงาน)
+window.drvInspectPickPlate=function(v){ window._dInspectPlate=v||''; };
+async function _drvLoadInspectPlates(){
+  try{
+    var {data}=await window._sb.from('logi_trucks').select('plate').order('plate');
+    var sel=document.getElementById('drv-inspect-plate-sel'); if(!sel) return;
+    (data||[]).forEach(function(t){
+      if(!t.plate) return;
+      var o=document.createElement('option'); o.value=t.plate; o.textContent=t.plate; sel.appendChild(o);
+    });
+  }catch(e){}
+}
+
 function drvInspectShow(date,plate){
+  window._dInspectPlate = plate||'';
   _dInspectPhotos={};
   var overlay=document.getElementById('drv-inspect-overlay');
   var list=document.getElementById('drv-inspect-list');
@@ -43966,7 +44005,17 @@ function drvInspectShow(date,plate){
 
   // อัพเดต header
   var subtitleEl=document.getElementById('drv-inspect-subtitle');
-  if(subtitleEl) subtitleEl.textContent=plate+' · '+date;
+  if(subtitleEl){
+    if(plate){
+      subtitleEl.textContent=plate+' · '+date;
+    } else {
+      // ไม่มีงาน → ให้เลือกทะเบียนรถที่จะตรวจ
+      subtitleEl.innerHTML='<span style="color:#f59e0b;">เลือกทะเบียนรถ</span> · '+date
+        +' <select id="drv-inspect-plate-sel" onchange="drvInspectPickPlate(this.value)" style="margin-left:6px;background:#0f172a;border:1px solid #f59e0b;border-radius:8px;color:#fff;font-size:12px;font-weight:800;padding:5px 8px;outline:none;">'
+        +'<option value="">— เลือกทะเบียน —</option></select>';
+      _drvLoadInspectPlates();
+    }
+  }
   var titleEl=document.getElementById('drv-inspect-title');
   if(titleEl) titleEl.innerHTML=tp.icon+' '+tp.label;
   var descEl=document.getElementById('drv-inspect-desc');
@@ -44036,9 +44085,10 @@ window.drvInspectSave=async function(){
     drvShowToast('📷 กรุณาถ่ายรูป: '+missingPhotos.map(function(n){return n.replace('⭐ ','');}).join(', '),true,5000);
     return;
   }
-  btn.disabled=true;btn.textContent='กำลังบันทึก...';
   var today=new Date().toISOString().split('T')[0];
-  var plate=(_dPlans[0]?.truck_plate)||'';
+  var plate=window._dInspectPlate||(_dPlans[0]?.truck_plate)||'';
+  if(!plate){ drvShowToast('กรุณาเลือกทะเบียนรถก่อนบันทึก',true); return; }
+  btn.disabled=true;btn.textContent='กำลังบันทึก...';
 
   var items=await Promise.all(tp.items.map(async function(itDef,i){
     var card=document.getElementById('drv-inspect-item-'+i);
