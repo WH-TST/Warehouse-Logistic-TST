@@ -43967,25 +43967,25 @@ async function drvInspectCheck(){
 // เด้งป๊อบอัพตรวจสภาพครั้งแรกของวัน — ไม่ว่าจะมีงานหรือไม่ (ไม่มีงาน = ให้เลือกทะเบียนเอง)
 async function drvInspectDailyPrompt(){
   var today=new Date().toISOString().split('T')[0];
-  var driverKey=_dSess?.driver_id||_dSess?.username||'x';
-  var guardKey='drv_inspect_prompt_'+driverKey+'_'+today;
-  try{ if(localStorage.getItem(guardKey)) return; }catch(e){}
+  // กันเด้งซ้ำ "ภายในรอบเดียว" (in-memory) — ไม่ใช่ทั้งวัน
+  // ถ้ายังไม่ตรวจ พอ login/refresh ใหม่จะเด้งอีก จนกว่าจะตรวจจริง
+  if(window._dInspectPromptedSession) return;
   // ถ้ามีแผนค้างคืนที่ออกรถไปแล้ว → ไม่ต้องตรวจซ้ำ
   var hasActiveOvernight=_dPlans.some(function(p){return p._isOvernight&&_dTripLogs[p.plan_id];});
-  if(hasActiveOvernight){ try{localStorage.setItem(guardKey,'1');}catch(e){} return; }
-  // ตรวจไปแล้ววันนี้ไหม (ต่อคนขับ)
+  if(hasActiveOvernight){ window._dInspectPromptedSession=true; return; }
+  // ตรวจไปแล้ววันนี้ไหม (ต่อคนขับ) — ตรวจแล้วเท่านั้นจึงหยุดเด้ง
   var driverId=_dSess?.driver_id||'';
   try{
     var q=window._sb.from('truck_inspections').select('id').eq('inspect_date',today);
     if(driverId) q=q.eq('driver_id',driverId);
     var {data:done}=await q.limit(1);
-    if(done&&done.length){ try{localStorage.setItem(guardKey,'1');}catch(e){} return; }
+    if(done&&done.length){ window._dInspectPromptedSession=true; return; }
   }catch(e){}
   // มีงานส่งของ → ใช้ทะเบียนจากงาน; ไม่มีงาน → ให้เลือกทะเบียนเอง (plate='')
   var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
   var plate = (hasDelivery && _dPlans[0]?.truck_plate) ? _dPlans[0].truck_plate : '';
   _dInspectType=_drvDetectInspectType();
-  try{ localStorage.setItem(guardKey,'1'); }catch(e){} // เด้งครั้งเดียว/วัน
+  window._dInspectPromptedSession=true; // กันเด้งซ้ำในรอบนี้ (รีเฟรช/login ใหม่จะเด้งอีกถ้ายังไม่ตรวจ)
   drvInspectShow(today, plate);
 }
 
