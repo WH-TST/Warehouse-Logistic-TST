@@ -3842,7 +3842,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         </div>
         <div>
           <label class="text-xs font-black text-slate-500 uppercase mb-1 block">วันที่โหลด <span class="text-red-500">*</span></label>
-          <input id="lo-date" type="date" oninput="loUpdateCreateBtn()"
+          <input id="lo-create-date" type="date" oninput="loUpdateCreateBtn()"
             class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 font-bold text-slate-800 outline-none focus:border-emerald-500 transition-all text-sm">
         </div>
       </div>
@@ -36940,7 +36940,7 @@ window.loOnPlanChange = function() {
             }
             var row = qr.data[0];
             var truckEl = document.getElementById('lo-truck');
-            var dateEl  = document.getElementById('lo-date');
+            var dateEl  = document.getElementById('lo-create-date');
             if (truckEl && !truckEl.value) truckEl.value = row.truck_plate || '';
             if (dateEl  && !dateEl.value)  dateEl.value  = (row.plan_date || '').substring(0, 10);
             if (info && infoTx) {
@@ -37149,7 +37149,7 @@ window.loUpdateCreateBtn = function() {
     var btn   = document.getElementById('lo-create-btn');
     if (!btn) return;
     var truck = (document.getElementById('lo-truck') || {}).value || '';
-    var date  = (document.getElementById('lo-date')  || {}).value || '';
+    var date  = (document.getElementById('lo-create-date')  || {}).value || '';
     var hasItems   = _loItems.length > 0;
     var hasPending = _loItems.some(function(it) { return !it.fromPlan && !it.validated; });
     var hasError   = _loItems.some(function(it) { return it.validated && !it.ok; });
@@ -37172,7 +37172,7 @@ window.loSubmitOrder = function() {
     var btn   = document.getElementById('lo-create-btn');
     if (!btn || btn.disabled) return;
     var truck   = (document.getElementById('lo-truck').value || '').trim();
-    var date    = (document.getElementById('lo-date').value  || '');
+    var date    = (document.getElementById('lo-create-date').value  || '');
     var planId  = _loPlanId || '';
     var creator = (typeof _cu !== 'undefined' && _cu) ? (_cu.name || _cu.username) : 'Admin';
     var items   = JSON.stringify(_loItems.map(function(it) {
@@ -37190,7 +37190,7 @@ window.loSubmitOrder = function() {
                 // reset form
                 _loItems = []; _loPlanId = '';
                 document.getElementById('lo-truck').value = '';
-                document.getElementById('lo-date').value  = '';
+                document.getElementById('lo-create-date').value  = '';
                 var sel = document.getElementById('lo-plan-select');
                 if (sel) sel.value = '';
                 var info = document.getElementById('lo-plan-info');
