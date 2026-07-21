@@ -29386,15 +29386,21 @@ window.custSave = async function(){
     Object.keys(all).forEach(function(k){ if (!_custCols.length || _custCols.indexOf(k) >= 0) row[k] = all[k]; });
     var { error } = await window._sb.from('logi_shops').upsert(row, { onConflict: 'id' });
     if (error) { showToast('❌ '+error.message, true); return; }
+    _custInvalidateMaster();
     custCloseModal();
     showToast(_custEditId ? '✅ แก้ไขลูกค้าแล้ว' : '✅ เพิ่มลูกค้าแล้ว');
     await custInit();
 };
+// ล้าง cache master ให้หน้าอื่น (Delivery Plan) โหลดลูกค้าใหม่
+function _custInvalidateMaster(){
+    try { if (typeof LOGI_MASTER_CACHE !== 'undefined') LOGI_MASTER_CACHE.loaded = false; } catch(e){}
+}
 window.custDelete = async function(id){
     var c = _custList.find(function(x){ return String(x.id)===String(id); });
     if (!confirm('ลบลูกค้า "'+(c?c.name:id)+'" ออกจากระบบ?\nไม่สามารถย้อนกลับได้')) return;
     var { error } = await window._sb.from('logi_shops').delete().eq('id', id);
     if (error) { showToast('❌ '+error.message, true); return; }
+    _custInvalidateMaster();
     showToast('🗑 ลบแล้ว');
     await custInit();
 };
@@ -29459,6 +29465,7 @@ window.custImport = function(input){
             input.value = '';
             statusEl.className = 'rounded-xl border p-4 text-sm font-bold mb-3 bg-emerald-50 border-emerald-200 text-emerald-700';
             statusEl.textContent = '✅ Import สำเร็จ '+rows.length+' ราย';
+            _custInvalidateMaster();
             await custInit();
         } catch(err){
             statusEl.className = 'rounded-xl border p-4 text-sm font-bold mb-3 bg-rose-50 border-rose-200 text-rose-700';
