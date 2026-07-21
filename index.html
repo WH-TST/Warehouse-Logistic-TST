@@ -25017,7 +25017,7 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         } catch(e){}
 
         var {data:done} = await window._sb.from('loading_sessions')
-            .select('sku,qty,weight,lifts,created_at,note')
+            .select('sku,qty,weight,lifts,created_at,note,photo_urls')
             .eq('order_id', oid)
             .neq('record_type', 'draft')
             .order('created_at', {ascending:true});
@@ -25035,6 +25035,11 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
                 if (mq) _rjQc = mq[1].split('').map(function(c){ return c === '1'; });
             }
         });
+        // ── รวมรูปเก่าจากงานครั้งแรก (แสดงในฟอร์ม + เก็บไว้ merge ตอน save) ──
+        window._ldOldPhotos = window._ldOldPhotos || {};
+        var _rjPhotos = [];
+        done.forEach(function(r){ (r.photo_urls||[]).forEach(function(u){ if(u && _rjPhotos.indexOf(u)<0) _rjPhotos.push(u); }); });
+        window._ldOldPhotos[oid] = _rjPhotos;
 
         // Group done sessions by SKU, sorted oldest-first for positional matching
         // (supports duplicate SKU order items — each iIdx gets its own session)
@@ -25098,6 +25103,22 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
                 var _qlbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+_qi);
                 if (_qbox) { _qbox.style.background=_on?'#16a34a':'#fff'; _qbox.style.borderColor=_on?'#16a34a':'#d97706'; var _qic=_qbox.querySelector('i'); if(_qic) _qic.style.display=_on?'block':'none'; }
                 if (_qlbl) { _qlbl.style.background=_on?'#f0fdf4':'#fffbeb'; _qlbl.style.borderColor=_on?'#86efac':'#fde68a'; }
+            }
+            // แสดงรูปเก่าจากงานครั้งแรก (read-only) ในช่องพรีวิว
+            var _prevEl = document.getElementById('ldf-photo-prev-'+oid);
+            if (_prevEl && _rjPhotos.length) {
+                var _oldHtml = '<div style="grid-column:1/-1;font-size:11px;font-weight:800;color:#64748b;margin-bottom:2px;">📷 รูปเดิม (จากครั้งแรก)</div>'
+                    + _rjPhotos.map(function(u){
+                        return '<a href="'+u+'" target="_blank" style="display:block;position:relative;"><img src="'+u+'" style="width:100%;height:70px;object-fit:cover;border-radius:8px;border:2px solid #86efac;"></a>';
+                    }).join('');
+                // แทรกรูปเก่าไว้ด้านหน้า โดยไม่ทับรูปใหม่ที่ผู้ใช้เพิ่ง add
+                if (!_prevEl.querySelector('[data-oldwrap]')) {
+                    var _w = document.createElement('div');
+                    _w.setAttribute('data-oldwrap','1');
+                    _w.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;grid-column:1/-1;margin-bottom:6px;';
+                    _w.innerHTML = _oldHtml;
+                    _prevEl.insertBefore(_w, _prevEl.firstChild);
+                }
             }
             ldCardStats(oid, _rjUnit);
             // Save pre-fill to localStorage WITHOUT userEdited flag so DB cache re-applies on next tab switch
@@ -26406,7 +26427,8 @@ window.ldCardHandlePhotos = function(inp, oid) {
 
     var prev = document.getElementById('ldf-photo-prev-'+oid);
     if (!prev) return;
-    prev.innerHTML = '';
+    // ล้างเฉพาะ thumbnail รูปใหม่ คงรูปเดิม (data-oldwrap) ไว้
+    Array.from(prev.children).forEach(function(c){ if(!c.hasAttribute('data-oldwrap')) c.remove(); });
     _ldCardPhotos[oid].forEach(function(f, i){
         var url = URL.createObjectURL(f);
         var div = document.createElement('div');
@@ -26503,8 +26525,8 @@ window.ldCardSave = async function(oid, unit) {
         }
     }
 
-    // Photo validation — at least 1 photo required
-    if (!(_ldCardPhotos[oid]||[]).length) {
+    // Photo validation — at least 1 photo required (รูปเก่าจากงานที่ตีกลับก็นับ)
+    if (!(_ldCardPhotos[oid]||[]).length && !((window._ldOldPhotos||{})[oid]||[]).length) {
         showToast('⚠️ At least 1 product photo is required', true);
         var pw = document.getElementById('ldf-photo-wrap-'+oid);
         if (pw) { pw.style.borderColor='#dc2626'; setTimeout(function(){ pw.style.borderColor='#e2e8f0'; },2000); }
@@ -26604,6 +26626,10 @@ window.ldCardSave = async function(oid, unit) {
                 _eSkuPos[sk]++;
                 skuIdMap[posKey] = r.id;
                 skuOldPhotos[posKey] = r.photo_urls||[];
+                // สะสมรูปเก่าแบบ key sku|unit (รวมทุก position) ให้ merge ตอน save เจอ
+                var mkKey = sk+'|'+curUnit;
+                if (!skuOldPhotos[mkKey]) skuOldPhotos[mkKey] = [];
+                (r.photo_urls||[]).forEach(function(u){ if(skuOldPhotos[mkKey].indexOf(u)<0) skuOldPhotos[mkKey].push(u); });
             });
             var _fOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_saveUk];
             var _iSkuPos = {};
