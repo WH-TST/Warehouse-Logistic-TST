@@ -2093,6 +2093,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <button onclick="switchView('logistic-plan')" id="nav-logistic-plan" class="nav-btn" data-tip="Delivery Plan">
                 <span class="nav-icon"><i class="fas fa-route"></i></span> Delivery Plan
             </button>
+            <button onclick="switchView('customers');if(window.custInit)custInit();" id="nav-customers" class="nav-btn" data-tip="ลูกค้า">
+                <span class="nav-icon"><i class="fas fa-store"></i></span> ลูกค้า
+            </button>
             <button onclick="switchView('loading-order')" id="nav-loading-order" class="nav-btn" data-tip="Loading Order">
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span>
                 <span>Loading Order</span>
@@ -7531,6 +7534,80 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
     <div class="px-6 pb-5 flex gap-3 justify-end">
       <button onclick="prodCloseModal()" class="px-5 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition">ยกเลิก</button>
       <button onclick="prodSave()" class="px-5 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-500 transition shadow">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     CUSTOMERS — ฐานข้อมูลลูกค้า (logi_shops)
+══════════════════════════════════════════════════════════════════ -->
+<div id="view-customers-content" class="hidden space-y-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+      <div>
+        <h3 class="font-black text-slate-800 text-base"><i class="fas fa-store text-emerald-500 mr-2"></i>ฐานข้อมูลลูกค้า</h3>
+        <p class="text-xs text-slate-500">ข้อมูลร้านค้า/ลูกค้าใน Supabase (logi_shops) — <span id="cust-count" class="font-bold text-emerald-600">0 ราย</span></p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="custExport()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm hover:bg-emerald-100 transition"><i class="fas fa-file-excel"></i> Export Excel</button>
+        <label class="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 font-bold text-sm hover:bg-sky-100 transition cursor-pointer">
+          <i class="fas fa-file-import"></i> Import จากไฟล์
+          <input type="file" id="cust-import-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="custImport(this)">
+        </label>
+        <button onclick="custOpenAdd()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500 transition shadow"><i class="fas fa-plus"></i> เพิ่มลูกค้า</button>
+      </div>
+    </div>
+    <div id="cust-import-status" class="hidden rounded-xl border p-4 text-sm font-bold mb-3"></div>
+    <input type="text" id="cust-search" placeholder="🔍 ค้นหา รหัส / ชื่อ / ที่อยู่ / SALE / เบอร์โทร..." oninput="custRender()" class="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-400 bg-slate-50 mb-3">
+    <div class="rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-sm" style="min-width:820px;">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="px-3 py-3 text-left text-[11px] font-black text-slate-500 uppercase">รหัส</th>
+            <th class="px-3 py-3 text-left text-[11px] font-black text-slate-500 uppercase">ชื่อร้าน / ลูกค้า</th>
+            <th class="px-3 py-3 text-left text-[11px] font-black text-slate-500 uppercase">ที่อยู่</th>
+            <th class="px-3 py-3 text-left text-[11px] font-black text-slate-500 uppercase">เบอร์โทร</th>
+            <th class="px-3 py-3 text-left text-[11px] font-black text-slate-500 uppercase">SALE</th>
+            <th class="px-3 py-3 text-right text-[11px] font-black text-slate-500 uppercase">ระยะทาง (กม.)</th>
+            <th class="px-3 py-3 text-center text-[11px] font-black text-slate-500 uppercase">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="cust-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: เพิ่ม/แก้ไขลูกค้า -->
+<div id="cust-modal" class="hidden fixed inset-0 z-[9999] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
+  <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
+      <h3 id="cust-modal-title" class="font-black text-slate-800">➕ เพิ่มลูกค้าใหม่</h3>
+      <button onclick="custCloseModal()" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-6 grid grid-cols-2 gap-4">
+      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">รหัสลูกค้า *</label>
+        <input id="cust-f-id" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="C00818"></div>
+      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">SALE ผู้รับผิดชอบ</label>
+        <input id="cust-f-sale" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+      <div class="col-span-2"><label class="text-xs font-black text-slate-500 uppercase block mb-1">ชื่อร้าน / ลูกค้า *</label>
+        <input id="cust-f-name" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+      <div class="col-span-2"><label class="text-xs font-black text-slate-500 uppercase block mb-1">ที่อยู่</label>
+        <input id="cust-f-address" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">เบอร์โทร</label>
+        <input id="cust-f-phone" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">ระยะทาง (กม.)</label>
+        <input id="cust-f-distance" type="number" step="0.1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">Lat</label>
+        <input id="cust-f-lat" type="number" step="any" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">Lng</label>
+        <input id="cust-f-lng" type="number" step="any" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+      <div class="col-span-2"><label class="text-xs font-black text-slate-500 uppercase block mb-1">หมายเหตุ</label>
+        <input id="cust-f-note" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
+    </div>
+    <div class="px-6 pb-5 flex gap-3 justify-end">
+      <button onclick="custCloseModal()" class="px-5 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50">ยกเลิก</button>
+      <button onclick="custSave()" class="px-5 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-500 shadow">บันทึก</button>
     </div>
   </div>
 </div>
@@ -13672,7 +13749,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'customers', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13722,6 +13799,7 @@ window.switchView = function switchView(view) {
             'overdue': 'Space Recovery Center',
             'whactivity': 'WH Activity Log — บันทึกข้อมูลจริงจากหน้างาน',
             'logistic-plan': 'Logistic — วางแผนส่งมอบ',
+            'customers': 'ฐานข้อมูลลูกค้า — Customer Master',
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
 
@@ -29230,6 +29308,168 @@ window._loLoadCustomers = async function() {
     if (!dl) return;
     var {data} = await window._sb.from('logi_shops').select('name').order('name');
     if (data) dl.innerHTML = data.map(function(s){ return '<option value="'+s.name+'">'; }).join('');
+};
+
+// ══ ฐานข้อมูลลูกค้า (logi_shops) ══════════════════════════════════
+var _custList = [];
+var _custEditId = null;
+window.custInit = async function() {
+    var tb = document.getElementById('cust-tbody');
+    if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-400">กำลังโหลด...</td></tr>';
+    var { data, error } = await window._sb.from('logi_shops')
+        .select('id,name,address,phone,sale,distance,lat,lng,note').order('name');
+    if (error) { if(tb) tb.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-rose-500">❌ '+error.message+'</td></tr>'; return; }
+    _custList = data || [];
+    custRender();
+};
+window.custRender = function() {
+    var q = (document.getElementById('cust-search')?.value||'').toLowerCase().trim();
+    var list = _custList.filter(function(c){
+        if (!q) return true;
+        return ['id','name','address','phone','sale'].some(function(k){ return String(c[k]||'').toLowerCase().includes(q); });
+    });
+    var cnt = document.getElementById('cust-count');
+    if (cnt) cnt.textContent = list.length.toLocaleString()+' ราย'+(q?(' (จาก '+_custList.length+')'):'');
+    var tb = document.getElementById('cust-tbody');
+    if (!tb) return;
+    if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-slate-400">ไม่พบลูกค้า</td></tr>'; return; }
+    tb.innerHTML = list.map(function(c){
+        var idSafe = String(c.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
+            + '<td class="px-3 py-2.5 font-mono font-bold text-slate-700 text-xs whitespace-nowrap">'+_loEsc(c.id||'–')+'</td>'
+            + '<td class="px-3 py-2.5 text-slate-700 text-xs font-bold">'+_loEsc(c.name||'')+'</td>'
+            + '<td class="px-3 py-2.5 text-slate-500 text-xs">'+_loEsc(c.address||'–')+'</td>'
+            + '<td class="px-3 py-2.5 text-slate-600 text-xs whitespace-nowrap">'+_loEsc(c.phone||'–')+'</td>'
+            + '<td class="px-3 py-2.5 text-indigo-600 text-xs font-bold">'+_loEsc(c.sale||'–')+'</td>'
+            + '<td class="px-3 py-2.5 text-right text-xs font-bold text-emerald-700">'+(c.distance!=null&&c.distance!==''?c.distance:'–')+'</td>'
+            + '<td class="px-3 py-2.5 text-center"><div class="flex justify-center gap-1">'
+              + '<button onclick="custOpenEdit(\''+idSafe+'\')" class="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 text-amber-500 hover:bg-amber-500 hover:text-white transition text-xs"><i class="fas fa-edit"></i></button>'
+              + '<button onclick="custDelete(\''+idSafe+'\')" class="w-7 h-7 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white transition text-xs"><i class="fas fa-trash-alt"></i></button>'
+            + '</div></td>'
+        + '</tr>';
+    }).join('');
+};
+function _custSetForm(c){
+    c = c || {};
+    ['id','name','address','phone','sale','distance','lat','lng','note'].forEach(function(k){
+        var el = document.getElementById('cust-f-'+k); if (el) el.value = (c[k]!=null?c[k]:'');
+    });
+}
+window.custOpenAdd = function(){
+    _custEditId = null;
+    document.getElementById('cust-modal-title').textContent = '➕ เพิ่มลูกค้าใหม่';
+    _custSetForm({});
+    document.getElementById('cust-f-id').disabled = false;
+    document.getElementById('cust-modal').classList.remove('hidden');
+};
+window.custOpenEdit = function(id){
+    var c = _custList.find(function(x){ return String(x.id)===String(id); });
+    if (!c) return;
+    _custEditId = id;
+    document.getElementById('cust-modal-title').textContent = '✏️ แก้ไขลูกค้า';
+    _custSetForm(c);
+    document.getElementById('cust-f-id').disabled = true;
+    document.getElementById('cust-modal').classList.remove('hidden');
+};
+window.custCloseModal = function(){ document.getElementById('cust-modal').classList.add('hidden'); };
+window.custSave = async function(){
+    var id   = document.getElementById('cust-f-id').value.trim();
+    var name = document.getElementById('cust-f-name').value.trim();
+    if (!id || !name) { showToast('❌ กรอกรหัสและชื่อลูกค้าด้วยครับ', true); return; }
+    var row = {
+        id: id, name: name,
+        address:  document.getElementById('cust-f-address').value.trim() || null,
+        phone:    document.getElementById('cust-f-phone').value.trim() || null,
+        sale:     document.getElementById('cust-f-sale').value.trim() || null,
+        distance: parseFloat(document.getElementById('cust-f-distance').value) || null,
+        lat:      parseFloat(document.getElementById('cust-f-lat').value) || null,
+        lng:      parseFloat(document.getElementById('cust-f-lng').value) || null,
+        note:     document.getElementById('cust-f-note').value.trim() || null,
+    };
+    var { error } = await window._sb.from('logi_shops').upsert(row, { onConflict: 'id' });
+    if (error) { showToast('❌ '+error.message, true); return; }
+    custCloseModal();
+    showToast(_custEditId ? '✅ แก้ไขลูกค้าแล้ว' : '✅ เพิ่มลูกค้าแล้ว');
+    await custInit();
+};
+window.custDelete = async function(id){
+    var c = _custList.find(function(x){ return String(x.id)===String(id); });
+    if (!confirm('ลบลูกค้า "'+(c?c.name:id)+'" ออกจากระบบ?\nไม่สามารถย้อนกลับได้')) return;
+    var { error } = await window._sb.from('logi_shops').delete().eq('id', id);
+    if (error) { showToast('❌ '+error.message, true); return; }
+    showToast('🗑 ลบแล้ว');
+    await custInit();
+};
+window.custExport = function(){
+    if (!_custList.length) { showToast('ไม่มีข้อมูลให้ export', true); return; }
+    var rows = [['รหัส','ชื่อร้าน/ลูกค้า','ที่อยู่','เบอร์โทร','SALE','ระยะทาง(กม.)','Lat','Lng','หมายเหตุ']];
+    _custList.forEach(function(c){ rows.push([c.id,c.name,c.address,c.phone,c.sale,c.distance,c.lat,c.lng,c.note]); });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+    XLSX.writeFile(wb, 'Customers_'+new Date().toISOString().slice(0,10)+'.xlsx');
+};
+window.custImport = function(input){
+    var file = input.files[0]; if (!file) return;
+    var statusEl = document.getElementById('cust-import-status');
+    statusEl.className = 'rounded-xl border p-4 text-sm font-bold mb-3 bg-blue-50 border-blue-200 text-blue-700';
+    statusEl.textContent = '⏳ กำลังอ่านไฟล์...'; statusEl.classList.remove('hidden');
+    var reader = new FileReader();
+    reader.onload = async function(e){
+        try {
+            var wb = XLSX.read(e.target.result, { type:'array' });
+            var raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
+            if (raw.length < 2) throw new Error('ไม่พบข้อมูล');
+            var hIdx = raw.findIndex(function(r){ return r.some(function(c){ return /รหัส|id|code|ชื่อ|name/i.test(String(c)); }); });
+            if (hIdx < 0) hIdx = 0;
+            var headers = raw[hIdx].map(function(h){ return String(h).toLowerCase().trim(); });
+            var col = function(keys){
+                for (var i=0;i<keys.length;i++){ var x=headers.indexOf(keys[i].toLowerCase()); if(x>=0) return x; }
+                for (var j=0;j<keys.length;j++){ var y=headers.findIndex(function(h){return h.includes(keys[j].toLowerCase());}); if(y>=0) return y; }
+                return -1;
+            };
+            var ci = {
+                id: col(['รหัส','id','code','รหัสลูกค้า']),
+                name: col(['ชื่อร้าน/ลูกค้า','ชื่อร้าน','ชื่อ','name','customer']),
+                address: col(['ที่อยู่','address']),
+                phone: col(['เบอร์โทร','เบอร์','phone','tel']),
+                sale: col(['sale','เซล','พนักงานขาย']),
+                distance: col(['ระยะทาง','distance','กม']),
+                lat: col(['lat','latitude']),
+                lng: col(['lng','long','longitude']),
+                note: col(['หมายเหตุ','note','remark']),
+            };
+            if (ci.id < 0 || ci.name < 0) throw new Error('ไม่พบคอลัมน์ รหัส หรือ ชื่อ');
+            var rows = [];
+            for (var r=hIdx+1; r<raw.length; r++){
+                var arr = raw[r]; if (!arr) continue;
+                var id = String(arr[ci.id]||'').trim(); var name = String(arr[ci.name]||'').trim();
+                if (!id || !name) continue;
+                rows.push({
+                    id:id, name:name,
+                    address: ci.address>=0 ? String(arr[ci.address]||'').trim()||null : null,
+                    phone:   ci.phone>=0 ? String(arr[ci.phone]||'').trim()||null : null,
+                    sale:    ci.sale>=0 ? String(arr[ci.sale]||'').trim()||null : null,
+                    distance:ci.distance>=0 ? (parseFloat(arr[ci.distance])||null) : null,
+                    lat:     ci.lat>=0 ? (parseFloat(arr[ci.lat])||null) : null,
+                    lng:     ci.lng>=0 ? (parseFloat(arr[ci.lng])||null) : null,
+                    note:    ci.note>=0 ? String(arr[ci.note]||'').trim()||null : null,
+                });
+            }
+            if (!rows.length) throw new Error('ไม่มีแถวข้อมูลที่ใช้ได้');
+            statusEl.textContent = '⏳ กำลังบันทึก '+rows.length+' ราย...';
+            var { error } = await window._sb.from('logi_shops').upsert(rows, { onConflict:'id' });
+            if (error) throw error;
+            input.value = '';
+            statusEl.className = 'rounded-xl border p-4 text-sm font-bold mb-3 bg-emerald-50 border-emerald-200 text-emerald-700';
+            statusEl.textContent = '✅ Import สำเร็จ '+rows.length+' ราย';
+            await custInit();
+        } catch(err){
+            statusEl.className = 'rounded-xl border p-4 text-sm font-bold mb-3 bg-rose-50 border-rose-200 text-rose-700';
+            statusEl.textContent = '❌ '+(err.message||err); input.value='';
+        }
+    };
+    reader.readAsArrayBuffer(file);
 };
 
 var _loTrucksCache = [];
