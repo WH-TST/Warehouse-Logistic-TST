@@ -7598,10 +7598,6 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <input id="cust-f-phone" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
       <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">ระยะทาง (กม.)</label>
         <input id="cust-f-distance" type="number" step="0.1" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
-      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">Lat</label>
-        <input id="cust-f-lat" type="number" step="any" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
-      <div><label class="text-xs font-black text-slate-500 uppercase block mb-1">Lng</label>
-        <input id="cust-f-lng" type="number" step="any" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
       <div class="col-span-2"><label class="text-xs font-black text-slate-500 uppercase block mb-1">หมายเหตุ</label>
         <input id="cust-f-note" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400"></div>
     </div>
@@ -29312,14 +29308,15 @@ window._loLoadCustomers = async function() {
 
 // ══ ฐานข้อมูลลูกค้า (logi_shops) ══════════════════════════════════
 var _custList = [];
+var _custCols = [];   // คอลัมน์ที่มีจริงในตาราง (จากข้อมูลที่โหลด)
 var _custEditId = null;
 window.custInit = async function() {
     var tb = document.getElementById('cust-tbody');
     if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-400">กำลังโหลด...</td></tr>';
-    var { data, error } = await window._sb.from('logi_shops')
-        .select('id,name,address,phone,sale,distance,lat,lng,note').order('name');
+    var { data, error } = await window._sb.from('logi_shops').select('*').order('name');
     if (error) { if(tb) tb.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-rose-500">❌ '+error.message+'</td></tr>'; return; }
     _custList = data || [];
+    if (_custList.length) _custCols = Object.keys(_custList[0]);
     custRender();
 };
 window.custRender = function() {
@@ -29376,16 +29373,17 @@ window.custSave = async function(){
     var id   = document.getElementById('cust-f-id').value.trim();
     var name = document.getElementById('cust-f-name').value.trim();
     if (!id || !name) { showToast('❌ กรอกรหัสและชื่อลูกค้าด้วยครับ', true); return; }
-    var row = {
+    var all = {
         id: id, name: name,
         address:  document.getElementById('cust-f-address').value.trim() || null,
         phone:    document.getElementById('cust-f-phone').value.trim() || null,
         sale:     document.getElementById('cust-f-sale').value.trim() || null,
         distance: parseFloat(document.getElementById('cust-f-distance').value) || null,
-        lat:      parseFloat(document.getElementById('cust-f-lat').value) || null,
-        lng:      parseFloat(document.getElementById('cust-f-lng').value) || null,
         note:     document.getElementById('cust-f-note').value.trim() || null,
     };
+    // ส่งเฉพาะคอลัมน์ที่มีจริงในตาราง (กัน 400 เพราะคอลัมน์ไม่ตรง schema)
+    var row = { id: id, name: name };
+    Object.keys(all).forEach(function(k){ if (!_custCols.length || _custCols.indexOf(k) >= 0) row[k] = all[k]; });
     var { error } = await window._sb.from('logi_shops').upsert(row, { onConflict: 'id' });
     if (error) { showToast('❌ '+error.message, true); return; }
     custCloseModal();
@@ -29402,8 +29400,8 @@ window.custDelete = async function(id){
 };
 window.custExport = function(){
     if (!_custList.length) { showToast('ไม่มีข้อมูลให้ export', true); return; }
-    var rows = [['รหัส','ชื่อร้าน/ลูกค้า','ที่อยู่','เบอร์โทร','SALE','ระยะทาง(กม.)','Lat','Lng','หมายเหตุ']];
-    _custList.forEach(function(c){ rows.push([c.id,c.name,c.address,c.phone,c.sale,c.distance,c.lat,c.lng,c.note]); });
+    var rows = [['รหัส','ชื่อร้าน/ลูกค้า','ที่อยู่','เบอร์โทร','SALE','ระยะทาง(กม.)','หมายเหตุ']];
+    _custList.forEach(function(c){ rows.push([c.id,c.name,c.address,c.phone,c.sale,c.distance,c.note]); });
     var ws = XLSX.utils.aoa_to_sheet(rows);
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Customers');
@@ -29435,8 +29433,6 @@ window.custImport = function(input){
                 phone: col(['เบอร์โทร','เบอร์','phone','tel']),
                 sale: col(['sale','เซล','พนักงานขาย']),
                 distance: col(['ระยะทาง','distance','กม']),
-                lat: col(['lat','latitude']),
-                lng: col(['lng','long','longitude']),
                 note: col(['หมายเหตุ','note','remark']),
             };
             if (ci.id < 0 || ci.name < 0) throw new Error('ไม่พบคอลัมน์ รหัส หรือ ชื่อ');
@@ -29451,12 +29447,12 @@ window.custImport = function(input){
                     phone:   ci.phone>=0 ? String(arr[ci.phone]||'').trim()||null : null,
                     sale:    ci.sale>=0 ? String(arr[ci.sale]||'').trim()||null : null,
                     distance:ci.distance>=0 ? (parseFloat(arr[ci.distance])||null) : null,
-                    lat:     ci.lat>=0 ? (parseFloat(arr[ci.lat])||null) : null,
-                    lng:     ci.lng>=0 ? (parseFloat(arr[ci.lng])||null) : null,
                     note:    ci.note>=0 ? String(arr[ci.note]||'').trim()||null : null,
                 });
             }
             if (!rows.length) throw new Error('ไม่มีแถวข้อมูลที่ใช้ได้');
+            // ส่งเฉพาะคอลัมน์ที่มีจริงในตาราง
+            if (_custCols.length) rows = rows.map(function(r){ var o={}; Object.keys(r).forEach(function(k){ if(_custCols.indexOf(k)>=0) o[k]=r[k]; }); return o; });
             statusEl.textContent = '⏳ กำลังบันทึก '+rows.length+' ราย...';
             var { error } = await window._sb.from('logi_shops').upsert(rows, { onConflict:'id' });
             if (error) throw error;
