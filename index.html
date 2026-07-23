@@ -29157,10 +29157,19 @@ window.loRefresh = function() {
 
 window.loLoadPlansForDate = function() { loRefresh(); };
 
+var _loProdNameMap = {};   // {sku: ชื่อเต็มจาก products.name (สด)}
+async function _loLoadProdNames() {
+    try {
+        var {data} = await window._sb.from('products').select('sku,name');
+        _loProdNameMap = {};
+        (data||[]).forEach(function(p){ if(p.sku) _loProdNameMap[p.sku] = p.name||''; });
+    } catch(e){}
+}
 async function _loLoadOrders(dateVal) {
     var list = document.getElementById('lo-order-list');
     if (list) list.innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>กำลังโหลด...</div>';
     try {
+        if (!Object.keys(_loProdNameMap).length) await _loLoadProdNames();
         var {data, error} = await window._sb.from('loading_orders').select('*').eq('order_date', dateVal).order('created_at');
         if (error) throw error;
         _loRender(data || []);
@@ -29200,7 +29209,7 @@ function _loRender(orders) {
             return '<tr class="border-t border-slate-100">'+
                 '<td class="px-3 py-1.5 text-xs font-mono font-bold text-slate-700">'+(idx+1)+'</td>'+
                 '<td class="px-3 py-1.5 text-xs font-bold text-slate-700">'+_loEsc(it.sku||'')+'</td>'+
-                '<td class="px-3 py-1.5 text-xs text-slate-500">'+_loEsc(it.product_name||'')+'</td>'+
+                '<td class="px-3 py-1.5 text-xs text-slate-500">'+_loEsc(_loProdNameMap[it.sku]||it.product_name||'')+'</td>'+
                 '<td class="px-3 py-1.5 text-xs text-right font-black text-sky-700">'+Number(it.qty||0).toLocaleString()+'</td>'+
                 '<td class="px-3 py-1.5 text-xs text-right font-black text-emerald-700">'+Number(it.target_weight||0).toLocaleString()+'</td>'+
                 swCell+
