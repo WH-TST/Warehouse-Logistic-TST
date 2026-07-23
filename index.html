@@ -25457,7 +25457,7 @@ function _ldBuildFormMobile(order) {
     var hdrCols='<th style="padding:8px 4px;background:#1e293b;width:36px;"></th>';
     for(var h=0;h<CPR;h++) hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:13px;font-weight:900;color:#fff;background:#1e293b;">'+(h+1)+'</th>';
     var itemRows=items.map(function(it,idx){
-        var pName=(it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+        var pName=(_ldProductMap[it.sku]&&_ldProductMap[it.sku].name)||it.product_name||it.sku||'—';
         var prod=_ldProductMap[it.sku]||{}, minW=prod.min_w, maxW=prod.max_w;
         var rangeStr=(minW!=null&&maxW!=null)?minW+' – '+maxW+' kg/pcs':'';
         var lc=_lc(it);
@@ -25727,7 +25727,7 @@ function _ldBuildForm(order) {
 
     // build item rows — multi-row per item when lifts > 7
     var itemRows = items.map(function(it, idx) {
-        var pName = (it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').trim();
+        var pName = (_ldProductMap[it.sku]&&_ldProductMap[it.sku].name)||it.product_name||it.sku||'—';
         var planWt = it.weight ? it.weight.toLocaleString(undefined,{maximumFractionDigits:1}) : '0';
         var itemCols = _ldCalcItemCols(it);
         var numRowGroups = itemCols / _LFT_COLS;
@@ -27010,7 +27010,7 @@ function _ldShowOrderNotif(order) {
     var totalQty = items.reduce(function(a,i){ return a+(Number(i.qty)||0); }, 0);
     var totalWt  = items.reduce(function(a,i){ return a+(Number(i.target_weight||i.weight)||0); }, 0);
     var itemsPreview = items.map(function(i, idx){
-        var n = (i.product_name||i.sku||'').replace(/[฀-๿]+/g,'').trim();
+        var n = (_ldProductMap[i.sku]&&_ldProductMap[i.sku].name)||i.product_name||i.sku||'—';
         var wt = Number(i.target_weight||i.weight||0);
         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);">'
             +'<div style="display:flex;align-items:center;gap:7px;min-width:0;">'
@@ -27239,9 +27239,10 @@ async function _ldLoadStaffMaster() {
 
 async function _ldLoadProductMap() {
     try {
-        var {data} = await window._sb.from('products').select('sku,name,min_w,max_w,lines_per_bundle,lifts_per_round');
+        var {data} = await window._sb.from('products').select('sku,name,search_name,min_w,max_w,lines_per_bundle,lifts_per_round');
         _ldProductMap = {};
-        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {name:p.name||'', min_w:p.min_w, max_w:p.max_w, lpb:p.lines_per_bundle||0, lpr:p.lifts_per_round||0}; });
+        // ชื่อแสดง = search_name (ชื่อค้นหา) เป็นหลัก, ไม่มีค่อย fallback เป็น name
+        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {name:(p.search_name||p.name||''), min_w:p.min_w, max_w:p.max_w, lpb:p.lines_per_bundle||0, lpr:p.lifts_per_round||0}; });
     } catch(e) {}
 }
 
@@ -28271,7 +28272,7 @@ function _ldRenderMonitorTable(rows, orders) {
                     var avg=aQ>0?aW/aQ:null;
                     var prod=_ldProductMap[it.sku]||{};
                     var minW=prod.min_w,maxW=prod.max_w;
-                    var pName=(prod.name||it.product_name||it.sku||'').replace(/[\u0e00-\u0e7f]+/g,'').trim();
+                    var pName=(prod.name||it.product_name||it.sku||'\u2014');
                     var tQ=Number(it.qty||0);
                     var bg=idx%2===0?'#fff':'#f8fafc';
                     var oor=avg!=null&&minW!=null&&maxW!=null&&(avg<minW||avg>maxW);
