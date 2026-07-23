@@ -24765,15 +24765,18 @@ function _ldGetCardsWrap() {
 }
 
 // ── โหลด+แสดง Order Cards ──
-async function _ldLoadOrderCards(dateVal) {
+async function _ldLoadOrderCards(dateVal, background) {
     var wrap = _ldGetCardsWrap();
     if (!wrap) return;
-    // Skip re-render while user is typing in any input/textarea — prevents keyboard dismissal
     var focused = document.activeElement;
-    if (focused && (focused.tagName==='INPUT'||focused.tagName==='TEXTAREA') && wrap.contains(focused)) {
-        // Schedule a deferred refresh after focus leaves
+    var typing = focused && (focused.tagName==='INPUT'||focused.tagName==='TEXTAREA') && wrap.contains(focused);
+    // การ์ดที่กำลังเปิดกรอกอยู่ (ปกติ/รถพ่วง)
+    var formOpen = !!_ldActiveOrderId || Object.keys(_ldTrailerActive||{}).some(function(k){ var t=_ldTrailerActive[k]; return t && (t.mother||t.trailer); });
+    // เลื่อน re-render เมื่อ: กำลังพิมพ์ หรือ (refresh เบื้องหลังขณะการ์ดเปิดอยู่)
+    // กัน re-render ทับขณะกรอก → QC เด้ง/ตัวเลขกระพริบ/ค่าที่ยังไม่ save หาย
+    if (typing || (background && formOpen)) {
         clearTimeout(_ldLoadOrderCards._defer);
-        _ldLoadOrderCards._defer = setTimeout(function(){ _ldLoadOrderCards(dateVal); }, 2000);
+        _ldLoadOrderCards._defer = setTimeout(function(){ _ldLoadOrderCards(dateVal, background); }, 2000);
         return;
     }
     try {
@@ -25007,7 +25010,7 @@ function _ldRenderCards(orders) {
     // After re-render — restore form values and timer
     if (_ldActiveOrderId) {
         var _aidSnap = _ldActiveOrderId;
-        setTimeout(function(){ _ldDraftLoad(_aidSnap); _ldStartTimer(_aidSnap); }, 120);
+        setTimeout(function(){ _ldDraftLoad(_aidSnap); _ldStartTimer(_aidSnap); _ldRestoreQcVisual(_aidSnap); }, 120);
     }
     Object.keys(_ldTrailerActive).forEach(function(oid){
         var ta = _ldTrailerActive[oid];
@@ -26046,6 +26049,17 @@ window.ldQcToggle = function(oid, i) {
         lbl.style.borderColor = checked ? '#86efac' : '#fde68a';
     }
 };
+// คืนภาพติ๊ก QC หลัง re-render (กัน QC เด้งกลับเป็นยังไม่ติ๊ก)
+function _ldRestoreQcVisual(oid) {
+    var st = _ldQcState[oid]; if (!st) return;
+    for (var i=0; i<5; i++) {
+        var on = !!st[i];
+        var box = document.getElementById('ldf-qc-box-'+oid+'-'+i);
+        var lbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+i);
+        if (box) { box.style.background=on?'#16a34a':'#fff'; box.style.borderColor=on?'#16a34a':'#d97706'; var ic=box.querySelector('i'); if(ic) ic.style.display=on?'block':'none'; }
+        if (lbl) { lbl.style.background=on?'#f0fdf4':'#fffbeb'; lbl.style.borderColor=on?'#86efac':'#fde68a'; }
+    }
+}
 
 var _ldCardStartTimes = {};
 var _ldDraftTimers    = {};   // debounce timers per order
@@ -27137,7 +27151,7 @@ function _ldSubOrders() {
             var cur = _ldCurrentDate();
             // ถ้า order ที่ insert ตรงกับวันที่แสดงอยู่ — reload และแจ้งเตือน
             if (payload && payload.new && payload.new.order_date === cur) {
-                _ldLoadOrderCards(cur);
+                _ldLoadOrderCards(cur, true);
                 if (!_ldLastKnownIds.has(payload.new.id+'_notified')) {
                     _ldLastKnownIds.add(payload.new.id+'_notified');
                     _ldNotifyNewOrder(payload.new);
@@ -27145,11 +27159,11 @@ function _ldSubOrders() {
             }
         })
         .on('postgres_changes',{event:'UPDATE',schema:'public',table:'loading_orders'}, function(){
-            _ldLoadOrderCards(_ldCurrentDate());
+            _ldLoadOrderCards(_ldCurrentDate(), true);
             if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .on('postgres_changes',{event:'DELETE',schema:'public',table:'loading_orders'}, function(){
-            _ldLoadOrderCards(_ldCurrentDate());
+            _ldLoadOrderCards(_ldCurrentDate(), true);
             if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .on('postgres_changes',{event:'*',schema:'public',table:'loading_sessions'}, function(){
@@ -27178,7 +27192,7 @@ function _ldSubOrders() {
                 var orders = res.data||[];
                 var hasNew = orders.some(function(o){ return !_ldLastKnownIds.has(o.id); });
                 orders.forEach(function(o){ _ldLastKnownIds.add(o.id); });
-                if (hasNew) _ldLoadOrderCards(today);
+                if (hasNew) _ldLoadOrderCards(today, true);
                 orders.forEach(function(o){
                     if (!_ldLastKnownIds.has(o.id+'_notified')) {
                         _ldLastKnownIds.add(o.id+'_notified');
@@ -27206,7 +27220,7 @@ function _ldSubOrders() {
                     var oid = card.dataset.oid;
                     if (oid && !stillPending.has(oid)) anyChanged = true;
                 });
-                if (anyChanged) _ldLoadOrderCards(today);
+                if (anyChanged) _ldLoadOrderCards(today, true);
             });
     }, 5000);
 }
