@@ -25457,7 +25457,7 @@ function _ldBuildFormMobile(order) {
     var hdrCols='<th style="padding:8px 4px;background:#1e293b;width:36px;"></th>';
     for(var h=0;h<CPR;h++) hdrCols+='<th style="padding:8px 4px;text-align:center;font-size:13px;font-weight:900;color:#fff;background:#1e293b;">'+(h+1)+'</th>';
     var itemRows=items.map(function(it,idx){
-        var pName=(_ldProductMap[it.sku]&&_ldProductMap[it.sku].name)||it.product_name||it.sku||'—';
+        var pName=(((_ldProductMap[it.sku]&&_ldProductMap[it.sku].name)||it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').replace(/\s{2,}/g,' ').trim())||it.sku||'—';
         var prod=_ldProductMap[it.sku]||{}, minW=prod.min_w, maxW=prod.max_w;
         var rangeStr=(minW!=null&&maxW!=null)?minW+' – '+maxW+' kg/pcs':'';
         var lc=_lc(it);
@@ -25727,7 +25727,7 @@ function _ldBuildForm(order) {
 
     // build item rows — multi-row per item when lifts > 7
     var itemRows = items.map(function(it, idx) {
-        var pName = (_ldProductMap[it.sku]&&_ldProductMap[it.sku].name)||it.product_name||it.sku||'—';
+        var pName = (((_ldProductMap[it.sku]&&_ldProductMap[it.sku].name)||it.product_name||it.sku||'').replace(/[฀-๿]+/g,'').replace(/\s{2,}/g,' ').trim())||it.sku||'—';
         var planWt = it.weight ? it.weight.toLocaleString(undefined,{maximumFractionDigits:1}) : '0';
         var itemCols = _ldCalcItemCols(it);
         var numRowGroups = itemCols / _LFT_COLS;
