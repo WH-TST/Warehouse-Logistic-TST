@@ -26,6 +26,46 @@
       var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdXVubXlyeHVnc29xd3J2ZGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODk5ODcsImV4cCI6MjA5NzE2NTk4N30.rpcJKRMDumcsgYx-JrgxFKeO26TKrIULxBJm0jWpBZw';
       window._sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
+      // ══ Cloudinary — ที่เก็บรูปหลัก (อัปตรงจากเว็บ) ══════════════════
+      window._CLD_CLOUD  = 'qnst1pzk';
+      window._CLD_PRESET = 'wms_unsigned';
+      // บีบอัดรูปก่อนอัป → เล็กลง เร็วขึ้น ประหยัดพื้นที่
+      window._wmsCompressImage = function(file, maxDim, quality) {
+        maxDim = maxDim || 1600; quality = quality || 0.72;
+        return new Promise(function(resolve){
+          try {
+            if (!file || !/^image\//.test(file.type)) return resolve(file);
+            var img = new Image();
+            img.onload = function(){
+              var w = img.width, h = img.height;
+              if (w > maxDim || h > maxDim) { var r = Math.min(maxDim/w, maxDim/h); w = Math.round(w*r); h = Math.round(h*r); }
+              var c = document.createElement('canvas'); c.width = w; c.height = h;
+              c.getContext('2d').drawImage(img, 0, 0, w, h);
+              c.toBlob(function(blob){
+                if (!blob) return resolve(file);
+                resolve(new File([blob], (file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg', {type:'image/jpeg'}));
+              }, 'image/jpeg', quality);
+            };
+            img.onerror = function(){ resolve(file); };
+            img.src = URL.createObjectURL(file);
+          } catch(e){ resolve(file); }
+        });
+      };
+      // อัปรูปขึ้น Cloudinary → คืน secure_url (คืน null ถ้าพลาด)
+      // folder เป็น subfolder ย่อยใน wms (เช่น 'loading', 'driver', 'inspect')
+      window._cldUpload = async function(file, folder) {
+        try {
+          var f = await window._wmsCompressImage(file);
+          var fd = new FormData();
+          fd.append('file', f);
+          fd.append('upload_preset', window._CLD_PRESET);
+          if (folder) fd.append('folder', 'wms/' + folder);
+          var res = await fetch('https://api.cloudinary.com/v1_1/' + window._CLD_CLOUD + '/image/upload', { method:'POST', body: fd });
+          var j = await res.json();
+          return j && j.secure_url ? j.secure_url : null;
+        } catch(e) { return null; }
+      };
+
       // ── Supabase Realtime — push อัพเดตทันทีเมื่อ DB เปลี่ยน ────────
       var _rtDebounce = {};
       function _rtRefresh(key, fn, delay) {
@@ -26683,12 +26723,8 @@ window.ldCardSave = async function(oid, unit) {
     // upload photos — parallel
     var _photoFiles = _ldCardPhotos[oid]||[];
     var _ts = Date.now();
-    var photoUrls = (await Promise.all(_photoFiles.map(function(f, pi){
-        var ext = (f.name||'photo.jpg').split('.').pop()||'jpg';
-        var path = 'loading/'+oid+'/'+_ts+'_'+pi+'.'+ext;
-        return window._sb.storage.from('delivery-photos').upload(path,f,{contentType:f.type||'image/jpeg',upsert:true})
-            .then(function(res){ if(!res.error){ var ud=window._sb.storage.from('delivery-photos').getPublicUrl(path); return ud.data.publicUrl; } return null; })
-            .catch(function(){ return null; });
+    var photoUrls = (await Promise.all(_photoFiles.map(function(f){
+        return window._cldUpload(f, 'loading');
     }))).filter(Boolean);
 
     // confirm draft rows → update to final, or insert if no draft exists
@@ -27478,16 +27514,8 @@ window.ldSaveSession = async function() {
     // upload photos
     var photoUrls = [];
     for (var pi=0; pi<_ldPhotoPending.length; pi++) {
-        try {
-            var f = _ldPhotoPending[pi];
-            var ext = (f.name||'photo.jpg').split('.').pop()||'jpg';
-            var path = 'loading/'+(_ldPlanData.plan_id||'unknown')+'/'+Date.now()+'_'+pi+'.'+ext;
-            var {error:ue} = await window._sb.storage.from('delivery-photos').upload(path, f, {contentType:f.type||'image/jpeg', upsert:true});
-            if (!ue) {
-                var {data:ud} = window._sb.storage.from('delivery-photos').getPublicUrl(path);
-                photoUrls.push(ud.publicUrl);
-            }
-        } catch(pe) {}
+        var _u = await window._cldUpload(_ldPhotoPending[pi], 'loading');
+        if (_u) photoUrls.push(_u);
     }
 
     // build rows — one per staff member
@@ -43324,13 +43352,9 @@ window.dmArriveAtShop=async function(){
     // upload photo
     var photoUrl=null;
     try{
-      var ext=(_dmCapturedFile.name||'photo.jpg').split('.').pop()||'jpg';
-      var path=_dmTripPlan.plan_id+'/'+seq+'/arrive_'+now.slice(0,19).replace(/[:\-T]/g,'')+'.'+ext;
-      var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dmCapturedFile,{contentType:_dmCapturedFile.type||'image/jpeg',upsert:true});
-      if(ue)throw ue;
-      var {data:ud}=window._sb.storage.from('delivery-photos').getPublicUrl(path);
-      photoUrl=ud.publicUrl;
-    }catch(pe){showToast('❌ อัพโหลดรูปไม่ได้: '+pe.message,true);return;}
+      photoUrl=await window._cldUpload(_dmCapturedFile,'driver');
+      if(!photoUrl)throw new Error('upload failed');
+    }catch(pe){showToast('❌ อัพโหลดรูปไม่ได้: '+(pe.message||''),true);return;}
     var {data:visitData,error:ve}=await window._sb.from('shop_visits').upsert({
       plan_id:_dmTripPlan.plan_id,shop_seq:seq,shop_name:shop.shopName||shop.shopId||'',
       mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
@@ -44458,13 +44482,7 @@ window.drvInspectSave=async function(){
     var photoUrl='';
     if(_dInspectPhotos[i]){
       try{
-        var ext=_dInspectPhotos[i].name.split('.').pop()||'jpg';
-        var path='truck-inspect/'+today+'/'+plate+'/'+_dInspectType+'_'+i+'.'+ext;
-        var {data:up}=await window._sb.storage.from('delivery-photos').upload(path,_dInspectPhotos[i],{upsert:true});
-        if(up){
-          var {data:pu}=window._sb.storage.from('delivery-photos').getPublicUrl(path);
-          photoUrl=pu?.publicUrl||'';
-        }
+        photoUrl=(await window._cldUpload(_dInspectPhotos[i],'inspect'))||'';
       }catch(e){}
     }
     return {id:i+1,name:itDef.name,status:status,symptom:symptom,photo_url:photoUrl,req_photo:itDef.req_photo};
@@ -44868,9 +44886,7 @@ window.drvMaintDrop=async function(){
     // อัพโหลดรูป (optional)
     var photoUrl=null;
     if(_dMaintPhotoFile){
-      var path=_dMaintPlan.plan_id+'/maint_drop_'+Date.now()+'.jpg';
-      var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dMaintPhotoFile,{contentType:'image/jpeg',upsert:true});
-      if(!ue) photoUrl=window._sb.storage.from('delivery-photos').getPublicUrl(path).data.publicUrl;
+      photoUrl=await window._cldUpload(_dMaintPhotoFile,'maint');
     }
     // บันทึก shop_visit seq=0 — insert แล้ว update ถ้ามีอยู่แล้ว
     var shopData={plan_id:_dMaintPlan.plan_id,shop_seq:0,
@@ -44900,9 +44916,7 @@ window.drvMaintPickup=async function(){
     // อัพโหลดรูปใบเสร็จ
     var photoUrl=null;
     if(_dMaintPhotoFile){
-      var path=_dMaintPlan.plan_id+'/maint_pickup_'+Date.now()+'.jpg';
-      var {error:ue}=await window._sb.storage.from('delivery-photos').upload(path,_dMaintPhotoFile,{contentType:'image/jpeg',upsert:true});
-      if(!ue) photoUrl=window._sb.storage.from('delivery-photos').getPublicUrl(path).data.publicUrl;
+      photoUrl=await window._cldUpload(_dMaintPhotoFile,'maint');
     }
     // shop_visit seq=1 — insert หรือ update
     var pickupData={plan_id:_dMaintPlan.plan_id,shop_seq:1,shop_name:'รับรถกลับ',
@@ -45269,14 +45283,8 @@ window.drvDoArriveAtShop=async function(){
   var visitSeq=(seq>=mCount&&_dTripPlan._childPlanId)?(seq-mCount):seq;
   var photoUrl=null;
   if(_dCapturedFile){
-    try{
-      var ext=(_dCapturedFile.name||'photo.jpg').split('.').pop()||'jpg';
-      var path=visitPlanId+'/'+visitSeq+'/arrive_'+Date.now()+'.'+ext;
-      var {error:ue}=await window._sb.storage.from(DRV_PHOTO_BUCKET).upload(path,_dCapturedFile,{contentType:_dCapturedFile.type||'image/jpeg',upsert:true});
-      if(ue)throw ue;
-      var {data:ud}=window._sb.storage.from(DRV_PHOTO_BUCKET).getPublicUrl(path);
-      photoUrl=ud.publicUrl;
-    }catch(e){drvHideL();drvShowToast('❌ อัพโหลดรูปไม่ได้',true);return;}
+    photoUrl=await window._cldUpload(_dCapturedFile,'driver');
+    if(!photoUrl){drvHideL();drvShowToast('❌ อัพโหลดรูปไม่ได้',true);return;}
   }
   var {data:visitData,error:ve}=await window._sb.from('shop_visits').upsert({
     plan_id:visitPlanId,shop_seq:visitSeq,shop_name:shop.shopName||shop.shopId||'',
@@ -45601,8 +45609,7 @@ window.trAckSubmit = async function(){
   try {
     var blob=await(await fetch(_trAckPhotoBase64)).blob();
     var fname='tr_'+_trPendingSession.session_id+'_'+(_trPendingSession.driver_username||'drv')+'_'+Date.now()+'.jpg';
-    var {error:upErr}=await window._sb.storage.from('training-photos').upload(fname,blob,{contentType:'image/jpeg',upsert:true});
-    if(!upErr){ var {data:ud}=window._sb.storage.from('training-photos').getPublicUrl(fname); photoUrl=ud.publicUrl; }
+    photoUrl=await window._cldUpload(blob,'training');
   } catch(e){}
   var {error}=await window._sb.from('training_participants').update({
     acknowledged:true, photo_url:photoUrl, acknowledged_at:new Date().toISOString()
@@ -45846,14 +45853,8 @@ window.dmgRemovePhoto = function(i){
 async function dmgUploadPhotos(prefix){
   var urls = [];
   for(var i=0;i<_dmgPhotos.length;i++){
-    var f = _dmgPhotos[i].file;
-    var ext = f.name.split('.').pop()||'jpg';
-    var fname = 'damage/'+prefix+'_'+i+'.'+ext;
-    var {error} = await window._sb.storage.from('damage-photos').upload(fname,f,{contentType:f.type,upsert:true});
-    if(!error){
-      var {data:ud} = window._sb.storage.from('damage-photos').getPublicUrl(fname);
-      urls.push(ud.publicUrl);
-    }
+    var _u = await window._cldUpload(_dmgPhotos[i].file,'damage');
+    if(_u) urls.push(_u);
   }
   return urls;
 }
