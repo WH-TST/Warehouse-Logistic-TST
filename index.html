@@ -30035,7 +30035,9 @@ function _loUpdateTotal() {
     if (el) el.textContent = 'รวม: '+totalQty.toLocaleString()+' เส้น / '+totalWt.toLocaleString()+' กก.';
 }
 
+window._loSaving = false;
 window.loSaveOrder = async function() {
+    if (window._loSaving) return;   // กันกดซ้ำ → ออเดอร์ซ้ำ
     var dateVal  = document.getElementById('lo-m-date')?.value;
     var truck    = document.getElementById('lo-m-truck')?.value.trim();
     var note     = document.getElementById('lo-m-note')?.value.trim();
@@ -30095,6 +30097,10 @@ window.loSaveOrder = async function() {
         }
     }
 
+    window._loSaving = true;
+    var _sb2 = document.getElementById('lo-submit-btn');
+    var _sbTxt = _sb2 ? _sb2.innerHTML : '';
+    if (_sb2) { _sb2.disabled = true; _sb2.style.opacity = '0.6'; _sb2.style.cursor = 'wait'; _sb2.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...'; }
     try {
         var {error} = _loEditId
             ? await window._sb.from('loading_orders').update(payload).eq('id', _loEditId)
@@ -30106,7 +30112,12 @@ window.loSaveOrder = async function() {
         var dateEl = document.getElementById('lo-date');
         if (dateEl) dateEl.value = dateVal;
         _loLoadOrders(dateVal);
-    } catch(e) { showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true); }
+    } catch(e) {
+        showToast('เกิดข้อผิดพลาด: '+(e?.message||String(e)), true);
+    } finally {
+        window._loSaving = false;
+        if (_sb2) { _sb2.disabled = false; _sb2.style.opacity = ''; _sb2.style.cursor = ''; _sb2.innerHTML = _sbTxt; }
+    }
 };
 
 window.loSetStatus = async function(id, status) {
