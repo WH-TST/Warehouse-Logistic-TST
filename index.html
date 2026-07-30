@@ -12435,6 +12435,8 @@ window.confirmAndSaveTag = async function confirmAndSaveTag(idx) {
         wMinMax: spec.wMinMax || item.wMinMax,
         productName: spec.name || item.productName
     });
+    // ดาวน์โหลด PDF ทันที (ไม่ต้องกด PRINT ALL ซ้ำ)
+    if (typeof window.printTagPopup === 'function') await window.printTagPopup();
 }
         function generatePreviewFromRow(idx, qty) {
             const item = tagPrintData[idx];
@@ -12677,7 +12679,7 @@ function generatePreview(item) {
                     clone.style.margin = '0'; clone.style.background = '#fff'; clone.style.overflow = 'hidden';
                     holder.innerHTML = '';
                     holder.appendChild(clone);
-                    var canvas = await html2canvas(clone, { scale:3, backgroundColor:'#ffffff', useCORS:true, logging:false });
+                    var canvas = await html2canvas(clone, { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false });
                     var png = await pdf.embedPng(canvas.toDataURL('image/png'));
                     var page = pdf.addPage([pageW, pageH]);
                     page.drawImage(png, { x:0, y:0, width:pageW, height:pageH });
