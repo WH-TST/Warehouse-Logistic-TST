@@ -27719,8 +27719,12 @@ async function _ldMonFetch(dateVal, showSpinner) {
             }
             return false;
         });
-        // งานที่โหลดข้ามวัน (order_date ≠ วันที่โหลด) ขึ้นก่อน
-        orders.sort(function(a,b){ return (a.order_date===dateVal?1:0) - (b.order_date===dateVal?1:0); });
+        // เรียงแบบคงที่ (กันการ์ดสลับตำแหน่ง/กระพริบตอน poll): งานข้ามวันขึ้นก่อน แล้วเรียงตาม order_no
+        orders.sort(function(a,b){
+            var ga = (a.order_date===dateVal?1:0), gb = (b.order_date===dateVal?1:0);
+            if (ga !== gb) return ga - gb;
+            return String(a.order_no||a.id||'').localeCompare(String(b.order_no||b.id||''));
+        });
         var showIds = {}; orders.forEach(function(o){ showIds[o.id]=1; });
         var sessions = allSess.filter(function(s){ return showIds[s.order_id]; });
         _ldRenderMonitorTable(sessions, orders);
