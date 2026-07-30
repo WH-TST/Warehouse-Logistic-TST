@@ -27702,11 +27702,14 @@ async function _ldMonFetch(dateVal, showSpinner) {
         }
         // 2) หา "วันที่โหลดจริง" ต่อออเดอร์ = วันที่ของ session ที่โหลดล่าสุด (end_time > start_time > created_at)
         var loadDate = {};   // order_id -> 'YYYY-MM-DD'
+        var loadTime = {};   // order_id -> timestamp เต็มของ session ที่โหลดล่าสุด (ไว้เรียงลำดับ)
         allSess.forEach(function(s){
             if (s.record_type === 'draft') return;
             var t = s.end_time || s.start_time || s.created_at || '';
-            var d = t ? String(t).slice(0,10) : '';
-            if (d && (!loadDate[s.order_id] || d > loadDate[s.order_id])) loadDate[s.order_id] = d;
+            if (!t) return;
+            var d = String(t).slice(0,10);
+            if (!loadDate[s.order_id] || d > loadDate[s.order_id]) loadDate[s.order_id] = d;
+            if (!loadTime[s.order_id] || String(t) > loadTime[s.order_id]) loadTime[s.order_id] = String(t);
         });
         // 3) เลือกออเดอร์สำหรับวันที่เลือก
         //    - โหลดแล้ว → แสดงตาม "วันที่โหลดจริง"
@@ -28710,13 +28713,22 @@ function _ldRenderMonitorTable(rows, orders) {
         });
 
         // split cards into: pending/rejected (tab1) vs approved (tab2)
+        // เวลาที่ "โหลดเสร็จ" ต่อออเดอร์ = end_time ล่าสุด (fallback updated_at/created_at) ของ session ที่เสร็จ
+        var _doneTime = function(oid){
+            return (doneByOrder[oid]||[]).reduce(function(mx, r){
+                var t = r.end_time || r.updated_at || r.created_at || '';
+                return t > mx ? t : mx;
+            }, '');
+        };
+        // อนุมัติแล้ว: เรียงงานที่เพิ่งโหลดเสร็จล่าสุดขึ้นบนสุด, เก่าสุดอยู่ล่าง
+        var _approvedOids = Object.keys(doneByOrder)
+            .filter(function(oid){ return (orderIdx[oid]||{}).review_status==='approved'; })
+            .sort(function(a,b){ return _doneTime(b).localeCompare(_doneTime(a)); });
         var approvedCards = '', pendingCards = '';
+        _approvedOids.forEach(function(oid){ approvedCards += (orderCards_byId[oid]||''); });
         Object.keys(doneByOrder).forEach(function(oid){
             var ord = orderIdx[oid]||{};
-            var rv = ord.review_status||'';
-            var cardHtml = orderCards_byId[oid]||'';
-            if (rv==='approved') approvedCards += cardHtml;
-            else pendingCards += cardHtml;
+            if ((ord.review_status||'')!=='approved') pendingCards += (orderCards_byId[oid]||'');
         });
         doneHtml = {pending: pendingCards, approved: approvedCards};
     }
