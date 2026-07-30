@@ -12644,31 +12644,47 @@ function generatePreview(item) {
 }
         window.closePrintPreview = function closePrintPreview() { document.getElementById('tag-preview-area').classList.add('hidden'); }
 
-        window.printTagPopup = function printTagPopup() {
+        // สร้าง PDF ขนาด 100×75mm ต่อ tag (แทน window.print ที่เพี้ยนบน Mac)
+        // → เปิด PDF ให้พิมพ์ ได้ผลตรงเหมือนโหลด PDF เอง (ขนาดหน้าถูกล็อกในไฟล์)
+        window.printTagPopup = async function printTagPopup() {
             var content = document.getElementById('preview-content');
             if (!content) return;
             var tags = content.querySelectorAll('.tag-preview-page');
             if (!tags.length) return;
-            var html = '';
-            tags.forEach(function(t) { html += t.outerHTML; });
-            var pw = window.open('', '_blank', 'width=400,height=320');
-            pw.document.write(
-                '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-                '<style>' +
-                '@page { size: 100mm 75mm; margin: 0; }' +
-                'html, body { margin: 0; padding: 0; background: white; }' +
-                '.tag-preview-page { width: 100mm; height: 75mm; overflow: hidden; box-sizing: border-box; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 2mm 4mm; display: flex; flex-direction: column; position: relative; color: black; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
-                // แบ่งหน้าเฉพาะระหว่าง tag — ไม่ใส่ให้ตัวสุดท้าย (กัน Mac เพิ่มหน้าว่าง = ล้น 2 แผ่น)
-                '.tag-preview-page:not(:last-child) { page-break-after: always; break-after: page; }' +
-                '.tag-preview-page:last-child { page-break-after: auto; break-after: auto; }' +
-                '.barcode-container { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 1mm; }' +
-                '.barcode-svg { width: 90% !important; max-height: 10mm; }' +
-                '* { font-family: Arial, sans-serif; box-sizing: border-box; }' +
-                '</style>' +
-                '</head><body onload="window.print();window.onafterprint=function(){window.close();};">' +
-                html + '</body></html>'
-            );
-            pw.document.close();
+            if (typeof showToast === 'function') showToast('⏳ กำลังสร้าง PDF...');
+            var holder = null;
+            try {
+                if (typeof _wheLoadLibs === 'function') await _wheLoadLibs();
+                var MM = 72/25.4;               // mm → pt
+                var pageW = 100*MM, pageH = 75*MM;
+                var pdf = await PDFLib.PDFDocument.create();
+                // เตรียมที่ render นอกจอ (โคลน tag + บังคับสไตล์ label สะอาด)
+                holder = document.createElement('div');
+                holder.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;';
+                document.body.appendChild(holder);
+                for (var i=0; i<tags.length; i++) {
+                    var clone = tags[i].cloneNode(true);
+                    clone.style.width = '100mm'; clone.style.height = '75mm';
+                    clone.style.border = 'none'; clone.style.boxShadow = 'none';
+                    clone.style.margin = '0'; clone.style.background = '#fff'; clone.style.overflow = 'hidden';
+                    holder.innerHTML = '';
+                    holder.appendChild(clone);
+                    var canvas = await html2canvas(clone, { scale:3, backgroundColor:'#ffffff', useCORS:true, logging:false });
+                    var png = await pdf.embedPng(canvas.toDataURL('image/png'));
+                    var page = pdf.addPage([pageW, pageH]);
+                    page.drawImage(png, { x:0, y:0, width:pageW, height:pageH });
+                }
+                var bytes = await pdf.save();
+                var blob = new Blob([bytes], { type:'application/pdf' });
+                var url = URL.createObjectURL(blob);
+                var w = window.open(url, '_blank');
+                if (w) { try { w.onload = function(){ try{ w.focus(); w.print(); }catch(e){} }; } catch(e){} }
+                if (typeof showToast === 'function') showToast('✅ สร้าง PDF สำเร็จ — กด Print ได้เลย');
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('❌ สร้าง PDF ไม่สำเร็จ: '+(e && e.message || e), true);
+            } finally {
+                if (holder) { try { document.body.removeChild(holder); } catch(e){} }
+            }
         }
 
         window.saveCalculation = function saveCalculation() {
