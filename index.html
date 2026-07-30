@@ -12685,12 +12685,11 @@ function generatePreview(item) {
                 var bytes = await pdf.save();
                 var blob = new Blob([bytes], { type:'application/pdf' });
                 var url = URL.createObjectURL(blob);
-                // ดาวน์โหลดไฟล์ PDF (เปิดเองแล้วสั่งพิมพ์ = ไม่ล้น) — ไม่ใช้ auto-print ที่กระดาษเพี้ยน
-                var a = document.createElement('a');
-                a.href = url; a.download = 'TAG_' + new Date().toISOString().slice(0,10) + '.pdf';
-                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
-                if (typeof showToast === 'function') showToast('✅ ดาวน์โหลด PDF แล้ว — เปิดไฟล์แล้วสั่งพิมพ์ (ขนาด 100×75mm ล็อกในไฟล์)');
+                // เปิด PDF แล้วสั่งพิมพ์ทันที (คลิกเดียว) — ขนาด 100×75mm ล็อกในไฟล์ + printer ตั้ง default ไว้แล้ว
+                var w = window.open(url, '_blank');
+                if (w) { try { w.addEventListener('load', function(){ setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 400); }); } catch(e){} }
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+                if (typeof showToast === 'function') showToast('✅ เปิด PDF + สั่งพิมพ์แล้ว');
             } catch (e) {
                 if (typeof showToast === 'function') showToast('❌ สร้าง PDF ไม่สำเร็จ: '+(e && e.message || e), true);
             } finally {
