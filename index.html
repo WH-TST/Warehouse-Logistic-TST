@@ -12685,16 +12685,12 @@ function generatePreview(item) {
                 var bytes = await pdf.save();
                 var blob = new Blob([bytes], { type:'application/pdf' });
                 var url = URL.createObjectURL(blob);
-                // สั่งพิมพ์ผ่าน iframe ซ่อน (ไม่โดน popup blocker แม้ผ่าน await) — ขนาด 100×75mm ล็อกในไฟล์
-                var oldIfr = document.getElementById('_tagPrintFrame'); if (oldIfr) oldIfr.remove();
-                var ifr = document.createElement('iframe');
-                ifr.id = '_tagPrintFrame';
-                ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
-                ifr.src = url;
-                ifr.onload = function(){ setTimeout(function(){ try{ ifr.contentWindow.focus(); ifr.contentWindow.print(); }catch(e){ window.open(url,'_blank'); } }, 500); };
-                document.body.appendChild(ifr);
+                // ดาวน์โหลดไฟล์ PDF ลงเครื่อง → เปิดไฟล์แล้วสั่งพิมพ์ (ไม่ล้น)
+                var a = document.createElement('a');
+                a.href = url; a.download = 'TAG_' + new Date().toISOString().slice(0,10) + '_' + Date.now() + '.pdf';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
-                if (typeof showToast === 'function') showToast('✅ สั่งพิมพ์แล้ว — ถ้าไม่ขึ้นหน้าพิมพ์ใน 2 วิ ให้กด PRINT ALL ซ้ำ');
+                if (typeof showToast === 'function') showToast('✅ ดาวน์โหลด PDF แล้ว — เปิดไฟล์แล้วสั่งพิมพ์ได้เลย');
             } catch (e) {
                 if (typeof showToast === 'function') showToast('❌ สร้าง PDF ไม่สำเร็จ: '+(e && e.message || e), true);
             } finally {
