@@ -12654,7 +12654,14 @@ function generatePreview(item) {
             if (typeof showToast === 'function') showToast('⏳ กำลังสร้าง PDF...');
             var holder = null;
             try {
-                if (typeof _wheLoadLibs === 'function') await _wheLoadLibs();
+                // โหลด lib เอง (ไม่พึ่ง scope อื่น)
+                if (!window.html2canvas) {
+                    await new Promise(function(res,rej){ var s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'; s.onload=res; s.onerror=function(){rej(new Error('โหลด html2canvas ไม่ได้'));}; document.head.appendChild(s); });
+                }
+                if (!(window.PDFLib && window.PDFLib.PDFDocument)) {
+                    await new Promise(function(res,rej){ var s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/@cantoo/pdf-lib@2.5.2/dist/pdf-lib.min.js'; s.onload=res; s.onerror=function(){rej(new Error('โหลด pdf-lib ไม่ได้'));}; document.head.appendChild(s); });
+                }
+                var PDFLib = window.PDFLib;
                 var MM = 72/25.4;               // mm → pt
                 var pageW = 100*MM, pageH = 75*MM;
                 var pdf = await PDFLib.PDFDocument.create();
