@@ -27685,29 +27685,42 @@ async function _ldMonFetch(dateVal, showSpinner) {
     if (showSpinner && wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
         if (!Object.keys(_ldProductMap).length) await _ldLoadProductMap();
-        var [{data:ordToday},{data:sessToday}] = await Promise.all([
-            window._sb.from('loading_orders').select('*').eq('order_date', dateVal),
-            window._sb.from('loading_sessions').select('*').eq('plan_date', dateVal)
-        ]);
-        var orders = ordToday||[], sessions = sessToday||[];
-        // ── ยกงานค้างข้ามวันมาแสดงในหน้า "วันนี้" ด้วย (real-time ไม่ต้องกลับไปดูย้อนหลัง) ──
         var today = new Date().toISOString().slice(0,10);
-        if (dateVal === today) {
-            var winStart = new Date(Date.now() - 14*86400000).toISOString().slice(0,10);
-            var {data:carried} = await window._sb.from('loading_orders').select('*')
-                .lt('order_date', dateVal).gte('order_date', winStart)
-                .or('status.in.(pending,in_progress),review_status.eq.pending_review,review_status.eq.rejected');
-            carried = carried||[];
-            var have = {}; orders.forEach(function(o){ have[o.id]=1; });
-            var newOnes = carried.filter(function(o){ return !have[o.id]; });
-            if (newOnes.length) {
-                orders = newOnes.concat(orders); // งานค้างขึ้นบนสุด
-                var cids = newOnes.map(function(o){ return o.id; });
-                var {data:cSess} = await window._sb.from('loading_sessions').select('*').in('order_id', cids);
-                var sHave = {}; sessions.forEach(function(s){ if(s.id!=null) sHave[s.id]=1; });
-                (cSess||[]).forEach(function(s){ if(s.id==null || !sHave[s.id]) sessions.push(s); });
-            }
+        var winStart = new Date(Date.now() - 14*86400000).toISOString().slice(0,10);
+        var winEnd = (dateVal > today) ? dateVal : today;
+        // 1) ดึงออเดอร์ในช่วง 14 วันย้อนหลัง (เป็นตัวเลือก) + session ทั้งหมดของออเดอร์เหล่านั้น
+        var {data:cand} = await window._sb.from('loading_orders').select('*')
+            .gte('order_date', winStart).lte('order_date', winEnd);
+        cand = cand || [];
+        var candIds = cand.map(function(o){ return o.id; });
+        var allSess = [];
+        if (candIds.length) {
+            var {data:s2} = await window._sb.from('loading_sessions').select('*').in('order_id', candIds);
+            allSess = s2 || [];
         }
+        // 2) หา "วันที่โหลดจริง" ต่อออเดอร์ = วันที่ของ session ที่โหลดล่าสุด (end_time > start_time > created_at)
+        var loadDate = {};   // order_id -> 'YYYY-MM-DD'
+        allSess.forEach(function(s){
+            if (s.record_type === 'draft') return;
+            var t = s.end_time || s.start_time || s.created_at || '';
+            var d = t ? String(t).slice(0,10) : '';
+            if (d && (!loadDate[s.order_id] || d > loadDate[s.order_id])) loadDate[s.order_id] = d;
+        });
+        // 3) เลือกออเดอร์สำหรับวันที่เลือก
+        //    - โหลดแล้ว → แสดงตาม "วันที่โหลดจริง"
+        //    - ยังไม่โหลด (WIP) → แสดงเฉพาะวันนี้ ถ้ายัง active (กำลังโหลด/รอตรวจ/ตีกลับ)
+        var orders = cand.filter(function(o){
+            if (loadDate[o.id]) return loadDate[o.id] === dateVal;
+            if (dateVal === today) {
+                var st = o.status||'', rv = o.review_status||'';
+                return (st==='pending' || st==='in_progress' || rv==='pending_review' || rv==='rejected');
+            }
+            return false;
+        });
+        // งานที่โหลดข้ามวัน (order_date ≠ วันที่โหลด) ขึ้นก่อน
+        orders.sort(function(a,b){ return (a.order_date===dateVal?1:0) - (b.order_date===dateVal?1:0); });
+        var showIds = {}; orders.forEach(function(o){ showIds[o.id]=1; });
+        var sessions = allSess.filter(function(s){ return showIds[s.order_id]; });
         _ldRenderMonitorTable(sessions, orders);
         _ldRenderMonKpi(sessions, orders);
         var badge = document.getElementById('ld-mon-realtime-badge');
