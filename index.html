@@ -12435,8 +12435,8 @@ window.confirmAndSaveTag = async function confirmAndSaveTag(idx) {
         wMinMax: spec.wMinMax || item.wMinMax,
         productName: spec.name || item.productName
     });
-    // ดาวน์โหลด PDF ทันที (ไม่ต้องกด PRINT ALL ซ้ำ)
-    if (typeof window.printTagPopup === 'function') await window.printTagPopup();
+    // ดาวน์โหลด PDF ทันที (ชื่อไฟล์ = วันที่_รหัสสินค้า_จำนวนมัด)
+    if (typeof window.printTagPopup === 'function') await window.printTagPopup(date + '_' + item.productId + '_' + qty + 'มัด');
 }
         function generatePreviewFromRow(idx, qty) {
             const item = tagPrintData[idx];
@@ -12649,7 +12649,7 @@ function generatePreview(item) {
 
         // สร้าง PDF ขนาด 100×75mm ต่อ tag (แทน window.print ที่เพี้ยนบน Mac)
         // → เปิด PDF ให้พิมพ์ ได้ผลตรงเหมือนโหลด PDF เอง (ขนาดหน้าถูกล็อกในไฟล์)
-        window.printTagPopup = async function printTagPopup() {
+        window.printTagPopup = async function printTagPopup(fileName) {
             var content = document.getElementById('preview-content');
             if (!content) return;
             var tags = content.querySelectorAll('.tag-preview-page');
@@ -12696,7 +12696,8 @@ function generatePreview(item) {
                 var url = URL.createObjectURL(blob);
                 // ดาวน์โหลดไฟล์ PDF ลงเครื่อง → เปิดไฟล์แล้วสั่งพิมพ์ (ไม่ล้น)
                 var a = document.createElement('a');
-                a.href = url; a.download = 'TAG_' + new Date().toISOString().slice(0,10) + '_' + Date.now() + '.pdf';
+                var _fn = (fileName ? String(fileName).replace(/[\/\\:*?"<>|]/g,'-') : ('TAG_' + new Date().toISOString().slice(0,10) + '_' + Date.now())) + '.pdf';
+                a.href = url; a.download = _fn;
                 document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
                 if (typeof showToast === 'function') showToast('✅ ดาวน์โหลด PDF แล้ว — เปิดไฟล์แล้วสั่งพิมพ์ได้เลย');
