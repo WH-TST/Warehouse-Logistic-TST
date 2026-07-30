@@ -12672,15 +12672,22 @@ function generatePreview(item) {
                 holder = document.createElement('div');
                 holder.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;';
                 document.body.appendChild(holder);
+                // tag ที่เนื้อหาเหมือนกัน (มัดของ SKU เดียวกัน) → เรนเดอร์รูปครั้งเดียวแล้วใช้ซ้ำทุกหน้า
+                var _pngCache = {};
                 for (var i=0; i<tags.length; i++) {
-                    var clone = tags[i].cloneNode(true);
-                    clone.style.width = '100mm'; clone.style.height = '75mm';
-                    clone.style.border = 'none'; clone.style.boxShadow = 'none';
-                    clone.style.margin = '0'; clone.style.background = '#fff'; clone.style.overflow = 'hidden';
-                    holder.innerHTML = '';
-                    holder.appendChild(clone);
-                    var canvas = await html2canvas(clone, { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false });
-                    var png = await pdf.embedPng(canvas.toDataURL('image/png'));
+                    var key = tags[i].outerHTML;
+                    var png = _pngCache[key];
+                    if (!png) {
+                        var clone = tags[i].cloneNode(true);
+                        clone.style.width = '100mm'; clone.style.height = '75mm';
+                        clone.style.border = 'none'; clone.style.boxShadow = 'none';
+                        clone.style.margin = '0'; clone.style.background = '#fff'; clone.style.overflow = 'hidden';
+                        holder.innerHTML = '';
+                        holder.appendChild(clone);
+                        var canvas = await html2canvas(clone, { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false });
+                        png = await pdf.embedPng(canvas.toDataURL('image/png'));
+                        _pngCache[key] = png;
+                    }
                     var page = pdf.addPage([pageW, pageH]);
                     page.drawImage(png, { x:0, y:0, width:pageW, height:pageH });
                 }
