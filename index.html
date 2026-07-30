@@ -12225,7 +12225,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
                     .getProductionPlanByDate(formattedDate, ppSpreadsheetId);
             }),
             window._sb.from('print_tag_log').select('sku,bundles').eq('print_date', formattedDate),
-            window._sb.from('products').select('sku,name,lines_per_bundle'),
+            window._sb.from('products').select('sku,name,search_name,lines_per_bundle'),
             // ปริ้นสะสม: ตั้งแต่ startDate ถึงก่อนวันที่เลือก
             window._sb.from('print_tag_log').select('sku,bundles').gte('print_date', startDate).lt('print_date', formattedDate),
             // ใช้จริง: transection_fg reference = Production ตั้งแต่ startDate ถึงก่อนวันที่เลือก
@@ -12278,6 +12278,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
             return {
                 productId: sku,
                 productName: prod.name || sku,
+                searchName: prod.search_name || '',
                 linesPerBundle: linesPerBundle,
                 planToday: planBundles,
                 savedBundlesToday: savedBundles,
@@ -12532,7 +12533,7 @@ function generatePreview(item) {
     const stdFormatted = (!isNaN(_stdVal) && _stdVal > 0) ? _stdVal.toFixed(2) : (item.wStd && item.wStd !== '-' ? item.wStd : '-');
     
     // ตัดภาษาไทยออกจากชื่อสินค้า
-    let engProductName = item.productName.replace(/[\u0E00-\u0E7F]/g, '');
+    let engProductName = (item.searchName || item.productName || '').replace(/[\u0E00-\u0E7F]/g, '');
     engProductName = engProductName.replace(/\s+/g, ' ').trim();
     
     for (let i = 1; i <= bundles; i++) {
@@ -12684,9 +12685,12 @@ function generatePreview(item) {
                 var bytes = await pdf.save();
                 var blob = new Blob([bytes], { type:'application/pdf' });
                 var url = URL.createObjectURL(blob);
-                var w = window.open(url, '_blank');
-                if (w) { try { w.onload = function(){ try{ w.focus(); w.print(); }catch(e){} }; } catch(e){} }
-                if (typeof showToast === 'function') showToast('✅ สร้าง PDF สำเร็จ — กด Print ได้เลย');
+                // ดาวน์โหลดไฟล์ PDF (เปิดเองแล้วสั่งพิมพ์ = ไม่ล้น) — ไม่ใช้ auto-print ที่กระดาษเพี้ยน
+                var a = document.createElement('a');
+                a.href = url; a.download = 'TAG_' + new Date().toISOString().slice(0,10) + '.pdf';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+                if (typeof showToast === 'function') showToast('✅ ดาวน์โหลด PDF แล้ว — เปิดไฟล์แล้วสั่งพิมพ์ (ขนาด 100×75mm ล็อกในไฟล์)');
             } catch (e) {
                 if (typeof showToast === 'function') showToast('❌ สร้าง PDF ไม่สำเร็จ: '+(e && e.message || e), true);
             } finally {
