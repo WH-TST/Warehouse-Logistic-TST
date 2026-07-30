@@ -27686,7 +27686,9 @@ async function _ldMonFetch(dateVal, showSpinner) {
     try {
         if (!Object.keys(_ldProductMap).length) await _ldLoadProductMap();
         var today = new Date().toISOString().slice(0,10);
-        var winStart = new Date(Date.now() - 14*86400000).toISOString().slice(0,10);
+        // ช่วงดึงออเดอร์: ครอบคลุมทั้งวันนี้และวันที่เลือก (เผื่อดูย้อนหลังเก่ากว่า 14 วัน) − 14 วัน
+        var _base = (dateVal < today) ? dateVal : today;
+        var winStart = new Date(new Date(_base+'T00:00:00').getTime() - 14*86400000).toISOString().slice(0,10);
         var winEnd = (dateVal > today) ? dateVal : today;
         // 1) ดึงออเดอร์ในช่วง 14 วันย้อนหลัง (เป็นตัวเลือก) + session ทั้งหมดของออเดอร์เหล่านั้น
         var {data:cand} = await window._sb.from('loading_orders').select('*')
