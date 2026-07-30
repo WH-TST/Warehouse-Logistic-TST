@@ -42136,6 +42136,10 @@ window.viewTripResult = async function(planId) {
         <span style="font-size:12px;font-weight:900;">อนุมัติ</span>
         <span id="drv-sup-badge" style="display:none;position:absolute;top:6px;right:calc(50% - 18px);background:#ef4444;color:#fff;font-size:9px;font-weight:900;border-radius:20px;padding:1px 5px;min-width:16px;text-align:center;"></span>
       </button>
+      <button id="drv-nav-inspect" onclick="drvManualInspect()" style="flex:1;border:none;background:none;color:#fbbf24;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;">
+        <i class="fas fa-clipboard-check" style="font-size:22px;"></i>
+        <span style="font-size:12px;font-weight:900;">ตรวจรถ</span>
+      </button>
       <button id="drv-nav-history" onclick="drvGoTab('history')" style="flex:1;border:none;background:none;color:#64748b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;">
         <i class="fas fa-history" style="font-size:22px;"></i>
         <span style="font-size:12px;font-weight:900;">ประวัติ</span>
@@ -44350,33 +44354,38 @@ async function drvInspectCheck(){
   drvInspectShow(today,plate);
 }
 
-// เด้งป๊อบอัพตรวจสภาพครั้งแรกของวัน — ไม่ว่าจะมีงานหรือไม่ (ไม่มีงาน = ให้เลือกทะเบียนเอง)
+// เด้งป๊อบอัพตรวจสภาพ — เด้งไปเรื่อยจนกว่าจะ "บันทึกผลตรวจ" (มี row) ถึงหยุด
 async function drvInspectDailyPrompt(){
   var today=new Date().toISOString().split('T')[0];
-  // เด้งวันละครั้งพอ — กันเด้งซ้ำทั้งวันด้วย localStorage (ต่อคนขับ/วัน)
-  // ปิดป๊อบอัพไปแล้วก็ไม่เด้งอีกในวันนั้น
-  var driverKey=_dSess?.driver_id||_dSess?.username||'x';
-  var guardKey='drv_inspect_shown_'+driverKey+'_'+today;
-  try{ if(localStorage.getItem(guardKey)) return; }catch(e){}
+  // กันเด้งซ้ำ "ภายในรอบเดียว" (in-memory) — refresh/login ใหม่จะเด้งอีกถ้ายังไม่ตรวจ
+  if(window._dInspectPromptedSession) return;
   // เด้งเฉพาะเมื่อยังมี "เที่ยวที่ยังไม่โหลด/ออกรถ"
   // ถ้าโหลด/ออกครบทุกเที่ยวแล้ว (รวมงานค้างคืนที่ขึ้นเย็นนี้) → ไม่ต้องเด้ง (ค่อยไปเด้งพรุ่งนี้)
   var hasUnloadedTrip=_dPlans.some(function(p){ return p.job_type!=='maintenance_pm' && !_dTripLogs[p.plan_id]; });
-  if(!hasUnloadedTrip){ try{localStorage.setItem(guardKey,'1');}catch(e){} return; }
-  // ตรวจไปแล้ววันนี้ไหม (ต่อคนขับ)
+  if(!hasUnloadedTrip){ window._dInspectPromptedSession=true; return; }
+  // ตรวจ+บันทึกไปแล้ววันนี้ไหม (มี row) → หยุดเด้ง
   var driverId=_dSess?.driver_id||'';
   try{
     var q=window._sb.from('truck_inspections').select('id').eq('inspect_date',today);
     if(driverId) q=q.eq('driver_id',driverId);
     var {data:done}=await q.limit(1);
-    if(done&&done.length){ try{localStorage.setItem(guardKey,'1');}catch(e){} return; }
+    if(done&&done.length){ window._dInspectPromptedSession=true; return; }
   }catch(e){}
   // มีงานส่งของ → ใช้ทะเบียนจากงาน; ไม่มีงาน → ให้เลือกทะเบียนเอง (plate='')
   var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
   var plate = (hasDelivery && _dPlans[0]?.truck_plate) ? _dPlans[0].truck_plate : '';
   _dInspectType=_drvDetectInspectType();
-  try{ localStorage.setItem(guardKey,'1'); }catch(e){} // เด้งครั้งเดียว/วัน
+  window._dInspectPromptedSession=true; // กันเด้งซ้ำในรอบนี้ (ยังไม่ตรวจ → refresh/login ใหม่เด้งอีก)
   drvInspectShow(today, plate);
 }
+// เปิดป๊อบอัพตรวจสภาพเอง (ปุ่ม "ตรวจรถ") — เปิดได้ทุกเมื่อ
+window.drvManualInspect=function(){
+  var today=new Date().toISOString().split('T')[0];
+  var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
+  var plate = (hasDelivery && _dPlans[0]?.truck_plate) ? _dPlans[0].truck_plate : '';
+  _dInspectType=_drvDetectInspectType();
+  drvInspectShow(today, plate);
+};
 
 // เลือกทะเบียนรถในป๊อบอัพ (กรณีไม่มีงาน)
 window.drvInspectPickPlate=function(v){ window._dInspectPlate=v||''; };
