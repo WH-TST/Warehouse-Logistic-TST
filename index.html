@@ -59,7 +59,8 @@
           var fd = new FormData();
           fd.append('file', f);
           fd.append('upload_preset', window._CLD_PRESET);
-          if (folder) fd.append('folder', 'wms/' + folder);
+          // แยกโฟลเดอร์ใน Media Library ตามประเภท (dynamic folders → ใช้ asset_folder)
+          if (folder) { fd.append('asset_folder', 'wms/' + folder); fd.append('folder', 'wms/' + folder); }
           var res = await fetch('https://api.cloudinary.com/v1_1/' + window._CLD_CLOUD + '/image/upload', { method:'POST', body: fd });
           var j = await res.json();
           return j && j.secure_url ? j.secure_url : null;
