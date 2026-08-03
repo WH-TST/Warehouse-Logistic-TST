@@ -27701,13 +27701,24 @@ async function _ldMonFetch(dateVal, showSpinner) {
             allSess = s2 || [];
         }
         // 2) หา "วันที่โหลดจริง" ต่อออเดอร์ = วันที่ของ session ที่โหลดล่าสุด (end_time > start_time > created_at)
+        // แปลงเป็นวันตามเวลาไทย (Asia/Bangkok, UTC+7): timestamp ที่เป็น UTC (ลงท้าย Z / มี offset)
+        // ต้องบวก 7 ชม.ก่อนตัดวัน ไม่งั้นการโหลดเช้ามืด (เช่น 06:23) จะเพี้ยนไปวันก่อนหน้า
+        var _ldBkkDate = function(t){
+            t = String(t);
+            var tail = t.slice(10);
+            var hasTz = /Z$/.test(t) || /[+-]\d\d:?\d\d$/.test(tail);
+            if (!hasTz) return t.slice(0,10); // naive (กรอกมือ) → วันตามที่กรอกอยู่แล้ว
+            var ms = new Date(t).getTime();
+            if (isNaN(ms)) return t.slice(0,10);
+            return new Date(ms + 7*3600000).toISOString().slice(0,10);
+        };
         var loadDate = {};   // order_id -> 'YYYY-MM-DD'
         var loadTime = {};   // order_id -> timestamp เต็มของ session ที่โหลดล่าสุด (ไว้เรียงลำดับ)
         allSess.forEach(function(s){
             if (s.record_type === 'draft') return;
             var t = s.end_time || s.start_time || s.created_at || '';
             if (!t) return;
-            var d = String(t).slice(0,10);
+            var d = _ldBkkDate(t);
             if (!loadDate[s.order_id] || d > loadDate[s.order_id]) loadDate[s.order_id] = d;
             if (!loadTime[s.order_id] || String(t) > loadTime[s.order_id]) loadTime[s.order_id] = String(t);
         });
