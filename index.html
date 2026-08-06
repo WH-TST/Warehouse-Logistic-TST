@@ -2109,6 +2109,16 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> WH ACTIVITY LOG
             </button>
 
+            <!-- ─── PRODUCTION ─── -->
+            <div class="nav-group-label" style="padding-top:16px;">
+                <span class="line"></span>
+                <i class="fas fa-industry" style="color:#475569;font-size:8px;"></i>&nbsp;PRODUCTION
+                <span class="line"></span>
+            </div>
+            <button onclick="switchView('production-block')" id="nav-production-block" class="nav-btn" data-tip="Production Block">
+                <span class="nav-icon"><i class="fas fa-th-large"></i></span> Production Block
+            </button>
+
             <!-- ─── INVENTORY ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
                 <span class="line"></span>
@@ -3105,6 +3115,24 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 <!-- ============================================================ -->
 <!-- VIEW: ผังคลังสินค้า — Warehouse Storage Map                  -->
 <!-- ============================================================ -->
+
+
+<!-- ============================================================ -->
+<!-- VIEW: PRODUCTION BLOCK — ฝังหน้าแผนผลิต (อ่านอย่างเดียว)      -->
+<!-- แก้ PROD_BLOCK_URL ด้านล่างเป็น URL จริง + token (?k=...)      -->
+<!-- จาก env PLAN_VIEW_TOKEN ของโปรเจกต์ tst-production-app         -->
+<!-- ============================================================ -->
+<div id="view-production-block-content" class="hidden" style="height:calc(100vh - 120px);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <p style="font-size:12px;color:#64748b;">
+            <i class="fas fa-eye"></i>&nbsp;อ่านอย่างเดียว — แก้ไข/กดคำสั่งจากหน้านี้ไม่ได้
+        </p>
+        <button onclick="loadProductionBlock()" class="text-xs font-black text-slate-500 hover:text-blue-600" style="padding:4px 10px;border:1px solid #e2e8f0;border-radius:8px;">
+            <i class="fas fa-rotate-right"></i>&nbsp;รีเฟรช
+        </button>
+    </div>
+    <iframe id="production-block-iframe" src="" style="width:100%;height:100%;border:1px solid #e2e8f0;border-radius:12px;background:#fff;"></iframe>
+</div>
 
 
 <!-- ============================================ -->
@@ -13821,11 +13849,31 @@ let currentAnalysis = null;
 /**
  * ฟังก์ชันหลักในการสลับ View ใหญ่
  */
+// ── Production Block (iframe ฝังหน้าแผนผลิต จากโปรเจกต์ tst-production-app) ──
+// ตั้งค่า URL จริง + token (WMS_VIEW_TOKEN จากโปรเจกต์ tst-production-app)
+window.PROD_BLOCK_URL = 'https://tstproduction.vercel.app/plan-view/block?k=wms-block-k7n3x9p2q5';
+function loadProductionBlock() {
+    const frame = document.getElementById('production-block-iframe');
+    if (!frame) return;
+    if (!window.PROD_BLOCK_URL || window.PROD_BLOCK_URL.indexOf('YOUR-PRODUCTION-APP-DOMAIN') !== -1) {
+        frame.removeAttribute('src');
+        frame.parentElement.querySelector('.prod-block-warn')?.remove();
+        const warn = document.createElement('div');
+        warn.className = 'prod-block-warn';
+        warn.style.cssText = 'padding:16px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:13px;font-weight:700;';
+        warn.innerText = 'ยังไม่ได้ตั้งค่า PROD_BLOCK_URL — แก้ตัวแปรนี้ในโค้ด (ค้นหา PROD_BLOCK_URL) ให้เป็น URL จริงของหน้าแผนผลิต + token';
+        frame.insertAdjacentElement('afterend', warn);
+        return;
+    }
+    const sep = window.PROD_BLOCK_URL.indexOf('?') === -1 ? '?' : '&';
+    frame.src = window.PROD_BLOCK_URL + sep + '_r=' + Date.now();
+}
+
 window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'logistic-plan', 'customers', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'production-block', 'logistic-plan', 'customers', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13860,6 +13908,7 @@ window.switchView = function switchView(view) {
         }
     });
 
+    if (view === 'production-block') loadProductionBlock();
     if (view === 'loading-order' && window.loInit) window.loInit();
     if (view === 'loading' && window.ldInit) window.ldInit();
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
@@ -13874,6 +13923,7 @@ window.switchView = function switchView(view) {
             'analytics': 'Warehouse Analytics & Flow',
             'overdue': 'Space Recovery Center',
             'whactivity': 'WH Activity Log — บันทึกข้อมูลจริงจากหน้างาน',
+            'production-block': 'Production Block — ดูแผนผลิต (อ่านอย่างเดียว)',
             'logistic-plan': 'Logistic — วางแผนส่งมอบ',
             'customers': 'ฐานข้อมูลลูกค้า — Customer Master',
             'kpi-wh': 'KPI Warehouse & Logistic — Supervisor Dashboard',
