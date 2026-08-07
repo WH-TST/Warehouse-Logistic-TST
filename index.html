@@ -12243,6 +12243,18 @@ window.loadPrintTagData = async function loadPrintTagData() {
         const { data: startDateRow } = await window._sb.from('app_config').select('value').eq('key', 'tag_system_start_date').maybeSingle();
         const startDate = (startDateRow && startDateRow.value) || '2026-04-20';
 
+        // ใช้จริง (เต็มมัด): ดึงสดจาก Production API (/api/trans/fg) แทนตาราง transection_fg
+        // ที่ต้องนำเข้าไฟล์ด้วยมือ (เก่า/ไม่อัปเดต) — to เป็นวันก่อนหน้า formattedDate (API รับ to แบบ inclusive)
+        const usedToDate = (function() {
+            const d = new Date(formattedDate + 'T00:00:00');
+            d.setDate(d.getDate() - 1);
+            return d.toISOString().split('T')[0];
+        })();
+        const usedFetchPromise = (startDate > usedToDate) ? Promise.resolve({ rows: [] }) :
+            fetch('https://tstproduction.vercel.app/api/trans/fg?from=' + startDate + '&to=' + usedToDate)
+                .then(function(r) { return r.ok ? r.json() : { rows: [] }; })
+                .catch(function() { return { rows: [] }; });
+
         // 2. ดึงแผนผลิตวันนี้ + log การพิมพ์ พร้อมกัน
         const [planRes, logRes, prodRes, cumulativePrintRes, usedRes] = await Promise.all([
             new Promise(function(resolve) {
@@ -12255,8 +12267,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
             window._sb.from('products').select('sku,name,search_name,lines_per_bundle'),
             // ปริ้นสะสม: ตั้งแต่ startDate ถึงก่อนวันที่เลือก
             window._sb.from('print_tag_log').select('sku,bundles').gte('print_date', startDate).lt('print_date', formattedDate),
-            // ใช้จริง: transection_fg reference = Production ตั้งแต่ startDate ถึงก่อนวันที่เลือก
-            window._sb.from('transection_fg').select('item_number,cw_quantity').eq('reference', 'Production').gte('tst_pd_date', startDate).lt('tst_pd_date', formattedDate)
+            usedFetchPromise
         ]);
 
         // 3. รวม lines ต่อ SKU จากทุกเครื่อง
@@ -12281,11 +12292,13 @@ window.loadPrintTagData = async function loadPrintTagData() {
             cumulativePrint[r.sku] = (cumulativePrint[r.sku] || 0) + (r.bundles || 0);
         });
 
-        // ใช้จริง (ก่อนวันที่เลือก, จาก transection_fg) — รวม cw_quantity ก่อน แล้วหาร lines_per_bundle ทีหลัง
+        // ใช้จริง (ก่อนวันที่เลือก, จาก Production /api/trans/fg — เฉพาะ row_type='bundle' คือ "เต็มมัด")
+        // รวมจำนวนเส้น (qty_lines) ต่อรหัสสินค้าก่อน แล้วหาร lines_per_bundle ทีหลัง (เหมือนของเดิม)
         const usedCwLines = {};
-        if (usedRes && usedRes.data) usedRes.data.forEach(function(r) {
-            const qty = parseFloat(r.cw_quantity) || 0;
-            if (qty > 0) usedCwLines[r.item_number] = (usedCwLines[r.item_number] || 0) + qty;
+        if (usedRes && usedRes.rows) usedRes.rows.forEach(function(r) {
+            if (r.row_type !== 'bundle' || !r.product_code) return;
+            const qty = parseFloat(r.qty_lines) || 0;
+            if (qty > 0) usedCwLines[r.product_code] = (usedCwLines[r.product_code] || 0) + qty;
         });
 
         // Map products สำหรับ linesPerBundle และชื่อสินค้า
