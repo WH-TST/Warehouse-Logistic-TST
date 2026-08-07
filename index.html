@@ -13183,13 +13183,23 @@ window.fetchProductSpec = async function fetchProductSpec(sku) {
 
     if (cfg && cfg.gasUrl) window._WMS_GAS_URL = cfg.gasUrl;
 
+    // ใช้ fetch() ธรรมดาแทน google.script.run (JSONP) — action นี้ยังไม่มีใน code.js
+    // ถ้าใช้ JSONP แล้ว GAS ตอบ JSON ดิบ (ไม่ห่อ callback) จะโดน parse เป็น <script> แล้วเกิด
+    // SyntaxError ที่ error handler จับไม่ได้ ต้องรอ timeout 90 วิ ก่อนไปต่อ — fetch() ปลอดภัยกว่า
     const gasPromise = (cfg && cfg.gasUrl && cfg.spreadsheetId && cfg.sheetName && cfg.fields)
-        ? new Promise(function(resolve) {
-            google.script.run
-                .withSuccessHandler(function(res) { resolve((res && res.success) ? (res.spec || {}) : {}); })
-                .withFailureHandler(function()    { resolve({}); })
-                .getProductSpec(cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields));
-          })
+        ? (function() {
+            var url = cfg.gasUrl + '?action=getProductSpec&args='
+                + encodeURIComponent(JSON.stringify([cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields)]));
+            return fetch(url).then(function(r) { return r.text(); }).then(function(text) {
+                try {
+                    var res = JSON.parse(text);
+                    return (res && res.success) ? (res.spec || {}) : {};
+                } catch (e) {
+                    console.warn('[TagSpec] getProductSpec ยังไม่รองรับใน GAS หรือตอบไม่ถูกฟอร์แมต — ข้าม');
+                    return {};
+                }
+            }).catch(function() { return {}; });
+          })()
         : Promise.resolve({});
 
     const supabasePromise = window._sb.from('products')
