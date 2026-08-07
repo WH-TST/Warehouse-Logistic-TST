@@ -12245,10 +12245,13 @@ window.loadPrintTagData = async function loadPrintTagData() {
 
         // ใช้จริง (เต็มมัด): ดึงสดจาก Production API (/api/trans/fg) แทนตาราง transection_fg
         // ที่ต้องนำเข้าไฟล์ด้วยมือ (เก่า/ไม่อัปเดต) — to เป็นวันก่อนหน้า formattedDate (API รับ to แบบ inclusive)
+        // ⚠️ ห้ามใช้ toISOString() ตัดวันที่ตรงๆ — มันแปลงเป็น UTC ก่อน ทำให้เที่ยงคืนเวลาไทย
+        // (UTC+7) กลายเป็น 17:00 ของวันก่อนหน้าใน UTC วันที่เลยเพี้ยนถอยหลังไป 1 วันเสมอ
+        // (กับดักเดียวกับที่เคยเจอใน _ldMonFetch) — คำนวณแบบ pure UTC-calendar arithmetic แทน
         const usedToDate = (function() {
-            const d = new Date(formattedDate + 'T00:00:00');
-            d.setDate(d.getDate() - 1);
-            return d.toISOString().split('T')[0];
+            const parts = formattedDate.split('-').map(Number);
+            const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]) - 86400000);
+            return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
         })();
         const usedFetchPromise = (startDate > usedToDate) ? Promise.resolve({ rows: [] }) :
             fetch('https://tstproduction.vercel.app/api/trans/fg?from=' + startDate + '&to=' + usedToDate)
