@@ -13000,9 +13000,18 @@ window.filterExtraProductDropdown = function filterExtraProductDropdown(q) {
 
     if (matches.length === 0) { dd.innerHTML = '<div class="p-3 text-slate-400 text-sm text-center">ไม่พบสินค้า</div>'; dd.classList.remove('hidden'); return; }
 
+    // escape ให้ปลอดภัยทั้งชั้น JS string (ในวงเล็บฟังก์ชัน) และชั้น HTML attribute (ที่ห่อด้วย ")
+    // ชื่อสินค้าบางตัวมี " (นิ้ว) ปนอยู่ เช่น 5"x2.3 มม. — ถ้าไม่ escape " จะตัด attribute กลางคัน
+    function _escForOnAttr(str) {
+        return String(str || '')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
     dd.innerHTML = matches.map(function(p) {
         return `<div class="px-4 py-3 cursor-pointer hover:bg-rose-50 border-b border-slate-100 last:border-0"
-                     onmousedown="selectExtraProduct('${p.id}','${(p.name||'').replace(/'/g,"\\'")}',${p.linesPerBundle})">
+                     onmousedown="selectExtraProduct('${p.id}','${_escForOnAttr(p.name)}',${p.linesPerBundle})">
             <p class="font-black text-indigo-700 font-mono text-sm">${p.id}</p>
             <p class="text-xs text-slate-500">${p.name || ''}</p>
         </div>`;
