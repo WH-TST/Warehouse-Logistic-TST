@@ -2250,7 +2250,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <h2 id="view-title" class="text-xl font-black text-slate-800 uppercase italic">Warehouse Management</h2>
         </div>
         <div class="flex items-center gap-6">
-            <div class="text-right">
+            <div id="plan-date-ref-box" class="text-right">
                 <p class="text-[10px] font-bold uppercase tracking-widest" style="color:#5a6f88;">Plan Date Reference</p>
                 <p id="current-sheet-label" class="font-black" style="color:#1d4ed8;font-size:15px;letter-spacing:0.02em;">PLEASE SELECT DATE</p>
             </div>
@@ -13892,6 +13892,10 @@ window.switchView = function switchView(view) {
 
     var _mh = document.getElementById('main-header');
     if (_mh) _mh.style.display = (view === 'user-preview') ? 'none' : '';
+
+    // Production Block เป็น iframe อ่านอย่างเดียว ไม่เกี่ยวกับ Google Sheet ที่เลือกอยู่ — ซ่อนกล่อง Plan Date Reference
+    var _pdBox = document.getElementById('plan-date-ref-box');
+    if (_pdBox) _pdBox.style.display = (view === 'production-block') ? 'none' : '';
 
     if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
     // Bring the active view into view, compensating for sticky header — works in Chrome + Safari
@@ -36925,6 +36929,7 @@ var WMS_VIEWS=[
   {id:'driver-analytics',label:'Driver Analytics'},
   {id:'kpi-wh',label:'KPI WH & Logistic'},
   {id:'training',label:'Training'},
+  {id:'production-block',label:'Production Block'},
   {id:'user-accounts',label:'ตั้งค่าบัญชีผู้ใช้'},
   {id:'audit-log',label:'Audit Log'},
   {id:'device-control',label:'Device Control'},
