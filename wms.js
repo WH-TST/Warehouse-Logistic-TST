@@ -63,40 +63,39 @@ function sendEvalEmail(p) {
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
 function doGet(e) {
+  // callback ต้องอ่านให้ได้ "ก่อน" try ทั้งหมด — ไม่งั้นถ้า error เกิดก่อนตั้ง respond()
+  // (เช่น JSON.parse(args) พัง หรือ error ระดับแพลตฟอร์ม) จะตอบ JSON ดิบไม่ห่อ callback
+  // แล้ว browser ที่โหลดผ่าน <script src> จะ parse เป็น JS ไม่ได้ → SyntaxError
+  var callback = (e && e.parameter && e.parameter.callback) || '';
+
+  function respond(obj) {
+    var json = JSON.stringify(obj);
+    var body = callback ? callback + '(' + json + ')' : json;
+    var mime = callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON;
+    return ContentService.createTextOutput(body).setMimeType(mime);
+  }
+
   try {
     if (e && e.parameter && e.parameter.action) {
-      var action   = e.parameter.action;
-      var callback = e.parameter.callback || '';
-      var args     = JSON.parse(e.parameter.args || '[]');
-
-      function respond(obj) {
-        var json = JSON.stringify(obj);
-        var body = callback ? callback + '(' + json + ')' : json;
-        var mime = callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON;
-        return ContentService.createTextOutput(body).setMimeType(mime);
-      }
+      var action = e.parameter.action;
+      var args   = JSON.parse(e.parameter.args || '[]');
 
       if (ALLOWED_ACTIONS.indexOf(action) === -1) {
         return respond({ success: false, message: 'Unknown action: ' + action });
       }
 
-      try {
-        var fn = this[action];
-        if (typeof fn !== 'function') {
-          return respond({ success: false, message: action + ' not defined' });
-        }
-        var result = fn.apply(null, args);
-        return respond(result !== undefined ? result : { success: true });
-      } catch (err) {
-        return respond({ success: false, message: err.toString() });
+      var fn = this[action];
+      if (typeof fn !== 'function') {
+        return respond({ success: false, message: action + ' not defined' });
       }
+      var result = fn.apply(null, args);
+      return respond(result !== undefined ? result : { success: true });
     }
 
     return ContentService.createTextOutput('WMS GAS OK').setMimeType(ContentService.MimeType.TEXT);
 
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return respond({ success: false, message: err.toString() });
   }
 }
 
