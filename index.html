@@ -28166,6 +28166,11 @@ function _ldRenderMonitorTable(rows, orders) {
                     var skuSessPos = {};
                     var totActWt=0,totActPcs=0,totTgtWt=0,totTgtPcs=0,totScale=0;
                     var isLW=g.loop_weigh, lwOid=g.orderId||orderId;
+                    // แถว "กำลังโหลดอยู่ตอนนี้จริงๆ" = session ที่มี qty>0 และอัปเดตล่าสุด (ไม่เพิ่ม UI แยกก้อนใหม่ กันจอล้นเวลามีหลายคันโหลดพร้อมกัน)
+                    var _liveMaxUpdated = filtSess.reduce(function(mx,r){
+                        var q=parseFloat(r.qty||0); if(!(q>0)) return mx;
+                        var t=r.updated_at||r.created_at||''; return t>mx?t:mx;
+                    }, '');
                     var rows2=targetItems.map(function(oIt,idx){
                         var sk=oIt.sku||'';
                         if(!skuSessPos[sk]) skuSessPos[sk]=0;
@@ -28182,6 +28187,21 @@ function _ldRenderMonitorTable(rows, orders) {
                         var overW=actW>0&&maxW&&actW/actQ>maxW;
                         var underW=actW>0&&minW&&actW/actQ<minW;
                         var kgColor=overW?'#dc2626':underW?'#d97706':'#7c3aed';
+                        var isActiveNow = _liveMaxUpdated && r && actQ>0 && (r.updated_at||r.created_at||'')===_liveMaxUpdated && tgtQ>actQ;
+                        // แถบช่วง STD min–max เทียบตำแหน่ง kg/pcs จริง (แค่ภาพประกอบ ตัวเลขจริงยังโชว์เป็นหลักเหมือนเดิม)
+                        var stdBarHtml = '';
+                        if (minW && maxW && maxW>minW && actQ>0 && actW>0) {
+                            var _avgW = actW/actQ;
+                            var _pad = (maxW-minW)*0.6;
+                            var _lo = minW-_pad, _hi = maxW+_pad;
+                            var _pos = Math.max(0, Math.min(100, ((_avgW-_lo)/(_hi-_lo))*100));
+                            var _dotColor = overW?'#dc2626':underW?'#d97706':'#64748b';
+                            stdBarHtml = '<div style="position:relative;height:8px;width:56px;margin:4px auto 0;">'
+                                +'<div style="position:absolute;top:3px;left:0;right:0;height:3px;border-radius:2px;background:#e2e8f0;"></div>'
+                                +'<div style="position:absolute;top:3px;left:'+(((minW-_lo)/(_hi-_lo))*100)+'%;right:'+(100-((maxW-_lo)/(_hi-_lo))*100)+'%;height:3px;border-radius:2px;background:'+(overW||underW?'#fca5a5':'#86efac')+';"></div>'
+                                +'<div style="position:absolute;top:0;left:'+_pos+'%;width:2px;height:8px;background:'+_dotColor+';transform:translateX(-1px);"></div>'
+                            +'</div>';
+                        }
                         var swCell='';
                         if (isLW) {
                             var itemIdx=idx;
@@ -28203,9 +28223,14 @@ function _ldRenderMonitorTable(rows, orders) {
                             +'</td>';
                         }
                         var canCut = oIt.can_cut;
-                        return '<tr style="border-bottom:1px solid '+borderColor+'20;">'
+                        var _rowBg = isActiveNow ? 'background:#fef2f2;' : '';
+                        var _actBg = isActiveNow ? '#fee2e2' : '#f8fafc';
+                        return '<tr style="border-bottom:1px solid '+borderColor+'20;'+_rowBg+'">'
                             +'<td style="padding:8px 10px;">'
-                                +'<div style="font-size:12px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</div>'
+                                +'<div style="display:flex;align-items:center;gap:5px;">'
+                                    +(isActiveNow?'<span style="width:6px;height:6px;border-radius:50%;background:#dc2626;display:inline-block;flex-shrink:0;animation:pulse 1s infinite;"></span>':'')
+                                    +'<span style="font-size:12px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</span>'
+                                +'</div>'
                                 +'<div style="font-size:10px;color:#94a3b8;">'+_ldEsc(sk)+'</div>'
                                 +(canCut?'<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:1px 6px;">'
                                     +'<span style="font-size:10px;">✂</span>'
@@ -28214,11 +28239,12 @@ function _ldRenderMonitorTable(rows, orders) {
                             +'</td>'
                             +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtQ>0?tgtQ.toLocaleString()+' PCS':'—')+'</td>'
                             +'<td style="padding:8px 6px;text-align:center;font-size:11px;color:#475569;">'+(tgtW>0?Math.round(tgtW).toLocaleString()+' KG':'—')+'</td>'
-                            +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#0369a1;">'+(actQ>0?actQ.toLocaleString()+' PCS':'<span style="color:#cbd5e1;">—</span>')+'</td>'
-                            +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#059669;">'+(actW>0?actW.toLocaleString(undefined,{maximumFractionDigits:0})+' KG':'<span style="color:#cbd5e1;">—</span>')+'</td>'
+                            +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#0369a1;background:'+_actBg+';">'+(actQ>0?actQ.toLocaleString()+' PCS':'<span style="color:#cbd5e1;">—</span>')+'</td>'
+                            +'<td style="padding:8px 6px;text-align:center;font-size:13px;font-weight:900;color:#059669;background:'+_actBg+';">'+(actW>0?actW.toLocaleString(undefined,{maximumFractionDigits:0})+' KG':'<span style="color:#cbd5e1;">—</span>')+'</td>'
                             +'<td style="padding:8px 6px;text-align:center;font-size:12px;font-weight:900;color:'+kgColor+';">'
-                                +kgPcs+(kgPcs!=='—'?' kg/pcs':'')
-                                +(minW&&maxW?'<div style="font-size:9px;color:#94a3b8;font-weight:500;">'+minW+'–'+maxW+'</div>':'')
+                                +kgPcs+(kgPcs!=='—'?' kg/pcs':'')+(overW?' ⚠':underW?' ⚠':'')
+                                +(minW&&maxW?'<div style="font-size:9px;color:#94a3b8;font-weight:500;">STD '+minW+'–'+maxW+'</div>':'')
+                                +stdBarHtml
                             +'</td>'
                             +swCell
                         +'</tr>';
@@ -28232,9 +28258,9 @@ function _ldRenderMonitorTable(rows, orders) {
                                 +'<th style="padding:8px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:left;">สินค้า</th>'
                                 +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">แผน PCS</th>'
                                 +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#64748b;text-align:center;">แผน KG</th>'
-                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#0369a1;text-align:center;">โหลดจริง PCS</th>'
-                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#059669;text-align:center;">โหลดจริง KG</th>'
-                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#7c3aed;text-align:center;">kg/pcs (ช่วง)</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#0369a1;text-align:center;background:#f1f5f9;">โหลดจริง PCS</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#059669;text-align:center;background:#f1f5f9;">โหลดจริง KG</th>'
+                                +'<th style="padding:8px 6px;font-size:9px;font-weight:900;color:#7c3aed;text-align:center;">kg/pcs vs STD</th>'
                                 +lwTh
                             +'</tr></thead>'
                             +'<tbody style="background:#fff;">'+rows2+'</tbody>'
