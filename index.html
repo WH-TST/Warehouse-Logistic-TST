@@ -20,11 +20,150 @@
          Supabase Client — direct DB access for WMS data
          ═══════════════════════════════════════════════════════════ -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         Dual-DB Client — ครอบ 2 โปรเจกต์ (เก่า=อ่านอย่างเดียว, ใหม่=อ่าน+เขียน)
+         อ่าน: merge เก่า+ใหม่ ด้วย id, ใหม่ชนะถ้าซ้ำ
+         เขียนใหม่/แก้ไข/ลบ: ไปที่โปรเจกต์ใหม่เท่านั้น (ลบ = soft-delete
+         ผ่านคอลัมน์ _dual_deleted_at เพราะแก้ DB เก่าไม่ได้)
+         ═══════════════════════════════════════════════════════════ -->
+    <script>
+    function createDualSupabaseClient(oldClient, newClient) {
+        var FILTER_METHODS = ['eq','neq','in','gt','gte','lt','lte','is','like','ilike','contains','filter','or','not'];
+        var POST_METHODS = ['order','limit','range'];
+
+        function applyChain(qb, chain) {
+            chain.forEach(function(c) {
+                if (qb && typeof qb[c[0]] === 'function') qb = qb[c[0]].apply(qb, c[1]);
+            });
+            return qb;
+        }
+
+        function mergedSelect(table, filterChain) {
+            var qOld = applyChain(oldClient.from(table).select('*'), filterChain);
+            var qNew = applyChain(newClient.from(table).select('*'), filterChain);
+            return Promise.all([qOld, qNew]).then(function(res) {
+                var rOld = res[0] || {}, rNew = res[1] || {};
+                var oldRows = rOld.data || [];
+                var newRows = rNew.data || [];
+                var byId = {};
+                oldRows.forEach(function(r) { if (r && r.id != null) byId[r.id] = r; });
+                newRows.forEach(function(r) { if (r && r.id != null) byId[r.id] = r; }); // ใหม่ชนะ
+                var merged = Object.keys(byId).map(function(k) { return byId[k]; })
+                    .filter(function(r) { return !r._dual_deleted_at; });
+                var err = (rNew.error && oldRows.length === 0) ? rNew.error : null;
+                return { rows: merged, error: err };
+            });
+        }
+
+        function applyOrder(rows, args) {
+            var col = args[0], opts = args[1] || {};
+            var asc = opts.ascending !== false;
+            rows.sort(function(a, b) {
+                var av = a[col], bv = b[col];
+                if (av == null && bv == null) return 0;
+                if (av == null) return asc ? -1 : 1;
+                if (bv == null) return asc ? 1 : -1;
+                if (av < bv) return asc ? -1 : 1;
+                if (av > bv) return asc ? 1 : -1;
+                return 0;
+            });
+            return rows;
+        }
+
+        function makeBuilder(table) {
+            var op = null, opArgs = null;
+            var filterChain = [], postChain = [];
+            var wantSingle = false, wantMaybeSingle = false;
+            var builder = {};
+
+            ['select', 'insert', 'update', 'upsert', 'delete'].forEach(function(opName) {
+                builder[opName] = function() { op = opName; opArgs = Array.prototype.slice.call(arguments); return builder; };
+            });
+            FILTER_METHODS.forEach(function(m) {
+                builder[m] = function() { filterChain.push([m, Array.prototype.slice.call(arguments)]); return builder; };
+            });
+            POST_METHODS.forEach(function(m) {
+                builder[m] = function() { postChain.push([m, Array.prototype.slice.call(arguments)]); return builder; };
+            });
+            builder.single = function() { wantSingle = true; return builder; };
+            builder.maybeSingle = function() { wantMaybeSingle = true; return builder; };
+
+            function finalizeRows(rows) {
+                postChain.forEach(function(c) {
+                    if (c[0] === 'order') rows = applyOrder(rows, c[1]);
+                    else if (c[0] === 'limit') rows = rows.slice(0, c[1][0]);
+                    else if (c[0] === 'range') rows = rows.slice(c[1][0], c[1][1] + 1);
+                });
+                rows.forEach(function(r) { if (r && ('_dual_deleted_at' in r)) delete r._dual_deleted_at; });
+                return rows;
+            }
+
+            async function execute() {
+                if (op === 'select') {
+                    var res = await mergedSelect(table, filterChain);
+                    var rows = finalizeRows(res.rows);
+                    if (wantSingle) return { data: rows[0] || null, error: rows.length ? null : (res.error || { message: 'No rows found' }) };
+                    if (wantMaybeSingle) return { data: rows[0] || null, error: res.error || null };
+                    return { data: rows, error: res.error || null };
+                }
+                if (op === 'insert') {
+                    return applyChain(newClient.from(table).insert.apply(null, opArgs), []);
+                }
+                if (op === 'update' || op === 'upsert') {
+                    var patch = opArgs[0] || {};
+                    if (op === 'upsert' && !filterChain.length && patch.id != null) {
+                        filterChain = [['eq', ['id', patch.id]]];
+                    }
+                    var found = await mergedSelect(table, filterChain);
+                    var targets = found.rows;
+                    if (!targets.length && op === 'upsert') targets = [Object.assign({}, patch)];
+                    var writes = targets.map(function(row) {
+                        var fullRow = Object.assign({}, row, patch);
+                        delete fullRow._dual_deleted_at;
+                        return newClient.from(table).upsert(fullRow, { onConflict: 'id' });
+                    });
+                    var results = await Promise.all(writes);
+                    var errRes = results.find(function(r) { return r && r.error; });
+                    return { data: null, error: errRes ? errRes.error : null };
+                }
+                if (op === 'delete') {
+                    var foundDel = await mergedSelect(table, filterChain);
+                    var writesDel = foundDel.rows.map(function(row) {
+                        var tomb = Object.assign({}, row, { _dual_deleted_at: new Date().toISOString() });
+                        return newClient.from(table).upsert(tomb, { onConflict: 'id' });
+                    });
+                    var resultsDel = await Promise.all(writesDel);
+                    var errResDel = resultsDel.find(function(r) { return r && r.error; });
+                    return { data: null, error: errResDel ? errResDel.error : null };
+                }
+                return { data: null, error: { message: 'ยังไม่เรียก .select()/.insert()/.update()/.upsert()/.delete()' } };
+            }
+
+            builder.then = function(resolve, reject) { return execute().then(resolve, reject); };
+            builder.catch = function(reject) { return execute().catch(reject); };
+            return builder;
+        }
+
+        return {
+            from: makeBuilder,
+            storage: newClient.storage,
+            auth: newClient.auth,
+            channel: function() { return newClient.channel.apply(newClient, arguments); },
+            removeChannel: function() { return newClient.removeChannel.apply(newClient, arguments); },
+        };
+    }
+    </script>
+
     <script>
     (function() {
-      var SUPA_URL = 'https://lkuunmyrxugsoqwrvdby.supabase.co';
-      var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdXVubXlyeHVnc29xd3J2ZGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODk5ODcsImV4cCI6MjA5NzE2NTk4N30.rpcJKRMDumcsgYx-JrgxFKeO26TKrIULxBJm0jWpBZw';
-      window._sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+      var OLD_URL = 'https://lkuunmyrxugsoqwrvdby.supabase.co';
+      var OLD_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrdXVubXlyeHVnc29xd3J2ZGJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODk5ODcsImV4cCI6MjA5NzE2NTk4N30.rpcJKRMDumcsgYx-JrgxFKeO26TKrIULxBJm0jWpBZw';
+      var NEW_URL = 'https://akazjfgbnzhykhgeenye.supabase.co';
+      var NEW_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrYXpqZmdibnpoeWtoZ2VlbnllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNjk4MDksImV4cCI6MjEwMTY0NTgwOX0.3XQowwoh5C9loTu9WpEz4sdKxGzRFlYEOrqNBYtqunA';
+      var _oldSb = supabase.createClient(OLD_URL, OLD_KEY);
+      var _newSb = supabase.createClient(NEW_URL, NEW_KEY);
+      window._sb = createDualSupabaseClient(_oldSb, _newSb);
 
       // ══ Cloudinary — ที่เก็บรูปหลัก (อัปตรงจากเว็บ) ══════════════════
       window._CLD_CLOUD  = 'qnst1pzk';
@@ -968,7 +1107,7 @@
         }
       };
 
-      console.log('[Supabase] Client initialized:', SUPA_URL);
+      console.log('[Supabase] Dual-client initialized — เก่า:', OLD_URL, '| ใหม่:', NEW_URL);
     })();
     </script>
 
