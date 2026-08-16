@@ -32,6 +32,31 @@
         var FILTER_METHODS = ['eq','neq','in','gt','gte','lt','lte','is','like','ilike','contains','filter','or','not'];
         var POST_METHODS = ['order','limit','range'];
 
+        // PK จริงของแต่ละตาราง (ไม่ใช่ทุกตารางใช้ "id"! บางตัวเป็น composite key)
+        // ดึงมาจาก information_schema.table_constraints ของ DB จริง — ตารางที่ไม่อยู่ในนี้ fallback เป็น ['id']
+        var TABLE_PK = {
+            analytics_cache: ['cache_key'],
+            app_config: ['key'],
+            holidays: ['holiday_date'],
+            inventory_daily_snapshot: ['snapshot_date'],
+            logi_trucks: ['plate'],
+            logistic_plans: ['plan_id'],
+            onhand: ['sku', 'warehouse'],
+            onhand_fg: ['item_number', 'warehouse'],
+            onhand_semi: ['item_number', 'warehouse', 'serial_number'],
+            production_block_cache: ['month_key'],
+            production_plan_cache: ['month_key'],
+            products: ['sku'],
+            trip_logs: ['plan_id'],
+            wms_users: ['username'],
+            zone_configs: ['key'],
+            zone_stock: ['zone', 'sku'],
+        };
+        function pkCols(table) { return TABLE_PK[table] || ['id']; }
+        function rowKey(table, row) {
+            return pkCols(table).map(function(c) { return row[c]; }).join('');
+        }
+
         function applyChain(qb, chain) {
             chain.forEach(function(c) {
                 if (qb && typeof qb[c[0]] === 'function') qb = qb[c[0]].apply(qb, c[1]);
@@ -47,8 +72,8 @@
                 var oldRows = rOld.data || [];
                 var newRows = rNew.data || [];
                 var byId = {};
-                oldRows.forEach(function(r) { if (r && r.id != null) byId[r.id] = r; });
-                newRows.forEach(function(r) { if (r && r.id != null) byId[r.id] = r; }); // ใหม่ชนะ
+                oldRows.forEach(function(r) { if (r) byId[rowKey(table, r)] = r; });
+                newRows.forEach(function(r) { if (r) byId[rowKey(table, r)] = r; }); // ใหม่ชนะ
                 var merged = Object.keys(byId).map(function(k) { return byId[k]; })
                     .filter(function(r) { return !r._dual_deleted_at; });
                 var err = (rNew.error && oldRows.length === 0) ? rNew.error : null;
@@ -112,8 +137,10 @@
                 }
                 if (op === 'update' || op === 'upsert') {
                     var patch = opArgs[0] || {};
-                    if (op === 'upsert' && !filterChain.length && patch.id != null) {
-                        filterChain = [['eq', ['id', patch.id]]];
+                    var pks = pkCols(table);
+                    var patchHasAllPk = pks.every(function(c) { return patch[c] != null; });
+                    if (op === 'upsert' && !filterChain.length && patchHasAllPk) {
+                        filterChain = pks.map(function(c) { return ['eq', [c, patch[c]]]; });
                     }
                     var found = await mergedSelect(table, filterChain);
                     var targets = found.rows;
@@ -121,17 +148,18 @@
                     var writes = targets.map(function(row) {
                         var fullRow = Object.assign({}, row, patch);
                         delete fullRow._dual_deleted_at;
-                        return newClient.from(table).upsert(fullRow, { onConflict: 'id' });
+                        return newClient.from(table).upsert(fullRow, { onConflict: pks.join(',') });
                     });
                     var results = await Promise.all(writes);
                     var errRes = results.find(function(r) { return r && r.error; });
                     return { data: null, error: errRes ? errRes.error : null };
                 }
                 if (op === 'delete') {
+                    var pksDel = pkCols(table);
                     var foundDel = await mergedSelect(table, filterChain);
                     var writesDel = foundDel.rows.map(function(row) {
                         var tomb = Object.assign({}, row, { _dual_deleted_at: new Date().toISOString() });
-                        return newClient.from(table).upsert(tomb, { onConflict: 'id' });
+                        return newClient.from(table).upsert(tomb, { onConflict: pksDel.join(',') });
                     });
                     var resultsDel = await Promise.all(writesDel);
                     var errResDel = resultsDel.find(function(r) { return r && r.error; });
