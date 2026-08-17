@@ -28311,33 +28311,13 @@ function _ldRenderMonitorTable(rows, orders) {
     var liveSessionIds = new Set(live.map(function(r){ return r.id; }));
     var done = validRows2.filter(function(r){ return !liveSessionIds.has(r.id) && r.record_type!=='draft'; });
 
-    // ── ออเดอร์ที่ยังไม่มี session เลยสักตัว (ยังไม่เริ่มโหลด) ──
-    // เดิม card ทั้งหมด derive มาจาก sessions เท่านั้น ทำให้ order ที่สร้างไว้แล้วแต่
-    // หน้างานยังไม่กดเริ่มโหลด ไม่ถูกแสดงที่ไหนเลยในหน้า Monitor
+    // ── ออเดอร์ที่ยังไม่มี session เลยสักตัว (ยังไม่มีใครกดเริ่มโหลด) ──
+    // เดิม liveByOrder ถูก seed จาก sessions เท่านั้น (live.forEach) ทำให้ order ที่ผ่าน
+    // เงื่อนไขควรโชว์ (status/review_status) แต่ยังไม่มี session เลย ไม่มีทางถูกสร้างการ์ด
+    // เลยแม้แต่ใบเดียว — ทางแก้คือ seed เข้า liveByOrder ตรงๆ (ดูด้านล่าง) แล้วปล่อยให้
+    // _buildLiveTable ที่มีอยู่แล้ว render ตามแผน (targetItems) โดย actual=0 ตามปกติ
     var _startedIds = new Set(rows.map(function(r){ return r.order_id; }).filter(Boolean));
     var notStarted = (orders||[]).filter(function(o){ return !_startedIds.has(o.id); });
-    var notStartedHtml = '';
-    if (notStarted.length) {
-        notStartedHtml = notStarted.map(function(o){
-            var items = o.items||[];
-            var totQty = items.reduce(function(s,it){ return s+(parseFloat(it.qty)||0); },0);
-            var totWt  = items.reduce(function(s,it){ return s+(parseFloat(it.target_weight||it.target_kg)||0); },0);
-            var statusLabel = o.review_status==='pending_review' ? 'รอตรวจสอบ'
-                : o.review_status==='rejected' ? '↩ ตีกลับ'
-                : o.status==='in_progress' ? 'กำลังโหลด'
-                : 'รอเริ่มโหลด';
-            return '<div style="background:#fff;border:2px solid #e2e8f0;border-radius:16px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
-                +'<div>'
-                    +'<div style="font-size:16px;font-weight:900;color:#1e293b;font-family:monospace;">'+_ldEsc(o.order_no||o.truck_plate||'—')+'</div>'
-                    +'<div style="font-size:12px;color:#64748b;">'+_ldEsc(o.customer_name||'—')+' · ทะเบียน '+_ldEsc(o.truck_plate||'—')+'</div>'
-                +'</div>'
-                +'<div style="display:flex;align-items:center;gap:10px;">'
-                    +'<span style="font-size:12px;color:#94a3b8;">'+(totQty>0?totQty.toLocaleString()+' PCS':'')+(totWt>0?' · '+Math.round(totWt).toLocaleString()+' KG':'')+'</span>'
-                    +'<span style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:900;background:#f1f5f9;color:#475569;">'+statusLabel+'</span>'
-                +'</div>'
-            +'</div>';
-        }).join('');
-    }
 
     // ── LIVE SECTION ──
     function _thTime(iso){
@@ -28346,16 +28326,14 @@ function _ldRenderMonitorTable(rows, orders) {
         catch(e){ return iso.slice(11,16); }
     }
     var liveHtml = '';
-    if (live.length) {
+    if (live.length || notStarted.length) {
         var liveByOrder = {};
         var orderIdx2 = {};
         (orders||[]).forEach(function(o){ orderIdx2[o.id] = o; });
-        live.forEach(function(r){
-            var k = r.order_id||'?';
-            var ord = orderIdx2[r.order_id]||{};
+        function _seedLiveOrder(k, ord, r) {
             if (!liveByOrder[k]) liveByOrder[k] = {
                 order_no:ord.order_no, truck_plate:ord.truck_plate,
-                customer_name:ord.customer_name, plan_id:r.plan_id,
+                customer_name:ord.customer_name, plan_id:(r&&r.plan_id)||ord.plan_id,
                 orderItems: ord.items||[], sessions:[],
                 is_trailer: ord.is_trailer, trailer_plate: ord.trailer_plate,
                 trailer_split: ord.trailer_split,
@@ -28364,6 +28342,15 @@ function _ldRenderMonitorTable(rows, orders) {
                 isRejected: (ord.review_status||'')==='rejected',
                 rejectionNote: ord.rejection_note||''
             };
+        }
+        // seed ออเดอร์ที่ยังไม่มี session เลยไว้ก่อน (sessions ว่างเปล่า) — ให้ตารางด้านล่าง
+        // ยัง render ตามแผน (targetItems) ได้ปกติ ไม่งั้น order ที่ยังไม่มีใครกดเริ่มโหลด
+        // จะไม่มีทางถูกสร้างการ์ดเลย ทั้งที่สถานะบอกว่าควรโชว์ในแท็บนี้
+        notStarted.forEach(function(o){ _seedLiveOrder(o.id, o, null); });
+        live.forEach(function(r){
+            var k = r.order_id||'?';
+            var ord = orderIdx2[r.order_id]||{};
+            _seedLiveOrder(k, ord, r);
             liveByOrder[k].sessions.push(r);
         });
         liveHtml = '<div class="mb-4">'
@@ -28629,8 +28616,6 @@ function _ldRenderMonitorTable(rows, orders) {
             }).join('')
         +'</div>';
     }
-    liveHtml = notStartedHtml + liveHtml; // การ์ดออเดอร์ที่ยังไม่เริ่มโหลดขึ้นก่อนเสมอ
-
     // ── DONE SECTION — grouped by order, card layout ──
     var doneHtml = '';
     if (done.length) {
