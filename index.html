@@ -156,10 +156,17 @@
                 }
                 if (op === 'upsert') {
                     // upsert(rowOrRows, {onConflict}) — รองรับทั้ง object เดี่ยวและ array หลายแถว
-                    // จับคู่แถวเดิมด้วย PK ที่อยู่ใน patch เอง (ไม่ใช่ filterChain) แล้ว copy ทั้งแถว
+                    // ⚠️ ต้องใช้ onConflict ที่ผู้เรียกระบุมาเอง (opArgs[1]) ถ้ามี — บางตารางใช้
+                    // unique constraint อื่นที่ไม่ใช่ PK จริง (เช่น truck_inspections ใช้
+                    // inspect_date+truck_plate+driver_id กันตรวจซ้ำ ไม่ใช่ id) ถ้า override เป็น PK
+                    // เฉยๆ จะจับคู่แถวเดิมผิด แล้วชน unique constraint จริงตอนเขียน (23505)
                     var patchInput = opArgs[0] || {};
                     var patchArray = Array.isArray(patchInput) ? patchInput : [patchInput];
-                    var pks2 = pkCols(table);
+                    var opts2 = opArgs[1] || {};
+                    var pks2 = opts2.onConflict
+                        ? opts2.onConflict.split(',').map(function(s) { return s.trim(); })
+                        : pkCols(table);
+                    function _keyOf2(row) { return pks2.map(function(c) { return row[c]; }).join(''); }
                     var found2;
                     if (filterChain.length && patchArray.length === 1) {
                         found2 = await mergedSelect(table, filterChain);
@@ -167,13 +174,13 @@
                         var pkVals = patchArray.map(function(p) { return p[pks2[0]]; }).filter(function(v) { return v != null; });
                         found2 = pkVals.length ? await mergedSelect(table, [['in', [pks2[0], pkVals]]]) : { rows: [] };
                     } else {
-                        // composite PK — ตารางกลุ่มนี้ไม่ใหญ่ ดึงทั้งตารางมาจับคู่ได้ไม่กระทบ perf
+                        // composite key — ตารางกลุ่มนี้ไม่ใหญ่ ดึงทั้งตารางมาจับคู่ได้ไม่กระทบ perf
                         found2 = await mergedSelect(table, []);
                     }
                     var byKey2 = {};
-                    found2.rows.forEach(function(r) { byKey2[rowKey(table, r)] = r; });
+                    found2.rows.forEach(function(r) { byKey2[_keyOf2(r)] = r; });
                     var fullRows2 = patchArray.map(function(patch) {
-                        var existing = byKey2[rowKey(table, patch)];
+                        var existing = byKey2[_keyOf2(patch)];
                         var fullRow = existing ? Object.assign({}, existing, patch) : Object.assign({}, patch);
                         delete fullRow._dual_deleted_at;
                         return fullRow;
