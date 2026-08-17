@@ -15595,14 +15595,28 @@ let blockingChartInstance = null;
             batch.push(rec);
         });
         if (!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
+        // กันแถวซ้ำ key เดียวกันในไฟล์ต้นทาง (D365 export บางทีมีหลายบรรทัดต่อ item+warehouse)
+        // — ตารางจริงมี unique constraint ตรงนี้ ถ้าส่ง insert พร้อมกันหลายแถวซ้ำ key จะ error
+        // ทันที ไม่เกี่ยวกับ DB เก่า/ใหม่เลย จึงต้อง dedupe ก่อนเสมอ (เอาแถวหลังสุดทับแถวก่อนหน้า)
+        const keyCols = tableType === 'onhand_fg' ? ['item_number','warehouse']
+            : tableType === 'onhand_semi' ? ['item_number','warehouse','serial_number']
+            : null; // onhand_rm ใช้ id auto-generate ไม่มี key ซ้ำได้
+        let dedupedBatch = batch;
+        if (keyCols) {
+            const byKey = {};
+            batch.forEach(function(rec) { byKey[keyCols.map(function(c){ return rec[c]; }).join('')] = rec; });
+            dedupedBatch = Object.values(byKey);
+            const dupCount = batch.length - dedupedBatch.length;
+            if (dupCount > 0) showToast('⚠️ พบแถวซ้ำ ' + dupCount + ' รายการในไฟล์ — ใช้ข้อมูลแถวล่าสุดแทน', true);
+        }
         // DELETE all → INSERT ใหม่ (replace strategy)
         await window._sb.from(tableName).delete().gte('imported_at', '2000-01-01');
         const CHUNK = 500;
-        for (let i = 0; i < batch.length; i += CHUNK) {
-            const { error } = await window._sb.from(tableName).insert(batch.slice(i, i + CHUNK));
+        for (let i = 0; i < dedupedBatch.length; i += CHUNK) {
+            const { error } = await window._sb.from(tableName).insert(dedupedBatch.slice(i, i + CHUNK));
             if (error) throw error;
         }
-        return batch.length;
+        return dedupedBatch.length;
     }
 
     // ── Import COUNTING → Supabase (ลบเดิม + insert ใหม่) ────────────────────────
