@@ -145,7 +145,10 @@ function createDualSupabaseClient(oldClient, newClient) {
 
             if (op === 'insert') {
                 // ข้อมูลใหม่ล้วนๆ (object หรือ array) → เข้า DB ใหม่ตรงๆ ไม่ต้อง merge
-                return applyChain(newClient.from(table).insert.apply(null, opArgs), []);
+                // ⚠️ ต้อง apply(qb, ...) ไม่ใช่ apply(null, ...) — insert() พึ่ง this
+                // internal ของ query builder ถ้า this=null จะพังทันที (bug ที่แก้ไปแล้ว)
+                var qbIns = newClient.from(table);
+                return qbIns.insert.apply(qbIns, opArgs);
             }
 
             if (op === 'update') {
