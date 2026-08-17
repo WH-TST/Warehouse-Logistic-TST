@@ -28273,7 +28273,9 @@ function _ldRenderMonKpi(rows, orders) {
 function _ldRenderMonitorTable(rows, orders) {
     var wrap = document.getElementById('ld-mon-table-wrap');
     if (!wrap) return;
-    if (!rows.length) {
+    // ⚠️ เดิมเช็คแค่ rows.length (sessions) — ถ้ามี order แล้วแต่ยังไม่มีใครกดเริ่มโหลด
+    // เลยสักใบ (sessions=0 จริง) จะโดนตัดจบแสดง "ไม่พบข้อมูล" ทั้งที่ orders มีจริง
+    if (!rows.length && !(orders||[]).length) {
         wrap.innerHTML = '<div class="text-center py-16 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
         return;
     }
@@ -28308,6 +28310,34 @@ function _ldRenderMonitorTable(rows, orders) {
     });
     var liveSessionIds = new Set(live.map(function(r){ return r.id; }));
     var done = validRows2.filter(function(r){ return !liveSessionIds.has(r.id) && r.record_type!=='draft'; });
+
+    // ── ออเดอร์ที่ยังไม่มี session เลยสักตัว (ยังไม่เริ่มโหลด) ──
+    // เดิม card ทั้งหมด derive มาจาก sessions เท่านั้น ทำให้ order ที่สร้างไว้แล้วแต่
+    // หน้างานยังไม่กดเริ่มโหลด ไม่ถูกแสดงที่ไหนเลยในหน้า Monitor
+    var _startedIds = new Set(rows.map(function(r){ return r.order_id; }).filter(Boolean));
+    var notStarted = (orders||[]).filter(function(o){ return !_startedIds.has(o.id); });
+    var notStartedHtml = '';
+    if (notStarted.length) {
+        notStartedHtml = notStarted.map(function(o){
+            var items = o.items||[];
+            var totQty = items.reduce(function(s,it){ return s+(parseFloat(it.qty)||0); },0);
+            var totWt  = items.reduce(function(s,it){ return s+(parseFloat(it.target_weight||it.target_kg)||0); },0);
+            var statusLabel = o.review_status==='pending_review' ? 'รอตรวจสอบ'
+                : o.review_status==='rejected' ? '↩ ตีกลับ'
+                : o.status==='in_progress' ? 'กำลังโหลด'
+                : 'รอเริ่มโหลด';
+            return '<div style="background:#fff;border:2px solid #e2e8f0;border-radius:16px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+                +'<div>'
+                    +'<div style="font-size:16px;font-weight:900;color:#1e293b;font-family:monospace;">'+_ldEsc(o.order_no||o.truck_plate||'—')+'</div>'
+                    +'<div style="font-size:12px;color:#64748b;">'+_ldEsc(o.customer_name||'—')+' · ทะเบียน '+_ldEsc(o.truck_plate||'—')+'</div>'
+                +'</div>'
+                +'<div style="display:flex;align-items:center;gap:10px;">'
+                    +'<span style="font-size:12px;color:#94a3b8;">'+(totQty>0?totQty.toLocaleString()+' PCS':'')+(totWt>0?' · '+Math.round(totWt).toLocaleString()+' KG':'')+'</span>'
+                    +'<span style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:900;background:#f1f5f9;color:#475569;">'+statusLabel+'</span>'
+                +'</div>'
+            +'</div>';
+        }).join('');
+    }
 
     // ── LIVE SECTION ──
     function _thTime(iso){
@@ -28599,6 +28629,7 @@ function _ldRenderMonitorTable(rows, orders) {
             }).join('')
         +'</div>';
     }
+    liveHtml = notStartedHtml + liveHtml; // การ์ดออเดอร์ที่ยังไม่เริ่มโหลดขึ้นก่อนเสมอ
 
     // ── DONE SECTION — grouped by order, card layout ──
     var doneHtml = '';
