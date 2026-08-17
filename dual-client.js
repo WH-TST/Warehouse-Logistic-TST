@@ -13,6 +13,10 @@
 //  plan_id, ...) บางตัวเป็น composite key (onhand: sku+warehouse) — ดู TABLE_PK
 //  ด้านล่าง ต้องอัปเดตถ้ามีตารางใหม่ที่ PK ไม่ใช่ "id"
 //
+//  ⚠️ upsert() รองรับทั้ง object เดี่ยวและ array หลายแถว (bulk save) — จับคู่แถวเดิม
+//  ด้วย PK ที่อยู่ใน patch เอง ไม่ใช่ filterChain ต่างจาก update() ที่ patch เป็น
+//  object เดี่ยวเสมอและใช้ filterChain (.eq()) บอกว่าจะแก้แถวไหน
+//
 //  ขอบเขต: ครอบเฉพาะ .from(table) query builder (select/insert/update/upsert/delete
 //  + eq/neq/in/gt/gte/lt/lte/is/like/ilike/order/limit/range/single/maybeSingle)
 //  ไม่ครอบ storage/realtime/rpc — จัดการแยกทีหลัง (ตกลงกับ user แล้วว่าทำ DB ก่อน)
@@ -23,13 +27,9 @@
 
 function createDualSupabaseClient(oldClient, newClient) {
 
-    // methods ที่ "กรอง" ว่าจะเอาแถวไหน — ส่งไปทั้ง 2 DB ตรงๆ ได้เลย
     var FILTER_METHODS = ['eq','neq','in','gt','gte','lt','lte','is','like','ilike','contains','filter','or','not'];
-    // methods ที่ "จัดเรียง/ตัดจำนวน" — ต้องรอ merge 2 ฝั่งเสร็จก่อน ค่อยทำเองใน JS
     var POST_METHODS = ['order','limit','range'];
 
-    // PK จริงของแต่ละตาราง (จาก information_schema.table_constraints ของ DB จริง)
-    // ตารางที่ไม่อยู่ในนี้ fallback เป็น ['id']
     var TABLE_PK = {
         analytics_cache: ['cache_key'],
         app_config: ['key'],
@@ -60,12 +60,8 @@ function createDualSupabaseClient(oldClient, newClient) {
         return qb;
     }
 
-    // หาแถวที่ merge แล้ว (เก่า+ใหม่, ใหม่ชนะ) ตาม filter chain ที่กำหนด — ใช้ทั้งตอน
-    // select() ปกติ และตอน update/upsert/delete (ต้องรู้ก่อนว่าแถวเดิมหน้าตาเป็นยังไง)
     function mergedSelect(table, filterChain) {
         var qOld = applyChain(oldClient.from(table).select('*'), filterChain);
-        // ฝั่งใหม่: ดึงมาทั้งหมดก่อน (รวมแถวที่ soft-delete ไว้ด้วย) เพื่อให้ tombstone
-        // ทับแถวเก่าใน merge ได้ถูกต้อง แล้วค่อยกรองออกทีหลังตอน merge เสร็จ
         var qNew = applyChain(newClient.from(table).select('*'), filterChain);
         return Promise.all([qOld, qNew]).then(function(res) {
             var rOld = res[0] || {}, rNew = res[1] || {};
@@ -75,7 +71,7 @@ function createDualSupabaseClient(oldClient, newClient) {
             oldRows.forEach(function(r) { if (r) byId[rowKey(table, r)] = r; });
             newRows.forEach(function(r) { if (r) byId[rowKey(table, r)] = r; }); // ใหม่ชนะ
             var merged = Object.keys(byId).map(function(k) { return byId[k]; })
-                .filter(function(r) { return !r._dual_deleted_at; }); // ตัดที่ถูก soft-delete ออก
+                .filter(function(r) { return !r._dual_deleted_at; });
             var err = (rNew.error && oldRows.length === 0) ? rNew.error : null;
             return { rows: merged, error: err };
         });
@@ -98,8 +94,8 @@ function createDualSupabaseClient(oldClient, newClient) {
 
     function makeBuilder(table) {
         var op = null, opArgs = null;
-        var filterChain = [];   // [[method, args], ...]  — เอาไปกรองแถวจริง
-        var postChain = [];     // order/limit/range — ทำหลัง merge
+        var filterChain = [];
+        var postChain = [];
         var wantSingle = false, wantMaybeSingle = false;
 
         var builder = {};
@@ -134,7 +130,6 @@ function createDualSupabaseClient(oldClient, newClient) {
                 else if (c[0] === 'limit') rows = rows.slice(0, c[1][0]);
                 else if (c[0] === 'range') rows = rows.slice(c[1][0], c[1][1] + 1);
             });
-            // เอาคอลัมน์ภายในออกก่อนคืนค่า ไม่ให้โค้ดเดิมงงกับ field แปลกปลอม
             rows.forEach(function(r) { if (r && ('_dual_deleted_at' in r)) delete r._dual_deleted_at; });
             return rows;
         }
@@ -143,63 +138,75 @@ function createDualSupabaseClient(oldClient, newClient) {
             if (op === 'select') {
                 var res = await mergedSelect(table, filterChain);
                 var rows = finalizeRows(res.rows);
-                if (wantSingle) {
-                    return { data: rows[0] || null, error: rows.length ? null : (res.error || { message: 'No rows found' }) };
-                }
-                if (wantMaybeSingle) {
-                    return { data: rows[0] || null, error: res.error || null };
-                }
+                if (wantSingle) return { data: rows[0] || null, error: rows.length ? null : (res.error || { message: 'No rows found' }) };
+                if (wantMaybeSingle) return { data: rows[0] || null, error: res.error || null };
                 return { data: rows, error: res.error || null };
             }
 
             if (op === 'insert') {
-                // ข้อมูลใหม่ล้วนๆ → เข้า DB ใหม่ตรงๆ ไม่ต้อง merge อะไร
-                return applyChain(newClient.from(table).insert.apply(null, opArgs), []).then(function(r) { return r; });
+                // ข้อมูลใหม่ล้วนๆ (object หรือ array) → เข้า DB ใหม่ตรงๆ ไม่ต้อง merge
+                return applyChain(newClient.from(table).insert.apply(null, opArgs), []);
             }
 
-            if (op === 'update' || op === 'upsert') {
-                // แก้ record เก่า (หรือใหม่) — ต้องรู้แถวเดิมก่อน (merge เก่า+ใหม่) แล้ว copy
-                // "ทั้งแถว" + patch ไปเขียน DB ใหม่ ตามที่ตกลงกันไว้ (ไม่ patch บางส่วน)
-                var patch = opArgs[0] || {};
-                var pks = pkCols(table);
-                var patchHasAllPk = pks.every(function(c) { return patch[c] != null; });
-                if (op === 'upsert' && !filterChain.length && patchHasAllPk) {
-                    // upsert ตรงๆ ด้วย object ที่มี PK ครบ — หาแถวเดิมด้วย PK นั้น
-                    filterChain = pks.map(function(c) { return ['eq', [c, patch[c]]]; });
-                }
-                var found = await mergedSelect(table, filterChain);
-                var targets = found.rows;
-                if (!targets.length && op === 'upsert') {
-                    // ไม่มีแถวเดิมเลย = สร้างใหม่ล้วนๆ
-                    targets = [Object.assign({}, patch)];
-                }
-                var writes = targets.map(function(row) {
-                    var fullRow = Object.assign({}, row, patch);
-                    delete fullRow._dual_deleted_at; // แก้ไข = ยืนยันว่ายังไม่ถูกลบ
-                    return newClient.from(table).upsert(fullRow, { onConflict: pks.join(',') });
+            if (op === 'update') {
+                // update(patch).eq(...) — patch เป็น object เดี่ยวเสมอ, filterChain บอกว่าแก้แถวไหน
+                // (อาจกรองด้วยคอลัมน์ใดก็ได้ ไม่ต้องเป็น PK) — copy ทั้งแถวเดิม+patch ไปเขียน
+                var patch1 = opArgs[0] || {};
+                var pks1 = pkCols(table);
+                var found1 = await mergedSelect(table, filterChain);
+                var fullRows1 = found1.rows.map(function(row) {
+                    var fullRow = Object.assign({}, row, patch1);
+                    delete fullRow._dual_deleted_at;
+                    return fullRow;
                 });
-                var results = await Promise.all(writes);
-                var errRes = results.find(function(r) { return r && r.error; });
-                return { data: null, error: errRes ? errRes.error : null };
+                if (!fullRows1.length) return { data: null, error: null };
+                var wr1 = await newClient.from(table).upsert(fullRows1, { onConflict: pks1.join(',') });
+                return { data: null, error: wr1.error || null };
+            }
+
+            if (op === 'upsert') {
+                // upsert(rowOrRows, {onConflict}) — รองรับทั้ง object เดี่ยวและ array หลายแถว (bulk save)
+                // จับคู่แถวเดิมด้วย PK ที่อยู่ใน patch เอง (ไม่ใช่ filterChain) แล้ว copy ทั้งแถว
+                var patchInput = opArgs[0] || {};
+                var patchArray = Array.isArray(patchInput) ? patchInput : [patchInput];
+                var pks2 = pkCols(table);
+                var found2;
+                if (filterChain.length && patchArray.length === 1) {
+                    found2 = await mergedSelect(table, filterChain);
+                } else if (pks2.length === 1) {
+                    var pkVals = patchArray.map(function(p) { return p[pks2[0]]; }).filter(function(v) { return v != null; });
+                    found2 = pkVals.length ? await mergedSelect(table, [['in', [pks2[0], pkVals]]]) : { rows: [] };
+                } else {
+                    // composite PK — ตารางกลุ่มนี้ไม่ใหญ่ ดึงทั้งตารางมาจับคู่ได้ไม่กระทบ perf
+                    found2 = await mergedSelect(table, []);
+                }
+                var byKey2 = {};
+                found2.rows.forEach(function(r) { byKey2[rowKey(table, r)] = r; });
+                var fullRows2 = patchArray.map(function(patch) {
+                    var existing = byKey2[rowKey(table, patch)];
+                    var fullRow = existing ? Object.assign({}, existing, patch) : Object.assign({}, patch);
+                    delete fullRow._dual_deleted_at;
+                    return fullRow;
+                });
+                var wr2 = await newClient.from(table).upsert(fullRows2, { onConflict: pks2.join(',') });
+                return { data: null, error: wr2.error || null };
             }
 
             if (op === 'delete') {
-                // ลบ record เก่า/ใหม่ = soft-delete — copy ทั้งแถว + ตั้งเวลาไปที่ DB ใหม่
+                // ลบ record เก่า/ใหม่ = soft-delete — copy ทั้งแถว + ตั้งเวลาไปที่ DB ใหม่ (bulk write เดียว)
                 var pksDel = pkCols(table);
                 var foundDel = await mergedSelect(table, filterChain);
-                var writesDel = foundDel.rows.map(function(row) {
-                    var tomb = Object.assign({}, row, { _dual_deleted_at: new Date().toISOString() });
-                    return newClient.from(table).upsert(tomb, { onConflict: pksDel.join(',') });
+                var tombs = foundDel.rows.map(function(row) {
+                    return Object.assign({}, row, { _dual_deleted_at: new Date().toISOString() });
                 });
-                var resultsDel = await Promise.all(writesDel);
-                var errResDel = resultsDel.find(function(r) { return r && r.error; });
-                return { data: null, error: errResDel ? errResDel.error : null };
+                if (!tombs.length) return { data: null, error: null };
+                var wrDel = await newClient.from(table).upsert(tombs, { onConflict: pksDel.join(',') });
+                return { data: null, error: wrDel.error || null };
             }
 
             return { data: null, error: { message: 'ยังไม่เรียก .select()/.insert()/.update()/.upsert()/.delete()' } };
         }
 
-        // thenable — ให้ใช้ await/​.then() แบบเดิมได้ทุกที่โดยไม่ต้องแก้โค้ดเรียกใช้
         builder.then = function(resolve, reject) { return execute().then(resolve, reject); };
         builder.catch = function(reject) { return execute().catch(reject); };
 
@@ -208,7 +215,6 @@ function createDualSupabaseClient(oldClient, newClient) {
 
     return {
         from: makeBuilder,
-        // ส่วนอื่น (storage/auth/channel/rpc) ยังไม่ครอบ — ใช้ client ใหม่ตรงๆ ไปก่อน
         storage: newClient.storage,
         auth: newClient.auth,
         channel: function() { return newClient.channel.apply(newClient, arguments); },

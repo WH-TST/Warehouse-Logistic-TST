@@ -135,35 +135,57 @@
                 if (op === 'insert') {
                     return applyChain(newClient.from(table).insert.apply(null, opArgs), []);
                 }
-                if (op === 'update' || op === 'upsert') {
-                    var patch = opArgs[0] || {};
-                    var pks = pkCols(table);
-                    var patchHasAllPk = pks.every(function(c) { return patch[c] != null; });
-                    if (op === 'upsert' && !filterChain.length && patchHasAllPk) {
-                        filterChain = pks.map(function(c) { return ['eq', [c, patch[c]]]; });
-                    }
-                    var found = await mergedSelect(table, filterChain);
-                    var targets = found.rows;
-                    if (!targets.length && op === 'upsert') targets = [Object.assign({}, patch)];
-                    var writes = targets.map(function(row) {
-                        var fullRow = Object.assign({}, row, patch);
+                if (op === 'update') {
+                    // update(patch).eq(...) — patch เป็น object เดี่ยวเสมอ, filterChain บอกว่าแก้แถวไหน
+                    // (อาจกรองด้วยคอลัมน์ใดก็ได้ ไม่ต้องเป็น PK) — copy ทั้งแถวเดิม+patch ไปเขียน
+                    var patch1 = opArgs[0] || {};
+                    var pks1 = pkCols(table);
+                    var found1 = await mergedSelect(table, filterChain);
+                    var fullRows1 = found1.rows.map(function(row) {
+                        var fullRow = Object.assign({}, row, patch1);
                         delete fullRow._dual_deleted_at;
-                        return newClient.from(table).upsert(fullRow, { onConflict: pks.join(',') });
+                        return fullRow;
                     });
-                    var results = await Promise.all(writes);
-                    var errRes = results.find(function(r) { return r && r.error; });
-                    return { data: null, error: errRes ? errRes.error : null };
+                    if (!fullRows1.length) return { data: null, error: null };
+                    var wr1 = await newClient.from(table).upsert(fullRows1, { onConflict: pks1.join(',') });
+                    return { data: null, error: wr1.error || null };
+                }
+                if (op === 'upsert') {
+                    // upsert(rowOrRows, {onConflict}) — รองรับทั้ง object เดี่ยวและ array หลายแถว
+                    // จับคู่แถวเดิมด้วย PK ที่อยู่ใน patch เอง (ไม่ใช่ filterChain) แล้ว copy ทั้งแถว
+                    var patchInput = opArgs[0] || {};
+                    var patchArray = Array.isArray(patchInput) ? patchInput : [patchInput];
+                    var pks2 = pkCols(table);
+                    var found2;
+                    if (filterChain.length && patchArray.length === 1) {
+                        found2 = await mergedSelect(table, filterChain);
+                    } else if (pks2.length === 1) {
+                        var pkVals = patchArray.map(function(p) { return p[pks2[0]]; }).filter(function(v) { return v != null; });
+                        found2 = pkVals.length ? await mergedSelect(table, [['in', [pks2[0], pkVals]]]) : { rows: [] };
+                    } else {
+                        // composite PK — ตารางกลุ่มนี้ไม่ใหญ่ ดึงทั้งตารางมาจับคู่ได้ไม่กระทบ perf
+                        found2 = await mergedSelect(table, []);
+                    }
+                    var byKey2 = {};
+                    found2.rows.forEach(function(r) { byKey2[rowKey(table, r)] = r; });
+                    var fullRows2 = patchArray.map(function(patch) {
+                        var existing = byKey2[rowKey(table, patch)];
+                        var fullRow = existing ? Object.assign({}, existing, patch) : Object.assign({}, patch);
+                        delete fullRow._dual_deleted_at;
+                        return fullRow;
+                    });
+                    var wr2 = await newClient.from(table).upsert(fullRows2, { onConflict: pks2.join(',') });
+                    return { data: null, error: wr2.error || null };
                 }
                 if (op === 'delete') {
                     var pksDel = pkCols(table);
                     var foundDel = await mergedSelect(table, filterChain);
-                    var writesDel = foundDel.rows.map(function(row) {
-                        var tomb = Object.assign({}, row, { _dual_deleted_at: new Date().toISOString() });
-                        return newClient.from(table).upsert(tomb, { onConflict: pksDel.join(',') });
+                    var tombs = foundDel.rows.map(function(row) {
+                        return Object.assign({}, row, { _dual_deleted_at: new Date().toISOString() });
                     });
-                    var resultsDel = await Promise.all(writesDel);
-                    var errResDel = resultsDel.find(function(r) { return r && r.error; });
-                    return { data: null, error: errResDel ? errResDel.error : null };
+                    if (!tombs.length) return { data: null, error: null };
+                    var wrDel = await newClient.from(table).upsert(tombs, { onConflict: pksDel.join(',') });
+                    return { data: null, error: wrDel.error || null };
                 }
                 return { data: null, error: { message: 'ยังไม่เรียก .select()/.insert()/.update()/.upsert()/.delete()' } };
             }
