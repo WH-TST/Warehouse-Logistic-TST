@@ -25,6 +25,9 @@
       var SUPA_URL = 'https://akazjfgbnzhykhgeenye.supabase.co';
       var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrYXpqZmdibnpoeWtoZ2VlbnllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNjk4MDksImV4cCI6MjEwMTY0NTgwOX0.3XQowwoh5C9loTu9WpEz4sdKxGzRFlYEOrqNBYtqunA';
       window._sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+      // expose ไว้ให้จุดที่เรียก edge function ใช้ — กันลืมแก้ key ตอนย้ายโปรเจกต์
+      window._SUPA_URL = SUPA_URL;
+      window._SUPA_KEY = SUPA_KEY;
 
       // ══ Cloudinary — ที่เก็บรูปหลัก (อัปตรงจากเว็บ) ══════════════════
       window._CLD_CLOUD  = 'qnst1pzk';
@@ -27152,7 +27155,7 @@ function _ldNotifyNewOrder(order) {
         var _pbody = 'รถ '+(order.truck_plate||'—')+'  ·  '+_items.length+' รายการ';
         fetch('https://akazjfgbnzhykhgeenye.supabase.co/functions/v1/send-push', {
             method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Bearer sb_publishable_V8AFghqrEUyFGBCDzKrmjw_5p36_5g9'},
+            headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._SUPA_KEY},
             body:JSON.stringify({title:'🚛 งานโหลดใหม่เข้ามา!', body:_pbody, tag:'ld-order-'+order.id})
         }).catch(function(){});
     } catch(e){}
