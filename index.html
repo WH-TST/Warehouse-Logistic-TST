@@ -20,7 +20,6 @@
          Supabase Client — direct DB access for WMS data
          ═══════════════════════════════════════════════════════════ -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
     <script>
     (function() {
       var SUPA_URL = 'https://lkuunmyrxugsoqwrvdby.supabase.co';
@@ -15396,28 +15395,14 @@ let blockingChartInstance = null;
             batch.push(rec);
         });
         if (!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
-        // กันแถวซ้ำ key เดียวกันในไฟล์ต้นทาง (D365 export บางทีมีหลายบรรทัดต่อ item+warehouse)
-        // — ตารางจริงมี unique constraint ตรงนี้ ถ้าส่ง insert พร้อมกันหลายแถวซ้ำ key จะ error
-        // ทันที ไม่เกี่ยวกับ DB เก่า/ใหม่เลย จึงต้อง dedupe ก่อนเสมอ (เอาแถวหลังสุดทับแถวก่อนหน้า)
-        const keyCols = tableType === 'onhand_fg' ? ['item_number','warehouse']
-            : tableType === 'onhand_semi' ? ['item_number','warehouse','serial_number']
-            : null; // onhand_rm ใช้ id auto-generate ไม่มี key ซ้ำได้
-        let dedupedBatch = batch;
-        if (keyCols) {
-            const byKey = {};
-            batch.forEach(function(rec) { byKey[keyCols.map(function(c){ return rec[c]; }).join('')] = rec; });
-            dedupedBatch = Object.values(byKey);
-            const dupCount = batch.length - dedupedBatch.length;
-            if (dupCount > 0) showToast('⚠️ พบแถวซ้ำ ' + dupCount + ' รายการในไฟล์ — ใช้ข้อมูลแถวล่าสุดแทน', true);
-        }
         // DELETE all → INSERT ใหม่ (replace strategy)
         await window._sb.from(tableName).delete().gte('imported_at', '2000-01-01');
         const CHUNK = 500;
-        for (let i = 0; i < dedupedBatch.length; i += CHUNK) {
-            const { error } = await window._sb.from(tableName).insert(dedupedBatch.slice(i, i + CHUNK));
+        for (let i = 0; i < batch.length; i += CHUNK) {
+            const { error } = await window._sb.from(tableName).insert(batch.slice(i, i + CHUNK));
             if (error) throw error;
         }
-        return dedupedBatch.length;
+        return batch.length;
     }
 
     // ── Import COUNTING → Supabase (ลบเดิม + insert ใหม่) ────────────────────────
@@ -28074,9 +28059,7 @@ function _ldRenderMonKpi(rows, orders) {
 function _ldRenderMonitorTable(rows, orders) {
     var wrap = document.getElementById('ld-mon-table-wrap');
     if (!wrap) return;
-    // ⚠️ เดิมเช็คแค่ rows.length (sessions) — ถ้ามี order แล้วแต่ยังไม่มีใครกดเริ่มโหลด
-    // เลยสักใบ (sessions=0 จริง) จะโดนตัดจบแสดง "ไม่พบข้อมูล" ทั้งที่ orders มีจริง
-    if (!rows.length && !(orders||[]).length) {
+    if (!rows.length) {
         wrap.innerHTML = '<div class="text-center py-16 text-slate-400 font-bold">ไม่พบข้อมูล</div>';
         return;
     }
@@ -28112,14 +28095,6 @@ function _ldRenderMonitorTable(rows, orders) {
     var liveSessionIds = new Set(live.map(function(r){ return r.id; }));
     var done = validRows2.filter(function(r){ return !liveSessionIds.has(r.id) && r.record_type!=='draft'; });
 
-    // ── ออเดอร์ที่ยังไม่มี session เลยสักตัว (ยังไม่มีใครกดเริ่มโหลด) ──
-    // เดิม liveByOrder ถูก seed จาก sessions เท่านั้น (live.forEach) ทำให้ order ที่ผ่าน
-    // เงื่อนไขควรโชว์ (status/review_status) แต่ยังไม่มี session เลย ไม่มีทางถูกสร้างการ์ด
-    // เลยแม้แต่ใบเดียว — ทางแก้คือ seed เข้า liveByOrder ตรงๆ (ดูด้านล่าง) แล้วปล่อยให้
-    // _buildLiveTable ที่มีอยู่แล้ว render ตามแผน (targetItems) โดย actual=0 ตามปกติ
-    var _startedIds = new Set(rows.map(function(r){ return r.order_id; }).filter(Boolean));
-    var notStarted = (orders||[]).filter(function(o){ return !_startedIds.has(o.id); });
-
     // ── LIVE SECTION ──
     function _thTime(iso){
         if(!iso) return '—';
@@ -28127,14 +28102,16 @@ function _ldRenderMonitorTable(rows, orders) {
         catch(e){ return iso.slice(11,16); }
     }
     var liveHtml = '';
-    if (live.length || notStarted.length) {
+    if (live.length) {
         var liveByOrder = {};
         var orderIdx2 = {};
         (orders||[]).forEach(function(o){ orderIdx2[o.id] = o; });
-        function _seedLiveOrder(k, ord, r) {
+        live.forEach(function(r){
+            var k = r.order_id||'?';
+            var ord = orderIdx2[r.order_id]||{};
             if (!liveByOrder[k]) liveByOrder[k] = {
                 order_no:ord.order_no, truck_plate:ord.truck_plate,
-                customer_name:ord.customer_name, plan_id:(r&&r.plan_id)||ord.plan_id,
+                customer_name:ord.customer_name, plan_id:r.plan_id,
                 orderItems: ord.items||[], sessions:[],
                 is_trailer: ord.is_trailer, trailer_plate: ord.trailer_plate,
                 trailer_split: ord.trailer_split,
@@ -28143,15 +28120,6 @@ function _ldRenderMonitorTable(rows, orders) {
                 isRejected: (ord.review_status||'')==='rejected',
                 rejectionNote: ord.rejection_note||''
             };
-        }
-        // seed ออเดอร์ที่ยังไม่มี session เลยไว้ก่อน (sessions ว่างเปล่า) — ให้ตารางด้านล่าง
-        // ยัง render ตามแผน (targetItems) ได้ปกติ ไม่งั้น order ที่ยังไม่มีใครกดเริ่มโหลด
-        // จะไม่มีทางถูกสร้างการ์ดเลย ทั้งที่สถานะบอกว่าควรโชว์ในแท็บนี้
-        notStarted.forEach(function(o){ _seedLiveOrder(o.id, o, null); });
-        live.forEach(function(r){
-            var k = r.order_id||'?';
-            var ord = orderIdx2[r.order_id]||{};
-            _seedLiveOrder(k, ord, r);
             liveByOrder[k].sessions.push(r);
         });
         liveHtml = '<div class="mb-4">'
@@ -28417,6 +28385,7 @@ function _ldRenderMonitorTable(rows, orders) {
             }).join('')
         +'</div>';
     }
+
     // ── DONE SECTION — grouped by order, card layout ──
     var doneHtml = '';
     if (done.length) {
