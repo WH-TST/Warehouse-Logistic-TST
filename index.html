@@ -15363,6 +15363,65 @@ let blockingChartInstance = null;
         if (fileInput) fileInput.value = '';
     };
 
+    // ── replace ทั้งตารางแบบปลอดภัย (ใช้ร่วมทุก import ที่เป็น "ลบเดิมทิ้ง+ใส่ใหม่") ──
+    // ปัญหาเดิม: DELETE ยิงก่อน INSERT ถ้า insert พังกลางทาง (เช่นชน PK) ตารางจะ
+    // เหลือศูนย์แถว ข้อมูลหายจริง กู้ไม่ได้ (เจอกับ onhand_fg 19 ส.ค.)
+    // helper นี้: dedupe → snapshot ข้อมูลเดิม → delete → insert → พังก็กู้ snapshot คืน
+    //   keyCols = คอลัมน์ PK จริงของตาราง (null = ตารางใช้ id surrogate ชนไม่ได้)
+    //   delFilter = ฟังก์ชันรับ query builder ของ .delete() แล้วใส่เงื่อนไข
+    async function _invReplaceTable(tableName, batch, keyCols, delFilter) {
+        // 1) กันแถวซ้ำ key เดียวกันในไฟล์ต้นทาง (D365 export มักมีหลายบรรทัดต่อ
+        //    item+warehouse เดียวกัน แยกตาม batch/สถานะ) เอาแถวหลังสุดเป็นตัวจริง
+        let rowsToInsert = batch;
+        if (keyCols) {
+            const byKey = {};
+            batch.forEach(function(rec) {
+                byKey[keyCols.map(function(c){ return rec[c]; }).join('|')] = rec;
+            });
+            rowsToInsert = Object.keys(byKey).map(function(k){ return byKey[k]; });
+            const dup = batch.length - rowsToInsert.length;
+            if (dup > 0) showToast('⚠️ ไฟล์มีแถวซ้ำ ' + dup.toLocaleString() + ' รายการ — ใช้ข้อมูลแถวล่าสุดของแต่ละรายการ', true);
+        }
+
+        // 2) snapshot ข้อมูลเดิมไว้ในหน่วยความจำก่อนลบ (ตารางพวกนี้หลักพันแถว ไหว)
+        const snapshot = [];
+        for (let from = 0; ; from += 1000) {
+            const { data, error } = await window._sb.from(tableName).select('*').range(from, from + 999);
+            if (error) throw new Error('อ่านข้อมูลเดิมเพื่อสำรองไม่ได้ ยกเลิกการนำเข้าเพื่อความปลอดภัย: ' + error.message);
+            if (data && data.length) snapshot.push.apply(snapshot, data);
+            if (!data || data.length < 1000) break;
+        }
+
+        // 3) ลบเดิม
+        const { error: delErr } = await delFilter(window._sb.from(tableName).delete());
+        if (delErr) throw delErr;
+
+        // 4) ใส่ใหม่ — พังตรงไหนก็กู้ snapshot กลับทันที
+        const CHUNK = 500;
+        try {
+            for (let i = 0; i < rowsToInsert.length; i += CHUNK) {
+                const { error } = await window._sb.from(tableName).insert(rowsToInsert.slice(i, i + CHUNK));
+                if (error) throw error;
+            }
+        } catch (insErr) {
+            let restored = 0;
+            try {
+                await delFilter(window._sb.from(tableName).delete());   // เก็บซากที่ใส่ไปบางส่วนก่อน
+                // ตัด id ออก ปล่อยให้ identity ออกเลขใหม่ (GENERATED ALWAYS ไม่รับ id ที่ระบุมา)
+                const restoreRows = snapshot.map(function(r) { const c = Object.assign({}, r); delete c.id; return c; });
+                for (let i = 0; i < restoreRows.length; i += CHUNK) {
+                    const { error } = await window._sb.from(tableName).insert(restoreRows.slice(i, i + CHUNK));
+                    if (error) throw error;
+                    restored += restoreRows.slice(i, i + CHUNK).length;
+                }
+            } catch (rbErr) {
+                throw new Error('นำเข้าล้มเหลว: ' + insErr.message + ' — และกู้ข้อมูลเดิมคืนได้แค่ ' + restored + '/' + snapshot.length + ' แถว (' + rbErr.message + ') กรุณาแจ้งผู้ดูแลทันที');
+            }
+            throw new Error('นำเข้าล้มเหลว: ' + insErr.message + ' — กู้ข้อมูลเดิมคืนครบ ' + restored + ' แถวแล้ว ตารางไม่ได้หาย');
+        }
+        return rowsToInsert.length;
+    }
+
     // ── Supabase import สำหรับ onhand_fg / onhand_semi / onhand_rm ──────────────
     async function _invImportOnhandToSupabase(rows, tableType) {
         const tableName = tableType === 'onhand_fg' ? 'onhand_fg' : tableType === 'onhand_rm' ? 'onhand_rm' : 'onhand_semi';
@@ -15437,33 +15496,13 @@ let blockingChartInstance = null;
         });
         if (!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
 
-        // ── กันแถวซ้ำ key เดียวกันในไฟล์ต้นทาง ──────────────────────────────
-        // ไฟล์ D365 export มักมีหลายบรรทัดต่อ item+warehouse เดียวกัน (แยกตาม
-        // batch/serial/สถานะ) แต่ตารางจริงมี unique constraint อยู่ ถ้า insert
-        // พร้อมกันทั้งชุดจะชน "onhand_fg_pkey" ทันที → ต้อง dedupe ก่อนเสมอ
-        // (เอาแถวหลังสุดของ key นั้นเป็นตัวจริง)
+        // PK จริงของแต่ละตาราง (onhand_rm ใช้ id surrogate → ไม่ต้อง dedupe)
         const keyCols = tableType === 'onhand_fg'   ? ['item_number','warehouse']
                       : tableType === 'onhand_semi' ? ['item_number','warehouse','serial_number']
-                      : null;   // onhand_rm ใช้ id auto-increment → ไม่มีทางซ้ำ
-        let rowsToInsert = batch;
-        if (keyCols) {
-            const byKey = {};
-            batch.forEach(function(rec) {
-                byKey[keyCols.map(function(c){ return rec[c]; }).join('|')] = rec;
-            });
-            rowsToInsert = Object.keys(byKey).map(function(k){ return byKey[k]; });
-            const dup = batch.length - rowsToInsert.length;
-            if (dup > 0) showToast('⚠️ ไฟล์มีแถวซ้ำ ' + dup.toLocaleString() + ' รายการ — ใช้ข้อมูลแถวล่าสุดของแต่ละรายการ', true);
-        }
-
-        // DELETE all → INSERT ใหม่ (replace strategy)
-        await window._sb.from(tableName).delete().gte('imported_at', '2000-01-01');
-        const CHUNK = 500;
-        for (let i = 0; i < rowsToInsert.length; i += CHUNK) {
-            const { error } = await window._sb.from(tableName).insert(rowsToInsert.slice(i, i + CHUNK));
-            if (error) throw error;
-        }
-        return rowsToInsert.length;
+                      : null;
+        return await _invReplaceTable(tableName, batch, keyCols, function(q) {
+            return q.gte('imported_at', '2000-01-01');
+        });
     }
 
     // ── Import COUNTING → Supabase (ลบเดิม + insert ใหม่) ────────────────────────
@@ -15509,16 +15548,10 @@ let blockingChartInstance = null;
             batch.push(rec);
         });
         if(!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
-        // ลบข้อมูลเดิมทั้งหมด
-        const { error: delErr } = await window._sb.from('counting').delete().gte('imported_at','2000-01-01');
-        if(delErr) throw delErr;
-        // insert ใหม่ เป็น chunk
-        const CHUNK = 500;
-        for(let i = 0; i < batch.length; i += CHUNK){
-            const { error } = await window._sb.from('counting').insert(batch.slice(i, i+CHUNK));
-            if(error) throw error;
-        }
-        return batch.length;
+        // counting ใช้ id surrogate → ไม่ต้อง dedupe แต่ยังต้องกันตารางหายถ้า insert พัง
+        return await _invReplaceTable('counting', batch, null, function(q) {
+            return q.gte('imported_at','2000-01-01');
+        });
     }
 
     // ── Import TRANSACTION FG → Supabase (ต่อท้าย + คำนวณ 6 คอลัมน์) ─────────────
@@ -15641,15 +15674,10 @@ let blockingChartInstance = null;
             batch.push(rec);
         });
         if(!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
-        // ลบข้อมูลเก่าทั้งหมดก่อน
-        const { error: delErr } = await window._sb.from('transection_semi').delete().neq('id', 0);
-        if(delErr) throw delErr;
-        const CHUNK = 500;
-        for(let i = 0; i < batch.length; i += CHUNK){
-            const { error } = await window._sb.from('transection_semi').insert(batch.slice(i, i+CHUNK));
-            if(error) throw error;
-        }
-        return batch.length;
+        // transection_semi ใช้ id surrogate → ไม่ต้อง dedupe แต่กันตารางหายถ้า insert พัง
+        return await _invReplaceTable('transection_semi', batch, null, function(q) {
+            return q.neq('id', 0);
+        });
     }
 
     window.invConfirmImport = function() {
