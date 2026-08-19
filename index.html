@@ -2482,6 +2482,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                 <button onclick="openTagSpecSettings()" class="bg-violet-500 hover:bg-violet-600 text-white px-5 py-2 rounded-xl font-black text-sm transition-all flex items-center gap-2 whitespace-nowrap shadow">
                     <i class="fas fa-table"></i> ตั้งค่าสเปคสินค้าจาก Sheet
                 </button>
+                <button onclick="resetPrintTagLog()" class="bg-white border-2 border-rose-300 text-rose-600 hover:bg-rose-50 px-5 py-2 rounded-xl font-black text-sm transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fas fa-trash-alt"></i> รีเซตประวัติการปริ้น
+                </button>
             </div>
         </div>
         <div id="tag-list-container" class="min-h-[300px]"></div>
@@ -12209,6 +12212,41 @@ window.saveTagStartDate = async function saveTagStartDate() {
     }
     if (!error) showToast('บันทึกวันเริ่มต้นสำเร็จ: ' + dateVal);
     else showToast('ผิดพลาด: ' + error.message, true);
+};
+
+/** ล้างประวัติการปริ้น TAG ทั้งหมด (print_tag_log) — กู้คืนไม่ได้ จึงยืนยัน 2 ชั้น */
+window.resetPrintTagLog = async function resetPrintTagLog() {
+    // นับก่อนว่ามีกี่รายการ เพื่อให้ผู้ใช้เห็นตัวเลขจริงก่อนตัดสินใจ
+    var cnt = 0;
+    try {
+        var { count } = await window._sb.from('print_tag_log').select('*', { count: 'exact', head: true });
+        cnt = count || 0;
+    } catch (e) {}
+
+    if (!cnt) { showToast('ไม่มีประวัติการปริ้นให้ลบ'); return; }
+
+    showConfirmModal(
+        'รีเซตประวัติการปริ้น TAG',
+        'จะลบประวัติการปริ้นทั้งหมด <b>' + cnt.toLocaleString() + ' รายการ</b><br>'
+        + '<span class="text-rose-400 text-xs">⚠️ ลบแล้วกู้คืนไม่ได้ และยอดสะสมที่เคยพิมพ์จะกลับเป็น 0 ทั้งหมด</span>',
+        function () {
+            // ยืนยันชั้นที่ 2 เพราะเป็นการลบถาวรทั้งตาราง
+            showConfirmModal(
+                'ยืนยันอีกครั้ง',
+                'แน่ใจหรือไม่ว่าต้องการลบประวัติทั้งหมด <b>' + cnt.toLocaleString() + ' รายการ</b>?',
+                async function () {
+                    var { error } = await window._sb.from('print_tag_log').delete().gte('printed_at', '1900-01-01');
+                    if (error) { showToast('ลบไม่สำเร็จ: ' + error.message, true); return; }
+                    showToast('🗑️ ลบประวัติการปริ้นแล้ว ' + cnt.toLocaleString() + ' รายการ');
+                    if (typeof logAudit === 'function') logAudit('PRINT TAG', 'reset-log', 'ลบประวัติการปริ้น ' + cnt + ' รายการ');
+                    // โหลดตารางใหม่ให้ยอดสะสมอัปเดตตาม
+                    if (document.getElementById('tag-date')?.value) loadPrintTagData();
+                },
+                { okText: 'ลบทั้งหมด', type: 'danger' }
+            );
+        },
+        { okText: 'ต่อไป', type: 'danger' }
+    );
 };
 
 /** ✅ แก้ไข loadPrintTagData() - เพิ่ม Console Log */
