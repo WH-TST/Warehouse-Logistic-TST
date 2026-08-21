@@ -44396,18 +44396,21 @@ window.drvInit=function(wmsUser){
       var today2=new Date().toISOString().split('T')[0];
       if(ins.inspect_date!==today2)return;
       // คนขับ: เห็นผลอนุมัติ/ระงับ
-      var myPlate=(_dPlans[0]?.truck_plate)||'';
-      var myId=_dSess?.driver_id||'';
-      if(!_dSess.is_supervisor&&ins.truck_plate===myPlate&&(ins.driver_id===myId||!myId)){
+      // คนขับ: สนใจทุกคันที่อยู่ในแผนวันนี้ (ผลตรวจนับต่อคัน ไม่ผูกกับคนขับ)
+      var myPlates=(_dPlans||[]).map(function(p){return (p.truck_plate||'').trim();});
+      if(!_dSess.is_supervisor&&myPlates.indexOf((ins.truck_plate||'').trim())>=0){
+        window._dInspectByPlate=window._dInspectByPlate||{};
+        window._dInspectByPlate[ins.truck_plate]={truck_plate:ins.truck_plate,approval_status:ins.approval_status,overall:ins.overall,approval_note:ins.approval_note};
         if(ins.approval_status==='approved'){
-          window._dInspectApproval={approval_status:'approved',overall:'issue'};
+          window._dInspectApproval={approval_status:'approved',overall:ins.overall||'issue'};
           var pending=document.getElementById('drv-inspect-pending-card');
           if(pending)pending.remove();
           drvRenderPlanCards(_dPlans);
-          drvShowToast('✅ หัวหน้าอนุมัติแล้ว — ออกรถได้เลย',false,5000);
+          drvShowToast('✅ หัวหน้าอนุมัติแล้ว ('+ins.truck_plate+') — ออกรถได้เลย',false,5000);
         } else if(ins.approval_status==='rejected'){
-          window._dInspectApproval={approval_status:'rejected',overall:'issue'};
-          drvShowToast('🚫 หัวหน้าระงับการออกรถ'+(ins.approval_note?' — '+ins.approval_note:''),true,7000);
+          window._dInspectApproval={approval_status:'rejected',overall:ins.overall||'issue'};
+          drvRenderPlanCards(_dPlans);
+          drvShowToast('🚫 หัวหน้าระงับการออกรถ ('+ins.truck_plate+')'+(ins.approval_note?' — '+ins.approval_note:''),true,7000);
         }
       }
       // หัวหน้า: อัพเดตรายการรออนุมัติ
@@ -44550,18 +44553,24 @@ window.drvLoadPlan=async function(){
   }else{
     document.getElementById('drv-ht').textContent='– ไม่มีแผนวันนี้ –';
   }
-  // โหลดสถานะ inspection ของวันนี้
-  var plate2=(_dPlans[0]?.truck_plate)||'';
+  // โหลดสถานะ inspection ของวันนี้ — "ตรวจวันละครั้งต่อคัน" → เก็บเป็น map ต่อทะเบียน (ไม่สนว่าใครตรวจ)
+  window._dInspectByPlate={};
   window._dInspectApproval=null;
-  if(plate2){
-    var {data:insRow}=await window._sb.from('truck_inspections')
-      .select('approval_status,approval_note,approved_by,overall')
-      .eq('inspect_date',today).eq('truck_plate',plate2).maybeSingle();
-    window._dInspectApproval=insRow||null;
+  var _insPlates=Array.from(new Set(_dPlans.map(function(p){return (p.truck_plate||'').trim();}).filter(Boolean)));
+  if(_insPlates.length){
+    var {data:insRows}=await window._sb.from('truck_inspections')
+      .select('truck_plate,approval_status,approval_note,approved_by,overall')
+      .eq('inspect_date',today).in('truck_plate',_insPlates);
+    (insRows||[]).forEach(function(r){
+      var prev=window._dInspectByPlate[r.truck_plate];
+      // ถ้ามีหลายแถวของคันเดียวกัน (ตกค้างจากคนละคนขับ) → approved ชนะ
+      if(!prev||(prev.approval_status!=='approved'&&r.approval_status==='approved')) window._dInspectByPlate[r.truck_plate]=r;
+    });
+    var plate2=_insPlates[0];
+    window._dInspectApproval=window._dInspectByPlate[plate2]||null;
     // ถ้ายังรออนุมัติ → แสดง pending card
-    if(insRow&&insRow.approval_status==='pending'&&insRow.overall==='issue'){
-      var issueItems=[];
-      drvShowInspectPending(plate2,today,issueItems);
+    if(window._dInspectApproval&&window._dInspectApproval.approval_status==='pending'&&window._dInspectApproval.overall==='issue'){
+      drvShowInspectPending(plate2,today,[]);
     }
   }
   drvHideL();drvRenderPlanCards(_dPlans);
@@ -44622,54 +44631,43 @@ function _drvDetectInspectType(){
   return 'pre_load';
 }
 
-async function drvInspectCheck(){
-  // ถ้าทุกแผนเป็นแผนซ่อมรถ → ไม่ต้องตรวจสภาพ
-  var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
-  if(!hasDelivery)return;
-  // ถ้ามีแผนค้างคืน (overnight) ที่ออกรถไปแล้ว → ไม่ต้องตรวจสภาพซ้ำ
-  var hasActiveOvernight=_dPlans.some(function(p){return p._isOvernight&&_dTripLogs[p.plan_id];});
-  if(hasActiveOvernight)return;
-  var today=new Date().toISOString().split('T')[0];
-  var plate=(_dPlans[0]?.truck_plate)||'';
-  var driverId=_dSess?.driver_id||'';
-  if(!plate)return;
-  var q=window._sb.from('truck_inspections').select('id').eq('inspect_date',today).eq('truck_plate',plate);
-  if(driverId) q=q.eq('driver_id',driverId);
-  var {data}=await q.maybeSingle();
-  if(data)return;
-  _dInspectType=_drvDetectInspectType();
-  drvInspectShow(today,plate);
-}
-
-// เด้งป๊อบอัพตรวจสภาพ — เด้งไปเรื่อยจนกว่าจะ "บันทึกผลตรวจ" (มี row) ถึงหยุด
+// เด้งป๊อบอัพตรวจสภาพ — "วันละครั้งต่อคัน" คันไหนมีผลตรวจของวันนี้แล้ว (ใครตรวจก็นับ) → ไม่เด้งซ้ำ
 async function drvInspectDailyPrompt(){
   var today=new Date().toISOString().split('T')[0];
-  // กันเด้งซ้ำ "ภายในรอบเดียว" (in-memory) — refresh/login ใหม่จะเด้งอีกถ้ายังไม่ตรวจ
-  if(window._dInspectPromptedSession) return;
+  window._dInspectPrompted=window._dInspectPrompted||{}; // กันเด้งซ้ำภายในรอบเดียว แยกตามทะเบียน
   // เด้งเฉพาะเมื่อยังมี "เที่ยวที่ยังไม่โหลด/ออกรถ"
   // ถ้าโหลด/ออกครบทุกเที่ยวแล้ว (รวมงานค้างคืนที่ขึ้นเย็นนี้) → ไม่ต้องเด้ง (ค่อยไปเด้งพรุ่งนี้)
-  var hasUnloadedTrip=_dPlans.some(function(p){ return p.job_type!=='maintenance_pm' && !_dTripLogs[p.plan_id]; });
-  if(!hasUnloadedTrip){ window._dInspectPromptedSession=true; return; }
-  // ตรวจ+บันทึกไปแล้ววันนี้ไหม (มี row) → หยุดเด้ง
-  var driverId=_dSess?.driver_id||'';
-  try{
-    var q=window._sb.from('truck_inspections').select('id').eq('inspect_date',today);
-    if(driverId) q=q.eq('driver_id',driverId);
-    var {data:done}=await q.limit(1);
-    if(done&&done.length){ window._dInspectPromptedSession=true; return; }
-  }catch(e){}
-  // มีงานส่งของ → ใช้ทะเบียนจากงาน; ไม่มีงาน → ให้เลือกทะเบียนเอง (plate='')
-  var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
-  var plate = (hasDelivery && _dPlans[0]?.truck_plate) ? _dPlans[0].truck_plate : '';
+  var waiting=_dPlans.filter(function(p){ return p.job_type!=='maintenance_pm' && !_dTripLogs[p.plan_id]; });
+  if(!waiting.length) return;
+  // หา "คันแรกที่ยังไม่มีผลตรวจของวันนี้"
+  var need='';
+  for(var i=0;i<waiting.length;i++){
+    var pl=(waiting[i].truck_plate||'').trim();
+    if(!pl) continue;
+    if(!(window._dInspectByPlate||{})[pl]){ need=pl; break; }
+  }
+  if(!need){
+    // ทุกคันในแผนตรวจแล้ว → จบ; ถ้าแผนไม่มีทะเบียนเลย → ให้เลือกทะเบียนเองครั้งเดียว
+    var noPlate=waiting.every(function(p){ return !(p.truck_plate||'').trim(); });
+    if(!noPlate) return;
+    if(window._dInspectPrompted.__nopl__) return;
+    window._dInspectPrompted.__nopl__=true;
+    _dInspectType=_drvDetectInspectType();
+    drvInspectShow(today,'');
+    return;
+  }
+  if(window._dInspectPrompted[need]) return; // เด้งไปแล้วรอบนี้ (refresh/login ใหม่จะเด้งอีกถ้ายังไม่ตรวจ)
+  window._dInspectPrompted[need]=true;
   _dInspectType=_drvDetectInspectType();
-  window._dInspectPromptedSession=true; // กันเด้งซ้ำในรอบนี้ (ยังไม่ตรวจ → refresh/login ใหม่เด้งอีก)
-  drvInspectShow(today, plate);
+  drvInspectShow(today, need);
 }
 // เปิดป๊อบอัพตรวจสภาพเอง (ปุ่ม "ตรวจรถ") — เปิดได้ทุกเมื่อ
 window.drvManualInspect=function(){
   var today=new Date().toISOString().split('T')[0];
-  var hasDelivery=_dPlans.some(function(p){return p.job_type!=='maintenance_pm';});
-  var plate = (hasDelivery && _dPlans[0]?.truck_plate) ? _dPlans[0].truck_plate : '';
+  var dels=_dPlans.filter(function(p){return p.job_type!=='maintenance_pm'&&(p.truck_plate||'').trim();});
+  // ตั้งต้นด้วย "คันที่ยังไม่ได้ตรวจวันนี้" ถ้าตรวจครบแล้วก็ใช้คันแรก
+  var un=dels.find(function(p){ return !(window._dInspectByPlate||{})[(p.truck_plate||'').trim()]; });
+  var plate = ((un||dels[0])?.truck_plate)||'';
   _dInspectType=_drvDetectInspectType();
   drvInspectShow(today, plate);
 };
@@ -44819,8 +44817,10 @@ window.drvInspectSave=async function(){
     drvShowToast('❌ บันทึกไม่สำเร็จ: '+error.message,true);return;
   }
   document.getElementById('drv-inspect-overlay').style.display='none';
-  // อัพเดต _dInspectApproval ทันที → re-render cards ให้ถูกต้อง
+  // อัพเดตสถานะ "คันนี้ตรวจแล้ววันนี้" ทันที → re-render cards ให้ถูกต้อง
   window._dInspectApproval={approval_status:approvalStatus,overall:hasIssue?'issue':'ok'};
+  window._dInspectByPlate=window._dInspectByPlate||{};
+  window._dInspectByPlate[plate]={truck_plate:plate,approval_status:approvalStatus,overall:hasIssue?'issue':'ok'};
   drvRenderPlanCards(_dPlans);
   if(hasIssue){
     var issueCount=items.filter(function(it){return it.status==='issue';}).length;
@@ -44966,6 +44966,14 @@ function drvRenderPlanCards(plans){
         +'<div><div style="font-size:12px;font-weight:900;color:#7dd3fc;">โหลดค้างคืน</div>'
         +'<div style="font-size:11px;color:#475569;">ส่งพรุ่งนี้ '+p.plan_date+'</div></div></div>'
       :'';
+    // Gate ออกรถ: คันนี้ต้องมีผลตรวจของวันนี้ (ตรวจวันละครั้งต่อคัน — ใครตรวจก็นับ) และผ่านอนุมัติ
+    var _insP=(window._dInspectByPlate||{})[(p.truck_plate||'').trim()]||null;
+    var _insBlock='';
+    if(st==='idle'&&p.job_type!=='maintenance_pm'&&(p.truck_plate||'').trim()){
+      if(!_insP)                                   _insBlock='ต้องตรวจสภาพรถก่อนออกรถ';
+      else if(_insP.approval_status==='pending')    _insBlock='รอหัวหน้าอนุมัติก่อนออกรถ';
+      else if(_insP.approval_status==='rejected')   _insBlock='หัวหน้าระงับการออกรถ';
+    }
     return '<div class="drv-fade-up drv-card" style="border:2px solid '+(p._isOvernight?'#1d4ed8':m.border)+';">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
       +'<div><div style="font-weight:900;color:#fff;font-size:18px;">'+(p._isOvernight?'🌙 ':'')+'เที่ยวที่ '+(pi+1)+'</div>'
@@ -44976,8 +44984,8 @@ function drvRenderPlanCards(plans){
       +contextLine
       +'<div style="font-size:14px;color:#64748b;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:5px;opacity:.6;"></i>'+routeText+'</div>'
       +'<div style="font-size:14px;color:#94a3b8;margin-bottom:12px;"><i class="fas fa-truck" style="margin-right:5px;"></i>'+drvEsc(p.truck_plate||'–')+'</div>'
-      +(window._dInspectApproval&&window._dInspectApproval.approval_status==='pending'&&st==='idle'
-        ?'<button disabled style="width:100%;background:#374151;border:none;border-radius:12px;padding:16px;color:#6b7280;font-weight:900;font-size:15px;cursor:not-allowed;"><i class="fas fa-lock" style="margin-right:8px;"></i>รอหัวหน้าอนุมัติก่อนออกรถ</button>'
+      +(_insBlock
+        ?'<button disabled style="width:100%;background:#374151;border:none;border-radius:12px;padding:16px;color:#6b7280;font-weight:900;font-size:15px;cursor:not-allowed;"><i class="fas fa-lock" style="margin-right:8px;"></i>'+_insBlock+'</button>'
         :'<button onclick="drvOpenTrip(\''+drvEsc(p.plan_id)+'\')" style="width:100%;background:'+m.btnBg+';border:none;border-radius:12px;padding:16px;color:#fff;font-weight:900;font-size:17px;cursor:pointer;">'+m.btnLabel+'</button>')
       +'</div>';
   }).join('');
