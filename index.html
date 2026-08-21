@@ -25294,28 +25294,54 @@ function _ldRenderCards(orders) {
 }
 
 // ── Gate: รถบริษัทต้องผ่านตรวจสภาพรถ (approved) ของวันนั้นก่อน ทีมโหลดถึงจะโหลดได้ ──
-async function _ldCheckInspectionAllowed(order) {
-    // คืน {gated:bool, allowed:bool, plate}
-    var plate = (order.truck_plate||'').trim();
-    var odate = order.order_date;
-    if (!plate || !odate) return { gated:false, allowed:true, plate:plate }; // ไม่มีทะเบียน → ไม่ gate
+// เช็คทะเบียนเดียว → {gated, allowed, plate, reason}
+async function _ldInspCheckPlate(plate, odate) {
+    plate = (plate||'').trim();
+    if (!plate || !odate) return { gated:false, allowed:true, plate:plate, reason:'' }; // ไม่มีทะเบียน → ไม่ gate
     // gate เฉพาะ "รถบริษัท" = ทะเบียนที่อยู่ในตาราง logi_trucks เท่านั้น
     // รถจ้าง/รถนอก (ไม่อยู่ใน master) → ไม่ต้องตรวจสภาพ แล้วแต่เขาเลย
-    var isFleet = false;
-    try {
-        var {data:tk} = await window._sb.from('logi_trucks')
-            .select('plate').eq('plate', plate).maybeSingle();
-        isFleet = !!tk;
-    } catch(e) { return { gated:false, allowed:true, plate:plate }; } // เช็คไม่ได้ → ไม่บล็อก
-    if (!isFleet) return { gated:false, allowed:true, plate:plate }; // ไม่ใช่รถบริษัท → ไม่ gate
-    // รถบริษัท → ต้องมีผลตรวจ approved ของ ทะเบียน+วันที่
-    try {
-        var {data:insp} = await window._sb.from('truck_inspections')
-            .select('approval_status').eq('inspect_date', odate).eq('truck_plate', plate)
-            .eq('approval_status','approved').limit(1);
-        return { gated:true, allowed:!!(insp && insp.length), plate:plate };
-    } catch(e){ return { gated:false, allowed:true, plate:plate }; } // เช็คไม่ได้ → ไม่บล็อก
+    var isFleet = null;
+    for (var t=0; t<2 && isFleet===null; t++) {
+        try {
+            var {data:tk, error:e1} = await window._sb.from('logi_trucks')
+                .select('plate').eq('plate', plate).maybeSingle();
+            if (e1) throw e1;
+            isFleet = !!tk;
+        } catch(e) { if (t) return { gated:true, allowed:false, plate:plate, reason:'offline' }; } // เช็คไม่ได้ → บล็อกไว้ก่อน (fail-closed)
+    }
+    if (!isFleet) return { gated:false, allowed:true, plate:plate, reason:'' }; // ไม่ใช่รถบริษัท → ไม่ gate
+    // รถบริษัท → ต้องมีผลตรวจ approved ของ ทะเบียน+วันที่ (วันละครั้งต่อคัน ใครตรวจก็นับ)
+    for (var t2=0; t2<2; t2++) {
+        try {
+            var {data:insp, error:e2} = await window._sb.from('truck_inspections')
+                .select('approval_status').eq('inspect_date', odate).eq('truck_plate', plate)
+                .eq('approval_status','approved').limit(1);
+            if (e2) throw e2;
+            return { gated:true, allowed:!!(insp && insp.length), plate:plate, reason:(insp&&insp.length)?'':'no_inspect' };
+        } catch(e){ if (t2) return { gated:true, allowed:false, plate:plate, reason:'offline' }; } // เช็คไม่ได้ → บล็อก
+    }
 }
+
+async function _ldCheckInspectionAllowed(order) {
+    // คืน {gated:bool, allowed:bool, plate, reason} — เช็คทั้งรถแม่และรถลูก (พ่วง)
+    var odate = order.order_date;
+    var mother = await _ldInspCheckPlate(order.truck_plate, odate);
+    if (mother.gated && !mother.allowed) return mother;
+    var tPlate = (order.trailer_plate||'').trim();
+    if (order.is_trailer && tPlate) {
+        var child = await _ldInspCheckPlate(tPlate, odate);
+        if (child.gated && !child.allowed) return child;
+        return { gated:(mother.gated||child.gated), allowed:true, plate:mother.plate||tPlate, reason:'' };
+    }
+    return mother;
+}
+// ข้อความบล็อกให้ตรงสาเหตุ
+function _ldInspBlockMsg(res, prefix) {
+    return (prefix||'')+(res.reason==='offline'
+        ? 'ตรวจสอบผลตรวจสภาพรถไม่ได้ (เชื่อมต่อฐานข้อมูลขัดข้อง) — ทะเบียน '+res.plate+' ลองใหม่อีกครั้ง'
+        : 'รถยังไม่ผ่านตรวจสภาพ — ทะเบียน '+res.plate+' ต้องตรวจสภาพและได้รับอนุมัติก่อนจึงจะโหลดได้');
+}
+window._ldInspBlockMsg = _ldInspBlockMsg;
 
 async function _ldApplyInspectionGate(oid) {
     var o = (window._ldOrdersById||{})[oid];
@@ -25331,11 +25357,24 @@ async function _ldApplyInspectionGate(oid) {
     // ถูกบล็อก — รถบริษัทยังไม่ผ่านตรวจสภาพ
     if (gate) gate.innerHTML = '<div style="margin:12px 12px 0;background:linear-gradient(135deg,#7f1d1d,#dc2626);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;">'
         +'<i class="fas fa-triangle-exclamation" style="color:#fecaca;font-size:20px;flex-shrink:0;"></i>'
-        +'<div><div style="font-size:14px;font-weight:900;color:#fff;">ยังโหลดไม่ได้ — รถยังไม่ผ่านตรวจสภาพ</div>'
-        +'<div style="font-size:12px;color:#fecaca;margin-top:2px;">ทะเบียน '+_ldEsc(res.plate)+' ต้องตรวจสภาพรถและได้รับการอนุมัติก่อน จึงจะโหลดสินค้าได้</div></div>'
+        +'<div><div style="font-size:14px;font-weight:900;color:#fff;">'+(res.reason==='offline'?'ยังโหลดไม่ได้ — ตรวจสอบผลตรวจสภาพไม่ได้':'ยังโหลดไม่ได้ — รถยังไม่ผ่านตรวจสภาพ')+'</div>'
+        +'<div style="font-size:12px;color:#fecaca;margin-top:2px;">'+_ldEsc(_ldInspBlockMsg(res,''))+'</div></div>'
         +'</div>';
     if (saveBtn) { saveBtn.disabled=true; saveBtn.style.opacity='0.5'; saveBtn.style.filter='grayscale(1)'; saveBtn.style.cursor='not-allowed'; }
 }
+// เดินสถานะ pending → in_progress ได้เฉพาะเมื่อรถผ่านตรวจสภาพแล้ว
+async function _ldGuardStartLoading(orderId) {
+    var o = (window._ldOrdersById||{})[orderId];
+    if (!o) {
+        try { var {data} = await window._sb.from('loading_orders').select('*').eq('id',orderId).maybeSingle(); o = data; } catch(e){ return; }
+    }
+    if (!o) return;
+    var res = await _ldCheckInspectionAllowed(o);
+    if (res.gated && !res.allowed) { showToast('🚫 '+_ldInspBlockMsg(res,''), true); return; }
+    window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()})
+        .eq('id',orderId).eq('status','pending').then(function(){});
+}
+window._ldGuardStartLoading = _ldGuardStartLoading;
 window._ldApplyInspectionGate = _ldApplyInspectionGate;
 window._ldCheckInspectionAllowed = _ldCheckInspectionAllowed;
 
@@ -26562,7 +26601,8 @@ window.ldToggleTrailerUnit = function(orderId, unit) {
         // opening — set as current unit for draft saving + mark in_progress
         _ldTrailerUnit[orderId] = unit;
         var uKey = orderId+'-'+unit;
-        window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
+        // ไม่เดินสถานะเป็น "กำลังโหลด" ถ้ารถยังไม่ผ่านตรวจสภาพ
+        _ldGuardStartLoading(orderId);
         _ldRestoreDraftIds(orderId, unit).then(function(){
             if (_ldCardStartTimes[uKey]) _ldInitSegment(uKey);
             setTimeout(function(){ _ldDraftLoad(orderId, unit); _ldStartTimer(uKey); }, 120);
@@ -26591,7 +26631,8 @@ window.ldToggleCard = function(orderId) {
     var today = new Date().toISOString().slice(0,10);
     _ldLoadOrderCards(today);
     if (!isOpen) {
-        window._sb.from('loading_orders').update({status:'in_progress', updated_at:new Date().toISOString()}).eq('id',orderId).eq('status','pending').then(function(){});
+        // ไม่เดินสถานะเป็น "กำลังโหลด" ถ้ารถยังไม่ผ่านตรวจสภาพ
+        _ldGuardStartLoading(orderId);
         _ldRestoreDraftIds(orderId).then(function(){
             // Init segment only if start_time was restored from DB/localStorage
             if (_ldCardStartTimes[orderId]) _ldInitSegment(orderId);
@@ -30408,6 +30449,14 @@ window.loSaveOrder = async function() {
 
 window.loSetStatus = async function(id, status) {
     try {
+        // ── Gate: เดินสถานะไป "กำลังโหลด"/"โหลดเสร็จ" ไม่ได้ถ้ารถยังไม่ผ่านตรวจสภาพ ──
+        if (status === 'in_progress' || status === 'done') {
+            var {data:_o} = await window._sb.from('loading_orders').select('*').eq('id',id).maybeSingle();
+            if (_o && typeof window._ldCheckInspectionAllowed === 'function') {
+                var _insp = await window._ldCheckInspectionAllowed(_o);
+                if (_insp.gated && !_insp.allowed) { showToast('🚫 '+window._ldInspBlockMsg(_insp,''), true); return; }
+            }
+        }
         var updatePayload = {status:status, updated_at:new Date().toISOString()};
         if (status === 'done') updatePayload.review_status = 'pending_review';
         var {error} = await window._sb.from('loading_orders').update(updatePayload).eq('id', id);
