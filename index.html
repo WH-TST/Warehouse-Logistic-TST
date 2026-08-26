@@ -29,6 +29,13 @@
       window._SUPA_URL = SUPA_URL;
       window._SUPA_KEY = SUPA_KEY;
 
+      // Supabase ของฝ่ายผลิต (tst-production-app) — อ่านแผน Production Block โดยตรง (read-only)
+      // ใช้เฉพาะหน้า "จัดการคลัง — Zone Capacity" แทนการดึงแผนผ่าน GAS
+      window._sbProd = supabase.createClient(
+        'https://mrpinzvdidokwbcptgos.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ycGluenZkaWRva3diY3B0Z29zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNzA2MTAsImV4cCI6MjA5NTk0NjYxMH0.stZ1zZyoHtcnfW1y4wB-zY8HOAsL_Bca7se6423MTnk'
+      );
+
       // ══ Cloudinary — ที่เก็บรูปหลัก (อัปตรงจากเว็บ) ══════════════════
       window._CLD_CLOUD  = 'qnst1pzk';
       window._CLD_PRESET = 'wms_unsigned';
@@ -9899,82 +9906,42 @@ const _safeStorage = {
         if (cards) cards.innerHTML = '<div class="col-span-full py-10 text-center" style="color:#64748b;"><i class="fas fa-spinner fa-spin text-2xl mb-2 block" style="color:#3b82f6;"></i><div class="text-sm font-bold">กำลังโหลด...</div></div>';
 
         try {
-          // หา month keys ที่ต้องโหลด (อาจข้ามเดือน เช่น forecast +3 วัน)
-          var d3 = new Date(dateStr+'T00:00:00'); d3.setDate(d3.getDate()+3);
-          var monthKey  = dateStr.slice(0,7);
-          var monthKey2 = d3.getFullYear()+'-'+String(d3.getMonth()+1).padStart(2,'0');
-          var monthKeys = monthKey2 !== monthKey ? [monthKey, monthKey2] : [monthKey];
-
-          // อ่าน config จาก app_config
-          var cfgRes = await window._sb.from('app_config').select('key,value').in('key', ['gas_sync_url','production_block_spreadsheet_id','production_block_sheet_name','production_plan_spreadsheet_id']);
-          var gasUrl = '', pbSpreadsheetId = '', pbSheetName = '', ppSpreadsheetId = '';
-          if (cfgRes.data) cfgRes.data.forEach(function(r){
-            if (r.key==='gas_sync_url') gasUrl = r.value;
-            if (r.key==='production_block_spreadsheet_id') pbSpreadsheetId = r.value;
-            if (r.key==='production_block_sheet_name') pbSheetName = r.value;
-            if (r.key==='production_plan_spreadsheet_id') ppSpreadsheetId = r.value;
-          });
-          // อัปเดต GAS URL ให้ Bridge ใช้ URL จาก Settings แทน hardcode
-          if (gasUrl) window._WMS_GAS_URL = gasUrl;
-
+          // ฐานว่างที่กรอกไว้ + สเปคสินค้า (จาก Supabase ของ WMS เอง)
           var [logRes, prodRes] = await Promise.all([
             window._sb.from('zone_capacity_log').select('zone,empty_slots').eq('log_date', dateStr),
             window._sb.from('products').select('sku,name,lines_per_bundle,bundle_height')
           ]);
 
-          // helper: merge machines array เข้า allMachines map
-          function mergeMachines(allMachines, machinesList) {
-            (machinesList || []).forEach(function(m) {
-              if (!allMachines[m.machineId]) allMachines[m.machineId] = { machineId: m.machineId, products: [] };
-              (m.products||[]).forEach(function(p) {
-                var existing = allMachines[m.machineId].products.find(function(x){ return x.sku===p.sku; });
-                if (existing) Object.assign(existing.daily, p.daily);
-                else allMachines[m.machineId].products.push({ sku: p.sku, daily: Object.assign({}, p.daily) });
-              });
-            });
-          }
-
           var allMachines = {};
+          var machineHours = {};
           {
-            // 1. Production Block — ใช้ google.script.run (JSONP) แทน fetch เพื่อหลีกเลี่ยง CORS
-            var pbResults = await Promise.all(monthKeys.map(function(mk) {
-              return new Promise(function(resolve) {
-                google.script.run
-                  .withSuccessHandler(function(res) { resolve(res); })
-                  .withFailureHandler(function() { resolve(null); })
-                  .getProductionBlock(mk, pbSpreadsheetId, pbSheetName);
-              });
-            }));
-            pbResults.forEach(function(res) {
-              if (!res || !res.success) return;
-              // กรองวันนี้ออก — วันนี้ใช้จาก Dashboard เท่านั้น
-              var filtered = (res.machines || []).map(function(m) {
-                return {
-                  machineId: m.machineId,
-                  products: (m.products || []).map(function(p) {
-                    var daily = {};
-                    Object.keys(p.daily || {}).forEach(function(d){ if (d !== dateStr) daily[d] = p.daily[d]; });
-                    return { sku: p.sku, daily: daily };
-                  }).filter(function(p){ return Object.keys(p.daily).length > 0; })
-                };
-              });
-              mergeMachines(allMachines, filtered);
-            });
+            // ── แผนผลิตจาก Production Block ของฝ่ายผลิต (tst-production-app Supabase) ──
+            // อ่านตาราง production_plans ตรงๆ แทนการดึงผ่าน GAS/Google Sheet
+            //   machine_id = โซน (P1..C5), product_code = sku, plan_date = วันที่จัดคิวจริง
+            // ครอบคลุมวันนี้ + forecast ~10 วัน (เผื่อข้ามอาทิตย์/งานเดินต่อเนื่อง)
+            var dEnd = new Date(dateStr+'T00:00:00'); dEnd.setDate(dEnd.getDate()+10);
+            var endDate = dEnd.getFullYear()+'-'+String(dEnd.getMonth()+1).padStart(2,'0')+'-'+String(dEnd.getDate()).padStart(2,'0');
 
-            // 2. Dashboard (แผนจริงวันนี้) — override/เพิ่มข้อมูลวันนี้
-            var machineHours = {};
-            if (ppSpreadsheetId) {
-              var ppRes = await new Promise(function(resolve) {
-                google.script.run
-                  .withSuccessHandler(function(res) { resolve(res); })
-                  .withFailureHandler(function() { resolve(null); })
-                  .getProductionPlanByDate(dateStr, ppSpreadsheetId);
-              });
-              if (ppRes && ppRes.success) {
-                mergeMachines(allMachines, ppRes.machines);
-                Object.assign(machineHours, ppRes.hours || {});
-              }
-            }
+            var pbRes = await window._sbProd.from('production_plans')
+              .select('machine_id,product_code,plan_date,qty_lines,status')
+              .in('status', ['planning','active','completed','done'])
+              .not('plan_date','is',null)
+              .gte('plan_date', dateStr)
+              .lte('plan_date', endDate)
+              .range(0, 49999);
+
+            if (pbRes.error) throw new Error('อ่านแผนผลิตไม่ได้: ' + pbRes.error.message);
+
+            (pbRes.data || []).forEach(function(r){
+              if (!r.machine_id || !r.product_code) return;
+              var lines = Number(r.qty_lines) || 0;
+              if (lines <= 0) return;
+              var mid = String(r.machine_id).toUpperCase();
+              if (!allMachines[mid]) allMachines[mid] = { machineId: mid, products: [] };
+              var prod = allMachines[mid].products.find(function(x){ return x.sku === r.product_code; });
+              if (!prod) { prod = { sku: r.product_code, daily: {} }; allMachines[mid].products.push(prod); }
+              prod.daily[r.plan_date] = (prod.daily[r.plan_date] || 0) + lines;
+            });
           }
 
           // Map logged empty_slots by zone — localStorage overrides DB
