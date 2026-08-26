@@ -215,7 +215,11 @@ function doGet(e) {
           'syncProductionPlan',
           'syncProductionBlock',
           'getProductionBlock',
-          'getProductionPlanByDate'
+          'getProductionPlanByDate',
+          // สเปคสินค้าสำหรับ Print Tag (ตัวฟังก์ชันอยู่ใน wms.js — Apps Script แชร์ global scope
+          // เดียวกันทั้งโปรเจกต์ จึงเรียกถึงกันได้ แค่ต้องอนุญาตชื่อในลิสต์นี้)
+          // เดิมไม่มีชื่อนี้ → ?action=getProductSpec ตอบ "Unknown action" → Tag ไม่มีช่อง Size/ชื่อ
+          'getProductSpec'
         ];
 
         if (fnNames.indexOf(action) === -1) {
