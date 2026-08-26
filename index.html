@@ -9879,8 +9879,8 @@ const _safeStorage = {
         const d = safeGet('wmc-date');
         if (d) {
           const saved = localStorage.getItem('wmc_date');
-          const t = new Date();
-          const today = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+          // วันนี้ตามเวลาไทย (Asia/Bangkok) เสมอ — ไม่พึ่ง tz ของเครื่อง/เบราว์เซอร์
+          const today = new Date().toLocaleString('sv-SE',{timeZone:'Asia/Bangkok'}).slice(0,10);
           d.value = saved || today;
           d.addEventListener('change', function(){ localStorage.setItem('wmc_date', this.value); }, {once:false});
         }
@@ -9901,7 +9901,7 @@ const _safeStorage = {
 
       window.wmCapLoad = async function() {
         const dateEl = safeGet('wmc-date');
-        const dateStr = dateEl ? dateEl.value : new Date().toISOString().slice(0,10);
+        const dateStr = dateEl ? dateEl.value : new Date().toLocaleString('sv-SE',{timeZone:'Asia/Bangkok'}).slice(0,10);
         const cards = safeGet('wmc-cards');
         if (cards) cards.innerHTML = '<div class="col-span-full py-10 text-center" style="color:#64748b;"><i class="fas fa-spinner fa-spin text-2xl mb-2 block" style="color:#3b82f6;"></i><div class="text-sm font-bold">กำลังโหลด...</div></div>';
 
@@ -9915,32 +9915,42 @@ const _safeStorage = {
           var allMachines = {};
           var machineHours = {};
           {
-            // ── แผนผลิตจาก Production Block ของฝ่ายผลิต (tst-production-app Supabase) ──
-            // อ่านตาราง production_plans ตรงๆ แทนการดึงผ่าน GAS/Google Sheet
-            //   machine_id = โซน (P1..C5), product_code = sku, plan_date = วันที่จัดคิวจริง
-            // ครอบคลุมวันนี้ + forecast ~10 วัน (เผื่อข้ามอาทิตย์/งานเดินต่อเนื่อง)
-            var dEnd = new Date(dateStr+'T00:00:00'); dEnd.setDate(dEnd.getDate()+10);
-            var endDate = dEnd.getFullYear()+'-'+String(dEnd.getMonth()+1).padStart(2,'0')+'-'+String(dEnd.getDate()).padStart(2,'0');
+            // ── แผนผลิตจาก API ของฝ่ายผลิต (/api/wh/production-plan) ────────────────
+            // เดิม query production_plans ดิบเอง แล้วบวกงานค้างเข้าวันนี้ด้วยมือ ซึ่งไม่ตรงกับ
+            // ตารางบล็อกที่หน้างานใช้จริง: แผนใบเดียวที่ผลิตข้ามวันจะโชว์ยอดเต็มทั้งใบลงวันแรก
+            // และไม่รู้จักวันหยุด/เครื่องจอด/PM/OT ที่ทำให้คิวเลื่อน
+            // API นี้คืนยอด "ที่ตารางวางให้ผลิตในวันนั้นจริง" พร้อมกิโลที่เฉลี่ยตามสัดส่วนแล้ว
+            // (งานค้างถูกจัดคิวใหม่มาลงวันนี้ให้เรียบร้อยจากฝั่งผลิต ไม่ต้องบวกเองอีก)
+            var PROD_API = 'https://tstproduction.vercel.app';
+            // หน้านี้เลือกวันได้ และโชว์ล่วงหน้า 10 วันจากวันที่เลือก
+            //   วันที่เลือก >= วันนี้ → ขอจากวันนี้ยาวพอให้ครอบถึง (วันที่เลือก + 10)
+            //   วันที่เลือกย้อนหลัง   → ขอแบบวันเดียว (API จะคืนแผนที่บันทึกไว้ของวันนั้น)
+            var _todayStr = (function(){ var n = new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0'); })();
+            var _planQuery;
+            if (dateStr < _todayStr) {
+              _planQuery = 'date=' + dateStr;
+            } else {
+              var _diffDays = Math.round((new Date(dateStr+'T00:00:00') - new Date(_todayStr+'T00:00:00')) / 86400000);
+              _planQuery = 'days=' + Math.min(30, Math.max(1, _diffDays + 11));
+            }
+            var planRes2 = await fetch(PROD_API + '/api/wh/production-plan?' + _planQuery)
+              .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
 
-            var pbRes = await window._sbProd.from('production_plans')
-              .select('machine_id,product_code,plan_date,qty_lines,status')
-              .in('status', ['planning','active','completed','done'])
-              .not('plan_date','is',null)
-              .gte('plan_date', dateStr)
-              .lte('plan_date', endDate)
-              .range(0, 49999);
-
-            if (pbRes.error) throw new Error('อ่านแผนผลิตไม่ได้: ' + pbRes.error.message);
-
-            (pbRes.data || []).forEach(function(r){
-              if (!r.machine_id || !r.product_code) return;
-              var lines = Number(r.qty_lines) || 0;
-              if (lines <= 0) return;
-              var mid = String(r.machine_id).toUpperCase();
+            function addPlanRow(mid, sku, day, lines) {
+              if (!mid || !sku || !(lines > 0)) return;
+              mid = String(mid).toUpperCase();
               if (!allMachines[mid]) allMachines[mid] = { machineId: mid, products: [] };
-              var prod = allMachines[mid].products.find(function(x){ return x.sku === r.product_code; });
-              if (!prod) { prod = { sku: r.product_code, daily: {} }; allMachines[mid].products.push(prod); }
-              prod.daily[r.plan_date] = (prod.daily[r.plan_date] || 0) + lines;
+              var prod = allMachines[mid].products.find(function(x){ return x.sku === sku; });
+              if (!prod) { prod = { sku: sku, daily: {} }; allMachines[mid].products.push(prod); }
+              prod.daily[day] = (prod.daily[day] || 0) + lines;
+            }
+
+            (planRes2.days_list || []).forEach(function(d){
+              (d.machines || []).forEach(function(m){
+                (m.items || []).forEach(function(it){
+                  addPlanRow(m.machine_id, it.product_code, d.date, Number(it.qty_lines) || 0);
+                });
+              });
             });
           }
 
@@ -10129,7 +10139,8 @@ const _safeStorage = {
           var cumSlots = 0; // สะสมเฉพาะวันอนาคต ไม่รวมวันนี้
           var fullDay = emptySlots > 0 && todayTotalSlots > emptySlots ? dateStr : '';
 
-          var _realToday = new Date().toISOString().slice(0,10);
+          // วันนี้จริงตามเวลาไทย — ห้ามใช้ toISOString (UTC) เพราะช่วงเช้ามืด (< 07:00) จะเพี้ยนเป็นวันก่อนหน้า
+          var _realToday = new Date().toLocaleString('sv-SE',{timeZone:'Asia/Bangkok'}).slice(0,10);
           dates.forEach(function(d, i) {
             if (d <= _realToday) return; // ข้ามวันนี้และวันก่อนหน้า
             var label = fmtThai(d);
@@ -12231,21 +12242,16 @@ window.loadPrintTagData = async function loadPrintTagData() {
     cont.innerHTML = '<div class="p-20 text-center text-slate-300"><i class="fas fa-spinner fa-spin text-4xl mb-4"></i><p class="font-bold">กำลังคำนวณข้อมูลจากแผนผลิต...</p></div>';
 
     try {
-        // 1. โหลด config จาก Supabase (ใช้ settings เดียวกับ WH Management)
+        // 1. โหลด config จาก Supabase — เหลือแค่ gas_sync_url (ใช้กับส่วนอื่นของหน้านี้)
+        // production_plan_spreadsheet_id ไม่ต้องใช้แล้ว เพราะแผนผลิตมาจาก API ฝ่ายผลิตตรงๆ
         const cfgRes = await window._sb.from('app_config').select('key,value')
-            .in('key', ['gas_sync_url', 'production_plan_spreadsheet_id']);
-        var gasUrl = '', ppSpreadsheetId = '';
+            .in('key', ['gas_sync_url']);
+        var gasUrl = '';
         if (cfgRes.data) cfgRes.data.forEach(function(r) {
             if (r.key === 'gas_sync_url') gasUrl = r.value;
-            if (r.key === 'production_plan_spreadsheet_id') ppSpreadsheetId = r.value;
         });
         if (gasUrl) window._WMS_GAS_URL = gasUrl;
-        window._tagPPSpreadsheetId = ppSpreadsheetId;
 
-        if (!ppSpreadsheetId) {
-            cont.innerHTML = '<div class="p-20 text-center text-slate-400"><i class="fas fa-cog text-5xl mb-4"></i><p>กรุณาตั้งค่า Spreadsheet ID ในหน้า Settings ก่อน</p></div>';
-            return;
-        }
 
         // 1b. โหลด tag_system_start_date จาก Supabase
         const { data: startDateRow } = await window._sb.from('app_config').select('value').eq('key', 'tag_system_start_date').maybeSingle();
@@ -12267,13 +12273,13 @@ window.loadPrintTagData = async function loadPrintTagData() {
                 .catch(function() { return { rows: [] }; });
 
         // 2. ดึงแผนผลิตวันนี้ + log การพิมพ์ พร้อมกัน
+        // แผนผลิตของวันที่เลือก — อ่านจาก API ฝ่ายผลิต (ตารางโปรดักชั่นบล็อกชุดเดียวกับหน้างาน)
+        // เดิมดึงจาก Google Sheet ผ่าน GAS ซึ่งเป็นข้อมูลคนละชุดกับที่ฝ่ายผลิตใช้จริง
+        // ต้องคีย์ซ้ำและมักไม่ตรงกัน — วันย้อนหลัง API จะคืนแผนที่บันทึกไว้ของวันนั้นให้
         const [planRes, logRes, prodRes, cumulativePrintRes, usedRes] = await Promise.all([
-            new Promise(function(resolve) {
-                google.script.run
-                    .withSuccessHandler(resolve)
-                    .withFailureHandler(function() { resolve(null); })
-                    .getProductionPlanByDate(formattedDate, ppSpreadsheetId);
-            }),
+            fetch('https://tstproduction.vercel.app/api/wh/production-plan?date=' + formattedDate)
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .catch(function() { return null; }),
             window._sb.from('print_tag_log').select('sku,bundles').eq('print_date', formattedDate),
             window._sb.from('products').select('sku,name,search_name,lines_per_bundle'),
             // ปริ้นสะสม: ตั้งแต่ startDate ถึงก่อนวันที่เลือก
@@ -12283,13 +12289,20 @@ window.loadPrintTagData = async function loadPrintTagData() {
 
         // 3. รวม lines ต่อ SKU จากทุกเครื่อง
         const planLines = {};
-        if (planRes && planRes.success) {
-            (planRes.machines || []).forEach(function(m) {
-                (m.products || []).forEach(function(p) {
-                    const lines = p.daily && p.daily[formattedDate] ? p.daily[formattedDate] : 0;
-                    if (lines > 0) planLines[p.sku] = (planLines[p.sku] || 0) + lines;
+        if (planRes && planRes.days_list) {
+            (planRes.days_list || []).forEach(function(d) {
+                if (d.date !== formattedDate) return;
+                (d.machines || []).forEach(function(m) {
+                    (m.items || []).forEach(function(it) {
+                        const lines = Number(it.qty_lines) || 0;
+                        if (lines > 0) planLines[it.product_code] = (planLines[it.product_code] || 0) + lines;
+                    });
                 });
             });
+        }
+        if (!planRes) {
+            cont.innerHTML = '<div class="p-20 text-center text-rose-500 font-bold"><i class="fas fa-triangle-exclamation text-4xl mb-3 block"></i>ดึงแผนผลิตจากฝ่ายผลิตไม่สำเร็จ ลองใหม่อีกครั้ง</div>';
+            return;
         }
 
         const savedLog = {};
