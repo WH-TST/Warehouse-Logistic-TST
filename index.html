@@ -13015,10 +13015,10 @@ window.openExtraJobModal = async function openExtraJobModal() {
     // โหลดสินค้าจาก Supabase ถ้ายังไม่มี cache
     if (allProductListCache.length === 0) {
         document.getElementById('extra-product-search').placeholder = 'กำลังโหลด...';
-        const { data } = await window._sb.from('products').select('sku,name,lines_per_bundle');
+        const { data } = await window._sb.from('products').select('sku,name,search_name,lines_per_bundle');
         if (data) {
             allProductListCache = data.map(function(p) {
-                return { id: p.sku, name: p.name, linesPerBundle: p.lines_per_bundle || 1 };
+                return { id: p.sku, name: p.name, searchName: p.search_name || '', linesPerBundle: p.lines_per_bundle || 1 };
             });
         }
         document.getElementById('extra-product-search').placeholder = 'พิมพ์รหัส หรือ ชื่อสินค้า...';
@@ -13127,6 +13127,7 @@ window.confirmExtraJobPrint = async function confirmExtraJobPrint() {
     generatePreview({
         productId: sku,
         productName: spec3.name || productInfo.name,
+        searchName: productInfo.searchName || '',
         productSize: spec3.size || '',
         wStd: spec3.wStd || '-',
         wMinMax: spec3.wMinMax || '-',
