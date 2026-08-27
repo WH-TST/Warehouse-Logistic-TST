@@ -6713,6 +6713,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
           <span class="text-sm font-bold text-slate-700">ชื่อค้นหา</span>
         </label>
         <label class="flex items-center gap-2 p-3 rounded-xl border-2 border-slate-200 hover:border-amber-300 cursor-pointer transition has-[:checked]:border-amber-400 has-[:checked]:bg-amber-50">
+          <input type="checkbox" id="upd-col-size" value="size" class="accent-amber-500">
+          <span class="text-sm font-bold text-slate-700">Size / ขนาด</span>
+        </label>
+        <label class="flex items-center gap-2 p-3 rounded-xl border-2 border-slate-200 hover:border-amber-300 cursor-pointer transition has-[:checked]:border-amber-400 has-[:checked]:bg-amber-50">
           <input type="checkbox" id="upd-col-pool" value="production_pool" class="accent-amber-500">
           <span class="text-sm font-bold text-slate-700">Production Pool</span>
         </label>
@@ -7549,6 +7553,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       <div>
         <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">ชื่อค้นหา (Search Name)</label>
         <input id="prod-f-searchname" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="เช่น CG 3 ขาวฟ้าWhite Blue">
+      </div>
+      <div>
+        <label class="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Size / ขนาด</label>
+        <input id="prod-f-size" type="text" class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-400" placeholder="แสดงบน Print Tag">
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
@@ -13204,45 +13212,17 @@ window.saveTagSpecSettings = async function saveTagSpecSettings() {
     closeTagSpecSettings();
 };
 
-// ดึงสเปคสินค้า: GAS (size/custom) + Supabase products (wStd, wMinMax) พร้อมกัน
+// ดึงสเปคสินค้าสำหรับ Print Tag — จาก Supabase products ล้วนๆ (ไม่พึ่ง GAS แล้ว)
+// size ย้ายมาเก็บที่คอลัมน์ products.size แก้ไขได้ที่หน้า "จัดการสินค้า"
 window.fetchProductSpec = async function fetchProductSpec(sku) {
-    if (!_tagSpecConfig) {
-        const { data } = await window._sb.from('app_config').select('value').eq('key', 'tag_spec_config').maybeSingle();
-        if (data && data.value) { try { _tagSpecConfig = JSON.parse(data.value); } catch(e) {} }
-    }
-    const cfg = _tagSpecConfig;
+    const { data: prod } = await window._sb.from('products')
+        .select('name,size,likely_w,min_w,max_w').eq('sku', sku).maybeSingle();
+    const p = prod || {};
 
-    if (cfg && cfg.gasUrl) window._WMS_GAS_URL = cfg.gasUrl;
+    const wStd    = (p.likely_w && p.likely_w > 0) ? String(p.likely_w) : '';
+    const wMinMax = (p.min_w > 0 || p.max_w > 0) ? (p.min_w + ' - ' + p.max_w) : '';
 
-    // ใช้ fetch() ธรรมดาแทน google.script.run (JSONP) — action นี้ยังไม่มีใน code.js
-    // ถ้าใช้ JSONP แล้ว GAS ตอบ JSON ดิบ (ไม่ห่อ callback) จะโดน parse เป็น <script> แล้วเกิด
-    // SyntaxError ที่ error handler จับไม่ได้ ต้องรอ timeout 90 วิ ก่อนไปต่อ — fetch() ปลอดภัยกว่า
-    const gasPromise = (cfg && cfg.gasUrl && cfg.spreadsheetId && cfg.sheetName && cfg.fields)
-        ? (function() {
-            var url = cfg.gasUrl + '?action=getProductSpec&args='
-                + encodeURIComponent(JSON.stringify([cfg.spreadsheetId, cfg.sheetName, sku, JSON.stringify(cfg.fields)]));
-            return fetch(url).then(function(r) { return r.text(); }).then(function(text) {
-                try {
-                    var res = JSON.parse(text);
-                    return (res && res.success) ? (res.spec || {}) : {};
-                } catch (e) {
-                    console.warn('[TagSpec] getProductSpec ยังไม่รองรับใน GAS หรือตอบไม่ถูกฟอร์แมต — ข้าม');
-                    return {};
-                }
-            }).catch(function() { return {}; });
-          })()
-        : Promise.resolve({});
-
-    const supabasePromise = window._sb.from('products')
-        .select('likely_w,min_w,max_w').eq('sku', sku).maybeSingle();
-
-    const [gasSpec, prodRes] = await Promise.all([gasPromise, supabasePromise]);
-    const prod = (prodRes && prodRes.data) || {};
-
-    const wStd    = (prod.likely_w && prod.likely_w > 0) ? String(prod.likely_w) : '';
-    const wMinMax = (prod.min_w > 0 || prod.max_w > 0) ? (prod.min_w + ' - ' + prod.max_w) : '';
-
-    return Object.assign({}, gasSpec, { wStd: wStd || gasSpec.wStd, wMinMax: wMinMax || gasSpec.wMinMax });
+    return { size: p.size || '', name: p.name || '', wStd: wStd, wMinMax: wMinMax };
 };
 
 // ✅ ฟังก์ชันวาดกราฟ Trend น้ำหนักและจำนวนเส้นคงคลัง (2 แกน Y)
@@ -38756,9 +38736,9 @@ if (false)(function(){
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="10" class="text-center py-12 text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></td></tr>';
     var { data, error } = await window._sb.from('products')
-      .select('sku,name,search_name,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w,semi_code,semi_code2')
+      .select('sku,name,search_name,size,production_pool,status,item_group,lines_per_bundle,lifts_per_round,bundle_width,bundle_height,min_w,max_w,likely_w,semi_code,semi_code2')
       .order('sku');
-    if (error) { tbody.innerHTML = '<tr><td colspan="16" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
+    if (error) { tbody.innerHTML = '<tr><td colspan="17" class="text-center py-8 text-rose-500">❌ โหลดไม่ได้: ' + error.message + '</td></tr>'; return; }
     _prodList = data || [];
     prodRender();
   }
@@ -38772,6 +38752,7 @@ if (false)(function(){
     { key:'sku',              label:'SKU / Item',  align:'left'   },
     { key:'name',             label:'ชื่อสินค้า',  align:'left'   },
     { key:'search_name',      label:'ชื่อค้นหา',   align:'left'   },
+    { key:'size',             label:'Size',         align:'center' },
     { key:'production_pool',  label:'Pool',         align:'center' },
     { key:'status',           label:'Status',       align:'center' },
     { key:'item_group',       label:'Group',        align:'center' },
@@ -38911,7 +38892,7 @@ if (false)(function(){
     var tbody = document.getElementById('prod-tbody');
     if (!tbody) return;
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="16" class="text-center py-12 text-slate-400">ไม่พบสินค้า</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="17" class="text-center py-12 text-slate-400">ไม่พบสินค้า</td></tr>';
       return;
     }
     var statusStyle = {
@@ -38929,6 +38910,7 @@ if (false)(function(){
         + '<td class="px-4 py-2.5 font-mono font-bold text-slate-700 text-xs whitespace-nowrap">' + esc(p.sku) + '</td>'
         + '<td class="px-4 py-2.5 text-slate-700 text-xs">' + esc(p.name) + '</td>'
         + '<td class="px-4 py-2.5 text-slate-500 text-xs">' + esc(p.search_name||'') + '</td>'
+        + '<td class="px-4 py-2.5 text-center text-xs font-bold text-slate-600">' + esc(p.size||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center text-xs font-bold text-slate-600">' + esc(p.production_pool||'–') + '</td>'
         + '<td class="px-4 py-2.5 text-center">' + statusBadge + '</td>'
         + '<td class="px-4 py-2.5 text-center text-xs font-bold text-indigo-700">' + esc(p.item_group||'–') + '</td>'
@@ -38953,7 +38935,7 @@ if (false)(function(){
   window.prodOpenAdd = function() {
     _prodEditSku = null;
     document.getElementById('prod-modal-title').textContent = '➕ เพิ่มสินค้าใหม่';
-    ['sku','name','searchname','pool','status','group','lpb','lpr','bw','bh','wmin','wmax','wstd','semi','semi2'].forEach(function(k) {
+    ['sku','name','searchname','size','pool','status','group','lpb','lpr','bw','bh','wmin','wmax','wstd','semi','semi2'].forEach(function(k) {
       var el = document.getElementById('prod-f-' + k);
       if (el) el.value = '';
     });
@@ -38970,6 +38952,7 @@ if (false)(function(){
     document.getElementById('prod-f-sku').disabled = true;
     document.getElementById('prod-f-name').value = p.name || '';
     document.getElementById('prod-f-searchname').value = p.search_name || '';
+    document.getElementById('prod-f-size').value = p.size || '';
     document.getElementById('prod-f-pool').value = p.production_pool || '';
     document.getElementById('prod-f-status').value = p.status || '';
     document.getElementById('prod-f-group').value = p.item_group || '';
@@ -38996,6 +38979,7 @@ if (false)(function(){
     var row = {
       sku: sku, name: name,
       search_name:     document.getElementById('prod-f-searchname').value.trim() || null,
+      size:            document.getElementById('prod-f-size').value.trim() || null,
       production_pool: document.getElementById('prod-f-pool').value.trim() || null,
       status:          document.getElementById('prod-f-status').value || null,
       item_group:      document.getElementById('prod-f-group').value.trim() || null,
@@ -39067,6 +39051,7 @@ if (false)(function(){
           sku:           ['item number','item','sku','รหัสสินค้า','รหัส'],
           name:          ['product name','ชื่อสินค้า','ชื่อ','name'],
           search_name:   ['search name','search_name','ชื่อค้นหา'],
+          size:          ['size','ขนาด'],
           production_pool: ['production pool','production_pool','pool'],
           status:        ['status','สถานะ'],
           item_group:    ['group','item_group','กลุ่ม'],
@@ -39108,7 +39093,7 @@ if (false)(function(){
           ['bundle_width','bundle_height','lines_per_bundle','lifts_per_round','min_w','max_w','likely_w'].forEach(function(f) {
             if (colIdx[f] >= 0) row[f] = parseFloat(r[colIdx[f]]) || 0;
           });
-          ['name','search_name','production_pool','status','item_group'].forEach(function(f) {
+          ['name','search_name','size','production_pool','status','item_group'].forEach(function(f) {
             if (colIdx[f] >= 0) row[f] = String(r[colIdx[f]] || '').trim();
           });
           _updParsedRows.push(row);
@@ -39118,10 +39103,10 @@ if (false)(function(){
 
         // แสดง preview 5 แถวแรก
         var previewCols = ['sku'].concat(
-          ['name','search_name','production_pool','status','item_group','lines_per_bundle','lifts_per_round','bundle_width','bundle_height','min_w','max_w','likely_w']
+          ['name','search_name','size','production_pool','status','item_group','lines_per_bundle','lifts_per_round','bundle_width','bundle_height','min_w','max_w','likely_w']
             .filter(function(f) { return colIdx[f] >= 0; })
         );
-        var labelMap = { sku:'SKU', name:'ชื่อสินค้า', search_name:'ชื่อค้นหา',
+        var labelMap = { sku:'SKU', name:'ชื่อสินค้า', search_name:'ชื่อค้นหา', size:'Size',
           production_pool:'Pool', status:'Status', item_group:'Group',
           bundle_width:'กว้าง(cm)', bundle_height:'สูง(cm)',
           lines_per_bundle:'เส้น/มัด', lifts_per_round:'มัด/รอบยก',
@@ -39154,7 +39139,7 @@ if (false)(function(){
     if (!_updParsedRows.length) return;
 
     // ดูว่า checkbox ไหน tick อยู่
-    var selectedFields = ['name','search_name','production_pool','status','item_group','bundle_width','bundle_height','lines_per_bundle','lifts_per_round','min_w','max_w','likely_w']
+    var selectedFields = ['name','search_name','size','production_pool','status','item_group','bundle_width','bundle_height','lines_per_bundle','lifts_per_round','min_w','max_w','likely_w']
       .filter(function(f) {
         var chk = document.querySelector('#prod-update-modal input[value="' + f + '"]');
         return chk && chk.checked;
@@ -39217,9 +39202,9 @@ if (false)(function(){
 
   window.prodExport = function() {
     if (!_prodList.length) { showToast('ไม่มีข้อมูลให้ export', true); return; }
-    var rows = [['ITem','Product name','เส้นต่อมัด','มัดต่อรอบยก','W(Min)','W(Max)','W(std)','SEMI','SEMI 2']];
+    var rows = [['ITem','Product name','Size','เส้นต่อมัด','มัดต่อรอบยก','W(Min)','W(Max)','W(std)','SEMI','SEMI 2']];
     _prodList.forEach(function(p) {
-      rows.push([p.sku, p.name, p.lines_per_bundle, p.lifts_per_round, p.min_w, p.max_w, p.likely_w, p.semi_code||'', p.semi_code2||'']);
+      rows.push([p.sku, p.name, p.size||'', p.lines_per_bundle, p.lifts_per_round, p.min_w, p.max_w, p.likely_w, p.semi_code||'', p.semi_code2||'']);
     });
     var ws = XLSX.utils.aoa_to_sheet(rows);
     var wb = XLSX.utils.book_new();
@@ -39267,6 +39252,7 @@ if (false)(function(){
         var iSku    = col(['item number','item','sku']);
         var iName   = col(['product name','name','ชื่อสินค้า','ชื่อ']);
         var iSearch = col(['search name','search_name','ชื่อค้นหา']);
+        var iSize   = col(['size','ขนาด']);
         var iPool   = col(['production pool','production_pool','pool']);
         var iStatus = col(['status','สถานะ']);
         var iGroup  = col(['group','item_group','กลุ่ม']);
@@ -39293,6 +39279,7 @@ if (false)(function(){
             sku: sku,
             name:            iName   >= 0 ? String(r[iName]||'').trim()   : '',
             search_name:     iSearch >= 0 ? String(r[iSearch]||'').trim() || null : null,
+            size:            iSize   >= 0 ? String(r[iSize]||'').trim()   || null : null,
             production_pool: iPool   >= 0 ? String(r[iPool]||'').trim()   || null : null,
             status:          iStatus >= 0 ? String(r[iStatus]||'').trim() || null : null,
             item_group:      iGroup  >= 0 ? String(r[iGroup]||'').trim()  || null : null,
