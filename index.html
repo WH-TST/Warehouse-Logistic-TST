@@ -14605,7 +14605,9 @@ let blockingChartInstance = null;
  */
         // --- INIT ---
         window.onload = () => {
-            const today = new Date().toISOString().split('T')[0];
+            // วันนี้ตามเวลาไทย (Asia/Bangkok) เสมอ — ห้ามใช้ toISOString() เพราะตัดวันที่แบบ UTC
+            // เที่ยงคืนถึงตี 7 เวลาไทย จะเพี้ยนถอยหลังไป 1 วัน
+            const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 10);
             const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
             setVal('plan-date', today);
             setVal('tag-date', today);
