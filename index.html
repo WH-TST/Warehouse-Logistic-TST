@@ -12296,14 +12296,18 @@ window.loadPrintTagData = async function loadPrintTagData() {
         ]);
 
         // 3. รวม lines ต่อ SKU จากทุกเครื่อง
+        // ใช้ qty_lines (ยอดของ "วันนี้" ตามตารางบล็อก) แค่เช็คว่า SKU นี้โผล่มาให้ผลิตวันนี้ไหม
+        // ส่วนยอดที่เอาไปคำนวณ "ต้องพิมพ์" ใช้ remaining_lines (ยอดคงเหลือทั้ง MO) แทน
+        // เพราะคลังต้องเตรียม TAG ให้ครบยอดที่เหลือทั้งใบ ไม่ใช่แค่เศษของวันนี้วันเดียว
         const planLines = {};
         if (planRes && planRes.days_list) {
             (planRes.days_list || []).forEach(function(d) {
                 if (d.date !== formattedDate) return;
                 (d.machines || []).forEach(function(m) {
                     (m.items || []).forEach(function(it) {
-                        const lines = Number(it.qty_lines) || 0;
-                        if (lines > 0) planLines[it.product_code] = (planLines[it.product_code] || 0) + lines;
+                        const todayLines = Number(it.qty_lines) || 0;
+                        const remaining = Number(it.remaining_lines) || 0;
+                        if (todayLines > 0) planLines[it.product_code] = (planLines[it.product_code] || 0) + remaining;
                     });
                 });
             });
