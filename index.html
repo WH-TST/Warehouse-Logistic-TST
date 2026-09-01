@@ -12300,6 +12300,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
         // ส่วนยอดที่เอาไปคำนวณ "ต้องพิมพ์" ใช้ remaining_lines (ยอดคงเหลือทั้ง MO) แทน
         // เพราะคลังต้องเตรียม TAG ให้ครบยอดที่เหลือทั้งใบ ไม่ใช่แค่เศษของวันนี้วันเดียว
         const planLines = {};
+        const planMachines = {}; // sku → Set ของเครื่องที่มีคิวสินค้านี้วันนี้ (เผื่อ SKU เดียวขึ้นหลายเครื่อง)
         if (planRes && planRes.days_list) {
             (planRes.days_list || []).forEach(function(d) {
                 if (d.date !== formattedDate) return;
@@ -12307,7 +12308,10 @@ window.loadPrintTagData = async function loadPrintTagData() {
                     (m.items || []).forEach(function(it) {
                         const todayLines = Number(it.qty_lines) || 0;
                         const remaining = Number(it.remaining_lines) || 0;
-                        if (todayLines > 0) planLines[it.product_code] = (planLines[it.product_code] || 0) + remaining;
+                        if (todayLines > 0) {
+                            planLines[it.product_code] = (planLines[it.product_code] || 0) + remaining;
+                            (planMachines[it.product_code] ??= new Set()).add(m.machine_id);
+                        }
                     });
                 });
             });
@@ -12351,6 +12355,7 @@ window.loadPrintTagData = async function loadPrintTagData() {
             const usedAcc    = Math.floor((usedCwLines[sku] || 0) / linesPerBundle);
             const surplus    = Math.max(0, printedAcc - usedAcc);
             const needToPrint = Math.max(0, planBundles - surplus);
+            const machines = planMachines[sku] ? Array.from(planMachines[sku]).sort() : [];
             return {
                 productId: sku,
                 productName: prod.name || sku,
@@ -12361,11 +12366,15 @@ window.loadPrintTagData = async function loadPrintTagData() {
                 needToPrintBundles: needToPrint,
                 printedExcludeToday: cumulativePrint[sku] || 0,
                 usedExcludeToday: Math.floor((usedCwLines[sku] || 0) / linesPerBundle),
+                machineLabel: machines.length ? machines.join(', ') : '-',
+                machineSort: machines[0] || 'ZZZ',
                 wStd: '-'
             };
         }).filter(function(i) { return i.planToday > 0; });
 
-        items.sort(function(a, b) { return a.productId.localeCompare(b.productId); });
+        items.sort(function(a, b) {
+            return a.machineSort.localeCompare(b.machineSort) || a.productId.localeCompare(b.productId);
+        });
 
         if (items.length === 0) {
             cont.innerHTML = '<div class="p-20 text-center text-slate-400"><i class="fas fa-info-circle text-5xl mb-4"></i><p>ไม่พบรายการที่ต้องพิมพ์ในวันที่เลือก</p></div>';
@@ -12410,6 +12419,7 @@ function renderTagList(data) {
             </thead>
             <tbody>`;
     
+    let lastMachineGroup = null;
     data.items.forEach((item, i) => {
         // เช็คว่าเคยบันทึกของวันนี้ไปหรือยัง
         const hasSavedBefore = item.savedBundlesToday > 0;
@@ -12419,9 +12429,17 @@ function renderTagList(data) {
         const inputDisabled = hasSavedBefore ? 'disabled' : '';
         const inputPlaceholder = hasSavedBefore ? '-' : '';
 
+        // แถบหัวกลุ่มเครื่อง — ขึ้นใหม่ทุกครั้งที่เปลี่ยนกลุ่มเครื่อง (เทียบง่ายกับหน้าแผนผลิตที่จัดกลุ่มตามเครื่องเหมือนกัน)
+        if (item.machineSort !== lastMachineGroup) {
+            lastMachineGroup = item.machineSort;
+            html += `<tr class="bg-indigo-50">
+                <td colspan="8" class="px-5 py-2 text-sm font-black text-indigo-800">🏭 เครื่อง ${item.machineLabel}</td>
+            </tr>`;
+        }
+
         html += `<tr class="border-b hover:bg-slate-50 font-sarabun">
             <td class="p-5 text-center">
-                <span class="bg-slate-100 px-3 py-1 rounded-lg font-black text-slate-600">-</span>
+                <span class="bg-slate-100 px-3 py-1 rounded-lg font-black text-slate-600">${item.machineLabel}</span>
             </td>
             <td class="p-5">
                 <p class="font-black text-indigo-700 font-mono">${item.productId}</p>
