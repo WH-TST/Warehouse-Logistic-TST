@@ -2128,6 +2128,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <button onclick="switchView('production-block')" id="nav-production-block" class="nav-btn" data-tip="Production Block">
                 <span class="nav-icon"><i class="fas fa-th-large"></i></span> Production Block
             </button>
+            <button onclick="switchView('output-audit')" id="nav-output-audit" class="nav-btn" data-tip="ตรวจสอบยอดผลิต">
+                <span class="nav-icon"><i class="fas fa-clipboard-check"></i></span> ตรวจสอบยอดผลิต
+            </button>
 
             <!-- ─── INVENTORY ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
@@ -3145,6 +3148,26 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         </button>
     </div>
     <iframe id="production-block-iframe" src="" style="width:100%;height:100%;border:1px solid #e2e8f0;border-radius:12px;background:#fff;"></iframe>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- VIEW: ตรวจสอบยอดผลิต — ฝังหน้าจากโปรเจกต์ tst-production-app -->
+<!-- ต่างจาก Production Block ตรงที่ "แก้ข้อมูลได้" ไม่ใช่แค่ดู     -->
+<!-- ข้อมูลถูกเก็บที่ Supabase ของฝ่ายผลิต ไม่ได้เก็บใน WMS         -->
+<!-- ชื่อคนกดส่งไปกับ ?u= เพื่อบันทึกว่าใครเป็นคนตรวจ/แก้           -->
+<!-- ============================================================ -->
+<div id="view-output-audit-content" class="hidden" style="height:calc(100vh - 120px);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+        <p style="font-size:12px;color:#64748b;">
+            <i class="fas fa-database"></i>&nbsp;ข้อมูลเก็บที่ระบบฝ่ายผลิต — สิ่งที่แก้ที่นี่จะมีผลกับฝ่ายผลิตทันที
+            <span id="output-audit-who" style="color:#94a3b8;"></span>
+        </p>
+        <button onclick="loadOutputAudit()" class="text-xs font-black text-slate-500 hover:text-blue-600" style="padding:4px 10px;border:1px solid #e2e8f0;border-radius:8px;">
+            <i class="fas fa-rotate-right"></i>&nbsp;รีเฟรช
+        </button>
+    </div>
+    <iframe id="output-audit-iframe" src="" style="width:100%;height:100%;border:1px solid #e2e8f0;border-radius:12px;background:#fff;"></iframe>
 </div>
 
 
@@ -13928,11 +13951,25 @@ function loadProductionBlock() {
     frame.src = window.PROD_BLOCK_URL + sep + '_r=' + Date.now();
 }
 
+// ── ตรวจสอบยอดผลิต (iframe ฝังหน้าจาก tst-production-app — แก้ข้อมูลได้) ──
+// token คนละตัวกับ Production Block เพราะหน้านี้ให้สิทธิ์ "เขียน" ข้อมูลฝ่ายผลิต
+window.OUTPUT_AUDIT_URL = 'https://tstproduction.vercel.app/wms-view/output-audit?k=wms-audit-r4m8t2v6y1';
+function loadOutputAudit() {
+    const frame = document.getElementById('output-audit-iframe');
+    if (!frame) return;
+    // ส่งชื่อคนที่ล็อกอิน WMS ไปด้วย ฝ่ายผลิตจะได้บันทึกได้ว่าใครกดตรวจ/แก้
+    const who = window._currentUser || '';
+    const label = document.getElementById('output-audit-who');
+    if (label) label.innerText = who ? ('· บันทึกในนาม ' + who) : '· ยังไม่ทราบชื่อผู้ใช้';
+    const sep = window.OUTPUT_AUDIT_URL.indexOf('?') === -1 ? '?' : '&';
+    frame.src = window.OUTPUT_AUDIT_URL + sep + 'u=' + encodeURIComponent(who) + '&_r=' + Date.now();
+}
+
 window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'production-block', 'logistic-plan', 'customers', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'production-block', 'output-audit', 'logistic-plan', 'customers', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13954,7 +13991,7 @@ window.switchView = function switchView(view) {
 
     // Production Block เป็น iframe อ่านอย่างเดียว ไม่เกี่ยวกับ Google Sheet ที่เลือกอยู่ — ซ่อนกล่อง Plan Date Reference
     var _pdBox = document.getElementById('plan-date-ref-box');
-    if (_pdBox) _pdBox.style.display = (view === 'production-block') ? 'none' : '';
+    if (_pdBox) _pdBox.style.display = (view === 'production-block' || view === 'output-audit') ? 'none' : '';
 
     if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
     // Bring the active view into view, compensating for sticky header — works in Chrome + Safari
@@ -13972,6 +14009,7 @@ window.switchView = function switchView(view) {
     });
 
     if (view === 'production-block') loadProductionBlock();
+    if (view === 'output-audit') loadOutputAudit();
     if (view === 'loading-order' && window.loInit) window.loInit();
     if (view === 'loading' && window.ldInit) window.ldInit();
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
@@ -37114,6 +37152,7 @@ var WMS_VIEWS=[
   {id:'kpi-wh',label:'KPI WH & Logistic'},
   {id:'training',label:'Training'},
   {id:'production-block',label:'Production Block'},
+  {id:'output-audit',label:'ตรวจสอบยอดผลิต'},
   {id:'user-accounts',label:'ตั้งค่าบัญชีผู้ใช้'},
   {id:'audit-log',label:'Audit Log'},
   {id:'device-control',label:'Device Control'},
