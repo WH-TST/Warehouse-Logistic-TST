@@ -11127,6 +11127,8 @@ window.loadAnalytics = async function loadAnalytics() {
                     .gte('tst_pd_date', startVal)
                     .lte('tst_pd_date', endVal)
                     .eq('reference', 'Production')
+                    // เอาเฉพาะชุดนำเข้าที่ยังใช้งาน — ชุดที่ถูกแทนที่ถูกปิดไว้ ไม่ใช่ลบ
+                    .eq('is_active', true)
                     .order('tst_pd_date')
                     .range(from, from + PAGE - 1);
                 if (error) return { error: error };
@@ -14949,6 +14951,8 @@ let blockingChartInstance = null;
           var dateTo   = (document.getElementById('invd-date-to').value||'').trim();
           if(dateFrom) q = q.gte('tst_pd_date', dateFrom);
           if(dateTo)   q = q.lte('tst_pd_date', dateTo);
+          // ตาราง FG มี session — ซ่อนชุดที่ถูกแทนที่ ไม่งั้นจะเห็นข้อมูลซ้ำ
+          if(_invdTable === 'transection_fg') q = q.eq('is_active', true);
         }
         var res = await q;
         if(res.error) throw res.error;
@@ -15611,10 +15615,37 @@ let blockingChartInstance = null;
         const prodMap = {};
         (products||[]).forEach(function(p){ prodMap[p.sku] = p; });
 
+        // ── Session การนำเข้า ──────────────────────────────────────────────
+        // ตารางนี้ต่อท้ายล้วน ไม่มีคีย์กันซ้ำ (serial_number ว่างทุกแถว และแถวเนื้อหา
+        // ซ้ำกันเป๊ะเป็นของจริง — มัดน้ำหนักเท่ากันหลายมัดในล็อตเดียว) จึงกันซ้ำด้วย
+        // "ชุดการนำเข้า" แทน: ทุกแถวจากไฟล์เดียวกันได้ session เดียวกัน แล้วถ้าเป็นการ
+        // นำเข้าซ้ำของวันเดิม ให้ปิดชุดเก่า (is_active=false) ไม่ลบทิ้ง
+        const sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID()
+            : 'sid-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+
+        // มีข้อมูลของวันนี้อยู่แล้วหรือยัง — ให้คนเลือกว่าจะแทนที่หรือเพิ่มต่อ
+        var existingCount = 0;
+        try {
+            const chk = await window._sb.from('transection_fg')
+                .select('id', { count: 'exact', head: true })
+                .eq('tst_pd_date', tstPdDate).eq('is_active', true);
+            existingCount = chk.count || 0;
+        } catch(e) { existingCount = 0; }
+
+        var replaceOld = false;
+        if (existingCount > 0) {
+            var ans = confirm(
+                'วันที่ ' + tstPdDate + ' มีข้อมูลอยู่แล้ว ' + existingCount + ' แถว\n\n' +
+                'กด "ตกลง"  = แทนที่ของเดิมด้วยไฟล์นี้ (ปิดชุดเก่า — ใช้เมื่อนำเข้าซ้ำ/ไฟล์แก้ไข)\n' +
+                'กด "ยกเลิก" = เพิ่มต่อท้ายของเดิม (ใช้เมื่อแบ่งไฟล์นำเข้าหลายรอบ)'
+            );
+            replaceOld = !!ans;
+        }
+
         const batch = [];
         rows.slice(1).forEach(function(row){
             if(!row || !row[0]) return;
-            const rec = { imported_at: now, tst_pd_date: tstPdDate };
+            const rec = { imported_at: now, tst_pd_date: tstPdDate, import_session_id: sessionId, is_active: true };
             hdr.forEach(function(h, i){
                 const col = colMap[h];
                 if(!col) return;
@@ -15650,12 +15681,23 @@ let blockingChartInstance = null;
             batch.push(rec);
         });
         if(!batch.length) throw new Error('ไม่พบข้อมูลที่ถูกต้อง');
-        // ต่อท้าย (ไม่ลบ) — insert เป็น chunk
+        // insert เป็น chunk
         const CHUNK = 500;
         for(let i = 0; i < batch.length; i += CHUNK){
             const { error } = await window._sb.from('transection_fg').insert(batch.slice(i, i+CHUNK));
             if(error) throw error;
         }
+
+        // ปิดชุดเก่าหลัง insert สำเร็จเท่านั้น — ถ้าปิดก่อนแล้ว insert พัง ข้อมูลวันนั้นจะหายทั้งวัน
+        if (replaceOld) {
+            const { error: deacErr } = await window._sb.from('transection_fg')
+                .update({ is_active: false })
+                .eq('tst_pd_date', tstPdDate)
+                .eq('is_active', true)
+                .neq('import_session_id', sessionId);
+            if (deacErr) throw deacErr;
+        }
+        window._lastFgImportSession = sessionId;
         return batch.length;
     }
 
@@ -40200,7 +40242,9 @@ window.viewTripResult = async function(planId) {
       // 1. ดึง SKU ที่มีการเคลื่อนไหวในวันนั้นจาก transection_fg
       var fgQuery = window._sb.from('transection_fg')
         .select('item_number,product_name,warehouse,cw_quantity,quantity,receipt,issue')
-        .eq('tst_pd_date', dateVal);
+        .eq('tst_pd_date', dateVal)
+        // เอาเฉพาะชุดนำเข้าที่ยังใช้งาน (ชุดที่ถูกแทนที่ถูกปิดไว้ ไม่ได้ลบ)
+        .eq('is_active', true);
       if(whFilter) fgQuery = fgQuery.eq('warehouse', whFilter);
       var fgRes = await fgQuery;
       if(fgRes.error) throw fgRes.error;
