@@ -2164,6 +2164,10 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span>
                 <span>Loading Order</span>
             </button>
+            <button onclick="switchView('si-summary')" id="nav-si-summary" class="nav-btn" data-tip="สรุป SI">
+                <span class="nav-icon"><i class="fas fa-file-invoice"></i></span>
+                <span>สรุป SI</span>
+            </button>
             <button onclick="switchView('loading')" id="nav-loading" class="nav-btn" data-tip="Loading">
                 <span class="nav-icon"><i class="fas fa-boxes"></i></span>
                 <span>Loading</span>
@@ -7729,7 +7733,6 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
   <div class="flex gap-3">
     <button id="lo-tab-btn-orders" onclick="loSwitchTab('orders')" class="lo-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-indigo-500 bg-indigo-500 text-white transition-all"><i class="fas fa-clipboard-list mr-1.5"></i>Loading Orders</button>
     <button id="lo-tab-btn-monitor" onclick="loSwitchTab('monitor')" class="lo-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-slate-200 bg-white text-slate-500 transition-all"><i class="fas fa-desktop mr-1.5"></i>WMS Monitor</button>
-    <button id="lo-tab-btn-si" onclick="loSwitchTab('si')" class="lo-tab-btn px-5 py-2.5 rounded-xl text-sm font-black border-2 border-slate-200 bg-white text-slate-500 transition-all"><i class="fas fa-file-invoice mr-1.5"></i>สรุป SI</button>
   </div>
 
   <!-- ── TAB: Orders ── -->
@@ -7784,8 +7787,11 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 
   </div>
 
-  <!-- ── TAB: สรุป SI ── -->
-  <div id="lo-tab-si" class="hidden space-y-4">
+
+</div>
+
+<!-- VIEW: สรุป SI — ยอดโหลดสินค้าส่งจริง                       -->
+  <div id="view-si-summary-content" class="hidden space-y-4">
     <!-- Filter bar -->
     <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-3">
       <div>
@@ -7867,7 +7873,6 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
     </div>
   </div>
 
-</div>
 
 <!-- Modal: สร้าง / แก้ไข Loading Order -->
 <div id="lo-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-6 px-3">
@@ -14055,7 +14060,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'production-block', 'output-audit', 'logistic-plan', 'customers', 'loading-order', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'overdue', 'whactivity', 'production-block', 'output-audit', 'logistic-plan', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -14097,6 +14102,7 @@ window.switchView = function switchView(view) {
     if (view === 'production-block') loadProductionBlock();
     if (view === 'output-audit') loadOutputAudit();
     if (view === 'loading-order' && window.loInit) window.loInit();
+    if (view === 'si-summary' && window.siInit) window.siInit();
     if (view === 'loading' && window.ldInit) window.ldInit();
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
     if (view === 'driver-analytics' && window.daInit) window.daInit();
@@ -14117,6 +14123,7 @@ window.switchView = function switchView(view) {
             'kpi-stock': 'KPI Inventory Accuracy — คำนวณความแม่นยำสต็อก',
 
             'loading-order': 'Loading Order — สร้างคำสั่งโหลดสินค้า',
+            'si-summary': 'สรุป SI — ยอดโหลดสินค้าส่งจริง',
             'loading': 'Loading Control — บันทึกการโหลดสินค้า',
             'driver-monitor': 'Driver Monitor — ติดตามคนขับ',
             'driver-analytics': 'Driver Analytics — สถิติคนขับ',
@@ -27676,7 +27683,7 @@ window.ldSwitchTab = function(tab) {
 };
 
 window.loSwitchTab = function(tab) {
-    ['orders','monitor','si'].forEach(function(t){
+    ['orders','monitor'].forEach(function(t){
         var pnl = document.getElementById('lo-tab-'+t);
         var btn = document.getElementById('lo-tab-btn-'+t);
         if (pnl) pnl.classList.toggle('hidden', t!==tab);
@@ -27686,7 +27693,6 @@ window.loSwitchTab = function(tab) {
         }
     });
     if (tab==='monitor') ldMonLoad();
-    if (tab==='si') siInit();
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -27831,7 +27837,7 @@ window.siLoad = async function() {
         if (teamSel) {
             var curVal = teamSel.value;
             var teams = Array.from(new Set(rows.map(function(r){ return r.team; }).filter(function(t){ return t && t!=='—'; })));
-            teamSel.innerHTML = '<option value="">ทุกทีม</option>' + teams.map(function(t){ return '<option value="'+_loEsc(t)+'">'+_loEsc(t)+'</option>'; }).join('');
+            teamSel.innerHTML = '<option value="">ทุกทีม</option>' + teams.map(function(t){ return '<option value="'+_ldEsc(t)+'">'+_ldEsc(t)+'</option>'; }).join('');
             teamSel.value = curVal;
         }
 
@@ -27891,18 +27897,18 @@ window.siRender = function() {
         var tb = truckBadge[r.truckType] || truckBadge.self;
         var rb = rangeBadge[r.rangeStatus] || rangeBadge.ok;
         return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
-            + '<td class="px-3 py-2.5 font-bold text-slate-700 whitespace-nowrap">'+_loEsc(r.date)+'</td>'
-            + '<td class="px-3 py-2.5 text-xs text-slate-400 font-mono whitespace-nowrap">'+_loEsc(r.time)+'</td>'
-            + '<td class="px-3 py-2.5 font-bold text-slate-700">'+_loEsc(r.customer)+'</td>'
-            + '<td class="px-3 py-2.5 text-slate-500">'+_loEsc(r.sale)+'</td>'
-            + '<td class="px-3 py-2.5"><div class="font-bold text-slate-700">'+_loEsc(r.name)+'</div><div class="text-[10px] text-slate-400 font-mono">'+_loEsc(r.sku)+'</div></td>'
+            + '<td class="px-3 py-2.5 font-bold text-slate-700 whitespace-nowrap">'+_ldEsc(r.date)+'</td>'
+            + '<td class="px-3 py-2.5 text-xs text-slate-400 font-mono whitespace-nowrap">'+_ldEsc(r.time)+'</td>'
+            + '<td class="px-3 py-2.5 font-bold text-slate-700">'+_ldEsc(r.customer)+'</td>'
+            + '<td class="px-3 py-2.5 text-slate-500">'+_ldEsc(r.sale)+'</td>'
+            + '<td class="px-3 py-2.5"><div class="font-bold text-slate-700">'+_ldEsc(r.name)+'</div><div class="text-[10px] text-slate-400 font-mono">'+_ldEsc(r.sku)+'</div></td>'
             + '<td class="px-3 py-2.5 text-right font-black text-slate-800">'+r.qty.toLocaleString()+'</td>'
             + '<td class="px-3 py-2.5 text-right font-black text-slate-800">'+r.finalKg.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
             + '<td class="px-3 py-2.5 text-right font-bold text-slate-600">'+r.perUnit.toFixed(2)+'</td>'
             + '<td class="px-3 py-2.5 text-center"><span class="inline-block text-[11px] font-black px-2.5 py-1 rounded-full '+rb[0]+'">'+rb[1]+'</span></td>'
-            + '<td class="px-3 py-2.5 text-slate-600 font-bold whitespace-nowrap">'+_loEsc(r.team)+'</td>'
+            + '<td class="px-3 py-2.5 text-slate-600 font-bold whitespace-nowrap">'+_ldEsc(r.team)+'</td>'
             + '<td class="px-3 py-2.5 text-center"><span class="inline-block text-[11px] font-black px-2.5 py-1 rounded-full '+tb[0]+'">'+tb[1]+'</span></td>'
-            + '<td class="px-3 py-2.5 text-slate-500 font-mono whitespace-nowrap">'+_loEsc(r.truckLabel)+'</td>'
+            + '<td class="px-3 py-2.5 text-slate-500 font-mono whitespace-nowrap">'+_ldEsc(r.truckLabel)+'</td>'
         + '</tr>';
     }).join('');
 };
