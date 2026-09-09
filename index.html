@@ -27790,12 +27790,17 @@ window.siLoad = async function() {
             var finalMap = diff ? _ldComputeFinalWeights(sess, diff) : null;
 
             // รวมตาม SKU (กันแถวซ้ำจากหลาย lift)
+            // _ldComputeFinalWeights คืนผลลัพธ์ "ต่อ session" (key = session.id หรือ 'i'+index ตามลำดับใน sess)
+            // ไม่ใช่ต่อ SKU — ต้องคำนวณ key ต่อ session ให้ตรงกับข้างในฟังก์ชันเป๊ะๆ ก่อนรวมเป็นยอดต่อ SKU
             var bySku = {};
-            sess.forEach(function(s){
+            sess.forEach(function(s, idx){
                 var k = s.sku || '?';
-                if (!bySku[k]) bySku[k] = { sku:k, product_name:s.product_name, qty:0, weight:0, team:s.team, _t:'' };
-                bySku[k].qty    += parseFloat(s.qty)    || 0;
-                bySku[k].weight += parseFloat(s.weight) || 0;
+                if (!bySku[k]) bySku[k] = { sku:k, product_name:s.product_name, qty:0, weight:0, finalKg:0, team:s.team, _t:'' };
+                var sessKey = s.id != null ? String(s.id) : 'i'+idx;
+                var fw = (finalMap && finalMap[sessKey]) ? finalMap[sessKey].finalKg : (parseFloat(s.weight) || 0);
+                bySku[k].qty     += parseFloat(s.qty)    || 0;
+                bySku[k].weight  += parseFloat(s.weight) || 0;
+                bySku[k].finalKg += fw;
                 var t = s.end_time || s.updated_at || s.created_at || '';
                 if (t > bySku[k]._t) { bySku[k]._t = t; bySku[k].team = s.team || bySku[k].team; }
             });
@@ -27804,7 +27809,7 @@ window.siLoad = async function() {
 
             Object.keys(bySku).forEach(function(sk){
                 var r = bySku[sk];
-                var finalKg = (finalMap && finalMap[sk]) ? finalMap[sk].finalKg : r.weight;
+                var finalKg = r.finalKg;
                 var perUnit = r.qty > 0 ? finalKg / r.qty : 0;
                 var prod = prodMap[sk] || {};
                 var rangeStatus = 'ok';
