@@ -27812,7 +27812,8 @@ window.siLoad = async function() {
 
                 rows.push({
                     date: order.order_date || fromV,
-                    time: r._t ? r._t.slice(11,16) : '—',
+                    sortKey: r._t || '',
+                    time: r._t ? new Date(r._t).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : '—',
                     customer: order.customer_name || '—',
                     sale: saleMap[order.customer_name] || '—',
                     sku: sk,
@@ -27829,7 +27830,7 @@ window.siLoad = async function() {
             });
         });
 
-        rows.sort(function(a,b){ return (a.date+a.time).localeCompare(b.date+b.time); });
+        rows.sort(function(a,b){ return a.sortKey.localeCompare(b.sortKey); });
         _siRows = rows;
 
         // เติม dropdown ทีมโหลดจากข้อมูลจริง
