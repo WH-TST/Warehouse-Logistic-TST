@@ -7851,7 +7851,8 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
               <th class="px-3 py-2.5 text-left text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">เวลาโหลดเสร็จ</th>
               <th class="px-3 py-2.5 text-left text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">ลูกค้า</th>
               <th class="px-3 py-2.5 text-left text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">Sale</th>
-              <th class="px-3 py-2.5 text-left text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">สินค้า</th>
+              <th class="px-3 py-2.5 text-left text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">รหัสสินค้า</th>
+              <th class="px-3 py-2.5 text-left text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">ชื่อสินค้า</th>
               <th class="px-3 py-2.5 text-right text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">จำนวนโหลดจริง</th>
               <th class="px-3 py-2.5 text-right text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">น้ำหนัก Final (กก.)</th>
               <th class="px-3 py-2.5 text-right text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">กก./เส้น</th>
@@ -7862,7 +7863,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             </tr>
           </thead>
           <tbody id="si-tbody">
-            <tr><td colspan="12" class="text-center py-16 text-slate-400 font-bold">เลือกวันที่แล้วกด "รีเฟรช" เพื่อโหลดข้อมูล</td></tr>
+            <tr><td colspan="13" class="text-center py-16 text-slate-400 font-bold">เลือกวันที่แล้วกด "รีเฟรช" เพื่อโหลดข้อมูล</td></tr>
           </tbody>
         </table>
       </div>
@@ -27718,7 +27719,7 @@ window.siLoad = async function() {
     var fromV = document.getElementById('si-date-from')?.value;
     var toV   = document.getElementById('si-date-to')?.value;
     if (!fromV || !toV) return;
-    if (tbody) tbody.innerHTML = '<tr><td colspan="12" class="text-center py-16 text-slate-400 font-bold"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>กำลังโหลด...</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="13" class="text-center py-16 text-slate-400 font-bold"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>กำลังโหลด...</td></tr>';
 
     try {
         // 1. Session ที่ปิดงานแล้ว (record_type != 'draft') ในช่วงวันที่เลือก
@@ -27845,7 +27846,7 @@ window.siLoad = async function() {
         siRender();
     } catch (e) {
         console.error('[siLoad]', e);
-        if (tbody) tbody.innerHTML = '<tr><td colspan="12" class="text-center py-16 text-rose-500 font-bold">❌ โหลดไม่สำเร็จ: ' + (e.message||e) + '</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="13" class="text-center py-16 text-rose-500 font-bold">❌ โหลดไม่สำเร็จ: ' + (e.message||e) + '</td></tr>';
     }
 };
 
@@ -27887,7 +27888,7 @@ window.siRender = function() {
     }
 
     if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center py-16 text-slate-400 font-bold">ไม่พบรายการ</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="text-center py-16 text-slate-400 font-bold">ไม่พบรายการ</td></tr>';
         return;
     }
 
@@ -27902,9 +27903,10 @@ window.siRender = function() {
             + '<td class="px-3 py-2.5 text-xs text-slate-400 font-mono whitespace-nowrap">'+_ldEsc(r.time)+'</td>'
             + '<td class="px-3 py-2.5 font-bold text-slate-700">'+_ldEsc(r.customer)+'</td>'
             + '<td class="px-3 py-2.5 text-slate-500">'+_ldEsc(r.sale)+'</td>'
-            + '<td class="px-3 py-2.5"><div class="font-bold text-slate-700">'+_ldEsc(r.name)+'</div><div class="text-[10px] text-slate-400 font-mono">'+_ldEsc(r.sku)+'</div></td>'
-            + '<td class="px-3 py-2.5 text-right font-black text-slate-800">'+r.qty.toLocaleString()+'</td>'
-            + '<td class="px-3 py-2.5 text-right font-black text-slate-800">'+r.finalKg.toLocaleString(undefined,{maximumFractionDigits:1})+'</td>'
+            + '<td class="px-3 py-2.5 text-slate-500 font-mono whitespace-nowrap">'+_ldEsc(r.sku)+'</td>'
+            + '<td class="px-3 py-2.5 font-bold text-slate-700">'+_ldEsc(r.name)+'</td>'
+            + '<td class="px-3 py-2.5 text-right font-black text-slate-800">'+r.qty.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'
+            + '<td class="px-3 py-2.5 text-right font-black text-slate-800">'+r.finalKg.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'
             + '<td class="px-3 py-2.5 text-right font-bold text-slate-600">'+r.perUnit.toFixed(2)+'</td>'
             + '<td class="px-3 py-2.5 text-center"><span class="inline-block text-[11px] font-black px-2.5 py-1 rounded-full '+rb[0]+'">'+rb[1]+'</span></td>'
             + '<td class="px-3 py-2.5 text-slate-600 font-bold whitespace-nowrap">'+_ldEsc(r.team)+'</td>'
