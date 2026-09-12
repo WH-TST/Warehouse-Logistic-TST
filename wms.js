@@ -226,24 +226,20 @@ function doGet(e) {
       }
     }
 
-    // ── HTML mode: เปิดจาก GAS โดยตรง ────────────────────────────────
-    const html = HtmlService.createTemplateFromFile('index')
-      .evaluate()
-      .setTitle('TST Warehouse Management System')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    // ── ไม่มี action: GAS เป็น API ล้วน ไม่ได้เสิร์ฟหน้าเว็บแล้ว ──────────
+    // หน้าเว็บจริงอยู่ที่ GitHub Pages — index.html ถูกถอดออกจากโปรเจกต์นี้แล้ว
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        success: false,
+        message: 'WMS GAS API — ต้องระบุ ?action=... (หน้าเว็บอยู่ที่ GitHub Pages)'
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
 
-    return html;
-    
   } catch (error) {
     Logger.log('Error in doGet: ' + error.toString());
-    return HtmlService.createHtmlOutput(
-      '<div style="padding: 40px; font-family: sans-serif;">' +
-      '<h1 style="color: #dc2626;">❌ Error Loading Application</h1>' +
-      '<p style="color: #64748b;">' + error.message + '</p>' +
-      '<p style="color: #64748b; font-size: 12px;">Please contact system administrator.</p>' +
-      '</div>'
-    );
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, message: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -281,38 +277,6 @@ function _withCache(key, ttlSeconds, fn) {
 // 📝 วิธีแก้ปัญหา CSP (Content Security Policy)
 // ============================================
 
-/*
- * ปัญหา: "frame-ancestors 'self'" violation
- * 
- * สาเหตุ:
- * - Google Cloud Run มี CSP policy ที่เข้มงวด
- * - ไม่อนุญาตให้แสดงผลใน iframe จากภายนอก
- * 
- * วิธีแก้:
- * 
- * 1. ✅ ใช้ ALLOWALL (ทำแล้วในโค้ด)
- *    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
- * 
- * 2. ⚙️ ตั้งค่า Google Cloud Project (ถ้ายังมีปัญหา):
- *    a. เปิด Google Cloud Console
- *    b. ไปที่ Cloud Run service ของโปรเจค
- *    c. Edit > Environment Variables > เพิ่ม:
- *       Name: CLOUD_RUN_CSP
- *       Value: frame-ancestors *
- * 
- * 3. 🔧 Deploy ใหม่:
- *    - Deploy > New deployment
- *    - เลือก "Execute as: User accessing the web app"
- *    - เลือก "Who has access: Anyone"
- * 
- * 4. 🌐 ใช้ Direct URL แทน iframe:
- *    - เปิดใน tab ใหม่แทนการใช้ iframe
- *    - window.open(url, '_blank')
- */
-
-// ============================================
-// เก็บส่วนอื่นๆ ของไฟล์เดิมไว้ด้านล่างนี้
-// ============================================
 /**
  * ดึงข้อมูลวันหยุดจาก Sheet
  */
