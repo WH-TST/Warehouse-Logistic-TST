@@ -980,6 +980,13 @@
 
       console.log('[Supabase] Client initialized:', SUPA_URL);
     })();
+
+    // ── วันที่ "วันนี้" ตามเวลาไทย ───────────────────────────────────────────
+    // ห้ามใช้ window._bkkToday() — นั่นคือวัน UTC
+    // ช่วง 00:00–07:00 น. ตามเวลาไทย UTC ยังเป็นเมื่อวาน ทำให้งานกะเช้ามืดหาย
+    window._bkkToday = function _bkkToday() {
+      return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 10);
+    };
     </script>
 
     <!-- ═══════════════════════════════════════════════════════════
@@ -10955,7 +10962,7 @@ window.loadAnalytics = async function loadAnalytics() {
         window._analyticsCurrentInvLines = invLines;
 
         // บันทึก snapshot วันนี้ — เก็บค่าสูงสุด (max) ของวัน
-        var todaySnap = new Date().toISOString().slice(0,10);
+        var todaySnap = window._bkkToday();
         var {data: existToday} = await window._sb.from('inventory_daily_snapshot')
             .select('total_kg,total_lines,total_sku')
             .eq('snapshot_date', todaySnap)
@@ -11093,7 +11100,7 @@ window.loadAnalytics = async function loadAnalytics() {
 
                 // คำนวณย้อนหลังจาก inventory ปัจจุบัน
                 // inv[d-1] = inv[d] - inbound[d] + outbound[d]
-                var today = new Date().toISOString().slice(0,10);
+                var today = window._bkkToday();
                 var sortedDesc = allDates.slice().sort().reverse();
 
                 var runKg    = window._analyticsCurrentInvKg    || 0;
@@ -12565,7 +12572,7 @@ function generatePreview(item) {
                 var url = URL.createObjectURL(blob);
                 // ดาวน์โหลดไฟล์ PDF ลงเครื่อง → เปิดไฟล์แล้วสั่งพิมพ์ (ไม่ล้น)
                 var a = document.createElement('a');
-                var _fn = (fileName ? String(fileName).replace(/[\/\\:*?"<>|]/g,'-') : ('TAG_' + new Date().toISOString().slice(0,10) + '_' + Date.now())) + '.pdf';
+                var _fn = (fileName ? String(fileName).replace(/[\/\\:*?"<>|]/g,'-') : ('TAG_' + window._bkkToday() + '_' + Date.now())) + '.pdf';
                 a.href = url; a.download = _fn;
                 document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
@@ -14756,7 +14763,7 @@ let blockingChartInstance = null;
         if (tstWrap) tstWrap.classList.toggle('hidden', type !== 'transection_fg' && type !== 'transection_semi');
         // Set today as default date
         const tstInput = document.getElementById('inv-tst-pd-date');
-        if (tstInput && !tstInput.value) tstInput.value = new Date().toISOString().slice(0,10);
+        if (tstInput && !tstInput.value) tstInput.value = window._bkkToday();
         // Reset file state
         invImportBuffer = null;
         const preview = document.getElementById('inv-import-preview');
@@ -20564,7 +20571,7 @@ window.psdSwitchMode = function psdSwitchMode(mode) {
         if (btnManual) btnManual.className = activeOrange;
         if (panelMan) panelMan.classList.remove('hidden');
         if (!document.getElementById('psd-m-date').value)
-            document.getElementById('psd-m-date').value = new Date().toISOString().slice(0,10);
+            document.getElementById('psd-m-date').value = window._bkkToday();
         psdLoadProducts();
     }
     if (previewW) previewW.classList.add('hidden');
@@ -22605,7 +22612,7 @@ function renderLogiCalendar() {
     }
 
     const days   = dateRange(startVal, endVal);
-    const todayStr = new Date().toISOString().slice(0,10);
+    const todayStr = window._bkkToday();
 
     // ใช้ logiCalPlanList (โหลดจาก loadAndRenderLogiCalendar)
     // ถ้ายังไม่มีให้ fallback ไป logiPlanList
@@ -23523,7 +23530,7 @@ var _ldTrailerActive = {};
 var _ldOrderSub = null;
 
 window.ldInit = function() {
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     var d = document.getElementById('ld-date');
     var dm = document.getElementById('ld-mon-date');
     if (d) d.value = today;
@@ -23582,7 +23589,7 @@ async function _ldLoadOrderCards(dateVal, background) {
         return;
     }
     try {
-        var today = new Date().toISOString().slice(0,10);
+        var today = window._bkkToday();
         var data;
         // งานของวันที่เลือก (active / under review / rejected)
         var r1 = await window._sb.from('loading_orders').select('*')
@@ -23591,7 +23598,7 @@ async function _ldLoadOrderCards(dateVal, background) {
             .order('created_at');
         if (dateVal === today) {
             // ── ยกงานค้างข้ามวันมาแสดงด้วย: pending/in_progress ที่ order_date < วันนี้ (ย้อนหลังไม่เกิน 14 วัน) ──
-            var winStart = new Date(Date.now() - 14*86400000).toISOString().slice(0,10);
+            var winStart = new Date(new Date(window._bkkToday()+'T00:00:00').getTime() - 14*86400000).toISOString().slice(0,10);
             var r2 = await window._sb.from('loading_orders').select('*')
                 .lt('order_date', dateVal).gte('order_date', winStart)
                 .in('status', ['pending','in_progress'])
@@ -23616,7 +23623,7 @@ function _ldRenderCards(orders) {
         wrap.innerHTML = '<div class="text-center py-16 text-slate-300"><i class="fas fa-inbox text-5xl mb-3 block"></i><p class="font-bold text-slate-400 text-sm">No loading orders for today</p><p class="text-xs text-slate-300 mt-1">Waiting for orders from dispatch</p></div>';
         return;
     }
-    var _todayStr = new Date().toISOString().slice(0,10);
+    var _todayStr = window._bkkToday();
     wrap.innerHTML = orders.map(function(o) {
         var items = o.items||[];
         var totalWt  = items.reduce(function(a,i){ return a+(parseFloat(i.target_weight)||0); },0);
@@ -24183,7 +24190,7 @@ function _ldBuildTrailerPicker(order) {
 
 window.ldPickTrailerUnit = function(oid, unit) {
     _ldTrailerUnit[oid] = unit;
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     _ldLoadOrderCards(today);
     setTimeout(function(){ _ldDraftLoad(oid); }, 150);
 };
@@ -24245,7 +24252,7 @@ window.ldSpConfirm = async function(oid, itemCount) {
         var {error}=await window._sb.from('loading_orders').update({trailer_split:split, updated_at:new Date().toISOString()}).eq('id',oid);
         if(error) throw error;
         showToast('✅ จัดสินค้าเสร็จแล้ว — เลือกรถที่จะโหลด');
-        var today=new Date().toISOString().slice(0,10);
+        var today=window._bkkToday();
         _ldLoadOrderCards(today);
     } catch(e){ showToast('Error: '+(e?.message||String(e)),true); }
 };
@@ -25152,7 +25159,7 @@ window.ldToggleTrailerUnit = function(orderId, unit) {
             setTimeout(function(){ _ldDraftLoad(orderId, unit); _ldStartTimer(uKey); }, 120);
         });
     }
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     _ldLoadOrderCards(today);
     // After re-render, restore form values for all still-open units
     var _activeSnap = Object.assign({}, _ldTrailerActive[orderId] || {});
@@ -25172,7 +25179,7 @@ function _ldBuildFormForUnit(order, unit) {
 window.ldToggleCard = function(orderId) {
     var isOpen = _ldActiveOrderId === orderId;
     _ldActiveOrderId = isOpen ? null : orderId;
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     _ldLoadOrderCards(today);
     if (!isOpen) {
         // ไม่เดินสถานะเป็น "กำลังโหลด" ถ้ารถยังไม่ผ่านตรวจสภาพ
@@ -25421,7 +25428,7 @@ window.ldCardSave = async function(oid, unit) {
         _saveBtn.style.cursor = 'not-allowed';
         _saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
     }
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     var curUnit = unit || _ldTrailerUnit[oid] || 'mother';
     // collect items from per-lift inputs
     var items = [];
@@ -25984,7 +25991,7 @@ var _ldLastKnownIds = new Set();
 function _ldSubOrders() {
     if (_ldOrderSub) { try { window._sb.removeChannel(_ldOrderSub); } catch(e){} _ldOrderSub = null; }
 
-    function _ldCurrentDate(){ return document.getElementById('ld-date')?.value || new Date().toISOString().slice(0,10); }
+    function _ldCurrentDate(){ return document.getElementById('ld-date')?.value || window._bkkToday(); }
     _ldOrderSub = window._sb.channel('ld-orders-rt-v4')
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'loading_orders'}, function(payload){
             var cur = _ldCurrentDate();
@@ -26019,12 +26026,12 @@ function _ldSubOrders() {
 
     // Polling fallback ทุก 15 วิ — ทำงานทุก mode (admin + WH staff)
     if (_ldPollTimer) clearInterval(_ldPollTimer);
-    var today0 = new Date().toISOString().slice(0,10);
+    var today0 = window._bkkToday();
     window._sb.from('loading_orders').select('id').eq('order_date', today0)
         .then(function(res){ (res.data||[]).forEach(function(o){ _ldLastKnownIds.add(o.id); _ldLastKnownIds.add(o.id+'_notified'); }); });
 
     _ldPollTimer = setInterval(function() {
-        var today = document.getElementById('ld-date')?.value || new Date().toISOString().slice(0,10);
+        var today = document.getElementById('ld-date')?.value || window._bkkToday();
         window._sb.from('loading_orders').select('*')
             .eq('order_date', today).in('status',['pending','in_progress'])
             .then(function(res) {
@@ -26048,7 +26055,7 @@ function _ldSubOrders() {
         if (!wrap) return;
         // only run while there are pending_review cards visible
         if (!wrap.querySelector('[data-rv="pending_review"]')) return;
-        var today = new Date().toISOString().slice(0,10);
+        var today = window._bkkToday();
         window._sb.from('loading_orders').select('id,review_status')
             .eq('order_date', today).eq('review_status','pending_review')
             .then(function(res) {
@@ -26710,7 +26717,7 @@ async function _ldMonFetch(dateVal, showSpinner) {
     if (showSpinner && wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
         if (!Object.keys(_ldProductMap).length) await _ldLoadProductMap();
-        var today = new Date().toISOString().slice(0,10);
+        var today = window._bkkToday();
         // ช่วงดึงออเดอร์: ครอบคลุมทั้งวันนี้และวันที่เลือก (เผื่อดูย้อนหลังเก่ากว่า 14 วัน) − 14 วัน
         var _base = (dateVal < today) ? dateVal : today;
         var winStart = new Date(new Date(_base+'T00:00:00').getTime() - 14*86400000).toISOString().slice(0,10);
@@ -27687,7 +27694,7 @@ function _ldRenderMonitorTable(rows, orders) {
                             +'</div>'
                         +'</div>'
                         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-                            +(function(){ var _t=new Date().toISOString().slice(0,10); if(order.order_date&&order.order_date<_t){ var d=order.order_date.split('-'); return '<span style="padding:4px 10px;border-radius:999px;font-size:11px;font-weight:900;background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;">⏳ ยกมา '+d[2]+'/'+d[1]+'</span>'; } return ''; })()
+                            +(function(){ var _t=window._bkkToday(); if(order.order_date&&order.order_date<_t){ var d=order.order_date.split('-'); return '<span style="padding:4px 10px;border-radius:999px;font-size:11px;font-weight:900;background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;">⏳ ยกมา '+d[2]+'/'+d[1]+'</span>'; } return ''; })()
                             +(order.is_trailer?'<span style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#1d4ed8;color:#bfdbfe;">รถพ่วง</span>':'')
                             +((order.review_status||'')==='rejected' && _hasDrafts
                                 ? '<span style="padding:4px 12px;border-radius:999px;font-size:11px;font-weight:900;background:#fff7ed;color:#c2410c;border:1.5px solid #fb923c;display:inline-flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;background:#f97316;border-radius:50%;display:inline-block;animation:pulse 1s infinite;"></span>↩ กำลังโหลดใหม่</span>'
@@ -28100,7 +28107,7 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
         delete _ldCardStartTimes[orderId];
         if (_ldActiveOrderId === orderId) _ldActiveOrderId = null;
         _ldShowToast('รีเซทเรียบร้อย — ' + (truckPlate||''));
-        var today = new Date().toISOString().slice(0,10);
+        var today = window._bkkToday();
         _ldLoadOrderCards(today);
         if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
     } catch(e) {
@@ -28252,7 +28259,7 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
           var newStatus = (anyPending || otherApproved) ? 'done' : 'in_progress';
           await window._sb.from('loading_orders').update({status:newStatus, review_status:newRv||null, unit_review:ur, updated_at:new Date().toISOString()}).eq('id',orderId);
           _ldShowToast('รีเซท'+label+'เรียบร้อย');
-          var today = new Date().toISOString().slice(0,10);
+          var today = window._bkkToday();
           _ldLoadOrderCards(today);
           if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
       } catch(e) { alert('เกิดข้อผิดพลาด: '+(e?.message||String(e))); }
@@ -28319,7 +28326,7 @@ var _loPlansCache= [];     // แผนของวันนั้น (cache ไ
 
 window.loInit = function() {
     var d = document.getElementById('lo-date');
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     if (d) d.value = today;          // เซ็ตวันนี้เสมอ
     _loLoadOrders(today);             // โหลดตรง ไม่รอ loRefresh
     _loSubscribe();
@@ -28597,7 +28604,7 @@ window.custExport = function(){
     var ws = XLSX.utils.aoa_to_sheet(rows);
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Customers');
-    XLSX.writeFile(wb, 'Customers_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    XLSX.writeFile(wb, 'Customers_'+window._bkkToday()+'.xlsx');
 };
 window.custImport = function(input){
     var file = input.files[0]; if (!file) return;
@@ -28825,7 +28832,7 @@ function _loSetModalMode(isEdit) {
 window.loNewOrder = function() {
     _loEditId = null;
     _loSetModalMode(false);
-    var today = document.getElementById('lo-date')?.value || new Date().toISOString().slice(0,10);
+    var today = document.getElementById('lo-date')?.value || window._bkkToday();
     document.getElementById('lo-m-date').value  = today;
     document.getElementById('lo-m-truck').value = '';
     document.getElementById('lo-m-note').value  = '';
@@ -28879,7 +28886,7 @@ window.loModalLoadPlans = async function() {
     if (!sel) return;
     sel.innerHTML = '<option value="">-- เลือกแผน หรือ กรอกเอง --</option>';
     try {
-        var today = new Date().toISOString().slice(0,10);
+        var today = window._bkkToday();
         var {data} = await window._sb.from('logistic_plans')
             .select('plan_id,plan_date,truck_plate,child_plate,shops,total_weight,is_mother,pair_id')
             .gte('plan_date', today)
@@ -29291,7 +29298,7 @@ window.loDeleteOrder = function(id) {
         showToast('🗑️ ลบ Order เรียบร้อย');
         var dateVal = document.getElementById('lo-date')?.value;
         if (dateVal) _loLoadOrders(dateVal);
-        var today = new Date().toISOString().slice(0,10);
+        var today = window._bkkToday();
         if (typeof window._ldLoadOrderCards === 'function') window._ldLoadOrderCards(dateVal||today);
         if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
     }, {type:'danger', okText:'ลบเลย'});
@@ -33574,7 +33581,7 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
     if (!listEl) return;
 
     // default: 7 วันล่าสุด
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     var weekAgo = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
     var from = (fromEl && fromEl.value) || weekAgo;
     var to   = (toEl   && toEl.value)   || today;
@@ -37142,7 +37149,7 @@ if (false)(function(){
 
   window.dtInit = function() {
     var inp = document.getElementById('dt-date');
-    if (inp && !inp.value) inp.value = new Date().toISOString().slice(0,10);
+    if (inp && !inp.value) inp.value = window._bkkToday();
     dtLoad();
     // เปิด auto-refresh อัตโนมัติเมื่อเข้าแท็บ
     clearInterval(_dtTimer);
@@ -37171,7 +37178,7 @@ if (false)(function(){
   window.dtLoad = async function() {
     if (_dtLoading) return;          // ป้องกัน concurrent calls
     _dtLoading = true;
-    var dateVal = (document.getElementById('dt-date')||{}).value || new Date().toISOString().slice(0,10);
+    var dateVal = (document.getElementById('dt-date')||{}).value || window._bkkToday();
     var listEl  = document.getElementById('dt-plan-list');
     var sumEl   = document.getElementById('dt-summary');
     if (listEl) listEl.innerHTML = '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center text-slate-400"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
@@ -38052,7 +38059,7 @@ if (false)(function(){
     var ws = XLSX.utils.aoa_to_sheet(rows);
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Product');
-    XLSX.writeFile(wb, 'Product_' + new Date().toISOString().slice(0,10) + '.xlsx');
+    XLSX.writeFile(wb, 'Product_' + window._bkkToday() + '.xlsx');
   };
 
   window.prodImport = async function(input) {
@@ -39082,7 +39089,7 @@ window.viewTripResult = async function(planId) {
             savedMap[k] = r;
           });
           // ถ้าเป็นวันย้อนหลัง ให้ใช้ system_pcs ที่บันทึกไว้แทนยอด counting live
-          var isHistorical = dateVal !== new Date().toISOString().slice(0,10);
+          var isHistorical = dateVal !== window._bkkToday();
           // pre-fill _scItems ที่มีอยู่
           _scItems.forEach(function(item){
             var s = savedMap[item.sku+'|'+(item.wh||'')];
@@ -39144,7 +39151,7 @@ window.viewTripResult = async function(planId) {
 
   // ── End-of-Month Count: ดึงทุก SKU ที่มียอดสต๊อก (counting) ─────
   window.scLoadEOM = async function(){
-    var today = new Date().toISOString().slice(0,10);
+    var today = window._bkkToday();
     var pickedDate = document.getElementById('sc-date').value || today;
     // ชื่อเดือนไทย (พ.ศ.) จากวันที่ที่เลือก
     var _d = new Date(pickedDate + 'T00:00:00');
@@ -40496,7 +40503,7 @@ window.viewTripResult = async function(planId) {
   // ── set today as default date ──
   (function(){
     var el = document.getElementById('sc-semi-date');
-    if(el && !el.value) el.value = new Date().toISOString().slice(0,10);
+    if(el && !el.value) el.value = window._bkkToday();
   })();
 
   // ── switch subtab ──
@@ -40553,7 +40560,7 @@ window.viewTripResult = async function(planId) {
       (savedSemi||[]).forEach(function(r){ savedSemiMap[r.semi_item] = r; });
 
       // วันย้อนหลัง: ใช้ system_qty ที่บันทึกไว้แทน onhand_semi live
-      var isSemiHistorical = date !== new Date().toISOString().slice(0,10);
+      var isSemiHistorical = date !== window._bkkToday();
 
       // 5. build _semiItems
       var prevMap = {};
@@ -41139,7 +41146,7 @@ window.viewTripResult = async function(planId) {
   // set default date
   (function(){
     var el = document.getElementById('sc-semi-date');
-    if(el && !el.value) el.value = new Date().toISOString().slice(0,10);
+    if(el && !el.value) el.value = window._bkkToday();
   })();
 })();
 </script>
