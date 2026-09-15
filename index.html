@@ -26133,8 +26133,17 @@ window.siLoad = async function() {
         var { data: products } = await window._sb.from('products')
             .select('sku,min_w,max_w').in('sku', skus.length ? skus : ['__none__']);
         var prodMap = {};
-        _ldProductMap = {}; // ใช้ร่วมกับ _ldComputeFinalWeights
-        (products||[]).forEach(function(p){ prodMap[p.sku] = p; _ldProductMap[p.sku] = p; });
+        // ⚠ ห้าม reset _ldProductMap — เป็น map กลางที่หน้าโหลด/รีวิวใช้ร่วมกัน (มี name, lpb, lpr ด้วย)
+        // ถ้าเคลียร์ทิ้ง หน้ารีวิวจะเห็น MIN/MAX เป็น "—" และ _ldComputeFinalWeights
+        // จะกระจาย scale_diff โดยไม่รู้ขอบเขต min/max → น้ำหนักเพี้ยน
+        // เติมเฉพาะ SKU ที่ยังไม่มี และเก็บ field เดิมไว้
+        (products||[]).forEach(function(p){
+            prodMap[p.sku] = p;
+            var cur = _ldProductMap[p.sku] || {};
+            if (cur.min_w == null) cur.min_w = p.min_w;
+            if (cur.max_w == null) cur.max_w = p.max_w;
+            _ldProductMap[p.sku] = cur;
+        });
 
         // 4. ลูกค้า → Sale
         var custNames = Array.from(new Set((orders||[]).map(function(o){ return o.customer_name; }).filter(Boolean)));
