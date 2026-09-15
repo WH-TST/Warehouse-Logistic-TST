@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>สรุป SI — ยอดโหลดสินค้าส่งจริง</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════
+   หน้า "สรุป SI" แบบอ่านอย่างเดียว สำหรับให้ระบบอื่น (ฝ่ายขาย) ฝัง iframe
+   - ไม่มี login  ป้องกันด้วย token ใน query string (?k=...)
+   - ไม่แตะ Supabase โดยตรง และไม่มี anon key อยู่ในไฟล์นี้
+     ดึงข้อมูลผ่าน Edge Function si-summary ซึ่งใช้ service_role ฝั่ง server
+   - อ่านอย่างเดียวจริง: ไม่มีปุ่มบันทึก/อนุมัติ/แก้ไข Edge Function รับแต่ GET
+   ฝัง:
+     <iframe src="https://wh-tst.github.io/Warehouse-Logistic-TST/si-view.html?k=TOKEN"
+             style="width:100%;height:900px;border:0"></iframe>
+  ══════════════════════════════════════════════════════════════════════
+-->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  body { font-family: 'Sarabun', -apple-system, 'Segoe UI', sans-serif; background:#f8fafc; }
+</style>
+</head>
+<body class="p-4">
+
+<div class="max-w-full space-y-4">
+
+  <!-- หัวเรื่อง -->
+  <div class="flex items-center justify-between flex-wrap gap-2">
+    <div>
+      <h1 class="text-xl font-black text-slate-800">สรุป SI — ยอดโหลดสินค้าส่งจริง</h1>
+      <p class="text-xs font-bold text-slate-400">ข้อมูลสดจากระบบ WMS · อ่านอย่างเดียว</p>
+    </div>
+    <span class="text-[11px] font-black px-3 py-1.5 rounded-full bg-slate-200 text-slate-600">
+      <i class="fas fa-lock"></i> READ ONLY
+    </span>
+  </div>
+
+  <!-- แถบกรอง -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs font-black text-slate-500 mb-1">วันที่ (ช่วง)</label>
+      <div class="flex items-center gap-2">
+        <input type="date" id="si-date-from" onchange="siLoad()"
+               class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none">
+        <span class="text-slate-400">–</span>
+        <input type="date" id="si-date-to" onchange="siLoad()"
+               class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-black text-slate-500 mb-1">ทีมโหลด</label>
+      <select id="si-f-team" onchange="siRender()"
+              class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none bg-white">
+        <option value="">ทุกทีม</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-black text-slate-500 mb-1">ประเภทรถ</label>
+      <select id="si-f-truck" onchange="siRender()"
+              class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none bg-white">
+        <option value="">ทุกประเภท</option>
+        <option value="company">รถบริษัท</option>
+        <option value="hired">รถจ้าง</option>
+        <option value="self">รถรับเอง</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-black text-slate-500 mb-1">อยู่ในเกณฑ์น้ำหนัก</label>
+      <select id="si-f-range" onchange="siRender()"
+              class="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none bg-white">
+        <option value="">ทั้งหมด</option>
+        <option value="ok">อยู่ในเกณฑ์</option>
+        <option value="out">นอกเกณฑ์</option>
+      </select>
+    </div>
+    <div class="flex-1 min-w-[200px]">
+      <label class="block text-xs font-black text-slate-500 mb-1">ค้นหา ลูกค้า / SKU / ชื่อสินค้า</label>
+      <input type="text" id="si-f-search" oninput="siRender()" placeholder="พิมพ์เพื่อค้นหา..."
+             class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:outline-none">
+    </div>
+    <button onclick="siExport()"
+            class="px-4 py-2.5 border-2 border-slate-200 bg-white text-slate-600 font-black text-sm rounded-xl hover:bg-slate-50 transition">
+      Export Excel
+    </button>
+    <button onclick="siLoad()"
+            class="px-4 py-2.5 bg-indigo-600 text-white font-black text-sm rounded-xl hover:bg-indigo-700 transition">
+      รีเฟรช
+    </button>
+  </div>
+
+  <!-- KPI -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="si-kpi"></div>
+
+  <!-- ตาราง -->
+  <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+      <div class="text-sm font-black text-slate-700">พบ <span id="si-count" class="text-indigo-600">0</span> รายการ</div>
+      <div class="text-xs font-bold text-slate-400" id="si-updated"></div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" style="min-width:1480px;">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">วันที่</th>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">เวลาโหลดเสร็จ</th>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">ลูกค้า</th>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">Sale</th>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">รหัสสินค้า</th>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">ชื่อสินค้า</th>
+            <th class="px-3 py-2.5 text-right  text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">จำนวนโหลดจริง</th>
+            <th class="px-3 py-2.5 text-right  text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">น้ำหนัก Final (กก.)</th>
+            <th class="px-3 py-2.5 text-right  text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">กก./เส้น</th>
+            <th class="px-3 py-2.5 text-center text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">อยู่ในเกณฑ์</th>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">ทีมโหลด</th>
+            <th class="px-3 py-2.5 text-center text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">ประเภทรถ</th>
+            <th class="px-3 py-2.5 text-left   text-[11px] font-black text-slate-500 uppercase whitespace-nowrap">ทะเบียน / ชื่อขนส่ง</th>
+          </tr>
+        </thead>
+        <tbody id="si-tbody">
+          <tr><td colspan="13" class="text-center py-16 text-slate-400 font-bold">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══ ตั้งค่า ═══════════════════════════════════════════════════════════
+var SI_API = 'https://akazjfgbnzhykhgeenye.supabase.co/functions/v1/si-summary';
+var SI_TOKEN = new URLSearchParams(location.search).get('k') || '';
+
+var _siRows = [];
+
+function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// "วันนี้" ตามเวลาไทย — ห้ามใช้ toISOString() นั่นคือวัน UTC ตี 0-7 โมงจะเพี้ยนเป็นเมื่อวาน
+function _bkkToday(){
+  return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0,10);
+}
+
+function _fatal(msg){
+  document.getElementById('si-tbody').innerHTML =
+    '<tr><td colspan="13" class="text-center py-16 text-rose-500 font-bold">' + _esc(msg) + '</td></tr>';
+  document.getElementById('si-kpi').innerHTML = '';
+  document.getElementById('si-count').textContent = '0';
+}
+
+window.siLoad = async function(){
+  if (!SI_TOKEN) { _fatal('ไม่พบ token — URL ต้องมี ?k=<token> ติดต่อทีม WMS เพื่อขอใบอนุญาต'); return; }
+
+  var fromV = document.getElementById('si-date-from').value;
+  var toV   = document.getElementById('si-date-to').value;
+  if (!fromV || !toV) return;
+
+  document.getElementById('si-tbody').innerHTML =
+    '<tr><td colspan="13" class="text-center py-16 text-slate-400 font-bold">กำลังโหลด...</td></tr>';
+
+  try {
+    var qs = new URLSearchParams({ from: fromV, to: toV, k: SI_TOKEN });
+    var res = await fetch(SI_API + '?' + qs.toString());
+    var j = await res.json();
+    if (!res.ok) { _fatal(j.error || ('เกิดข้อผิดพลาด (' + res.status + ')')); return; }
+
+    _siRows = j.rows || [];
+
+    // เติม dropdown ทีมโหลดจากข้อมูลจริง
+    var teams = Array.from(new Set(_siRows.map(function(r){ return r.team; }).filter(Boolean))).sort();
+    var sel = document.getElementById('si-f-team'), cur = sel.value;
+    sel.innerHTML = '<option value="">ทุกทีม</option>' +
+      teams.map(function(t){ return '<option value="' + _esc(t) + '">' + _esc(t) + '</option>'; }).join('');
+    sel.value = cur;
+
+    document.getElementById('si-updated').textContent =
+      'อัปเดตเมื่อ ' + new Date().toLocaleTimeString('th-TH', { timeZone:'Asia/Bangkok', hour:'2-digit', minute:'2-digit' });
+
+    siRender();
+  } catch(e) {
+    _fatal('เชื่อมต่อไม่ได้: ' + (e && e.message ? e.message : String(e)));
+  }
+};
+
+function _siFiltered(){
+  var fTeam   = document.getElementById('si-f-team').value;
+  var fTruck  = document.getElementById('si-f-truck').value;
+  var fRange  = document.getElementById('si-f-range').value;
+  var fSearch = document.getElementById('si-f-search').value.toLowerCase().trim();
+  return _siRows.filter(function(r){
+    if (fTeam  && r.team      !== fTeam)  return false;
+    if (fTruck && r.truckType !== fTruck) return false;
+    if (fRange === 'ok'  && r.rangeStatus !== 'ok') return false;
+    if (fRange === 'out' && r.rangeStatus === 'ok') return false;
+    if (fSearch && !((r.customer + ' ' + r.sku + ' ' + r.name).toLowerCase().includes(fSearch))) return false;
+    return true;
+  });
+}
+
+window.siRender = function(){
+  var list = _siFiltered();
+  document.getElementById('si-count').textContent = list.length.toLocaleString();
+
+  var totalQty = list.reduce(function(s,r){ return s + r.qty; }, 0);
+  var totalKg  = list.reduce(function(s,r){ return s + r.finalKg; }, 0);
+  var outCount = list.filter(function(r){ return r.rangeStatus !== 'ok'; }).length;
+
+  function tile(label, value, unit, cls){
+    return '<div class="bg-white rounded-2xl border border-slate-200 p-4">'
+         +   '<div class="text-[11px] font-black text-slate-400 uppercase mb-1">' + label + '</div>'
+         +   '<div class="text-2xl font-black ' + (cls||'text-slate-800') + '">' + value
+         +     ' <span class="text-sm text-slate-400 font-bold">' + unit + '</span></div></div>';
+  }
+  document.getElementById('si-kpi').innerHTML =
+      tile('รายการที่โหลด',      list.length.toLocaleString(), 'รายการ')
+    + tile('จำนวนโหลดจริงรวม',   totalQty.toLocaleString(),    'เส้น')
+    + tile('น้ำหนัก Final รวม',  totalKg.toLocaleString(undefined,{maximumFractionDigits:0}), 'กก.')
+    + tile('นอกเกณฑ์น้ำหนัก',    outCount.toLocaleString(),    'รายการ', outCount ? 'text-rose-600' : '');
+
+  var tbody = document.getElementById('si-tbody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="13" class="text-center py-16 text-slate-400 font-bold">ไม่พบรายการ</td></tr>';
+    return;
+  }
+
+  var truckBadge = { company:['bg-slate-100 text-slate-700','รถบริษัท'], hired:['bg-sky-100 text-sky-700','รถจ้าง'], self:['bg-violet-100 text-violet-700','รถรับเอง'] };
+  var rangeBadge = { ok:['bg-emerald-100 text-emerald-700','ในเกณฑ์'], over:['bg-rose-100 text-rose-700','▲ เกิน Max'], under:['bg-amber-100 text-amber-700','▼ ต่ำกว่า Min'] };
+  var n2 = { minimumFractionDigits:2, maximumFractionDigits:2 };
+
+  tbody.innerHTML = list.map(function(r){
+    var tb = truckBadge[r.truckType] || truckBadge.self;
+    var rb = rangeBadge[r.rangeStatus] || rangeBadge.ok;
+    return '<tr class="border-b border-slate-100 hover:bg-slate-50 transition">'
+      + '<td class="px-3 py-2.5 font-bold text-slate-700 whitespace-nowrap">' + _esc(r.date) + '</td>'
+      + '<td class="px-3 py-2.5 text-xs text-slate-400 font-mono whitespace-nowrap">' + _esc(r.time) + '</td>'
+      + '<td class="px-3 py-2.5 font-bold text-slate-700">' + _esc(r.customer) + '</td>'
+      + '<td class="px-3 py-2.5 text-slate-500">' + _esc(r.sale) + '</td>'
+      + '<td class="px-3 py-2.5 text-slate-500 font-mono whitespace-nowrap">' + _esc(r.sku) + '</td>'
+      + '<td class="px-3 py-2.5 font-bold text-slate-700">' + _esc(r.name) + '</td>'
+      + '<td class="px-3 py-2.5 text-right font-black text-slate-800">' + r.qty.toLocaleString(undefined, n2) + '</td>'
+      + '<td class="px-3 py-2.5 text-right font-black text-slate-800">' + r.finalKg.toLocaleString(undefined, n2) + '</td>'
+      + '<td class="px-3 py-2.5 text-right font-bold text-slate-600">' + r.perUnit.toFixed(2) + '</td>'
+      + '<td class="px-3 py-2.5 text-center"><span class="inline-block text-[11px] font-black px-2.5 py-1 rounded-full ' + rb[0] + '">' + rb[1] + '</span></td>'
+      + '<td class="px-3 py-2.5 text-slate-600 font-bold whitespace-nowrap">' + _esc(r.team) + '</td>'
+      + '<td class="px-3 py-2.5 text-center"><span class="inline-block text-[11px] font-black px-2.5 py-1 rounded-full ' + tb[0] + '">' + tb[1] + '</span></td>'
+      + '<td class="px-3 py-2.5 text-slate-500 font-mono whitespace-nowrap">' + _esc(r.truckLabel) + '</td>'
+      + '</tr>';
+  }).join('');
+};
+
+window.siExport = function(){
+  var head = ['วันที่','เวลาโหลดเสร็จ','ลูกค้า','Sale','รหัสสินค้า','ชื่อสินค้า','จำนวนโหลดจริง','น้ำหนัก Final (กก.)','กก./เส้น','อยู่ในเกณฑ์','ทีมโหลด','ประเภทรถ','ทะเบียน/ชื่อขนส่ง'];
+  var truckLabel = { company:'รถบริษัท', hired:'รถจ้าง', self:'รถรับเอง' };
+  var rangeLabel = { ok:'ในเกณฑ์', over:'เกิน Max', under:'ต่ำกว่า Min' };
+  var rows = [head];
+  _siFiltered().forEach(function(r){
+    rows.push([ r.date, r.time, r.customer, r.sale, r.sku, r.name,
+                Number(r.qty.toFixed(2)), Number(r.finalKg.toFixed(2)), Number(r.perUnit.toFixed(2)),
+                rangeLabel[r.rangeStatus] || '', r.team, truckLabel[r.truckType] || '', r.truckLabel ]);
+  });
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'สรุป SI');
+  XLSX.writeFile(wb, 'SI_' + document.getElementById('si-date-from').value + '_to_' + document.getElementById('si-date-to').value + '.xlsx');
+};
+
+// ── เริ่มต้น: ค่าเริ่มต้นเป็นวันนี้ (เวลาไทย) ──────────────────────────────
+(function(){
+  var t = _bkkToday();
+  document.getElementById('si-date-from').value = t;
+  document.getElementById('si-date-to').value   = t;
+  siLoad();
+  // รีเฟรชอัตโนมัติทุก 60 วินาที เพื่อให้ฝ่ายขายเห็นข้อมูลสดโดยไม่ต้องกดเอง
+  setInterval(function(){ siLoad(); }, 60000);
+})();
+</script>
+</body>
+</html>

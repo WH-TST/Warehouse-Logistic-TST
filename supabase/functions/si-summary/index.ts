@@ -155,28 +155,85 @@ function computeFinalWeights(
   return result
 }
 
+// ── ขีดจำกัดช่วงวันที่ต่อ 1 request (กันดูดข้อมูลทั้งปีในครั้งเดียว) ──────
+const MAX_DAYS = 92
+
+// ── ใบอนุญาตอยู่ในตาราง public.si_view_access ────────────────────────────
+// ห้ามย้ายไป app_config — ตารางนั้น anon อ่านได้ และ anon key ฝังอยู่ใน
+// index.html แบบเปิดเผย (static site) token จะรั่วทันที
+// ตาราง si_view_access เปิด RLS โดยไม่มี policy = เข้าถึงได้เฉพาะ service_role
+// เพิกถอน: delete from public.si_view_access where token = '...'  (มีผลทันที)
+type AccessRow = {
+  token: string
+  label: string | null
+  origins: string[] | null
+  expires: string | null
+  use_count: number | null
+}
+
 Deno.serve(async (req) => {
-  const cors = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  const reqOrigin = req.headers.get('origin') || ''
+  // ตอบ preflight ก่อน แล้วค่อยล็อก origin จริงหลังอ่าน config (preflight ยังไม่มี token ให้ตรวจ)
+  const baseCors: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-si-token',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    Vary: 'Origin',
   }
+  let cors: Record<string, string> = { ...baseCors, 'Access-Control-Allow-Origin': reqOrigin || '*' }
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors })
+  if (req.method !== 'GET') return json({ error: 'รองรับเฉพาะ GET (อ่านอย่างเดียว)' }, 405)
 
   try {
     const url = new URL(req.url)
+
+    // service_role — ไม่พึ่ง RLS ของ anon และไม่ต้องเปิดตารางให้ anon อ่าน
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+    // ── 0. ตรวจใบอนุญาต ───────────────────────────────────────────────────
+    const supplied = url.searchParams.get('k') || req.headers.get('x-si-token') || ''
+    if (!supplied) return json({ error: 'ต้องระบุ token (?k=... หรือ header X-SI-Token)' }, 401)
+
+    const { data: lic } = await supabase
+      .from('si_view_access')
+      .select('token,label,origins,expires,use_count')
+      .eq('token', supplied)
+      .maybeSingle()
+    const hit = lic as AccessRow | null
+    if (!hit) return json({ error: 'token ไม่ถูกต้องหรือถูกเพิกถอนแล้ว' }, 401)
+
+    const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 10)
+    if (hit.expires && hit.expires < today) return json({ error: 'token หมดอายุแล้ว (' + hit.expires + ')' }, 401)
+
+    const allowOrigins = hit.origins || []
+    if (allowOrigins.length && reqOrigin && !allowOrigins.includes(reqOrigin)) {
+      cors = { ...baseCors } // ไม่ส่ง Allow-Origin กลับ เบราว์เซอร์บล็อกเอง
+      return json({ error: 'origin นี้ไม่ได้รับอนุญาตสำหรับ token ใบนี้' }, 403)
+    }
+    if (reqOrigin) cors = { ...baseCors, 'Access-Control-Allow-Origin': reqOrigin }
+
+    // บันทึกการใช้งาน (ไว้ไล่ย้อนตอน token รั่ว) — ล้มเหลวไม่ต้องขัดการอ่านข้อมูล
+    supabase
+      .from('si_view_access')
+      .update({ last_used: new Date().toISOString(), use_count: (hit.use_count || 0) + 1 })
+      .eq('token', supplied)
+      .then(() => {}, () => {})
+
     const fromV = url.searchParams.get('from')
     const toV = url.searchParams.get('to')
-    if (!fromV || !toV) {
-      return new Response(JSON.stringify({ error: 'ต้องระบุ from และ to (YYYY-MM-DD)' }), {
-        status: 400,
-        headers: { ...cors, 'Content-Type': 'application/json' },
-      })
+    if (!fromV || !toV) return json({ error: 'ต้องระบุ from และ to (YYYY-MM-DD)' }, 400)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromV) || !/^\d{4}-\d{2}-\d{2}$/.test(toV)) {
+      return json({ error: 'รูปแบบวันที่ต้องเป็น YYYY-MM-DD' }, 400)
     }
+    if (toV < fromV) return json({ error: 'to ต้องไม่น้อยกว่า from' }, 400)
+    const spanDays = Math.round((Date.parse(toV) - Date.parse(fromV)) / 86400000) + 1
+    if (spanDays > MAX_DAYS) return json({ error: 'ขอข้อมูลได้ครั้งละไม่เกิน ' + MAX_DAYS + ' วัน (ขอมา ' + spanDays + ' วัน)' }, 400)
+
     const fTeam = url.searchParams.get('team') || ''
     const fTruck = url.searchParams.get('truck') || ''
     const fRange = url.searchParams.get('range') || ''
-
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!)
 
     // 1. Session ที่ปิดงานแล้ว
     const { data: sessionsRaw, error: sErr } = await supabase
@@ -188,9 +245,7 @@ Deno.serve(async (req) => {
       .range(0, 19999)
     if (sErr) throw sErr
     const sessions = (sessionsRaw || []) as Session[]
-    if (!sessions.length) {
-      return new Response(JSON.stringify({ rows: [] }), { headers: { ...cors, 'Content-Type': 'application/json' } })
-    }
+    if (!sessions.length) return json({ from: fromV, to: toV, count: 0, rows: [] })
 
     const orderIds = Array.from(new Set(sessions.map((s) => s.order_id).filter(Boolean))) as string[]
 
@@ -324,13 +379,8 @@ Deno.serve(async (req) => {
       .filter((r) => !fRange || (fRange === 'ok' ? r.rangeStatus === 'ok' : r.rangeStatus !== 'ok'))
       .map(({ _sortKey, ...rest }) => rest)
 
-    return new Response(JSON.stringify({ from: fromV, to: toV, count: filtered.length, rows: filtered }), {
-      headers: { ...cors, 'Content-Type': 'application/json' },
-    })
+    return json({ from: fromV, to: toV, count: filtered.length, rows: filtered })
   } catch (e) {
-    return new Response(JSON.stringify({ error: String((e as Error).message || e) }), {
-      status: 500,
-      headers: { ...cors, 'Content-Type': 'application/json' },
-    })
+    return json({ error: String((e as Error).message || e) }, 500)
   }
 })
