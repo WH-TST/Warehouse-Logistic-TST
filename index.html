@@ -26705,6 +26705,7 @@ function _ldSubscribeRealtime() {
 }
 
 var _ldMonDate = '';
+var _ldMonBusy = false;
 async function _ldMonFetch(dateVal, showSpinner) {
     if (!dateVal) return;
     // Skip re-render if user is actively typing in a monitor input
@@ -26713,6 +26714,10 @@ async function _ldMonFetch(dateVal, showSpinner) {
         var _wrap = document.getElementById('ld-mon-table-wrap');
         if (_ae && (_ae.tagName==='INPUT'||_ae.tagName==='TEXTAREA') && _wrap && _wrap.contains(_ae)) return;
     }
+    // กันคำขอซ้อนกัน — รอบนี้ดึงเกือบ 1 MB ถ้าเน็ตช้ากว่ารอบ poll คำขอจะกองทับกัน
+    // จนหน้าค้างและกินแบนด์วิดท์ทวีคูณ รอบที่ยังค้างอยู่ให้ข้ามไปเลย
+    if (_ldMonBusy) return;
+    _ldMonBusy = true;
     var wrap = document.getElementById('ld-mon-table-wrap');
     if (showSpinner && wrap) wrap.innerHTML = '<div class="text-center py-8 text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...</div>';
     try {
@@ -26729,7 +26734,11 @@ async function _ldMonFetch(dateVal, showSpinner) {
         var candIds = cand.map(function(o){ return o.id; });
         var allSess = [];
         if (candIds.length) {
-            var {data:s2} = await window._sb.from('loading_sessions').select('*').in('order_id', candIds);
+            // ระบุคอลัมน์แทน select('*') — คอลัมน์ lifts เป็น JSON ก้อนใหญ่ (~7% ของ payload)
+            // ที่หน้ามอนิเตอร์ไม่ได้ใช้เลย ดึงมาเปล่าๆ ทุก 20 วินาที
+            var {data:s2} = await window._sb.from('loading_sessions')
+                .select('id,order_id,plan_id,sku,product_name,qty,weight,team,staff_name,record_type,truck_unit,note,photo_urls,start_time,end_time,created_at,updated_at')
+                .in('order_id', candIds);
             allSess = s2 || [];
         }
         // 2) หา "วันที่โหลดจริง" ต่อออเดอร์ = วันที่ของ session ที่โหลดล่าสุด (end_time > start_time > created_at)
@@ -26779,30 +26788,39 @@ async function _ldMonFetch(dateVal, showSpinner) {
         if (badge) badge.classList.remove('hidden');
     } catch(e) {
         if (wrap) wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">เกิดข้อผิดพลาด: '+(e?.message||String(e))+'</div>';
+    } finally {
+        _ldMonBusy = false;
     }
 }
 
 function _ldMonSetupRt(dateVal) {
     if (_ldMonSub) { try { window._sb.removeChannel(_ldMonSub); } catch(e) {} _ldMonSub = null; }
+    // รวบ event ที่ถี่ๆ ให้ยิงรอบเดียว — ตอนคนโหลดงานกันหลายคัน row change
+    // เข้ามาเป็นสิบครั้งต่อวินาที ถ้ายิง fetch ทุกครั้งหน้าจะค้าง
+    var _rtTimer = null;
+    function _rtPing() {
+        if (_rtTimer) return;
+        _rtTimer = setTimeout(function(){
+            _rtTimer = null;
+            var d = document.getElementById('ld-mon-date')?.value;
+            if (d) _ldMonFetch(d, false);
+        }, 1500);
+    }
     _ldMonSub = window._sb.channel('loading-mon-rt-v2')
-        .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions'}, function(){
-            var d = document.getElementById('ld-mon-date')?.value;
-            if (d) _ldMonFetch(d, false);
-        })
-        .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'}, function(){
-            var d = document.getElementById('ld-mon-date')?.value;
-            if (d) _ldMonFetch(d, false);
-        })
+        .on('postgres_changes', {event:'*', schema:'public', table:'loading_sessions'}, _rtPing)
+        .on('postgres_changes', {event:'*', schema:'public', table:'loading_orders'}, _rtPing)
         .subscribe();
-    // polling fallback ทุก 5 วินาที
+    // polling fallback — realtime เป็นช่องทางหลักอยู่แล้ว อันนี้แค่กันหลุด
+    // ตั้ง 5 วิ ไม่ไหว เพราะรอบหนึ่งดึงเกือบ 1 MB (≈12 MB/นาที ต่อ 1 แท็บ)
     if (window._ldMonPoll) clearInterval(window._ldMonPoll);
     window._ldMonPoll = setInterval(function(){
         var d = document.getElementById('ld-mon-date')?.value;
         if (!d) return;
         var wrap = document.getElementById('ld-mon-table-wrap');
         if (!wrap || wrap.closest('.hidden')) return;
+        if (document.hidden) return;   // แท็บที่ไม่ได้เปิดดูอยู่ ไม่ต้องดึง
         _ldMonFetch(d, false);
-    }, 5000);
+    }, 20000);
 }
 
 window.ldMonLoad = async function() {
