@@ -28839,7 +28839,13 @@ async function _custFetchSale() {
     if (res.error) throw new Error(res.error.message);
     var byCode = {}, byName = {};
     (res.data || []).forEach(function(c){
-        if (c.customer_code && !byCode[c.customer_code]) byCode[c.customer_code] = c;
+        if (c.customer_code) {
+            if (!byCode[c.customer_code]) byCode[c.customer_code] = c;
+            return;   // มีรหัสแล้ว ห้ามเอามาจับคู่ด้วยชื่อ
+        }
+        // ดัชนีชื่อ ใส่เฉพาะรายที่ฝั่งฝ่ายขาย "ไม่มีรหัส" เท่านั้น
+        // กันเคสอย่าง WMS C00009 จันทร์เพ็ญฯ ที่ชื่อไปพ้องกับ C00224 ของฝ่ายขาย
+        // ซึ่งเป็นคนละรหัส อาจเป็นคนละนิติบุคคล ถ้าจับคู่ไปข้อมูลจะสลับกันแบบเงียบๆ
         var k = _custNormName(c.name);
         if (k && !byName[k]) byName[k] = c;
     });
