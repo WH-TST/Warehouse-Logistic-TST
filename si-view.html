@@ -193,97 +193,253 @@ var SI_COLS = [
 ];
 
 var _siSort = { k:'', dir:0 };
+// _siColF[key] = { vals:[...] }  สำหรับคอลัมน์ทั่วไป (ว่าง/ไม่มี = ไม่กรอง)
+//              = { min:n, max:n } สำหรับคอลัมน์ตัวเลข
 var _siColF = {};
-var _siFocusKey = '';
+var _siMenuKey = '';     // คอลัมน์ที่เปิดป๊อบอัพอยู่
+var _siMenuQ = '';       // คำค้นในรายการของป๊อบอัพ
 
-// ตัวกรองคอลัมน์ตัวเลข: >100, <50, >=10, <=9.5, 10-20 หรือเลขตรงๆ
-function _siNumMatch(val, expr){
-  expr = String(expr).replace(/,/g,'').trim();
-  if (!expr) return true;
-  var m;
-  if ((m = expr.match(/^(>=|<=|>|<|=)\s*(-?\d+(?:\.\d+)?)$/))) {
-    var n = parseFloat(m[2]);
-    if (m[1] === '>')  return val >  n;
-    if (m[1] === '<')  return val <  n;
-    if (m[1] === '>=') return val >= n;
-    if (m[1] === '<=') return val <= n;
-    return Math.abs(val - n) < 0.005;
-  }
-  if ((m = expr.match(/^(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)$/)))
-    return val >= parseFloat(m[1]) && val <= parseFloat(m[2]);
-  if (/^-?\d+(\.\d+)?$/.test(expr)) return Math.abs(val - parseFloat(expr)) < 0.005;
-  return String(val).indexOf(expr) >= 0;
+function _siColOf(k){ return SI_COLS.filter(function(c){ return c.k === k; })[0] || {}; }
+function _siHasF(k){
+  var f = _siColF[k];
+  if (!f) return false;
+  if (f.vals) return f.vals.length > 0;
+  return f.min != null || f.max != null;
+}
+function _siAnyF(){ return SI_COLS.some(function(c){ return _siHasF(c.k); }); }
+
+// ค่าที่เลือกได้ของคอลัมน์ — คิดจากข้อมูลที่ผ่านตัวกรองคอลัมน์ "อื่น" แล้ว
+// (เหมือน Excel: เปิดเมนูคอลัมน์ไหน จะเห็นเฉพาะค่าที่ยังเป็นไปได้)
+function _siValuesFor(key){
+  var rows = _siRows.filter(function(r){ return _siMatchExcept(r, key); });
+  var c = _siColOf(key);
+  var seen = {}, out = [];
+  rows.forEach(function(r){
+    var v = r[key];
+    if (v == null || v === '') return;
+    v = String(v);
+    if (!seen[v]) { seen[v] = 1; out.push({ v:v, label: c.map ? (c.map[v] || v) : v }); }
+  });
+  out.sort(function(a,b){ return a.label.localeCompare(b.label, 'th'); });
+  return out;
 }
 
-window.siSortBy = function(key){
-  if (_siSort.k !== key) { _siSort.k = key; _siSort.dir = 1; }
-  else if (_siSort.dir === 1) { _siSort.dir = -1; }
-  else { _siSort.k = ''; _siSort.dir = 0; }
+function _siMatchExcept(r, skipKey){
+  for (var i = 0; i < SI_COLS.length; i++) {
+    var c = SI_COLS[i];
+    if (c.k === skipKey) continue;
+    var f = _siColF[c.k];
+    if (!f) continue;
+    if (c.num) {
+      var n = parseFloat(r[c.k]) || 0;
+      if (f.min != null && n < f.min) return false;
+      if (f.max != null && n > f.max) return false;
+    } else if (f.vals && f.vals.length) {
+      if (f.vals.indexOf(String(r[c.k])) < 0) return false;
+    }
+  }
+  return true;
+}
+
+// ── ป๊อบอัพต่อคอลัมน์ ────────────────────────────────────────────────────
+window.siToggleMenu = function(key, ev){
+  ev.stopPropagation();
+  if (_siMenuKey === key) { siCloseMenu(); return; }
+  _siMenuKey = key;
+  _siMenuQ = '';
+  _siDrawMenu(ev.currentTarget);
+};
+
+function _siMenuEl(){
+  var m = document.getElementById('si-menu');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'si-menu';
+    m.className = 'hidden absolute z-50 w-64 bg-white rounded-xl border border-slate-200 shadow-xl py-1';
+    document.body.appendChild(m);
+  }
+  return m;
+}
+
+window.siCloseMenu = function(){
+  _siMenuKey = '';
+  _siMenuEl().classList.add('hidden');
+};
+
+function _siDrawMenu(anchorEl){
+  var m = _siMenuEl();
+  var key = _siMenuKey, c = _siColOf(key);
+  var f = _siColF[key] || {};
+  var sortedAsc  = _siSort.k === key && _siSort.dir === 1;
+  var sortedDesc = _siSort.k === key && _siSort.dir === -1;
+
+  function btn(active, onclick, icon, text){
+    return '<button onclick="' + onclick + '" class="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg transition '
+         + (active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100') + '">'
+         + '<span class="w-4 text-center">' + icon + '</span>' + text + '</button>';
+  }
+
+  var html = '<div class="px-3 pt-3 pb-1 text-[11px] font-black text-slate-400 uppercase">' + _esc(c.label) + '</div>'
+    + '<div class="px-1.5">'
+    +   btn(sortedAsc,  'siSetSort(\'' + key + '\',1)',  '↑', c.num ? 'น้อย → มาก' : 'ก → ฮ / A → Z')
+    +   btn(sortedDesc, 'siSetSort(\'' + key + '\',-1)', '↓', c.num ? 'มาก → น้อย' : 'ฮ → ก / Z → A')
+    +   (_siSort.k === key ? btn(false, 'siSetSort(\'' + key + '\',0)', '✕', 'ยกเลิกการเรียง') : '')
+    + '</div><div class="border-t border-slate-100 my-1.5"></div>';
+
+  if (c.num) {
+    html += '<div class="px-3 pb-1 text-[11px] font-black text-slate-400 uppercase">ช่วงตัวเลข</div>'
+      + '<div class="px-3 pb-2 flex items-center gap-2">'
+      +   '<input id="si-menu-min" type="number" step="any" placeholder="ตั้งแต่" value="' + (f.min != null ? f.min : '') + '" '
+      +     'class="w-full border-2 border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:border-indigo-400 focus:outline-none">'
+      +   '<span class="text-slate-300">–</span>'
+      +   '<input id="si-menu-max" type="number" step="any" placeholder="ถึง" value="' + (f.max != null ? f.max : '') + '" '
+      +     'class="w-full border-2 border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:border-indigo-400 focus:outline-none">'
+      + '</div>';
+  } else {
+    var all = _siValuesFor(key);
+    var q = _siMenuQ.toLowerCase();
+    var shown = q ? all.filter(function(o){ return o.label.toLowerCase().indexOf(q) >= 0; }) : all;
+    var sel = f.vals || [];
+    var allChecked = shown.length > 0 && shown.every(function(o){ return sel.indexOf(o.v) >= 0; });
+
+    html += '<div class="px-3 pb-2">'
+      + '<input id="si-menu-q" type="text" placeholder="ค้นหาในรายการ..." value="' + _esc(_siMenuQ) + '" '
+      +   'oninput="siMenuSearch(this.value)" '
+      +   'class="w-full border-2 border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:border-indigo-400 focus:outline-none">'
+      + '</div>'
+      + '<div class="max-h-56 overflow-y-auto px-1.5">'
+      + '<label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer border-b border-slate-100 mb-1">'
+      +   '<input type="checkbox" onchange="siMenuAll(this.checked)"' + (allChecked ? ' checked' : '')
+      +     ' class="accent-indigo-600 w-3.5 h-3.5">'
+      +   '<span class="text-xs font-black text-slate-600">เลือกทั้งหมด</span></label>';
+
+    if (!shown.length) html += '<div class="px-2 py-6 text-center text-xs font-bold text-slate-300">ไม่พบ</div>';
+    shown.forEach(function(o){
+      html += '<label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">'
+        + '<input type="checkbox" onchange="siMenuPick(\'' + encodeURIComponent(o.v) + '\', this.checked)"'
+        + (sel.indexOf(o.v) >= 0 ? ' checked' : '') + ' class="accent-indigo-600 w-3.5 h-3.5">'
+        + '<span class="text-xs font-bold text-slate-600 truncate" title="' + _esc(o.label) + '">' + _esc(o.label) + '</span></label>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div class="border-t border-slate-100 mt-1.5 px-3 py-2 flex items-center gap-2">'
+    + '<button onclick="siClearCol(\'' + key + '\')" class="flex-1 px-2 py-1.5 text-xs font-black rounded-lg border-2 border-slate-200 text-slate-500 hover:bg-slate-50">ล้างคอลัมน์นี้</button>'
+    + (c.num ? '<button onclick="siApplyNum(\'' + key + '\')" class="flex-1 px-2 py-1.5 text-xs font-black rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">ตกลง</button>'
+             : '<button onclick="siCloseMenu()" class="flex-1 px-2 py-1.5 text-xs font-black rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">เสร็จ</button>')
+    + '</div>';
+
+  m.innerHTML = html;
+  m.classList.remove('hidden');
+
+  // วางใต้ไอคอน และดันกลับเข้าจอถ้าล้นขอบขวา
+  var r = anchorEl.getBoundingClientRect();
+  m.style.top  = (r.bottom + window.scrollY + 6) + 'px';
+  var left = r.left + window.scrollX;
+  m.style.left = Math.max(8, Math.min(left, window.scrollX + document.documentElement.clientWidth - m.offsetWidth - 8)) + 'px';
+
+  var qEl = document.getElementById('si-menu-q');
+  if (qEl && _siMenuQ) { qEl.focus(); qEl.setSelectionRange(qEl.value.length, qEl.value.length); }
+}
+
+function _siRedrawMenu(){
+  if (!_siMenuKey) return;
+  var icon = document.querySelector('#si-thead [data-fkey="' + _siMenuKey + '"]');
+  if (icon) _siDrawMenu(icon);
+}
+
+window.siMenuSearch = function(v){ _siMenuQ = v; _siRedrawMenu(); };
+
+window.siMenuPick = function(encV, on){
+  var v = decodeURIComponent(encV);
+  var f = _siColF[_siMenuKey] || { vals: [] };
+  var sel = (f.vals || []).slice();
+  var i = sel.indexOf(v);
+  if (on && i < 0) sel.push(v);
+  if (!on && i >= 0) sel.splice(i, 1);
+  if (sel.length) _siColF[_siMenuKey] = { vals: sel }; else delete _siColF[_siMenuKey];
+  siRender();
+  _siRedrawMenu();
+};
+
+window.siMenuAll = function(on){
+  if (on) {
+    var q = _siMenuQ.toLowerCase();
+    var shown = _siValuesFor(_siMenuKey).filter(function(o){ return !q || o.label.toLowerCase().indexOf(q) >= 0; });
+    _siColF[_siMenuKey] = { vals: shown.map(function(o){ return o.v; }) };
+  } else {
+    delete _siColF[_siMenuKey];
+  }
+  siRender();
+  _siRedrawMenu();
+};
+
+window.siApplyNum = function(key){
+  var mn = document.getElementById('si-menu-min').value;
+  var mx = document.getElementById('si-menu-max').value;
+  var f = {};
+  if (mn !== '') f.min = parseFloat(mn);
+  if (mx !== '') f.max = parseFloat(mx);
+  if (f.min != null || f.max != null) _siColF[key] = f; else delete _siColF[key];
+  siCloseMenu();
   siRender();
 };
 
-window.siColFilter = function(key, val){
-  if (val) _siColF[key] = val; else delete _siColF[key];
+window.siClearCol = function(key){
+  delete _siColF[key];
+  if (_siSort.k === key) _siSort = { k:'', dir:0 };
+  siCloseMenu();
+  siRender();
+};
+
+window.siSetSort = function(key, dir){
+  _siSort = dir ? { k:key, dir:dir } : { k:'', dir:0 };
+  siCloseMenu();
   siRender();
 };
 
 window.siClearSortFilter = function(){
   _siSort = { k:'', dir:0 };
   _siColF = {};
+  siCloseMenu();
   ['si-f-team','si-f-truck','si-f-range','si-f-search'].forEach(function(id){
     var el = document.getElementById(id); if (el) el.value = '';
   });
   siRender();
 };
 
+// ปิดป๊อบอัพเมื่อคลิกที่อื่น หรือกด Esc
+document.addEventListener('click', function(e){
+  if (!_siMenuKey) return;
+  var m = document.getElementById('si-menu');
+  if (m && m.contains(e.target)) return;
+  siCloseMenu();
+});
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') siCloseMenu(); });
+
 function _siBuildHead(){
   var thead = document.getElementById('si-thead');
   if (!thead) return;
   var alignCls = { left:'text-left', right:'text-right', center:'text-center' };
 
-  var r1 = SI_COLS.map(function(c){
-    var arrow = (_siSort.k === c.k)
-      ? (_siSort.dir === 1 ? ' ▲' : ' ▼')
-      : ' <span class="text-slate-300">⇅</span>';
+  thead.innerHTML = '<tr>' + SI_COLS.map(function(c){
+    var sorted = _siSort.k === c.k;
+    var active = sorted || _siHasF(c.k);
+    var mark = sorted ? (_siSort.dir === 1 ? '↑' : '↓') : '';
     return '<th class="px-3 py-2.5 ' + alignCls[c.align] + ' text-[11px] font-black uppercase whitespace-nowrap '
-         + (_siSort.k === c.k ? 'text-indigo-600' : 'text-slate-500')
-         + ' cursor-pointer select-none hover:bg-slate-100 transition" '
-         + 'onclick="siSortBy(\'' + c.k + '\')" title="คลิกเพื่อเรียงลำดับ">'
-         + _esc(c.label) + arrow + '</th>';
-  }).join('');
-
-  var r2 = SI_COLS.map(function(c){
-    var cur = _siColF[c.k] || '', inner;
-    if (c.f === 'select') {
-      var vals = Array.from(new Set(_siRows.map(function(r){ return r[c.k]; })
-                  .filter(function(v){ return v != null && v !== ''; }))).sort();
-      inner = '<select onchange="siColFilter(\'' + c.k + '\', this.value)" '
-            + 'class="w-full border border-slate-200 rounded-lg px-1.5 py-1 text-[11px] font-bold bg-white focus:border-indigo-400 focus:outline-none">'
-            + '<option value="">ทั้งหมด</option>'
-            + vals.map(function(v){
-                var lbl = c.map ? (c.map[v] || v) : v;
-                return '<option value="' + _esc(v) + '"' + (String(v) === cur ? ' selected' : '') + '>' + _esc(lbl) + '</option>';
-              }).join('')
-            + '</select>';
-    } else {
-      inner = '<input type="text" value="' + _esc(cur) + '" '
-            + 'oninput="siColFilter(\'' + c.k + '\', this.value)" '
-            + 'placeholder="' + (c.num ? '>100, 10-20' : 'ค้นหา') + '" '
-            + 'class="w-full border border-slate-200 rounded-lg px-1.5 py-1 text-[11px] font-bold focus:border-indigo-400 focus:outline-none '
-            + (c.align === 'right' ? 'text-right' : '') + '">';
-    }
-    return '<th class="px-2 pb-2 align-top" style="min-width:110px;">' + inner + '</th>';
-  }).join('');
-
-  thead.innerHTML = '<tr>' + r1 + '</tr><tr class="bg-white border-b border-slate-200">' + r2 + '</tr>';
-
-  // คืนโฟกัสให้ช่องที่กำลังพิมพ์ (หัวตารางถูกสร้างใหม่ทุกรอบ)
-  if (_siFocusKey) {
-    var idx = SI_COLS.map(function(c){ return c.k; }).indexOf(_siFocusKey);
-    var cellEl = thead.rows[1] && thead.rows[1].cells[idx];
-    var el = cellEl && cellEl.querySelector('input');
-    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
-  }
+      + (active ? 'text-indigo-600' : 'text-slate-500') + '">'
+      + '<span class="inline-flex items-center gap-1">'
+      +   _esc(c.label)
+      +   (mark ? '<span class="text-indigo-600">' + mark + '</span>' : '')
+      +   '<button type="button" data-fkey="' + c.k + '" onclick="siToggleMenu(\'' + c.k + '\', event)" '
+      +     'title="เรียงลำดับ / กรอง" '
+      +     'class="w-5 h-5 inline-flex items-center justify-center rounded transition '
+      +     (active ? 'bg-indigo-100 text-indigo-600' : 'text-slate-300 hover:bg-slate-200 hover:text-slate-600') + '">'
+      +     '<svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">'
+      +       '<path d="M1.5 2.5h13a.5.5 0 0 1 .38.82L10 9.2V14a.5.5 0 0 1-.76.43l-2.5-1.5A.5.5 0 0 1 6.5 12.5V9.2L1.12 3.32a.5.5 0 0 1 .38-.82Z"/>'
+      +     '</svg></button>'
+      + '</span></th>';
+  }).join('') + '</tr>';
 }
 
 function _siFiltered(){
@@ -299,15 +455,7 @@ function _siFiltered(){
     if (fRange === 'out' && r.rangeStatus === 'ok') return false;
     if (fSearch && !((r.customer + ' ' + r.sku + ' ' + r.name).toLowerCase().includes(fSearch))) return false;
 
-    for (var i = 0; i < SI_COLS.length; i++) {
-      var c = SI_COLS[i], want = _siColF[c.k];
-      if (!want) continue;
-      var v = r[c.k];
-      if (c.num) { if (!_siNumMatch(parseFloat(v) || 0, want)) return false; }
-      else if (c.f === 'select') { if (String(v) !== want) return false; }
-      else if (String(v == null ? '' : v).toLowerCase().indexOf(want.toLowerCase()) < 0) return false;
-    }
-    return true;
+    return _siMatchExcept(r, null);
   });
 
   if (_siSort.dir && _siSort.k) {
@@ -322,16 +470,11 @@ function _siFiltered(){
 }
 
 window.siRender = function(){
-  var ae = document.activeElement;
-  _siFocusKey = (ae && ae.tagName === 'INPUT' && ae.closest && ae.closest('#si-thead'))
-    ? (SI_COLS[Array.prototype.indexOf.call(ae.closest('tr').cells, ae.closest('th'))] || {}).k || ''
-    : '';
-
   var list = _siFiltered();
   _siBuildHead();
 
   var clearBtn = document.getElementById('si-clear-btn');
-  if (clearBtn) clearBtn.classList.toggle('hidden', !_siSort.dir && !Object.keys(_siColF).length);
+  if (clearBtn) clearBtn.classList.toggle('hidden', !_siSort.dir && !_siAnyF());
 
   document.getElementById('si-count').textContent = list.length.toLocaleString();
 
