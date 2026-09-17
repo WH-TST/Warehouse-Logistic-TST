@@ -28835,7 +28835,7 @@ function _custPhoneSame(a, b) {
 // อ่านลูกค้าจากระบบฝ่ายขาย แล้วสร้างดัชนี 2 ชั้น: รหัสลูกค้าเป็นหลัก ชื่อร้านเป็นตัวสำรอง
 async function _custFetchSale() {
     var res = await window._sbProd.from('customers')
-        .select('customer_code,name,phone,address,salesperson_name').limit(5000);
+        .select('id,customer_code,name,phone,address,salesperson_name').limit(5000);
     if (res.error) throw new Error(res.error.message);
     var byCode = {}, byName = {};
     (res.data || []).forEach(function(c){
@@ -28849,7 +28849,7 @@ async function _custFetchSale() {
         var k = _custNormName(c.name);
         if (k && !byName[k]) byName[k] = c;
     });
-    return { byCode: byCode, byName: byName };
+    return { byCode: byCode, byName: byName, all: res.data || [] };
 }
 
 var _CUST_SYNC_FIELDS = [
@@ -28877,9 +28877,33 @@ function _custBuildPlan(shops, idx) {
             changes.push({ id:r.id, name:r.name, field:f.w, label:f.label, from:wv, to:sv });
         });
     });
+    // ── ลูกค้าใหม่: ฝั่งฝ่ายขายมี แต่ WMS ไม่มีทั้งรหัสและชื่อ ────────────────
+    var haveCode = {}, haveName = {};
+    shops.forEach(function(r){ haveCode[r.id] = 1; haveName[_custNormName(r.name)] = 1; });
+    var seen = {}, inserts = [];
+    (idx.all || []).forEach(function(c){
+        var nm = _custNormName(c.name);
+        if (!nm) return;
+        if (c.customer_code && haveCode[c.customer_code]) return;   // มีรหัสนี้อยู่แล้ว
+        if (haveName[nm]) return;                                   // มีชื่อนี้อยู่แล้ว
+        if (seen[nm]) return;                                       // ฝ่ายขายมีชื่อซ้ำกันเอง เอารายแรกพอ
+        seen[nm] = 1;
+        // รหัสใหม่: ใช้ customer_code ถ้ามี ไม่มีก็สร้างจาก id ของฝ่ายขาย (คงที่ ซิงก์ซ้ำไม่เพิ่มซ้ำ)
+        var newId = c.customer_code || ('S' + String(c.id || '').replace(/-/g, '').slice(0, 10).toUpperCase());
+        if (!newId) return;
+        inserts.push({
+            id: newId,
+            name: String(c.name || '').trim(),
+            address: String(c.address == null ? '' : c.address).trim(),
+            phone: String(c.phone == null ? '' : c.phone).trim(),
+            sale: String(c.salesperson_name == null ? '' : c.salesperson_name).trim()
+            // distance / no_trailer ปล่อยให้ใช้ค่า default — เป็นข้อมูลที่คลังต้องกรอกเอง
+        });
+    });
+
     return {
         rows: Object.keys(rowsById).map(function(k){ return rowsById[k]; }),
-        changes: changes, matched: matched, unmatched: unmatched
+        changes: changes, matched: matched, unmatched: unmatched, inserts: inserts
     };
 }
 
@@ -28888,6 +28912,16 @@ function _custBuildPlan(shops, idx) {
 // แต่เราส่งไปแค่ช่องที่จะแก้ (เช่น {id, phone}) ฐานข้อมูลจึงฟ้อง
 //   null value in column "address" violates not-null constraint
 // update แตะเฉพาะคอลัมน์ที่ส่งไป และไม่มีทางสร้างแถวใหม่โดยบังเอิญ
+async function _custInsert(rows) {
+    var ok = 0, err = '';
+    for (var i = 0; i < rows.length; i += 100) {
+        // ทุกแถวมีคีย์ครบชุดเหมือนกัน insert ทีเดียวได้ ไม่ติด NOT NULL
+        var r = await window._sb.from('logi_shops').insert(rows.slice(i, i + 100));
+        if (r.error) err = r.error.message; else ok += Math.min(100, rows.length - i);
+    }
+    return { ok: ok, err: err };
+}
+
 async function _custWrite(rows) {
     var ok = 0, err = '';
     for (var i = 0; i < rows.length; i += 20) {
@@ -28916,11 +28950,21 @@ window.custAutoSync = async function(silent) {
     try {
         var idx = await _custFetchSale();
         var plan = _custBuildPlan(_custList, idx);
-        if (!plan.rows.length) { if (!silent) showToast('ข้อมูลตรงกับฝ่ายขายอยู่แล้ว'); return; }
-        var w = await _custWrite(plan.rows);
-        if (w.err) { showToast('ซิงก์จากฝ่ายขายล้มเหลว: ' + w.err, true); return; }
+        var nIns = (plan.inserts || []).length;
+        if (!plan.rows.length && !nIns) { if (!silent) showToast('ข้อมูลตรงกับฝ่ายขายอยู่แล้ว'); return; }
+        var msg = [];
+        if (plan.rows.length) {
+            var w = await _custWrite(plan.rows);
+            if (w.err) { showToast('ซิงก์จากฝ่ายขายล้มเหลว: ' + w.err, true); return; }
+            msg.push('อัปเดต ' + plan.rows.length + ' ร้าน');
+        }
+        if (nIns) {
+            var ins = await _custInsert(plan.inserts);
+            if (ins.err) { showToast('เพิ่มลูกค้าใหม่ล้มเหลว: ' + ins.err, true); return; }
+            msg.push('เพิ่มลูกค้าใหม่ ' + ins.ok + ' ราย');
+        }
         await custInit();
-        showToast('ซิงก์จากฝ่ายขายอัตโนมัติ: อัปเดต ' + plan.rows.length + ' ร้าน (' + plan.changes.length + ' ช่อง)');
+        showToast('ซิงก์จากฝ่ายขาย: ' + msg.join(' · '));
     } catch (e) {
         if (!silent) showToast('ซิงก์จากฝ่ายขายไม่สำเร็จ: ' + (e && e.message ? e.message : e), true);
     } finally {
@@ -28992,7 +29036,7 @@ function _custSyncRenderModal() {
       +   tile('จับคู่ชื่อได้', p.matched + ' ราย')
       +   tile('จับคู่ไม่ได้', p.unmatched.length + ' ราย', p.unmatched.length ? 'text-amber-600' : '')
       +   tile('ร้านที่จะอัปเดต', p.rows.length + ' ราย', 'text-violet-700')
-      +   tile('ช่องที่จะเปลี่ยน', p.changes.length + ' ช่อง', 'text-violet-700')
+      +   tile('ลูกค้าใหม่ที่จะเพิ่ม', ((p.inserts || []).length) + ' ราย', (p.inserts || []).length ? 'text-emerald-700' : '')
       + '</div>'
       + (Object.keys(byField).length
           ? '<div class="px-5 pb-2 text-xs font-bold text-slate-500">แยกตามประเภท: '
@@ -29013,8 +29057,8 @@ function _custSyncRenderModal() {
       + '</div>'
       + '<div class="px-5 py-4 border-t border-slate-100 flex items-center justify-end gap-2">'
       +   '<button onclick="custSyncClose()" class="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50">ยกเลิก</button>'
-      +   (p.rows.length
-            ? '<button onclick="custSyncApply()" id="cust-sync-go" class="px-4 py-2 rounded-xl bg-violet-600 text-white font-black text-sm hover:bg-violet-700">ยืนยันอัปเดต ' + p.rows.length + ' ราย</button>'
+      +   ((p.rows.length || (p.inserts||[]).length)
+            ? '<button onclick="custSyncApply()" id="cust-sync-go" class="px-4 py-2 rounded-xl bg-violet-600 text-white font-black text-sm hover:bg-violet-700">ยืนยัน (อัปเดต ' + p.rows.length + ' · เพิ่มใหม่ ' + ((p.inserts||[]).length) + ')</button>'
             : '')
       + '</div></div>';
 }
@@ -29026,14 +29070,18 @@ window.custSyncClose = function() {
 };
 
 window.custSyncApply = async function() {
-    if (!_custSyncPlan || !_custSyncPlan.rows.length) return;
+    if (!_custSyncPlan) return;
+    var p = _custSyncPlan, nIns = (p.inserts || []).length;
+    if (!p.rows.length && !nIns) return;
     var btn = document.getElementById('cust-sync-go');
-    if (btn) { btn.disabled = true; btn.textContent = 'กำลังอัปเดต...'; }
-    var w = await _custWrite(_custSyncPlan.rows);
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+    var msg = [], bad = '';
+    if (p.rows.length) { var w = await _custWrite(p.rows); if (w.err) bad = w.err; else msg.push('อัปเดต ' + w.ok + ' ร้าน'); }
+    if (nIns)          { var n = await _custInsert(p.inserts); if (n.err) bad = n.err; else msg.push('เพิ่มใหม่ ' + n.ok + ' ราย'); }
     custSyncClose();
     await custInit();
-    if (w.err) showToast('อัปเดตสำเร็จ ' + w.ok + ' ราย แต่มีข้อผิดพลาด: ' + w.err, true);
-    else showToast('อัปเดตข้อมูลลูกค้าจากฝ่ายขายสำเร็จ ' + w.ok + ' ราย');
+    if (bad) showToast('มีข้อผิดพลาด: ' + bad, true);
+    else showToast('ซิงก์จากฝ่ายขายสำเร็จ — ' + msg.join(' · '));
 };
 
 // ══ ฐานข้อมูลลูกค้า (logi_shops) ══════════════════════════════════
