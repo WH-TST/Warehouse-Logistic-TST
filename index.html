@@ -29,8 +29,9 @@
       window._SUPA_URL = SUPA_URL;
       window._SUPA_KEY = SUPA_KEY;
 
-      // Supabase ของฝ่ายผลิต (tst-production-app) — อ่านแผน Production Block โดยตรง (read-only)
-      // ใช้เฉพาะหน้า "จัดการคลัง — Zone Capacity" แทนการดึงแผนผ่าน GAS
+      // Supabase โปรเจกต์ "TST - Sales" — อ่านอย่างเดียว ใช้ 2 งาน:
+      //   1) แผน Production Block (หน้าจัดการคลัง — Zone Capacity) แทนการดึงผ่าน GAS
+      //   2) ฐานข้อมูลลูกค้า customers (ปุ่มซิงก์ในแท็บ Customers)
       window._sbProd = supabase.createClient(
         'https://mrpinzvdidokwbcptgos.supabase.co',
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ycGluenZkaWRva3diY3B0Z29zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNzA2MTAsImV4cCI6MjA5NTk0NjYxMH0.stZ1zZyoHtcnfW1y4wB-zY8HOAsL_Bca7se6423MTnk'
@@ -7563,6 +7564,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
           <i class="fas fa-file-import"></i> Import จากไฟล์
           <input type="file" id="cust-import-file" accept=".xlsx,.xls,.csv" class="hidden" onchange="custImport(this)">
         </label>
+        <button onclick="custSyncPreview()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-50 border border-violet-200 text-violet-700 font-bold text-sm hover:bg-violet-100 transition"><i class="fas fa-rotate"></i> ซิงก์จากฝ่ายขาย</button>
         <button onclick="custOpenAdd()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500 transition shadow"><i class="fas fa-plus"></i> เพิ่มลูกค้า</button>
       </div>
     </div>
@@ -28792,6 +28794,169 @@ window._loLoadCustomers = async function() {
     if (!dl) return;
     var {data} = await window._sb.from('logi_shops').select('name').order('name');
     if (data) dl.innerHTML = data.map(function(s){ return '<option value="'+s.name+'">'; }).join('');
+};
+
+// ══ ซิงก์ข้อมูลลูกค้าจากระบบฝ่ายขาย ════════════════════════════════
+//  จับคู่ด้วย "ชื่อร้าน" แล้วอัปเดต ที่อยู่ / เบอร์โทร / ชื่อ Sale ตามฝั่งฝ่ายขาย
+//  กติกาที่ต้องรักษาไว้:
+//   • ห้ามแตะ id ของ logi_shops เด็ดขาด — ใบสั่งโหลด/แผนส่งอ้างอิงอยู่
+//   • ฟิลด์ไหนฝั่งฝ่ายขาย "ว่าง" ให้คงของเดิมไว้ ไม่ทับด้วยค่าว่าง
+//     (ฝ่ายขายมีที่อยู่/เบอร์แค่ ~46% ส่วน WMS มีเกือบครบ ถ้าทับตรงๆ ข้อมูลส่งของจะหาย)
+//   • distance / no_trailer เป็นของคลังล้วน ไม่ยุ่ง
+//   • ไม่เพิ่มลูกค้าใหม่ และไม่ลบใคร — อัปเดตเฉพาะที่จับคู่ได้
+var _custSyncPlan = null;
+
+// escape ประจำบล็อกนี้ — _ldEsc อยู่คนละ <script> block เรียกข้ามไม่ได้
+function _custEsc(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ตัดคำนำหน้านิติบุคคลและอักขระคั่น เพื่อให้ชื่อร้านที่พิมพ์ต่างกันเล็กน้อยจับคู่กันได้
+function _custNormName(n) {
+    n = String(n || '').toLowerCase();
+    ['บริษัท','จำกัด','(มหาชน)','ห้างหุ้นส่วนจำกัด','หจก.','จก.','บ.'].forEach(function(x){
+        n = n.split(x).join('');
+    });
+    return n.replace(/[\s.\-/()]/g, '');
+}
+
+window.custSyncPreview = async function() {
+    if (!window._sbProd) { showToast('ยังไม่ได้ตั้งค่าการเชื่อมต่อระบบฝ่ายขาย', true); return; }
+    showToast('กำลังอ่านข้อมูลจากระบบฝ่ายขาย...');
+    var res = await window._sbProd.from('customers')
+        .select('name,phone,address,salesperson_name,status').limit(5000);
+    if (res.error) { showToast('อ่านข้อมูลฝ่ายขายไม่ได้: ' + res.error.message, true); return; }
+
+    var saleMap = {};
+    (res.data || []).forEach(function(c){
+        var k = _custNormName(c.name);
+        if (k && !saleMap[k]) saleMap[k] = c;   // ชื่อซ้ำ ใช้รายการแรก
+    });
+
+    var FIELDS = [
+        { w:'address', s:'address',          label:'ที่อยู่'   },
+        { w:'phone',   s:'phone',            label:'เบอร์โทร'  },
+        { w:'sale',    s:'salesperson_name', label:'ชื่อ Sale' }
+    ];
+
+    var changes = [], matched = 0, unmatched = [];
+    _custList.forEach(function(r){
+        var m = saleMap[_custNormName(r.name)];
+        if (!m) { unmatched.push(r.name); return; }
+        matched++;
+        var upd = {};
+        FIELDS.forEach(function(f){
+            var sv = String(m[f.s] == null ? '' : m[f.s]).trim();
+            var wv = String(r[f.w] == null ? '' : r[f.w]).trim();
+            if (!sv || sv === wv) return;      // ฝั่งขายว่าง หรือเหมือนเดิม → ข้าม
+            upd[f.w] = sv;
+            changes.push({ id:r.id, name:r.name, field:f.w, label:f.label, from:wv, to:sv });
+        });
+        if (Object.keys(upd).length) {
+            upd.id = r.id;                      // ใช้เป็น key ของ upsert เท่านั้น ไม่ได้เปลี่ยนค่า
+            r._pendingUpd = upd;
+        } else {
+            delete r._pendingUpd;
+        }
+    });
+
+    _custSyncPlan = {
+        rows: _custList.filter(function(r){ return r._pendingUpd; }).map(function(r){ return r._pendingUpd; }),
+        changes: changes, matched: matched, unmatched: unmatched
+    };
+    _custSyncRenderModal();
+};
+
+function _custSyncRenderModal() {
+    var p = _custSyncPlan;
+    var byField = {};
+    p.changes.forEach(function(c){ byField[c.label] = (byField[c.label] || 0) + 1; });
+
+    var el = document.getElementById('cust-sync-modal');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'cust-sync-modal';
+        el.className = 'fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4';
+        document.body.appendChild(el);
+    }
+    el.classList.remove('hidden');
+
+    function tile(label, value, cls) {
+        return '<div class="bg-slate-50 rounded-xl p-3"><div class="text-[11px] font-black text-slate-400 uppercase mb-0.5">'
+             + label + '</div><div class="text-xl font-black ' + (cls || 'text-slate-800') + '">' + value + '</div></div>';
+    }
+
+    var rowsHtml = p.changes.length
+        ? p.changes.map(function(c){
+            return '<tr class="border-b border-slate-100">'
+              + '<td class="px-3 py-2 font-bold text-slate-700">' + _custEsc(c.name) + '</td>'
+              + '<td class="px-3 py-2 text-slate-500 whitespace-nowrap">' + c.label + '</td>'
+              + '<td class="px-3 py-2 text-rose-600 line-through">' + (_custEsc(c.from) || '<span class="text-slate-300 no-underline">(ว่าง)</span>') + '</td>'
+              + '<td class="px-3 py-2 text-emerald-700 font-bold">' + _custEsc(c.to) + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="4" class="text-center py-10 text-slate-400 font-bold">ข้อมูลตรงกันอยู่แล้ว ไม่มีอะไรต้องอัปเดต</td></tr>';
+
+    el.innerHTML =
+      '<div class="bg-white rounded-2xl w-full max-w-4xl max-h-[88vh] flex flex-col shadow-2xl">'
+      + '<div class="px-5 py-4 border-b border-slate-100">'
+      +   '<h3 class="font-black text-slate-800">ซิงก์ข้อมูลลูกค้าจากระบบฝ่ายขาย</h3>'
+      +   '<p class="text-xs text-slate-500 mt-0.5">จับคู่ด้วยชื่อร้าน · อัปเดตเฉพาะ ที่อยู่ / เบอร์โทร / ชื่อ Sale · <b>ไม่เปลี่ยนรหัสลูกค้า</b></p>'
+      + '</div>'
+      + '<div class="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-3">'
+      +   tile('จับคู่ชื่อได้', p.matched + ' ราย')
+      +   tile('จับคู่ไม่ได้', p.unmatched.length + ' ราย', p.unmatched.length ? 'text-amber-600' : '')
+      +   tile('ร้านที่จะอัปเดต', p.rows.length + ' ราย', 'text-violet-700')
+      +   tile('ช่องที่จะเปลี่ยน', p.changes.length + ' ช่อง', 'text-violet-700')
+      + '</div>'
+      + (Object.keys(byField).length
+          ? '<div class="px-5 pb-2 text-xs font-bold text-slate-500">แยกตามประเภท: '
+            + Object.keys(byField).map(function(k){ return k + ' ' + byField[k]; }).join(' · ') + '</div>'
+          : '')
+      + (p.unmatched.length
+          ? '<div class="mx-5 mb-3 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-bold text-amber-800">'
+            + 'จับคู่ไม่ได้ ' + p.unmatched.length + ' ราย (ฝ่ายขายไม่มีชื่อนี้) — จะไม่ถูกแตะต้อง: '
+            + _custEsc(p.unmatched.slice(0, 5).join(', ')) + (p.unmatched.length > 5 ? ' …' : '') + '</div>'
+          : '')
+      + '<div class="flex-1 overflow-auto mx-5 mb-3 rounded-xl border border-slate-200">'
+      +   '<table class="w-full text-xs"><thead class="bg-slate-50 sticky top-0"><tr>'
+      +     '<th class="px-3 py-2 text-left text-[11px] font-black text-slate-500 uppercase">ร้าน</th>'
+      +     '<th class="px-3 py-2 text-left text-[11px] font-black text-slate-500 uppercase">ช่อง</th>'
+      +     '<th class="px-3 py-2 text-left text-[11px] font-black text-slate-500 uppercase">ค่าเดิม</th>'
+      +     '<th class="px-3 py-2 text-left text-[11px] font-black text-slate-500 uppercase">ค่าใหม่</th>'
+      +   '</tr></thead><tbody>' + rowsHtml + '</tbody></table>'
+      + '</div>'
+      + '<div class="px-5 py-4 border-t border-slate-100 flex items-center justify-end gap-2">'
+      +   '<button onclick="custSyncClose()" class="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50">ยกเลิก</button>'
+      +   (p.rows.length
+            ? '<button onclick="custSyncApply()" id="cust-sync-go" class="px-4 py-2 rounded-xl bg-violet-600 text-white font-black text-sm hover:bg-violet-700">ยืนยันอัปเดต ' + p.rows.length + ' ราย</button>'
+            : '')
+      + '</div></div>';
+}
+
+window.custSyncClose = function() {
+    var el = document.getElementById('cust-sync-modal');
+    if (el) el.classList.add('hidden');
+    _custSyncPlan = null;
+};
+
+window.custSyncApply = async function() {
+    if (!_custSyncPlan || !_custSyncPlan.rows.length) return;
+    var btn = document.getElementById('cust-sync-go');
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังอัปเดต...'; }
+
+    var rows = _custSyncPlan.rows, ok = 0, fail = 0, lastErr = '';
+    for (var i = 0; i < rows.length; i += 100) {
+        var chunk = rows.slice(i, i + 100);
+        var r = await window._sb.from('logi_shops').upsert(chunk, { onConflict: 'id' });
+        if (r.error) { fail += chunk.length; lastErr = r.error.message; } else { ok += chunk.length; }
+        if (btn) btn.textContent = 'กำลังอัปเดต... ' + Math.min(i + 100, rows.length) + '/' + rows.length;
+    }
+
+    custSyncClose();
+    await custInit();
+    if (fail) showToast('อัปเดตสำเร็จ ' + ok + ' ราย, ล้มเหลว ' + fail + ' ราย: ' + lastErr, true);
+    else showToast('อัปเดตข้อมูลลูกค้าจากฝ่ายขายสำเร็จ ' + ok + ' ราย');
 };
 
 // ══ ฐานข้อมูลลูกค้า (logi_shops) ══════════════════════════════════
