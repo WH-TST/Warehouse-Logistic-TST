@@ -28827,7 +28827,9 @@ function _custPhoneSame(a, b) {
     var x = String(a == null ? '' : a).replace(/\D/g, '');
     var y = String(b == null ? '' : b).replace(/\D/g, '');
     if (!x || !y) return false;
-    return x === y || x.replace(/^0+/, '') === y.replace(/^0+/, '');
+    // เทียบตรงตัว ไม่ตัด 0 นำหน้า — WMS บางแถวเก็บเบอร์หาย 0 ตัวหน้า
+    // ("902878749" แทนที่จะเป็น "0902878749") อันนั้นคือเบอร์ผิด ต้องให้อัปเดตตามฝ่ายขาย
+    return x === y;
 }
 
 // อ่านลูกค้าจากระบบฝ่ายขาย แล้วสร้างดัชนี 2 ชั้น: รหัสลูกค้าเป็นหลัก ชื่อร้านเป็นตัวสำรอง
@@ -28875,11 +28877,21 @@ function _custBuildPlan(shops, idx) {
     };
 }
 
+// ต้องใช้ update ทีละแถว ห้ามใช้ upsert เด็ดขาด
+// upsert = INSERT ... ON CONFLICT UPDATE ซึ่งฝั่ง INSERT บังคับให้มีคอลัมน์ NOT NULL ครบ
+// แต่เราส่งไปแค่ช่องที่จะแก้ (เช่น {id, phone}) ฐานข้อมูลจึงฟ้อง
+//   null value in column "address" violates not-null constraint
+// update แตะเฉพาะคอลัมน์ที่ส่งไป และไม่มีทางสร้างแถวใหม่โดยบังเอิญ
 async function _custWrite(rows) {
     var ok = 0, err = '';
-    for (var i = 0; i < rows.length; i += 100) {
-        var r = await window._sb.from('logi_shops').upsert(rows.slice(i, i + 100), { onConflict: 'id' });
-        if (r.error) err = r.error.message; else ok += Math.min(100, rows.length - i);
+    for (var i = 0; i < rows.length; i += 20) {
+        var batch = rows.slice(i, i + 20).map(function(row){
+            var id = row.id, patch = {};
+            Object.keys(row).forEach(function(k){ if (k !== 'id') patch[k] = row[k]; });
+            return window._sb.from('logi_shops').update(patch).eq('id', id);
+        });
+        var res = await Promise.all(batch);
+        res.forEach(function(r){ if (r.error) err = r.error.message; else ok++; });
     }
     return { ok: ok, err: err };
 }
