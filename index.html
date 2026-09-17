@@ -28812,7 +28812,7 @@ function _custEsc(v) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ตัดคำนำหน้านิติบุคคลและอักขระคั่น เพื่อให้ชื่อร้านที่พิมพ์ต่างกันเล็กน้อยจับคู่กันได้
+// ตัดคำนำหน้านิติบุคคลและอักขระคั่น — ใช้เป็น "ตัวสำรอง" เมื่อฝั่งฝ่ายขายไม่มีรหัสลูกค้า
 function _custNormName(n) {
     n = String(n || '').toLowerCase();
     ['บริษัท','จำกัด','(มหาชน)','ห้างหุ้นส่วนจำกัด','หจก.','จก.','บ.'].forEach(function(x){
@@ -28821,51 +28821,118 @@ function _custNormName(n) {
     return n.replace(/[\s.\-/()]/g, '');
 }
 
+// เทียบเบอร์โทรด้วยตัวเลขล้วน — "089-109-6836" กับ "0891096836" คือเบอร์เดียวกัน
+// ถ้าไม่ทำแบบนี้ จะไปลบขีดของ WMS ทิ้ง 161 ร้าน ทั้งที่ไม่ได้ข้อมูลใหม่อะไรเลย
+function _custPhoneSame(a, b) {
+    var x = String(a == null ? '' : a).replace(/\D/g, '');
+    var y = String(b == null ? '' : b).replace(/\D/g, '');
+    if (!x || !y) return false;
+    return x === y || x.replace(/^0+/, '') === y.replace(/^0+/, '');
+}
+
+// อ่านลูกค้าจากระบบฝ่ายขาย แล้วสร้างดัชนี 2 ชั้น: รหัสลูกค้าเป็นหลัก ชื่อร้านเป็นตัวสำรอง
+async function _custFetchSale() {
+    var res = await window._sbProd.from('customers')
+        .select('customer_code,name,phone,address,salesperson_name').limit(5000);
+    if (res.error) throw new Error(res.error.message);
+    var byCode = {}, byName = {};
+    (res.data || []).forEach(function(c){
+        if (c.customer_code && !byCode[c.customer_code]) byCode[c.customer_code] = c;
+        var k = _custNormName(c.name);
+        if (k && !byName[k]) byName[k] = c;
+    });
+    return { byCode: byCode, byName: byName };
+}
+
+var _CUST_SYNC_FIELDS = [
+    { w:'address', s:'address',          label:'ที่อยู่'   },
+    { w:'phone',   s:'phone',            label:'เบอร์โทร'  },
+    { w:'sale',    s:'salesperson_name', label:'ชื่อ Sale' }
+];
+
+// เทียบข้อมูล WMS กับฝ่ายขาย แล้วคืนรายการที่ต้องแก้ (ยังไม่เขียนลงฐานข้อมูล)
+function _custBuildPlan(shops, idx) {
+    var changes = [], rowsById = {}, matched = 0, unmatched = [];
+    shops.forEach(function(r){
+        // จับคู่ด้วย "รหัสลูกค้า" ก่อน — แม่นกว่าชื่อ และครอบคลุม 12 ร้าน
+        // ที่รหัสตรงกันแต่เขียนชื่อคนละแบบ (เช่น "ณรงค์ค้าเหล็ก สระแก้ว" กับ "หจก. ณรงค์ค้าเหล็ก")
+        var m = idx.byCode[r.id] || idx.byName[_custNormName(r.name)];
+        if (!m) { unmatched.push(r.name); return; }
+        matched++;
+        _CUST_SYNC_FIELDS.forEach(function(f){
+            var sv = String(m[f.s] == null ? '' : m[f.s]).trim();
+            var wv = String(r[f.w] == null ? '' : r[f.w]).trim();
+            if (!sv) return;                                     // ฝั่งขายว่าง → คงของเดิม
+            if (sv === wv) return;
+            if (f.w === 'phone' && _custPhoneSame(sv, wv)) return; // เบอร์เดียวกัน ต่างแค่รูปแบบ
+            (rowsById[r.id] = rowsById[r.id] || { id: r.id })[f.w] = sv;
+            changes.push({ id:r.id, name:r.name, field:f.w, label:f.label, from:wv, to:sv });
+        });
+    });
+    return {
+        rows: Object.keys(rowsById).map(function(k){ return rowsById[k]; }),
+        changes: changes, matched: matched, unmatched: unmatched
+    };
+}
+
+async function _custWrite(rows) {
+    var ok = 0, err = '';
+    for (var i = 0; i < rows.length; i += 100) {
+        var r = await window._sb.from('logi_shops').upsert(rows.slice(i, i + 100), { onConflict: 'id' });
+        if (r.error) err = r.error.message; else ok += Math.min(100, rows.length - i);
+    }
+    return { ok: ok, err: err };
+}
+
+// ══ ซิงก์อัตโนมัติ ═══════════════════════════════════════════════════════
+//  ทำงาน 2 จังหวะ:
+//   1) ทุกครั้งที่เปิดแท็บ Customers — ไล่เทียบทั้งตารางให้ตรงกัน
+//   2) Realtime — ฝ่ายขายแก้เมื่อไหร่ WMS ตามทันที (ถ้าโปรเจกต์ฝ่ายขาย
+//      เปิด publication ให้ตาราง customers ไว้ ถ้ายังไม่เปิด ข้อ 1 ยังทำงานปกติ)
+var _custAutoBusy = false;
+var _custSaleSub = null;
+
+window.custAutoSync = async function(silent) {
+    if (_custAutoBusy || !window._sbProd || !_custList.length) return;
+    _custAutoBusy = true;
+    try {
+        var idx = await _custFetchSale();
+        var plan = _custBuildPlan(_custList, idx);
+        if (!plan.rows.length) { if (!silent) showToast('ข้อมูลตรงกับฝ่ายขายอยู่แล้ว'); return; }
+        var w = await _custWrite(plan.rows);
+        if (w.err) { showToast('ซิงก์จากฝ่ายขายล้มเหลว: ' + w.err, true); return; }
+        await custInit();
+        showToast('ซิงก์จากฝ่ายขายอัตโนมัติ: อัปเดต ' + plan.rows.length + ' ร้าน (' + plan.changes.length + ' ช่อง)');
+    } catch (e) {
+        if (!silent) showToast('ซิงก์จากฝ่ายขายไม่สำเร็จ: ' + (e && e.message ? e.message : e), true);
+    } finally {
+        _custAutoBusy = false;
+    }
+};
+
+function _custWatchSale() {
+    if (_custSaleSub || !window._sbProd) return;
+    var t = null;
+    _custSaleSub = window._sbProd.channel('wms-customers-sync')
+        .on('postgres_changes', { event:'*', schema:'public', table:'customers' }, function(){
+            // รวบ event ที่ติดๆ กัน (ฝ่ายขายแก้หลายช่องรวดเดียว) ให้ซิงก์รอบเดียว
+            if (t) clearTimeout(t);
+            t = setTimeout(function(){ t = null; custAutoSync(true); }, 2000);
+        })
+        .subscribe();
+}
+
+// ══ ปุ่มซิงก์แบบตรวจก่อน (ไว้ใช้ตอนอยากเห็นว่าจะเปลี่ยนอะไรบ้าง) ══════════
 window.custSyncPreview = async function() {
     if (!window._sbProd) { showToast('ยังไม่ได้ตั้งค่าการเชื่อมต่อระบบฝ่ายขาย', true); return; }
     showToast('กำลังอ่านข้อมูลจากระบบฝ่ายขาย...');
-    var res = await window._sbProd.from('customers')
-        .select('name,phone,address,salesperson_name,status').limit(5000);
-    if (res.error) { showToast('อ่านข้อมูลฝ่ายขายไม่ได้: ' + res.error.message, true); return; }
-
-    var saleMap = {};
-    (res.data || []).forEach(function(c){
-        var k = _custNormName(c.name);
-        if (k && !saleMap[k]) saleMap[k] = c;   // ชื่อซ้ำ ใช้รายการแรก
-    });
-
-    var FIELDS = [
-        { w:'address', s:'address',          label:'ที่อยู่'   },
-        { w:'phone',   s:'phone',            label:'เบอร์โทร'  },
-        { w:'sale',    s:'salesperson_name', label:'ชื่อ Sale' }
-    ];
-
-    var changes = [], matched = 0, unmatched = [];
-    _custList.forEach(function(r){
-        var m = saleMap[_custNormName(r.name)];
-        if (!m) { unmatched.push(r.name); return; }
-        matched++;
-        var upd = {};
-        FIELDS.forEach(function(f){
-            var sv = String(m[f.s] == null ? '' : m[f.s]).trim();
-            var wv = String(r[f.w] == null ? '' : r[f.w]).trim();
-            if (!sv || sv === wv) return;      // ฝั่งขายว่าง หรือเหมือนเดิม → ข้าม
-            upd[f.w] = sv;
-            changes.push({ id:r.id, name:r.name, field:f.w, label:f.label, from:wv, to:sv });
-        });
-        if (Object.keys(upd).length) {
-            upd.id = r.id;                      // ใช้เป็น key ของ upsert เท่านั้น ไม่ได้เปลี่ยนค่า
-            r._pendingUpd = upd;
-        } else {
-            delete r._pendingUpd;
-        }
-    });
-
-    _custSyncPlan = {
-        rows: _custList.filter(function(r){ return r._pendingUpd; }).map(function(r){ return r._pendingUpd; }),
-        changes: changes, matched: matched, unmatched: unmatched
-    };
-    _custSyncRenderModal();
+    try {
+        var idx = await _custFetchSale();
+        _custSyncPlan = _custBuildPlan(_custList, idx);
+        _custSyncRenderModal();
+    } catch (e) {
+        showToast('อ่านข้อมูลฝ่ายขายไม่ได้: ' + (e && e.message ? e.message : e), true);
+    }
 };
 
 function _custSyncRenderModal() {
@@ -28944,19 +29011,11 @@ window.custSyncApply = async function() {
     if (!_custSyncPlan || !_custSyncPlan.rows.length) return;
     var btn = document.getElementById('cust-sync-go');
     if (btn) { btn.disabled = true; btn.textContent = 'กำลังอัปเดต...'; }
-
-    var rows = _custSyncPlan.rows, ok = 0, fail = 0, lastErr = '';
-    for (var i = 0; i < rows.length; i += 100) {
-        var chunk = rows.slice(i, i + 100);
-        var r = await window._sb.from('logi_shops').upsert(chunk, { onConflict: 'id' });
-        if (r.error) { fail += chunk.length; lastErr = r.error.message; } else { ok += chunk.length; }
-        if (btn) btn.textContent = 'กำลังอัปเดต... ' + Math.min(i + 100, rows.length) + '/' + rows.length;
-    }
-
+    var w = await _custWrite(_custSyncPlan.rows);
     custSyncClose();
     await custInit();
-    if (fail) showToast('อัปเดตสำเร็จ ' + ok + ' ราย, ล้มเหลว ' + fail + ' ราย: ' + lastErr, true);
-    else showToast('อัปเดตข้อมูลลูกค้าจากฝ่ายขายสำเร็จ ' + ok + ' ราย');
+    if (w.err) showToast('อัปเดตสำเร็จ ' + w.ok + ' ราย แต่มีข้อผิดพลาด: ' + w.err, true);
+    else showToast('อัปเดตข้อมูลลูกค้าจากฝ่ายขายสำเร็จ ' + w.ok + ' ราย');
 };
 
 // ══ ฐานข้อมูลลูกค้า (logi_shops) ══════════════════════════════════
@@ -28971,6 +29030,8 @@ window.custInit = async function() {
     _custList = data || [];
     if (_custList.length) _custCols = Object.keys(_custList[0]);
     custRender();
+    // ซิงก์ตามฝ่ายขายอัตโนมัติ + เฝ้าฟังการแก้ไขแบบเรียลไทม์
+    if (!_custAutoBusy) { _custWatchSale(); setTimeout(function(){ custAutoSync(true); }, 300); }
 };
 window.custRender = function() {
     var q = (document.getElementById('cust-search')?.value||'').toLowerCase().trim();
