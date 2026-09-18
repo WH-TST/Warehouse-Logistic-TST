@@ -28834,9 +28834,33 @@ function _custPhoneSame(a, b) {
 
 // อ่านลูกค้าจากระบบฝ่ายขาย แล้วสร้างดัชนี 2 ชั้น: รหัสลูกค้าเป็นหลัก ชื่อร้านเป็นตัวสำรอง
 async function _custFetchSale() {
-    var res = await window._sbProd.from('customers')
-        .select('id,customer_code,name,phone,address,salesperson_name').limit(5000);
+    // ชื่อเซลที่ CRM ฝ่ายขายแสดงจริง มาจาก assigned_to (โยงไปตาราง users)
+    // ไม่ใช่คอลัมน์ salesperson_name ซึ่งเป็นข้อความเก่าที่ไม่ได้อัปเดตตามการเปลี่ยนมือ
+    // (เคยทำให้ WMS ได้ชื่อ "กฤษฎา โกมินา" ที่ลาออกไปแล้ว 134 ราย
+    //  และไม่เคยได้ชื่อ "ชนิภรณ์ ใจสา" ที่ดูแลลูกค้าอยู่จริงเลยสักราย)
+    var both = await Promise.all([
+        window._sbProd.from('customers')
+            .select('id,customer_code,name,phone,address,salesperson_name,assigned_to').limit(5000),
+        window._sbProd.from('users').select('id,name,is_active').limit(500)
+    ]);
+    var res = both[0], usr = both[1];
     if (res.error) throw new Error(res.error.message);
+    var userName = {}, activeName = {};
+    (usr.data || []).forEach(function(u){
+        var n = String(u.name || '').trim();
+        if (u.id) userName[u.id] = n;
+        if (n && u.is_active) activeName[n] = 1;
+    });
+
+    // เซลที่ใช้จริง: assigned_to ก่อน
+    // ถ้าไม่มี ค่อยใช้ salesperson_name ที่ค้างไว้ — แต่ต้องเป็นคนที่ยังทำงานอยู่เท่านั้น
+    // ไม่งั้นชื่อคนที่ลาออกไปแล้วจะค้างใน WMS ต่อไปเรื่อยๆ
+    (res.data || []).forEach(function(c){
+        var byAssign = c.assigned_to ? userName[c.assigned_to] : '';
+        var stale = String(c.salesperson_name || '').trim();
+        c.salesperson_name = byAssign || (activeName[stale] ? stale : '');
+    });
+
     var byCode = {}, byName = {};
     (res.data || []).forEach(function(c){
         if (c.customer_code) {
