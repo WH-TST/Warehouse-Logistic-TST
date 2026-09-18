@@ -28855,25 +28855,62 @@ async function _custFetchSale() {
     // เซลที่ใช้จริง: assigned_to ก่อน
     // ถ้าไม่มี ค่อยใช้ salesperson_name ที่ค้างไว้ — แต่ต้องเป็นคนที่ยังทำงานอยู่เท่านั้น
     // ไม่งั้นชื่อคนที่ลาออกไปแล้วจะค้างใน WMS ต่อไปเรื่อยๆ
-    (res.data || []).forEach(function(c){
+    var rows = (res.data || []).map(function(c){
         var byAssign = c.assigned_to ? userName[c.assigned_to] : '';
         var stale = String(c.salesperson_name || '').trim();
-        c.salesperson_name = byAssign || (activeName[stale] ? stale : '');
+        return {
+            id: c.id,
+            customer_code: c.customer_code,
+            name: c.name,
+            phone: String(c.phone == null ? '' : c.phone).trim(),
+            address: String(c.address == null ? '' : c.address).trim(),
+            salesperson_name: byAssign || (activeName[stale] ? stale : ''),
+            _hasAssign: !!byAssign,
+            _upd: c.updated_at || ''
+        };
     });
 
-    var byCode = {}, byName = {};
-    (res.data || []).forEach(function(c){
-        if (c.customer_code) {
-            if (!byCode[c.customer_code]) byCode[c.customer_code] = c;
-            return;   // มีรหัสแล้ว ห้ามเอามาจับคู่ด้วยชื่อ
-        }
-        // ดัชนีชื่อ ใส่เฉพาะรายที่ฝั่งฝ่ายขาย "ไม่มีรหัส" เท่านั้น
-        // กันเคสอย่าง WMS C00009 จันทร์เพ็ญฯ ที่ชื่อไปพ้องกับ C00224 ของฝ่ายขาย
-        // ซึ่งเป็นคนละรหัส อาจเป็นคนละนิติบุคคล ถ้าจับคู่ไปข้อมูลจะสลับกันแบบเงียบๆ
-        var k = _custNormName(c.name);
-        if (k && !byName[k]) byName[k] = c;
+    // ── รวมแถวซ้ำชื่อเดียวกัน ─────────────────────────────────────────────
+    // ฝ่ายขายมีลูกค้ารายเดียวกันบันทึกซ้ำ 44 ชื่อ (91 แถว) โดยแถวเก่ามักมีแต่รหัส
+    // ส่วนแถวใหม่ที่ข้อมูลครบกลับไม่มีรหัส ถ้าจับคู่ด้วยรหัสตรงๆ WMS จะได้แถวที่ว่างเปล่า
+    // (เจอจริง 24 ร้าน) จึงรวมทุกแถวชื่อเดียวกันเป็นรายการเดียว เลือกค่าที่ดีที่สุดต่อช่อง
+    var groups = {};
+    rows.forEach(function(r){
+        var k = _custNormName(r.name);
+        if (!k) return;
+        (groups[k] = groups[k] || []).push(r);
     });
-    return { byCode: byCode, byName: byName, all: res.data || [] };
+
+    function pick(list, field, prefer) {
+        var best = '', bestKey = null;
+        list.forEach(function(r){
+            var v = String(r[field] || '').trim();
+            if (!v) return;
+            var key = [prefer && r[prefer] ? 1 : 0, r._upd || ''];
+            if (!bestKey || key > bestKey) { bestKey = key; best = v; }
+        });
+        return best;
+    }
+
+    var byCode = {}, byName = {}, merged = [];
+    Object.keys(groups).forEach(function(k){
+        var list = groups[k];
+        var m = {
+            name: list[0].name,
+            // ชื่อเซล: เอาจากแถวที่มี assigned_to จริงก่อน แล้วค่อยดูแถวที่อัปเดตล่าสุด
+            salesperson_name: pick(list, 'salesperson_name', '_hasAssign'),
+            phone:   pick(list, 'phone'),
+            address: pick(list, 'address'),
+            customer_code: (list.filter(function(r){ return r.customer_code; })[0] || {}).customer_code || '',
+            id: list[0].id
+        };
+        merged.push(m);
+        byName[k] = m;
+        // ทุกรหัสในกลุ่มชี้มาที่รายการที่รวมแล้ว
+        list.forEach(function(r){ if (r.customer_code && !byCode[r.customer_code]) byCode[r.customer_code] = m; });
+    });
+
+    return { byCode: byCode, byName: byName, all: merged };
 }
 
 var _CUST_SYNC_FIELDS = [
