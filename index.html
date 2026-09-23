@@ -25877,6 +25877,14 @@ window.ldCardSave = async function(oid, unit) {
     }
     var today = window._bkkToday();
     var curUnit = unit || _ldTrailerUnit[oid] || 'mother';
+
+    // ── ดึงของที่คนอื่นกรอกมารวมก่อนบันทึก ─────────────────────────────
+    // ตอนกดส่ง ระบบอ่านค่าจากช่องกรอกบนหน้าจอเครื่องนี้เท่านั้น
+    // ถ้าอีกคนเพิ่งพิมพ์แล้ว event เรียลไทม์ยังมาไม่ถึง (เน็ตสะดุด/แท็บพักอยู่)
+    // สิ่งที่บันทึกจะขาดของคนนั้นไป แล้วมอนิเตอร์จะเห็นข้อมูลไม่ครบ
+    // ซิงก์อีกรอบตรงนี้ให้แน่ใจว่าบันทึกครบทั้งสองคน
+    try { await _ldApplyRemoteDrafts(oid, curUnit); } catch(e) {}
+
     // collect items from per-lift inputs
     var items = [];
     var idx2 = 0;
