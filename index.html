@@ -25575,10 +25575,19 @@ async function _ldRestoreDraftIds(oid, unit) {
         if (!drafts || !drafts.length) return;
 
         // Restore start_time from earliest draft so cross-device timer is in sync
-        if (!_ldCardStartTimes[oid]) {
+        // ⚠ ต้องเก็บด้วยคีย์เดียวกับที่ ldDraftSave ใช้ ไม่งั้นเวลาจะเริ่มนับใหม่
+        //   รถพ่วง (trailer_split) ใช้คีย์ oid-หน่วย ส่วนรถเดี่ยวใช้ oid เฉยๆ
+        //   เดิมกู้คืนลง oid อย่างเดียว พอเป็นรถพ่วง ldDraftSave หา oid-mother ไม่เจอ
+        //   เลยนับเป็นการพิมพ์ครั้งแรก แล้วตั้งเวลาเริ่มใหม่ทุกครั้งที่กดออกแล้วเข้ามาใหม่
+        var _segKeyR = (od.is_trailer && od.trailer_split) ? oid+'-'+_restoreUnit : oid;
+        if (!_ldCardStartTimes[_segKeyR]) {
             var earliest = null;
             drafts.forEach(function(r){ if (r.start_time && (!earliest || r.start_time < earliest)) earliest = r.start_time; });
-            if (earliest) _ldCardStartTimes[oid] = earliest;
+            if (earliest) {
+                _ldCardStartTimes[_segKeyR] = earliest;
+                if (!_ldCardStartTimes[oid]) _ldCardStartTimes[oid] = earliest;
+                _ldInitSegment(_segKeyR);
+            }
         }
 
         // Delete orphan duplicates — keep only the latest row per sku+truck_unit
