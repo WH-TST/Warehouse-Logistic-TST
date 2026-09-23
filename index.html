@@ -44655,10 +44655,41 @@ window.drvLoadPlan=async function(){
       drvShowInspectPending(plate2,today,[]);
     }
   }
-  drvHideL();drvRenderPlanCards(_dPlans);
+  drvHideL();
+  // ── ตรวจสภาพรถก่อน ถึงจะเห็นการ์ดงาน ───────────────────────────────
+  // เดิมการ์ดงานขึ้นมาก่อน แล้วค่อยเด้งฟอร์มตรวจทับ ปุ่ม "เริ่มงาน" ถูกล็อกไว้
+  // แต่คนขับเห็นงานทั้งหมดแล้วและปิดฟอร์มเลื่อนดูได้ ทำให้ข้ามขั้นตอนตรวจได้
+  // ตอนนี้ถ้ายังมีคันที่ยังไม่ตรวจวันนี้ จะไม่แสดงการ์ดงานเลย
+  var _needIns = _drvFirstUninspectedPlate();
+  if (_needIns) {
+    var _w = document.getElementById('drv-plan-cards');
+    if (_w) _w.innerHTML = '<div style="text-align:center;padding:48px 16px;">'
+      + '<i class="fas fa-clipboard-check" style="font-size:44px;display:block;margin-bottom:14px;color:#f59e0b;"></i>'
+      + '<p style="font-weight:900;color:#fcd34d;font-size:15px;">ต้องตรวจสภาพรถก่อน</p>'
+      + '<p style="font-size:13px;margin-top:8px;color:#94a3b8;line-height:1.6;">ทะเบียน ' + drvEsc(_needIns) + '<br>ตรวจเสร็จแล้วงานของวันนี้จะแสดงขึ้นมา</p>'
+      + '<button onclick="drvManualInspect()" style="margin-top:18px;background:#f59e0b;border:none;border-radius:12px;padding:14px 28px;color:#0f172a;font-weight:900;font-size:15px;cursor:pointer;">เปิดแบบตรวจสภาพรถ</button>'
+      + '</div>';
+    var _st=document.getElementById('drv-st-total'); if(_st) _st.textContent=_dPlans.length;
+    var _sd=document.getElementById('drv-st-done');  if(_sd) _sd.textContent=0;
+  } else {
+    drvRenderPlanCards(_dPlans);
+  }
   // ตรวจสภาพรถ: เด้งครั้งแรกของวัน ไม่ว่าจะมีงานหรือไม่ (เตรียมพร้อมกรณีมีงานแทรก)
   drvInspectDailyPrompt();
 };
+
+// คันแรกในงานของวันนี้ที่ยังไม่มีผลตรวจ — ใช้ทั้งตอนบล็อกการ์ดและตอนเด้งฟอร์ม
+function _drvFirstUninspectedPlate(){
+  var waiting=(_dPlans||[]).filter(function(p){
+    return p.job_type!=='maintenance_pm' && !_dTripLogs[p.plan_id];
+  });
+  for(var i=0;i<waiting.length;i++){
+    var pl=(waiting[i].truck_plate||'').trim();
+    if(!pl) continue;
+    if(!(window._dInspectByPlate||{})[pl]) return pl;
+  }
+  return '';
+}
 
 // ─── Vehicle Inspection ────────────────────────────────────────────────────
 // each item: {name, req_photo} — req_photo=true = บังคับถ่ายรูป
@@ -44721,13 +44752,9 @@ async function drvInspectDailyPrompt(){
   // ถ้าโหลด/ออกครบทุกเที่ยวแล้ว (รวมงานค้างคืนที่ขึ้นเย็นนี้) → ไม่ต้องเด้ง (ค่อยไปเด้งพรุ่งนี้)
   var waiting=_dPlans.filter(function(p){ return p.job_type!=='maintenance_pm' && !_dTripLogs[p.plan_id]; });
   if(!waiting.length) return;
-  // หา "คันแรกที่ยังไม่มีผลตรวจของวันนี้"
-  var need='';
-  for(var i=0;i<waiting.length;i++){
-    var pl=(waiting[i].truck_plate||'').trim();
-    if(!pl) continue;
-    if(!(window._dInspectByPlate||{})[pl]){ need=pl; break; }
-  }
+  // หา "คันแรกที่ยังไม่มีผลตรวจของวันนี้" — ใช้ตัวเดียวกับที่บล็อกการ์ดงาน
+  // ถ้าสองที่ตัดสินไม่ตรงกัน จะเกิดหน้าจอบล็อกที่ไม่มีฟอร์มเด้งให้ทำ
+  var need=_drvFirstUninspectedPlate();
   if(!need){
     // ทุกคันในแผนตรวจแล้ว → จบ; ถ้าแผนไม่มีทะเบียนเลย → ให้เลือกทะเบียนเองครั้งเดียว
     var noPlate=waiting.every(function(p){ return !(p.truck_plate||'').trim(); });
@@ -44903,7 +44930,12 @@ window.drvInspectSave=async function(){
   window._dInspectApproval={approval_status:approvalStatus,overall:hasIssue?'issue':'ok'};
   window._dInspectByPlate=window._dInspectByPlate||{};
   window._dInspectByPlate[plate]={truck_plate:plate,approval_status:approvalStatus,overall:hasIssue?'issue':'ok'};
-  drvRenderPlanCards(_dPlans);
+  // ตรวจเสร็จแล้วอาจยังมีคันอื่นที่ยังไม่ตรวจ — ให้ drvLoadPlan ตัดสินอีกรอบ
+  if(typeof _drvFirstUninspectedPlate==='function' && _drvFirstUninspectedPlate()){
+    drvLoadPlan();
+  } else {
+    drvRenderPlanCards(_dPlans);
+  }
   if(hasIssue){
     var issueCount=items.filter(function(it){return it.status==='issue';}).length;
     drvShowToast('⚠️ พบปัญหา '+issueCount+' รายการ — รอหัวหน้าอนุมัติก่อนออกรถ',true,6000);
