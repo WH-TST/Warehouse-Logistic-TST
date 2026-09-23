@@ -22429,6 +22429,8 @@ function _logiRowToCard(row) {
         failReason:      row.fail_reason      || '',
         transferRemark:  row.fail_reason      || '',
         returnDistance:  row.return_distance  || 0,
+        originTruck:     row.origin_truck_plate || '',
+        originDriver:    row.origin_driver      || '',
         shops:           _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false),
         shopNames:       _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
         distance:        _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
@@ -22637,13 +22639,27 @@ window.calDrop = async function(e, newDate, newTruck) {
     var plan = allPlans.find(function(p) { return p.id === planId; });
     if (!plan) return;
 
+    // งานค้าง: การ์ดที่ลากคือ "สำเนา" ที่วางอยู่วันนี้ ต้องอ้างวันของแผนต้นฉบับ
+    // ไม่ใช่วันที่การ์ดโผล่อยู่ ไม่งั้นจะคิดว่าย้ายวันทั้งที่ยังไม่ได้ย้าย
+    var carryCard = allPlans.find(function(p){ return p.isCarry && p.sourcePlanId === planId; });
+    var srcDate   = carryCard ? carryCard.carryFrom : plan.date;
+
     var curTruck = plan.truckType === 'hire' ? (plan.driverTransport || '—') : (plan.truckPlate || '—');
-    if (plan.date === newDate && curTruck === newTruck) return;
+    if (srcDate === newDate && curTruck === newTruck) return;
 
     var updates = {};
-    if (plan.date !== newDate) updates.plan_date = newDate;
+    // ลากงานค้างไปวันอื่นที่ไม่ใช่วันนี้ = เลื่อนแผนไปวันนั้นจริง เลิกเป็นงานค้าง
+    // ลากอยู่ในวันนี้ = แค่เปลี่ยนรถ/คนขับ วันแผนคงเดิม เพื่อให้ยังรู้ว่าค้างมาจากวันไหน
+    var stayToday = carryCard && newDate === window._bkkToday();
+    if (!stayToday && srcDate !== newDate) updates.plan_date = newDate;
     if (curTruck !== newTruck && plan.truckType === 'company') updates.truck_plate = newTruck;
     if (!Object.keys(updates).length) return;
+
+    // เก็บต้นทางไว้ครั้งแรกที่งานค้างถูกแก้ — ถ้าไม่เก็บจะไม่รู้ว่าเดิมวางให้ใคร
+    if (carryCard && updates.truck_plate) {
+        if (!plan.originTruck)  updates.origin_truck_plate = plan.truckPlate || '';
+        if (!plan.originDriver) updates.origin_driver      = plan.driverTransport || '';
+    }
 
     // รถพ่วง: ย้ายแม่+ลูกพร้อมกัน
     var ids = [planId];
@@ -22661,13 +22677,19 @@ window.calDrop = async function(e, newDate, newTruck) {
         [logiCalPlanList, logiPlanList].forEach(function(list) {
             if (!list) return;
             list.forEach(function(p) {
-                if (ids.indexOf(p.id) !== -1) {
-                    if (updates.plan_date)  p.date = updates.plan_date;
-                    if (updates.truck_plate) { p.truckPlate = updates.truck_plate; }
-                }
+                var match = ids.indexOf(p.id) !== -1 || (p.isCarry && ids.indexOf(p.sourcePlanId) !== -1);
+                if (!match) return;
+                if (updates.plan_date && !p.isCarry) p.date = updates.plan_date;
+                if (updates.truck_plate) p.truckPlate = updates.truck_plate;
+                if (updates.origin_truck_plate) p.originTruck  = updates.origin_truck_plate;
+                if (updates.origin_driver)      p.originDriver = updates.origin_driver;
             });
         });
-        showToast('ย้ายแผนเรียบร้อย', false);
+        showToast(carryCard
+            ? (stayToday ? 'ย้ายงานค้างไปรถ ' + newTruck + ' แล้ว — วันแผนเดิมคงไว้'
+                         : 'เลื่อนงานค้างไปวันที่ ' + newDate + ' แล้ว')
+            : 'ย้ายแผนเรียบร้อย', false);
+        if (typeof loadAndRenderLogiCalendar === 'function') { loadAndRenderLogiCalendar(); return; }
         renderLogiCalendar();
         if (typeof renderLogisticList === 'function') renderLogisticList();
     } catch(err) {
@@ -22946,11 +22968,11 @@ function renderLogiCalendar() {
                 const _tint = ((p.isCarry && !p.carryDone) || p.status==='inprogress') ? '1f' : '12';
                 const headBg = `background:${ST}${_tint};`;
 
-                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${p.isCarry?'cursor:pointer;':'cursor:grab;'}${(p.status==='failed'||_overdue)?'opacity:.85;':''}"
+                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${(p.isCarry && p.carryDone)?'cursor:pointer;':'cursor:grab;'}${(p.status==='failed'||_overdue)?'opacity:.85;':''}"
                     class="group transition-all hover:shadow-md"
                     id="cal-badge-${p.id}"
-                    draggable="${p.isCarry?'false':'true'}"
-                    ${p.isCarry ? '' : `ondragstart="calDragStart(event,'${_escA(p.id)}')" ondragend="calDragEnd(event)"`}
+                    draggable="${(p.isCarry && p.carryDone) ? 'false' : 'true'}"
+                    ${(p.isCarry && p.carryDone) ? '' : `ondragstart="calDragStart(event,'${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" ondragend="calDragEnd(event)"`}
                     onclick="viewLogiPlan('${_escA(openId)}')">
 
                     ${p.isCarry
@@ -22970,6 +22992,28 @@ function renderLogiCalendar() {
                             ${_esc(p.driverTransport||'ยังไม่ระบุคนขับ')}</span>
                     </div>
 
+                    ${p.isCarry ? (function(){
+                        var oTruck = p.originTruck || p.truckPlate || '—';
+                        var oDrv   = p.originDriver || p.driverTransport || '—';
+                        var chTruck = p.originTruck && p.originTruck !== p.truckPlate;
+                        var chDrv   = p.originDriver && p.originDriver !== p.driverTransport;
+                        var d = p.carryFrom || '';
+                        var dTxt = d ? (d.slice(8,10)+'/'+d.slice(5,7)+'/'+(parseInt(d.slice(0,4))+543)) : '—';
+                        var row = function(k,v,changed,oldV){
+                            return `<dt style="color:#5e6b7f;font-weight:600;white-space:nowrap;">${k}</dt>`
+                                 + `<dd style="margin:0;font-weight:600;color:${changed?ST:'#0b1017'};">`
+                                 + (changed ? `<span style="color:#5e6b7f;font-weight:500;text-decoration:line-through;margin-right:5px;">${_esc(oldV)}</span>` : '')
+                                 + `${_esc(v)}</dd>`;
+                        };
+                        return `<dl style="display:grid;grid-template-columns:auto 1fr;gap:3px 8px;margin:0;
+                                border:1px dashed ${ST}73;background:rgba(255,255,255,.55);border-radius:7px;padding:6px 9px;font-size:11.5px;">
+                            <div style="grid-column:1/3;font-size:10px;font-weight:700;letter-spacing:.06em;color:${ST};margin-bottom:1px;">
+                                ต้นทางแผน${(chTruck||chDrv)?' · ถูกแก้แล้ว':''}</div>
+                            ${row('วันที่วาง', dTxt + (p.carryDone ? ' · ส่งจริง '+p.date.slice(8,10)+'/'+p.date.slice(5,7) : ''), false)}
+                            ${row('ทะเบียนรถ', p.truckPlate||'—', chTruck, oTruck)}
+                            ${row('คนขับ', p.driverTransport||'—', chDrv, oDrv)}
+                        </dl>`;
+                    })() : ''}
                     ${shops.length>1 ? `<div style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#39455a;">
                         <span>ส่งแล้ว ${doneCnt}/${shops.length} ร้าน</span>
                         <span style="flex:1;height:5px;border-radius:3px;background:rgba(15,23,42,.10);overflow:hidden;"><i style="display:block;height:100%;width:${Math.round(doneCnt/shops.length*100)}%;background:${CAL_STATUS_HEX.success};border-radius:3px;"></i></span>
