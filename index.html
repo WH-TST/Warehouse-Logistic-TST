@@ -27360,7 +27360,7 @@ async function _ldMonFetch(dateVal, showSpinner) {
             // ระบุคอลัมน์แทน select('*') — คอลัมน์ lifts เป็น JSON ก้อนใหญ่ (~7% ของ payload)
             // ที่หน้ามอนิเตอร์ไม่ได้ใช้เลย ดึงมาเปล่าๆ ทุก 20 วินาที
             var {data:s2} = await window._sb.from('loading_sessions')
-                .select('id,order_id,plan_id,sku,product_name,qty,weight,team,staff_name,record_type,truck_unit,note,photo_urls,start_time,end_time,created_at,updated_at')
+                .select('id,order_id,plan_id,sku,product_name,qty,weight,team,staff_name,record_type,truck_unit,note,photo_urls,start_time,end_time,created_at,updated_at,load_date')
                 .in('order_id', candIds);
             allSess = s2 || [];
         }
@@ -27382,7 +27382,9 @@ async function _ldMonFetch(dateVal, showSpinner) {
             if (s.record_type === 'draft') return;
             var t = s.end_time || s.start_time || s.created_at || '';
             if (!t) return;
-            var d = _ldBkkDate(t);
+            // load_date เป็นคอลัมน์ที่ DB เขียนเอง — ใช้เป็นหลักเพื่อให้ทุกหน้า
+            // ตอบวันเดียวกัน ส่วนการคำนวณด้านล่างเหลือไว้เผื่อแถวเก่าที่ยังไม่ backfill
+            var d = s.load_date || _ldBkkDate(t);
             if (!loadDate[s.order_id] || d > loadDate[s.order_id]) loadDate[s.order_id] = d;
             if (!loadTime[s.order_id] || String(t) > loadTime[s.order_id]) loadTime[s.order_id] = String(t);
         });
@@ -34585,9 +34587,21 @@ window.whaSearchOrders = async function whaSearchOrders(slug) {
 
     try {
         // ดึง loading_orders ที่ status=done ในช่วงวันที่
+        // ยึดวันที่โหลดจริง — หา order_id จาก session ที่โหลดในช่วงวันที่เลือกก่อน
+        // (ออเดอร์ที่วางแผนวันที่ 22 แต่โหลดวันที่ 23 ต้องอยู่ใต้วันที่ 23)
+        var { data: _ldRows } = await window._sb.from('loading_sessions')
+            .select('order_id')
+            .neq('record_type','draft')
+            .gte('load_date',from).lte('load_date',to)
+            .limit(5000);
+        var _oids = Array.from(new Set((_ldRows||[]).map(function(r){ return r.order_id; }).filter(Boolean)));
+        if (!_oids.length) {
+            listEl.innerHTML = '<div class="text-slate-400 text-xs text-center py-3">ไม่พบข้อมูลในช่วงวันที่เลือก</div>';
+            return;
+        }
         var { data: orders, error: ordErr } = await window._sb.from('loading_orders')
             .select('id,order_date,truck_plate,is_trailer,trailer_plate,customer_name,order_no')
-            .eq('status','done').gte('order_date',from).lte('order_date',to)
+            .eq('status','done').in('id', _oids)
             .order('order_date',{ascending:false}).limit(60);
         if (ordErr) { listEl.innerHTML = '<div class="text-red-400 text-xs text-center py-3">Query error: '+ordErr.message+'</div>'; return; }
         if (!orders || !orders.length) {
