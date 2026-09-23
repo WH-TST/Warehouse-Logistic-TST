@@ -22337,6 +22337,7 @@ window.logiCalSetRange = function logiCalSetRange(days) {
 const CAL_STATUS_HEX = {
     planned:'#1d4ed8', inprogress:'#c2680a', success:'#137a3e',
     failed:'#c02626',  extra:'#7c3aed',      carry:'#c9377d',
+    cancelled:'#64748b',
 };
 const CAL_STATUS_STYLE = {
     planned:    { bg:'bg-blue-50',    border:'border-blue-300',    dot:'bg-blue-500',    text:'text-blue-800',    label:'วางแผนแล้ว'      },
@@ -22377,6 +22378,21 @@ window.logiCopyPlanId = function logiCopyPlanId(id){
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(id).then(done, function(){ _ldCopyFallback(id); done(); });
     } else { _ldCopyFallback(id); done(); }
+};
+
+// ยกเลิกแผน (จากปุ่ม X บนการ์ดงานค้าง)
+// ไม่ลบแถวทิ้ง — เขียน cancelled_at ไว้ การ์ดที่วันเดิมยังอยู่แต่ขึ้นว่า "ถูกลบทิ้ง"
+// ถ้าลบแถวจริงจะไม่เหลือร่องรอยว่าเคยวางแผนไว้แล้วเกิดอะไรขึ้น
+window.logiCancelPlan = async function logiCancelPlan(planId) {
+    if (!planId) return;
+    if (!confirm('ยกเลิกแผนนี้?\n\n• งานค้างจะหายจากวันนี้\n• การ์ดที่วันเดิมยังอยู่ แต่จะขึ้นว่า "ถูกลบทิ้ง"\n• ข้อมูลและประวัติไม่ถูกลบ')) return;
+    var by = '';
+    try { by = (_cu && (_cu.username || _cu.name)) || ''; } catch(e) {}
+    var payload = { cancelled_at: new Date().toISOString(), cancelled_by: by, carried_resolved_at: new Date().toISOString() };
+    var r = await window._sb.from('logistic_plans').update(payload).eq('plan_id', planId);
+    if (r.error) { showToast('ยกเลิกแผนไม่สำเร็จ: ' + r.error.message, true); return; }
+    showToast('ยกเลิกแผน ' + planId + ' แล้ว — การ์ดที่วันเดิมขึ้นว่าถูกลบทิ้ง');
+    loadAndRenderLogiCalendar();
 };
 
 // ปิดงานค้างส่ง — ไม่มีปุ่มบนการ์ดแล้ว สถานะต้องมาจากการทำงานของคนขับ
@@ -22432,6 +22448,8 @@ function _logiRowToCard(row) {
         returnDistance:  row.return_distance  || 0,
         originTruck:     row.origin_truck_plate || '',
         originDriver:    row.origin_driver      || '',
+        cancelledAt:     row.cancelled_at       || '',
+        originPlanDate:  row.origin_plan_date    || '',
         shops:           _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false),
         shopNames:       _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).map(function(s){ return s.shopName; }).filter(Boolean).join(', '),
         distance:        _filterTrailerShops(row.shops||[], row.is_mother||false, row.is_child||false).reduce(function(s,sh){ return s+(parseFloat(sh.distance)||0); }, 0),
@@ -22476,7 +22494,7 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
         // งานค้างที่ยังไม่จบ — ย้อนหลังไม่จำกัด เพราะต้องยกมาจนกว่าจะจัดการ
         _needCarry
             ? window._sb.from('logistic_plans').select('*')
-                .neq('status', 'success').is('carried_resolved_at', null)
+                .neq('status', 'success').is('carried_resolved_at', null).is('cancelled_at', null)
                 .lt('plan_date', _todayCal).order('plan_date')
             : Promise.resolve({ data: [] }),
         // งานค้างที่ส่งสำเร็จไปแล้ว — ใช้แค่วางการ์ด "ส่งสำเร็จ (ค้างส่ง)" ที่วันปิดงาน
@@ -22663,14 +22681,20 @@ window.calDrop = async function(e, newDate, newTruck) {
     var updates = {};
     // ลากงานค้างไปวันอื่นที่ไม่ใช่วันนี้ = เลื่อนแผนไปวันนั้นจริง เลิกเป็นงานค้าง
     // ลากอยู่ในวันนี้ = แค่เปลี่ยนรถ/คนขับ วันแผนคงเดิม เพื่อให้ยังรู้ว่าค้างมาจากวันไหน
-    var stayToday = carryCard && newDate === window._bkkToday();
-    if (!stayToday && srcDate !== newDate) updates.plan_date = newDate;
+    if (plan.date !== newDate) updates.plan_date = newDate;
     if (curTruck !== newTruck && plan.truckType === 'company') updates.truck_plate = newTruck;
     if (!Object.keys(updates).length) return;
 
+    // ย้ายวันงานค้าง: ต้องจำวันที่วางครั้งแรกไว้ ไม่งั้น plan_date ถูกทับแล้ว
+    // จะไม่เหลือร่องรอยว่างานนี้ค้างมาจากวันไหน — งานยังเป็นงานค้างจนกว่าจะส่งสำเร็จ
+    var isCarryLike = !!carryCard || !!plan.originPlanDate;
+    if (isCarryLike && updates.plan_date && !plan.originPlanDate) {
+        updates.origin_plan_date = carryCard ? carryCard.carryFrom : plan.date;
+    }
+
     // เก็บต้นทางไว้ "ครั้งแรก" ที่งานค้างถูกแก้เท่านั้น
     // ลากซ้ำรอบ 2, 3, 4… จะไม่ทับค่าเดิม ต้นทางจึงยังเป็นของจริงเสมอ
-    if (carryCard && updates.truck_plate) {
+    if (isCarryLike && updates.truck_plate) {
         if (!plan.originTruck)  updates.origin_truck_plate = plan.truckPlate || '';
         if (!plan.originDriver) updates.origin_driver      = plan.driverTransport || '';
         // ลากกลับไปรถเดิม = ไม่ได้ถูกแก้แล้ว ล้างต้นทางทิ้ง ป้ายจะได้ไม่ค้างว่า "ถูกแก้แล้ว"
@@ -22698,14 +22722,12 @@ window.calDrop = async function(e, newDate, newTruck) {
                 if (!match) return;
                 if (updates.plan_date && !p.isCarry) p.date = updates.plan_date;
                 if (updates.truck_plate) p.truckPlate = updates.truck_plate;
+                if ('origin_plan_date'   in updates) p.originPlanDate = updates.origin_plan_date || '';
                 if ('origin_truck_plate' in updates) p.originTruck  = updates.origin_truck_plate || '';
                 if ('origin_driver'      in updates) p.originDriver = updates.origin_driver      || '';
             });
         });
-        showToast(carryCard
-            ? (stayToday ? 'ย้ายงานค้างไปรถ ' + newTruck + ' แล้ว — วันแผนเดิมคงไว้'
-                         : 'เลื่อนงานค้างไปวันที่ ' + newDate + ' แล้ว')
-            : 'ย้ายแผนเรียบร้อย', false);
+        showToast(isCarryLike ? 'ย้ายงานค้างแล้ว — ยังเป็นงานค้างจนกว่าจะส่งสำเร็จ' : 'ย้ายแผนเรียบร้อย', false);
         if (typeof loadAndRenderLogiCalendar === 'function') { loadAndRenderLogiCalendar(); return; }
         renderLogiCalendar();
         if (typeof renderLogisticList === 'function') renderLogisticList();
@@ -22926,14 +22948,23 @@ function renderLogiCalendar() {
                 // override amber เป็นสีน้ำเงินทั้งระบบ (ดู .border-amber-400 ใน <style>)
                 // แผนของวันที่ผ่านไปแล้วและยังไม่จบงาน → ถือว่า "ไม่สำเร็จ" โดยอัตโนมัติ
                 // (ไม่เขียนทับสถานะในฐานข้อมูล แค่แสดงผลตามความจริงของเวลา)
-                const _overdue = !p.isCarry && p.date < todayStr && p.status !== 'success' && p.status !== 'failed';
-                const _stKey = p.isCarry ? (p.carryDone ? 'success' : 'carry') : (_overdue ? 'failed' : p.status);
+                const _cancelled = !!p.cancelledAt;
+                // แผนที่เคยค้างแล้วถูกลากไปวันอื่น ยังเป็นงานค้างอยู่จนกว่าจะส่งสำเร็จ
+                // การย้ายวันแค่บอกว่า "จะไปทำวันนั้น" ไม่ได้แปลว่าเลิกค้าง
+                const _wasCarry = !p.isCarry && !!p.originPlanDate && p.status !== 'success' && !_cancelled;
+                const _overdue = !p.isCarry && !_cancelled && p.date < todayStr && p.status !== 'success' && p.status !== 'failed';
+                const _stKey = _cancelled ? 'cancelled'
+                             : (p.isCarry ? (p.carryDone ? 'success' : 'carry')
+                             : (_wasCarry ? 'carry' : (_overdue ? 'failed' : p.status)));
                 const ST   = CAL_STATUS_HEX[_stKey] || '#64748b';
-                const LBL  = p.isCarry
-                           ? (p.carryDone ? 'ส่งสำเร็จ (ค้างส่ง)'
-                              : (p.carryFrom ? 'ค้างจาก ' + p.carryFrom.slice(8,10)+'/'+p.carryFrom.slice(5,7) : 'ค้างส่ง'))
+                const _origD = p.carryFrom || p.originPlanDate || '';
+                const _origTxt = _origD ? 'ค้างจาก ' + _origD.slice(8,10)+'/'+_origD.slice(5,7) : 'ค้างส่ง';
+                const LBL  = _cancelled ? 'ถูกลบทิ้ง'
+                           : (p.isCarry
+                           ? (p.carryDone ? 'ส่งสำเร็จ (ค้างส่ง)' : _origTxt)
+                           : (_wasCarry ? _origTxt
                            : (_overdue ? 'ไม่สำเร็จ · ไม่ได้ส่ง'
-                           : ((CAL_STATUS_STYLE[p.status]||{}).label || p.status));
+                           : ((CAL_STATUS_STYLE[p.status]||{}).label || p.status))));
                 const shops = p.shops || [];
                 const _esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
                 const _escA = function(x){ return String(x).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
@@ -22982,21 +23013,24 @@ function renderLogiCalendar() {
                 const openId = p.isCarry ? p.sourcePlanId : p.id;
                 // พื้นการ์ดใช้สีสถานะทั้งใบ โทนอ่อน (~7%) ให้แยกสถานะได้ตั้งแต่กวาดตา
                 // ใบที่ต้องรีบดู (ค้างส่ง/กำลังวิ่ง) เข้มขึ้นอีกนิดให้เด่นกว่าใบปกติ
-                const _tint = ((p.isCarry && !p.carryDone) || p.status==='inprogress') ? '1f' : '12';
+                const _tint = _cancelled ? '0d' : (((p.isCarry && !p.carryDone) || _wasCarry || p.status==='inprogress') ? '1f' : '12');
                 const headBg = `background:${ST}${_tint};`;
 
-                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${(p.isCarry && p.carryDone)?'cursor:pointer;':'cursor:grab;'}${(p.status==='failed'||_overdue)?'opacity:.85;':''}"
+                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${(p.isCarry && p.carryDone)?'cursor:pointer;':'cursor:grab;'}${_cancelled?'opacity:.6;':((p.status==='failed'||_overdue)?'opacity:.85;':'')}"
                     class="group transition-all hover:shadow-md"
                     id="cal-badge-${p.id}"
-                    draggable="${(p.isCarry && p.carryDone) ? 'false' : 'true'}"
-                    ${(p.isCarry && p.carryDone) ? '' : `ondragstart="calDragStart(event,'${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" ondragend="calDragEnd(event)"`}
+                    draggable="${(_cancelled || (p.isCarry && p.carryDone)) ? 'false' : 'true'}"
+                    ${(_cancelled || (p.isCarry && p.carryDone)) ? '' : `ondragstart="calDragStart(event,'${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" ondragend="calDragEnd(event)"`}
                     onclick="viewLogiPlan('${_escA(openId)}')">
 
                     ${/* งานค้างไม่มีปุ่มปิดงานเอง — สถานะต้องมาจากการทำงานของคนขับ
                           พอคนขับกดจบงาน แผนเป็น success แล้วการ์ดจะเปลี่ยนเป็น
                           "ส่งสำเร็จ (ค้างส่ง)" และเลิกยกมาเอง
                           ถ้าจะยกเลิกงานจริงๆ ให้ไปลบ/แก้ที่แผนต้นฉบับในวันของมัน */''}
-                    ${(!p.isCarry && (p.status !== 'inprogress' || (_cu && _cu.isAdmin))) ? `<button onclick="event.stopPropagation();deleteLogiPlanFromCal('${_escA(p.id)}')"
+                    ${((p.isCarry && !p.carryDone) || _wasCarry) ? `<button onclick="event.stopPropagation();logiCancelPlan('${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" title="ยกเลิกแผนนี้ — การ์ดที่วันเดิมจะขึ้นว่าถูกลบทิ้ง"
+                             class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-500 text-white text-[10px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-700 z-10 flex">
+                             <i class="fas fa-times"></i></button>` : ''}
+                    ${(!p.isCarry && !_wasCarry && (p.status !== 'inprogress' || (_cu && _cu.isAdmin))) ? `<button onclick="event.stopPropagation();deleteLogiPlanFromCal('${_escA(p.id)}')"
                              class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-500 text-white text-[10px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-700 z-10 flex">
                              <i class="fas fa-times"></i></button>` : ''}
 
@@ -23009,12 +23043,12 @@ function renderLogiCalendar() {
                             ${_esc(p.driverTransport||'ยังไม่ระบุคนขับ')}</span>
                     </div>
 
-                    ${p.isCarry ? (function(){
+                    ${(p.isCarry || _wasCarry) ? (function(){
                         var oTruck = p.originTruck || p.truckPlate || '—';
                         var oDrv   = p.originDriver || p.driverTransport || '—';
                         var chTruck = p.originTruck && p.originTruck !== p.truckPlate;
                         var chDrv   = p.originDriver && p.originDriver !== p.driverTransport;
-                        var d = p.carryFrom || '';
+                        var d = _origD;
                         var dTxt = d ? (d.slice(8,10)+'/'+d.slice(5,7)+'/'+(parseInt(d.slice(0,4))+543)) : '—';
                         var row = function(k,v,changed,oldV){
                             return `<dt style="color:#5e6b7f;font-weight:600;white-space:nowrap;">${k}</dt>`
