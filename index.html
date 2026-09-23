@@ -23038,7 +23038,7 @@ function renderLogiCalendar() {
                     id="cal-badge-${p.id}"
                     draggable="${_locked ? 'false' : 'true'}"
                     ${_locked ? '' : `ondragstart="calDragStart(event,'${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" ondragend="calDragEnd(event)"`}
-                    onclick="viewLogiPlan('${_escA(openId)}')">
+                    onclick="viewLogiPlan('${_escA(openId)}'${_isOrigin ? ',1' : ''})">
 
                     ${/* งานค้างไม่มีปุ่มปิดงานเอง — สถานะต้องมาจากการทำงานของคนขับ
                           พอคนขับกดจบงาน แผนเป็น success แล้วการ์ดจะเปลี่ยนเป็น
@@ -23148,7 +23148,10 @@ function renderLogiCalendar() {
 
 
 // ── ดูรายละเอียด (popup) ──
-window.viewLogiPlan = function viewLogiPlan(planId) {
+// isOrigin = เปิดจากการ์ดต้นขั้ว (แผนเดิมที่ส่งไม่สำเร็จ) → ดูได้อย่างเดียว
+// แถวใน DB เป็นแถวเดียวกับการ์ดงานค้างของวันถัดไป ถ้าให้แก้จากสองที่
+// คนวางแผนจะแก้ใบที่วันเดิมโดยไม่เห็นว่างานจริงถูกยกไปไว้วันไหนแล้ว
+window.viewLogiPlan = function viewLogiPlan(planId, isOrigin) {
     // หาจากทั้ง logiPlanList และ logiCalPlanList
     const allPlans = (logiPlanList || []).concat(typeof logiCalPlanList !== 'undefined' ? (logiCalPlanList || []) : []);
     const p = allPlans.find(x => x.id === planId);
@@ -23296,7 +23299,10 @@ window.viewLogiPlan = function viewLogiPlan(planId) {
         <div class="px-6 pb-6 flex justify-end gap-3">
             <button onclick="document.getElementById('logi-view-modal').classList.add('hidden')" class="px-6 py-3 bg-slate-100 rounded-xl font-black hover:bg-slate-200">ปิด</button>
             <button onclick="document.getElementById('logi-view-modal').classList.add('hidden'); printPreShipmentFromPlan('${p.id}')" class="px-6 py-3 bg-orange-500 text-white rounded-xl font-black hover:bg-orange-600 flex items-center gap-2"><i class="fas fa-file-invoice"></i> PRE-SHIPMENT</button>
-            <button onclick="document.getElementById('logi-view-modal').classList.add('hidden'); editLogiPlan('${p.id}')" class="px-6 py-3 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-800">แก้ไข</button>
+            ${isOrigin
+                ? `<div class="px-5 py-3 rounded-xl font-bold text-sm flex items-center gap-2" style="background:#fdf2f6;color:#a12a5e;border:1px solid #f3c6d8;">
+                       <i class="fas fa-lock"></i> แผนนี้ส่งไม่สำเร็จ แก้ที่การ์ด "งานค้างส่ง" ในวันถัดไป</div>`
+                : `<button onclick="document.getElementById('logi-view-modal').classList.add('hidden'); editLogiPlan('${p.id}')" class="px-6 py-3 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-800">แก้ไข</button>`}
         </div>
     </div>`;
     document.getElementById('logi-view-modal').classList.remove('hidden');
