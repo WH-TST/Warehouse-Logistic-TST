@@ -22472,14 +22472,23 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
     Promise.all([
         window._sb.from('logistic_plans').select('*')
             .gte('plan_date', startVal).lte('plan_date', endVal).order('plan_id'),
+        // งานค้างที่ยังไม่จบ — ย้อนหลังไม่จำกัด เพราะต้องยกมาจนกว่าจะจัดการ
         _needCarry
             ? window._sb.from('logistic_plans').select('*')
-                .is('carried_resolved_at', null)
+                .neq('status', 'success').is('carried_resolved_at', null)
+                .lt('plan_date', _todayCal).order('plan_date')
+            : Promise.resolve({ data: [] }),
+        // งานค้างที่ส่งสำเร็จไปแล้ว — ใช้แค่วางการ์ด "ส่งสำเร็จ (ค้างส่ง)" ที่วันปิดงาน
+        // จำกัดย้อนหลัง 10 วันจากต้นช่วงที่ดูอยู่ ไม่งั้นจะลากแผนสำเร็จมาทั้งฐาน (900+ แถว)
+        _needCarry
+            ? window._sb.from('logistic_plans').select('*')
+                .eq('status', 'success').is('carried_resolved_at', null)
+                .gte('plan_date', new Date(new Date(startVal+'T00:00:00').getTime() - 10*86400000).toISOString().slice(0,10))
                 .lt('plan_date', _todayCal).order('plan_date')
             : Promise.resolve({ data: [] })
     ])
         .then(function(both) {
-            const result = both[0], carryRes = both[1];
+            const result = both[0], carryRes = both[1], carryDoneRes = both[2];
             // พิกัดบรรทุกต่อคัน (โหลดครั้งเดียว ใช้คำนวณ % ความเต็มของการ์ด)
             if (!Object.keys(window._logiTruckCapMap||{}).length) {
                 window._sb.from('logi_trucks').select('plate,net_weight').then(function(tr){
@@ -22503,6 +22512,7 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
             const _carryRows = rows.filter(function(r){
                     return !r.carried_resolved_at && r.plan_date < _todayCal;
                 }).concat(carryRes && carryRes.data ? carryRes.data : [])
+                .concat(carryDoneRes && carryDoneRes.data ? carryDoneRes.data : [])
                 .filter(function(r){ return r.job_type !== 'maintenance_pm'; })   // งานซ่อม/PM ไม่ใช่ของค้างส่ง
                 .filter(function(r){ if (_seenCarry[r.plan_id]) return false; _seenCarry[r.plan_id]=1; return true; });
             window._logiCarryRows = _needCarry ? _carryRows : [];
@@ -22636,12 +22646,14 @@ window.calDrop = async function(e, newDate, newTruck) {
     if (!planId) return;
 
     var allPlans = (logiCalPlanList && logiCalPlanList.length) ? logiCalPlanList : (logiPlanList || []);
-    var plan = allPlans.find(function(p) { return p.id === planId; });
-    if (!plan) return;
-
     // งานค้าง: การ์ดที่ลากคือ "สำเนา" ที่วางอยู่วันนี้ ต้องอ้างวันของแผนต้นฉบับ
     // ไม่ใช่วันที่การ์ดโผล่อยู่ ไม่งั้นจะคิดว่าย้ายวันทั้งที่ยังไม่ได้ย้าย
     var carryCard = allPlans.find(function(p){ return p.isCarry && p.sourcePlanId === planId; });
+    // การ์ดต้นฉบับอาจอยู่นอกช่วงวันที่กำลังดู (เช่น ค้างจาก 19/09 แต่เปิดดู 23–29)
+    // ถ้าหาไม่เจอให้ใช้การ์ดค้างแทน ไม่งั้นลากแล้วเงียบ ไม่มีอะไรเกิดขึ้น
+    var plan = allPlans.find(function(p) { return p.id === planId; }) || carryCard;
+    if (!plan) return;
+
     var srcDate   = carryCard ? carryCard.carryFrom : plan.date;
 
     var curTruck = plan.truckType === 'hire' ? (plan.driverTransport || '—') : (plan.truckPlate || '—');
@@ -22655,10 +22667,14 @@ window.calDrop = async function(e, newDate, newTruck) {
     if (curTruck !== newTruck && plan.truckType === 'company') updates.truck_plate = newTruck;
     if (!Object.keys(updates).length) return;
 
-    // เก็บต้นทางไว้ครั้งแรกที่งานค้างถูกแก้ — ถ้าไม่เก็บจะไม่รู้ว่าเดิมวางให้ใคร
+    // เก็บต้นทางไว้ "ครั้งแรก" ที่งานค้างถูกแก้เท่านั้น
+    // ลากซ้ำรอบ 2, 3, 4… จะไม่ทับค่าเดิม ต้นทางจึงยังเป็นของจริงเสมอ
     if (carryCard && updates.truck_plate) {
         if (!plan.originTruck)  updates.origin_truck_plate = plan.truckPlate || '';
         if (!plan.originDriver) updates.origin_driver      = plan.driverTransport || '';
+        // ลากกลับไปรถเดิม = ไม่ได้ถูกแก้แล้ว ล้างต้นทางทิ้ง ป้ายจะได้ไม่ค้างว่า "ถูกแก้แล้ว"
+        var backToOrigin = plan.originTruck && plan.originTruck === updates.truck_plate;
+        if (backToOrigin) { updates.origin_truck_plate = null; updates.origin_driver = null; }
     }
 
     // รถพ่วง: ย้ายแม่+ลูกพร้อมกัน
@@ -22681,8 +22697,8 @@ window.calDrop = async function(e, newDate, newTruck) {
                 if (!match) return;
                 if (updates.plan_date && !p.isCarry) p.date = updates.plan_date;
                 if (updates.truck_plate) p.truckPlate = updates.truck_plate;
-                if (updates.origin_truck_plate) p.originTruck  = updates.origin_truck_plate;
-                if (updates.origin_driver)      p.originDriver = updates.origin_driver;
+                if ('origin_truck_plate' in updates) p.originTruck  = updates.origin_truck_plate || '';
+                if ('origin_driver'      in updates) p.originDriver = updates.origin_driver      || '';
             });
         });
         showToast(carryCard
