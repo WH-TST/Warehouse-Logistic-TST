@@ -23171,7 +23171,23 @@ window.viewLogiPlan = function viewLogiPlan(planId, isOrigin) {
     // หาจากทั้ง logiPlanList และ logiCalPlanList
     const allPlans = (logiPlanList || []).concat(typeof logiCalPlanList !== 'undefined' ? (logiCalPlanList || []) : []);
     const p = allPlans.find(x => x.id === planId);
-    if (!p) return;
+    if (!p) {
+        // การ์ดงานค้างอ้างแผนต้นฉบับซึ่งอยู่คนละวันกับที่กำลังดู
+        // ถ้าวันต้นทางอยู่นอกช่วงที่เปิดอยู่ แผนนั้นไม่ได้ถูกโหลดมาในหน้านี้
+        // เดิมฟังก์ชันเงียบไปเฉยๆ กดการ์ดชมพูแล้วไม่มีอะไรเกิดขึ้น
+        // ดึงจาก DB มาแล้วเปิดให้ แทนที่จะเงียบ
+        if (window._sb && typeof _logiRowToCard === 'function') {
+            window._sb.from('logistic_plans').select('*').eq('plan_id', planId).maybeSingle()
+                .then(function(r){
+                    if (!r || !r.data) { showToast('ไม่พบแผน ' + planId, true); return; }
+                    var card = _logiRowToCard(r.data);
+                    if (typeof logiCalPlanList !== 'undefined' && logiCalPlanList) logiCalPlanList.push(card);
+                    else logiPlanList.push(card);
+                    viewLogiPlan(planId, isOrigin);
+                }, function(){ showToast('เปิดแผนไม่สำเร็จ', true); });
+        }
+        return;
+    }
 
     // รวม shops จาก -C plan ด้วย (ถ้าเป็น -M plan) แยก section แม่/ลูก
     const childPlanId = p.isMother ? (p.pairId + '-C') : null;
