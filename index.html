@@ -22943,7 +22943,9 @@ function renderLogiCalendar() {
             const dow       = dateObj.getDay();
             const isToday   = d === todayStr;
             const isWeekend = dow === 0 || dow === 6;
-            const cellBg = isToday ? 'bg-emerald-50' : isWeekend ? 'bg-slate-100/60' : '';
+            // ช่องวันนี้ไม่ลงสีพื้น — พื้นเขียวไปผสมกับสีพื้นการ์ด ทำให้อ่านสถานะผิด
+            // (การ์ดสีชมพู "ค้างส่ง" กลายเป็นโทนอมเขียว) หัวตารางเขียวบอกวันนี้อยู่แล้ว
+            const cellBg = isWeekend && !isToday ? 'bg-slate-100/60' : '';
 
             const plans = (dayMap[d] || []).filter(p => {
                 const t = p.truckType === 'hire'
