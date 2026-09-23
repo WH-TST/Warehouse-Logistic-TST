@@ -17905,6 +17905,12 @@ window.saveLogisticPlan = function saveLogisticPlan() {
                                     : ((_cu && _cu.isAdmin) || payload.truckType === 'hire')
                                         ? (payload.status || 'planned')
                                         : (logiPlanList.find(p => p.id === pid)?.status || 'planned'),
+                // ออฟฟิศแก้สถานะเองจากฟอร์มแผน — ต้องรู้ว่าใครแก้
+                // ไม่งั้นรายงานจะนับเป็นผลงานคนขับทั้งที่เขาไม่ได้กดอะไร
+                status_by:        (isUpdate && ((_cu && _cu.isAdmin) || payload.truckType === 'hire')
+                                    && (payload.status || 'planned') !== (logiPlanList.find(p => p.id === pid)?.status || 'planned'))
+                                    ? ('ADMIN:' + ((_cu && (_cu.username || _cu.name)) || 'ไม่ทราบผู้ใช้'))
+                                    : undefined,
                 truck_type:       payload.truckType      || 'company',
                 truck_plate:      plate                  || '',
                 child_plate:      isTrailerSplit ? (payload.childPlate || '') : '',
@@ -22870,7 +22876,10 @@ window.changeHirePlanStatus = async function(planId) {
 window._doChangeHireStatus = async function(planId, newStatus) {
     document.getElementById('hire-status-modal')?.remove();
     try {
-        var res = await window._sb.from('logistic_plans').update({ status: newStatus }).eq('plan_id', planId);
+        var res = await window._sb.from('logistic_plans')
+            .update({ status: newStatus,
+                      status_by: 'ADMIN:' + ((_cu && (_cu.username || _cu.name)) || 'ไม่ทราบผู้ใช้') })
+            .eq('plan_id', planId);
         if (res.error) throw res.error;
         // อัปเดต local list
         [logiPlanList, typeof logiCalPlanList !== 'undefined' ? logiCalPlanList : null].forEach(function(list) {
@@ -46228,7 +46237,7 @@ window.dwlLoad = async function dwlLoad(){
   try{
     // 1) แผนในช่วง — เฉพาะรถบริษัท และไม่เอางานซ่อม/PM
     var pr = await window._sb.from('logistic_plans')
-      .select('plan_id,plan_date,status,truck_type,truck_plate,driver_transport,driver_id,trip_no,shops,job_type,origin_plan_date,cancelled_at')
+      .select('plan_id,plan_date,status,truck_type,truck_plate,driver_transport,driver_id,trip_no,shops,job_type,origin_plan_date,cancelled_at,status_by')
       .gte('plan_date',fromV).lte('plan_date',toV)
       .neq('job_type','maintenance_pm')
       .is('cancelled_at',null)
@@ -46293,6 +46302,9 @@ window.dwlLoad = async function dwlLoad(){
           // ใครเป็นคนกด — ถ้าออฟฟิศกดแทน เวลาในแถวนี้ไม่ใช่เวลาที่คนขับทำจริง
           byShop: v.acted_by||'',
           byTrip: log.acted_by || (log.driver_username==='admin-override'?'ADMIN:(ไม่ทราบผู้ใช้)':'') || '',
+          byPlan: p.status_by||'',
+          // ปิดเป็น "สำเร็จ" ทั้งที่ไม่มีเวลาหน้างานเลย = มีคนกดปิดให้จากออฟฟิศ
+          closedNoField: (p.status==='success' && !v.departed_at && !v.arrived_at),
           ok: done,
           status: p.status||'planned',
           // เรียงตามเวลาเช้าสุดของแถวนั้น งานที่ไม่มีเวลาเลยไปท้ายสุด
@@ -46330,7 +46342,9 @@ function dwlRender(){
     if(fRes==='ok'    && !r.ok) return false;
     if(fRes==='bad'   && r.ok)  return false;
     if(fRes==='carry' && !r.carryFrom) return false;
-    if(fRes==='override' && !((r.byShop&&r.byShop.indexOf('ADMIN:')===0)||(r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0))) return false;
+    if(fRes==='override' && !((r.byShop&&r.byShop.indexOf('ADMIN:')===0)
+        || (r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0)
+        || (r.byPlan&&r.byPlan.indexOf('ADMIN:')===0) || r.closedNoField)) return false;
     return true;
   });
 
@@ -46366,9 +46380,13 @@ function dwlRender(){
     var durs=list.map(function(r){return (r.arrive&&r.depart)?(new Date(r.depart)-new Date(r.arrive)):0;}).filter(function(x){return x>0;});
     var avg=durs.length?Math.round(durs.reduce(function(a,b){return a+b;},0)/durs.length/60000):0;
     // ช่องเวลาที่ควรมีแต่ไม่มี = คนขับไม่ได้กด
-    var nOverride=list.filter(function(r){
-      return (r.byShop&&r.byShop.indexOf('ADMIN:')===0) || (r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0);
-    }).length;
+    function _isOverride(r){
+      return (r.byShop&&r.byShop.indexOf('ADMIN:')===0)
+          || (r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0)
+          || (r.byPlan&&r.byPlan.indexOf('ADMIN:')===0)
+          || r.closedNoField;
+    }
+    var nOverride=list.filter(_isOverride).length;
     var miss=0;
     list.forEach(function(r){
       if(!r.arrive) miss++;
@@ -46407,7 +46425,8 @@ function dwlRender(){
                   : '<td class="mono" style="color:#94a3b8;">—</td>');
 
       // ออฟฟิศกดแทน — ต้องเห็นชัด ไม่งั้นเวลาในแถวนี้จะถูกอ่านเป็นผลงานคนขับ
-      var actors=[r.byShop, (r.seq===1?r.byTrip:'')].filter(function(x){ return x&&x.indexOf('ADMIN:')===0; });
+      var actors=[r.byShop, (r.seq===1?r.byTrip:''), r.byPlan].filter(function(x){ return x&&x.indexOf('ADMIN:')===0; });
+      if(!actors.length && r.closedNoField) actors=['ADMIN:(ปิดงานจากออฟฟิศ)'];
       var overrideBadge = actors.length
         ? '<div style="margin-top:3px;font-size:11px;font-weight:700;color:#7c3aed;white-space:nowrap;">'
           +'<i class="fas fa-user-shield" style="margin-right:4px;"></i>ออฟฟิศกดแทน · '
@@ -46480,8 +46499,12 @@ window.dwlExport = function dwlExport(){
     var cells=[_thDate(r.date), r.driver, r.plate, r.trip, r.planId, r.seq, r.shop,
       _hm(r.out), _hm(r.arrive), _hm(r.depart), r.next, _hm(r.home), r.dur,
       r.ok?'ส่งสำเร็จ':'ไม่สำเร็จ', r.carryFrom?_thDate(r.carryFrom):'',
-      (r.byShop&&r.byShop.indexOf('ADMIN:')===0) ? ('ออฟฟิศกดแทน: '+r.byShop.slice(6))
-        : ((r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0) ? ('ออฟฟิศกดแทน: '+r.byTrip.slice(6)) : 'คนขับ')];
+      (function(){
+        var a=[r.byShop,(r.seq===1?r.byTrip:''),r.byPlan].filter(function(x){return x&&x.indexOf('ADMIN:')===0;});
+        if(a.length) return 'ออฟฟิศกดแทน: '+a[0].slice(6);
+        if(r.closedNoField) return 'ออฟฟิศกดแทน: (ปิดงานจากออฟฟิศ)';
+        return 'คนขับ';
+      })()];
     lines.push(cells.map(function(c){ return '"'+String(c==null?'':c).replace(/"/g,'""')+'"'; }).join(','));
   });
   // BOM ให้ Excel อ่านภาษาไทยถูก

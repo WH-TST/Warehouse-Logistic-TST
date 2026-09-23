@@ -15,10 +15,15 @@
 alter table public.trip_logs   add column if not exists acted_by text;
 alter table public.shop_visits add column if not exists acted_by text;
 
+-- ออฟฟิศเปลี่ยนสถานะเองจากตารางรายการแผน / บล็อก — ไม่ผ่าน trip_logs เลย
+alter table public.logistic_plans add column if not exists status_by text;
+
 comment on column public.trip_logs.acted_by is
     'ผู้กดสถานะล่าสุด — ขึ้นต้นด้วย ADMIN: คือออฟฟิศกดแทนคนขับ';
 comment on column public.shop_visits.acted_by is
     'ผู้กดถึงร้าน/ออกจากร้านล่าสุด — ขึ้นต้นด้วย ADMIN: คือออฟฟิศกดแทนคนขับ';
+comment on column public.logistic_plans.status_by is
+    'ผู้เปลี่ยนสถานะแผนล่าสุดจากฝั่งออฟฟิศ (ADMIN:<username>) — ถ้าเป็น null คือสถานะมาจากการทำงานของคนขับ';
 
 -- ── ข้อมูลเก่าที่พอกู้ได้ ─────────────────────────────────────────────
 -- Driver Monitor รุ่นก่อนเขียน driver_username = 'admin-override' ไว้ตอนเริ่มงาน
