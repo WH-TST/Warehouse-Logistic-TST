@@ -15,6 +15,7 @@ type Session = {
   id: string
   order_id: string | null
   plan_date: string
+  load_date?: string
   sku: string | null
   product_name: string | null
   qty: number | string | null
@@ -235,27 +236,34 @@ Deno.serve(async (req) => {
     const fTruck = url.searchParams.get('truck') || ''
     const fRange = url.searchParams.get('range') || ''
 
-    // 1. Session ที่ปิดงานแล้ว
+    // 1. ออเดอร์ที่โหลดเสร็จในช่วงที่ขอ — ยึด "ทั้งคัน" ไม่ใช่รายแถว
+    //    ออเดอร์เดียวโหลดคร่อมวันได้ ถ้านับรายแถวของคันเดียวกันจะกระจายสองวัน
+    //    และ scale_diff ที่ผูกกับทั้งคันจะถูกกระจายผิด น้ำหนัก FINAL เพี้ยน
+    //    load_date = วันที่ session สุดท้ายของคันนั้นจบ (DB เขียนเองด้วย trigger)
+    const { data: ordersRaw, error: oErr } = await supabase
+      .from('loading_orders')
+      .select('id,order_no,customer_name,truck_plate,scale_diff,order_date,load_date')
+      .gte('load_date', fromV)
+      .lte('load_date', toV)
+      .range(0, 4999)
+    if (oErr) throw oErr
+    const orders = ordersRaw || []
+    if (!orders.length) return json({ from: fromV, to: toV, count: 0, rows: [] })
+
+    const orderIds = orders.map((o: any) => o.id) as string[]
+    const orderMap: Record<string, any> = {}
+    ;(orders || []).forEach((o: any) => (orderMap[o.id] = o))
+
+    // 2. Session ของออเดอร์เหล่านั้น — เอามาทั้งคัน รวมส่วนที่โหลดวันก่อน
     const { data: sessionsRaw, error: sErr } = await supabase
       .from('loading_sessions')
-      .select('id,order_id,plan_date,sku,product_name,qty,weight,team,end_time,updated_at,created_at')
+      .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,end_time,updated_at,created_at')
       .neq('record_type', 'draft')
-      .gte('plan_date', fromV)
-      .lte('plan_date', toV)
+      .in('order_id', orderIds)
       .range(0, 19999)
     if (sErr) throw sErr
     const sessions = (sessionsRaw || []) as Session[]
     if (!sessions.length) return json({ from: fromV, to: toV, count: 0, rows: [] })
-
-    const orderIds = Array.from(new Set(sessions.map((s) => s.order_id).filter(Boolean))) as string[]
-
-    // 2. Loading orders
-    const { data: orders } = await supabase
-      .from('loading_orders')
-      .select('id,order_no,customer_name,truck_plate,scale_diff,order_date')
-      .in('id', orderIds.length ? orderIds : ['__none__'])
-    const orderMap: Record<string, any> = {}
-    ;(orders || []).forEach((o: any) => (orderMap[o.id] = o))
 
     // 3. Products
     const skus = Array.from(new Set(sessions.map((s) => s.sku).filter(Boolean))) as string[]
@@ -278,7 +286,8 @@ Deno.serve(async (req) => {
         .select('truck_plate,driver_transport,plan_date')
         .eq('truck_type', 'hire')
         .in('truck_plate', plates.length ? plates : ['__none__'])
-        .gte('plan_date', fromV)
+        // แผนอาจอยู่ก่อนวันโหลด ถ้าค้นแค่ช่วงที่ขอจะหาแผนรถจ้างไม่เจอ
+        .gte('plan_date', new Date(new Date(fromV + 'T00:00:00').getTime() - 30 * 86400000).toISOString().slice(0, 10))
         .lte('plan_date', toV),
     ])
     const companySet = new Set((companyRes.data || []).map((t: any) => t.plate))
@@ -341,6 +350,7 @@ Deno.serve(async (req) => {
         }
       })
 
+      // ประเภทรถยังเทียบกับวันของแผน (แผนอยู่วันนั้น ไม่ใช่วันที่โหลด)
       const truck = classifyTruck(order.truck_plate, order.order_date || fromV)
 
       Object.keys(bySku).forEach((sk) => {
@@ -353,7 +363,7 @@ Deno.serve(async (req) => {
         else if (prod.min_w != null && perUnit < prod.min_w) rangeStatus = 'under'
 
         rows.push({
-          date: order.order_date || fromV,
+          date: order.load_date || order.order_date || fromV,
           time: r._t ? new Date(r._t).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : '—',
           customer: order.customer_name || '—',
           sale: saleMap[order.customer_name] || '—',
