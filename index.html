@@ -22472,7 +22472,7 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
             .gte('plan_date', startVal).lte('plan_date', endVal).order('plan_id'),
         _needCarry
             ? window._sb.from('logistic_plans').select('*')
-                .neq('status', 'success').is('carried_resolved_at', null)
+                .is('carried_resolved_at', null)
                 .lt('plan_date', _todayCal).order('plan_date')
             : Promise.resolve({ data: [] })
     ])
@@ -22499,7 +22499,7 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
             // ไม่ใช่แค่ failed เหมือนเดิม เพราะเคสที่เกิดบ่อยที่สุดคือไม่มีใครไปกดอะไรเลย
             const _seenCarry = {};
             const _carryRows = rows.filter(function(r){
-                    return r.status !== 'success' && !r.carried_resolved_at && r.plan_date < _todayCal;
+                    return !r.carried_resolved_at && r.plan_date < _todayCal;
                 }).concat(carryRes && carryRes.data ? carryRes.data : [])
                 .filter(function(r){ return r.job_type !== 'maintenance_pm'; })   // งานซ่อม/PM ไม่ใช่ของค้างส่ง
                 .filter(function(r){ if (_seenCarry[r.plan_id]) return false; _seenCarry[r.plan_id]=1; return true; });
@@ -22540,20 +22540,50 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
                                 renderLogiCalendar();
                             }, function(){});
                     }
-                    // เติมการ์ด "ค้างส่ง" ลงวันนี้ (ตัวต้นฉบับยังอยู่ที่วันเดิม สถานะไม่สำเร็จ)
-                    var _seen = {};
-                    (window._logiCarryRows || []).forEach(function(row){
-                        if (_seen[row.plan_id]) return;
-                        _seen[row.plan_id] = 1;
-                        var base = _logiRowToCard(row);
-                        base.id          = 'carry-' + row.plan_id;
-                        base.sourcePlanId= row.plan_id;
-                        base.date        = _todayCal;
-                        base.isCarry     = true;
-                        base.carryFrom   = row.plan_date;
-                        logiCalPlanList.push(base);
-                    });
-                    renderLogiCalendar();
+                    // เติมการ์ด "ค้างส่ง" (ตัวต้นฉบับยังอยู่ที่วันเดิม แสดงเป็นไม่สำเร็จ)
+                    //  • ยังไม่ส่ง      → วางที่ "วันนี้" ยกไปเรื่อยๆ จนกว่าจะจัดการ
+                    //  • ส่งสำเร็จแล้ว  → วางที่ "วันที่ปิดงานจริง" ป้าย "ส่งสำเร็จ (ค้างส่ง)"
+                    //    เพื่อให้เห็นว่างานนี้เคยค้างมาก่อน ไม่ใช่งานปกติของวันนั้น
+                    var _carryList = (window._logiCarryRows || []);
+                    var _doneIds = _carryList.filter(function(r){ return r.status === 'success'; })
+                                             .map(function(r){ return r.plan_id; });
+                    var _finish = function(doneMap){
+                        var _seen = {};
+                        _carryList.forEach(function(row){
+                            if (_seen[row.plan_id]) return;
+                            _seen[row.plan_id] = 1;
+                            var isDone = row.status === 'success';
+                            var landOn = _todayCal;
+                            if (isDone) {
+                                var cdt = doneMap[row.plan_id];
+                                if (!cdt) return;                       // ไม่รู้วันปิดงาน → ไม่ต้องแสดงซ้ำ
+                                landOn = cdt;
+                                if (landOn <= row.plan_date) return;    // ปิดงานวันเดียวกับแผน = งานปกติ
+                            }
+                            var base = _logiRowToCard(row);
+                            base.id          = 'carry-' + row.plan_id;
+                            base.sourcePlanId= row.plan_id;
+                            base.date        = landOn;
+                            base.isCarry     = true;
+                            base.carryDone   = isDone;
+                            base.carryFrom   = row.plan_date;
+                            logiCalPlanList.push(base);
+                        });
+                        renderLogiCalendar();
+                    };
+                    if (_doneIds.length) {
+                        window._sb.from('trip_logs').select('plan_id,completed_at').in('plan_id', _doneIds)
+                            .then(function(tr){
+                                var m = {};
+                                (tr.data||[]).forEach(function(t){
+                                    if (!t.completed_at) return;
+                                    // timestamp เป็น UTC ต้องบวก 7 ชม.ก่อนตัดวัน
+                                    m[t.plan_id] = new Date(new Date(t.completed_at).getTime() + 7*3600000)
+                                                     .toISOString().slice(0,10);
+                                });
+                                _finish(m);
+                            }, function(){ _finish({}); });
+                    } else { _finish({}); }
                 });
             return; // renderLogiCalendar ถูกเรียกใน .then ด้านบนแล้ว
         });
@@ -22858,9 +22888,11 @@ function renderLogiCalendar() {
                 // แผนของวันที่ผ่านไปแล้วและยังไม่จบงาน → ถือว่า "ไม่สำเร็จ" โดยอัตโนมัติ
                 // (ไม่เขียนทับสถานะในฐานข้อมูล แค่แสดงผลตามความจริงของเวลา)
                 const _overdue = !p.isCarry && p.date < todayStr && p.status !== 'success' && p.status !== 'failed';
-                const _stKey = p.isCarry ? 'carry' : (_overdue ? 'failed' : p.status);
+                const _stKey = p.isCarry ? (p.carryDone ? 'success' : 'carry') : (_overdue ? 'failed' : p.status);
                 const ST   = CAL_STATUS_HEX[_stKey] || '#64748b';
-                const LBL  = p.isCarry ? 'ค้างส่ง'
+                const LBL  = p.isCarry
+                           ? (p.carryDone ? 'ส่งสำเร็จ (ค้างส่ง)'
+                              : (p.carryFrom ? 'ค้างจาก ' + p.carryFrom.slice(8,10)+'/'+p.carryFrom.slice(5,7) : 'ค้างส่ง'))
                            : (_overdue ? 'ไม่สำเร็จ · ไม่ได้ส่ง'
                            : ((CAL_STATUS_STYLE[p.status]||{}).label || p.status));
                 const shops = p.shops || [];
@@ -22882,7 +22914,7 @@ function renderLogiCalendar() {
                         ? `<span style="width:15px;height:15px;border-radius:50%;background:${CAL_STATUS_HEX.success};color:#fff;font-size:9px;font-weight:700;display:inline-grid;place-items:center;margin-top:2px;">✓</span>`
                         : (isNow
                             ? `<span style="width:15px;height:15px;border-radius:50%;background:${ST};box-shadow:0 0 0 3px ${ST}33;margin-top:2px;"></span>`
-                            : `<span style="width:15px;height:15px;border-radius:50%;border:2px solid #dde3ea;background:#fff;margin-top:2px;"></span>`);
+                            : `<span style="width:15px;height:15px;border-radius:50%;border:2px solid rgba(15,23,42,.18);background:#fff;margin-top:2px;"></span>`);
                     const isPick = sh.type === 'pickup' || sh.type === 'transfer';
                     const nameCol = isDone ? '#39455a' : '#0b1017';
                     const when = isDone
@@ -22893,8 +22925,8 @@ function renderLogiCalendar() {
                     if (skuN) meta.push(`<span style="font-weight:600;">${skuN} SKU</span>`);
                     if (sh.distance) meta.push(`<span>${nf(sh.distance)} กม.</span>`);
                     if (sh.remark && sh.remark !== '—') meta.push(`<span style="color:${CAL_STATUS_HEX.inprogress};font-weight:600;">${_esc(sh.remark)}</span>`);
-                    if (sh.loadWarehouse) meta.push(`<span style="font-size:10px;background:#eff3f9;color:#39455a;padding:0 5px;border-radius:4px;font-weight:600;">${_esc(sh.loadWarehouse)}</span>`);
-                    return `<div style="display:grid;grid-template-columns:15px 1fr auto;gap:4px 8px;align-items:baseline;padding:7px 0;${i?'border-top:1px dashed #eaeef3;':''}">
+                    if (sh.loadWarehouse) meta.push(`<span style="font-size:10px;background:rgba(255,255,255,.78);color:#39455a;padding:0 5px;border-radius:4px;font-weight:600;">${_esc(sh.loadWarehouse)}</span>`);
+                    return `<div style="display:grid;grid-template-columns:15px 1fr auto;gap:4px 8px;align-items:baseline;padding:7px 0;${i?'border-top:1px dashed rgba(15,23,42,.10);':''}">
                         ${mark}
                         <div style="font-size:13px;font-weight:600;line-height:1.35;color:${nameCol};overflow-wrap:anywhere;">${isPick?'<span style="color:#1d4ed8;font-weight:700;">รับของ · </span>':''}${_esc(sh.shopName||'—')}</div>
                         ${shops.length>1 && kg ? `<div style="font-size:13px;font-weight:700;color:${nameCol};white-space:nowrap;font-variant-numeric:tabular-nums;">${nf(kg)} กก.</div>` : '<div></div>'}
@@ -22909,7 +22941,10 @@ function renderLogiCalendar() {
                 const pctN = cap ? Math.round(wt/cap*100) : 0;
                 const barCol = pctN>=95 ? CAL_STATUS_HEX.carry : (pctN>=85 ? CAL_STATUS_HEX.inprogress : CAL_STATUS_HEX.success);
                 const openId = p.isCarry ? p.sourcePlanId : p.id;
-                const headBg = (p.isCarry || p.status==='inprogress') ? `background:linear-gradient(180deg,${ST}17 0 58px,#fff 58px);` : '';
+                // พื้นการ์ดใช้สีสถานะทั้งใบ โทนอ่อน (~7%) ให้แยกสถานะได้ตั้งแต่กวาดตา
+                // ใบที่ต้องรีบดู (ค้างส่ง/กำลังวิ่ง) เข้มขึ้นอีกนิดให้เด่นกว่าใบปกติ
+                const _tint = ((p.isCarry && !p.carryDone) || p.status==='inprogress') ? '1f' : '12';
+                const headBg = `background:${ST}${_tint};`;
 
                 return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${p.isCarry?'cursor:pointer;':'cursor:grab;'}${(p.status==='failed'||_overdue)?'opacity:.85;':''}"
                     class="group transition-all hover:shadow-md"
@@ -22929,7 +22964,7 @@ function renderLogiCalendar() {
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                         <span style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;background:${ST}24;color:${ST};padding:2px 7px;border-radius:5px;">เที่ยว ${_esc(p.tripNo||'—')}</span>
                         ${p.isMother ? `<span style="font-size:10px;font-weight:700;color:#fff;background:#1d4ed8;padding:2px 6px;border-radius:5px;">พ่วง</span>` : ''}
-                        <span style="margin-left:auto;font-size:11px;font-weight:700;color:${ST};">${p.isCarry && p.carryFrom ? 'ค้างจาก '+p.carryFrom.slice(8,10)+'/'+p.carryFrom.slice(5,7) : LBL}</span>
+                        <span style="margin-left:auto;font-size:11px;font-weight:700;color:${ST};">${LBL}</span>
                         <span style="flex:0 0 100%;display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#0b1017;margin-top:1px;">
                             <span style="flex:0 0 auto;width:13px;height:13px;border-radius:50%;background:${ST}29;box-shadow:inset 0 0 0 1.5px ${ST}8c;"></span>
                             ${_esc(p.driverTransport||'ยังไม่ระบุคนขับ')}</span>
@@ -22937,7 +22972,7 @@ function renderLogiCalendar() {
 
                     ${shops.length>1 ? `<div style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#39455a;">
                         <span>ส่งแล้ว ${doneCnt}/${shops.length} ร้าน</span>
-                        <span style="flex:1;height:5px;border-radius:3px;background:#eaeef3;overflow:hidden;"><i style="display:block;height:100%;width:${Math.round(doneCnt/shops.length*100)}%;background:${CAL_STATUS_HEX.success};border-radius:3px;"></i></span>
+                        <span style="flex:1;height:5px;border-radius:3px;background:rgba(15,23,42,.10);overflow:hidden;"><i style="display:block;height:100%;width:${Math.round(doneCnt/shops.length*100)}%;background:${CAL_STATUS_HEX.success};border-radius:3px;"></i></span>
                     </div>` : ''}
 
                     <div>${stopRows}</div>
@@ -22947,14 +22982,14 @@ function renderLogiCalendar() {
                             <span style="font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1;color:#0b1017;font-variant-numeric:tabular-nums;">${nf(wt)}<span style="font-size:11px;font-weight:600;color:#39455a;margin-left:3px;">กก.</span></span>
                             ${cap ? `<span style="margin-left:auto;font-size:12px;font-weight:700;color:${barCol};">${pctN}%</span>` : ''}
                         </div>
-                        ${cap ? `<div style="height:6px;border-radius:3px;background:#eaeef3;overflow:hidden;"><i style="display:block;height:100%;width:${Math.min(pctN,100)}%;background:${barCol};border-radius:3px;"></i></div>` : ''}
+                        ${cap ? `<div style="height:6px;border-radius:3px;background:rgba(15,23,42,.10);overflow:hidden;"><i style="display:block;height:100%;width:${Math.min(pctN,100)}%;background:${barCol};border-radius:3px;"></i></div>` : ''}
                     </div>
 
-                    <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#39455a;border-top:1px solid #eaeef3;padding-top:7px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#39455a;border-top:1px solid rgba(15,23,42,.10);padding-top:7px;flex-wrap:wrap;">
                         ${totalDist>0 ? `<span style="color:#0b1017;font-weight:600;font-variant-numeric:tabular-nums;">${nf(totalDist)} กม.</span>` : ''}
                         ${p.failReason && !p.failReason.startsWith('[') ? `<span style="color:${CAL_STATUS_HEX.inprogress};font-weight:600;">${_esc(p.failReason)}</span>` : ''}
                         <span onclick="event.stopPropagation();logiCopyPlanId('${_escA(openId)}')" title="คลิกเพื่อคัดลอก Plan ID"
-                            style="margin-left:auto;font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.02em;color:#5e6b7f;background:#f2f5f9;padding:1px 6px;border-radius:4px;cursor:copy;white-space:nowrap;">${_esc(openId)}</span>
+                            style="margin-left:auto;font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.02em;color:#4a5668;background:rgba(255,255,255,.72);padding:1px 6px;border-radius:4px;cursor:copy;white-space:nowrap;">${_esc(openId)}</span>
                     </div>
                 </div>`}).join('');
 
