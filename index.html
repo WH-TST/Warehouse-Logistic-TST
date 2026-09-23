@@ -22370,6 +22370,15 @@ function dateRange(startStr, endStr) {
 // ── โหลดข้อมูลตามช่วงวันแล้ว render ──────────────────────────────────────
 let logiCalPlanList = []; // cache สำหรับ calendar (แยกจาก logiPlanList)
 
+// คัดลอก Plan ID จากการ์ด — เวลาคุยกันเรื่องแผนจะได้อ้างเลขตรงกัน
+window.logiCopyPlanId = function logiCopyPlanId(id){
+    if (!id) return;
+    var done = function(){ showToast('คัดลอกแล้ว: ' + id); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(id).then(done, function(){ _ldCopyFallback(id); done(); });
+    } else { _ldCopyFallback(id); done(); }
+};
+
 // ปิดงานค้างส่ง — ใช้เมื่อวิ่งซ้ำให้ลูกค้าเสร็จแล้ว หรือลูกค้ายกเลิก
 // บันทึกเวลาไว้ในคอลัมน์ carried_resolved_at การ์ดจะหายจากวันนี้
 // แต่แผนเดิมยังอยู่ที่วันของมัน สถานะ "ไม่สำเร็จ" เหมือนเดิม ไม่ลบประวัติ
@@ -22944,6 +22953,8 @@ function renderLogiCalendar() {
                     <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#39455a;border-top:1px solid #eaeef3;padding-top:7px;flex-wrap:wrap;">
                         ${totalDist>0 ? `<span style="color:#0b1017;font-weight:600;font-variant-numeric:tabular-nums;">${nf(totalDist)} กม.</span>` : ''}
                         ${p.failReason && !p.failReason.startsWith('[') ? `<span style="color:${CAL_STATUS_HEX.inprogress};font-weight:600;">${_esc(p.failReason)}</span>` : ''}
+                        <span onclick="event.stopPropagation();logiCopyPlanId('${_escA(openId)}')" title="คลิกเพื่อคัดลอก Plan ID"
+                            style="margin-left:auto;font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.02em;color:#5e6b7f;background:#f2f5f9;padding:1px 6px;border-radius:4px;cursor:copy;white-space:nowrap;">${_esc(openId)}</span>
                     </div>
                 </div>`}).join('');
 
