@@ -2218,6 +2218,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <button onclick="switchView('driver-analytics')" id="nav-driver-analytics" class="nav-btn" data-tip="Driver Analytics">
                 <span class="nav-icon"><i class="fas fa-chart-line"></i></span> Driver Analytics
             </button>
+            <button onclick="switchView('driver-worklog')" id="nav-driver-worklog" class="nav-btn" data-tip="สรุปการทำงานคนขับ">
+                <span class="nav-icon"><i class="fas fa-user-clock"></i></span> สรุปการทำงานคนขับ
+            </button>
 
             <!-- ─── SUPERVISOR ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
@@ -8055,6 +8058,56 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 
 <!-- DRIVER ANALYTICS                                              -->
 <!-- ============================================================ -->
+<!-- ══════ สรุปการทำงานคนขับ (รถบริษัท) ══════ -->
+<div id="view-driver-worklog-content" class="hidden space-y-4">
+  <style>
+    #view-driver-worklog-content .dwl-f{display:flex;flex-direction:column;gap:5px}
+    #view-driver-worklog-content .dwl-f label{font-size:10.5px;font-weight:900;color:#8496a8;letter-spacing:.06em;text-transform:uppercase}
+    #view-driver-worklog-content .dwl-f input,#view-driver-worklog-content .dwl-f select{
+      font-size:13px;font-weight:700;color:#0e1620;background:#f1f5f9;border:1px solid #dbe2ea;
+      border-radius:9px;padding:8px 11px;outline:none;min-width:150px;}
+    #view-driver-worklog-content table{border-collapse:collapse;width:100%;min-width:960px}
+    #view-driver-worklog-content thead th{background:#16212e;color:#cfdcea;font-size:10.5px;font-weight:900;
+      letter-spacing:.05em;text-align:left;padding:9px 12px;white-space:nowrap}
+    #view-driver-worklog-content tbody td{padding:9px 12px;border-bottom:1px solid #eaeff4;font-size:13px;vertical-align:middle}
+    #view-driver-worklog-content tbody tr.dstart td{border-top:2px solid #dbe2ea}
+    #view-driver-worklog-content tbody tr:hover td{background:#e8eefc}
+    #view-driver-worklog-content .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+  </style>
+
+  <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#0f766e,#0891b2);">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="width:48px;height:48px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-user-clock" style="color:#fff;font-size:22px;"></i>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:20px;font-weight:900;color:#fff;">สรุปการทำงานคนขับ</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.7);font-weight:600;">เฉพาะรถบริษัท · เวลาทั้งหมดมาจากที่คนขับกดจริงในแอป</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 p-4" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+    <div class="dwl-f"><label>ตั้งแต่วันที่</label><input type="date" id="dwl-from"></div>
+    <div class="dwl-f"><label>ถึงวันที่</label><input type="date" id="dwl-to"></div>
+    <div class="dwl-f"><label>คนขับ</label><select id="dwl-driver"><option value="">ทุกคน</option></select></div>
+    <div class="dwl-f"><label>ทะเบียนรถ</label><select id="dwl-plate"><option value="">ทุกคัน</option></select></div>
+    <div class="dwl-f"><label>ผลการส่ง</label><select id="dwl-result">
+      <option value="">ทั้งหมด</option><option value="ok">ส่งสำเร็จ</option>
+      <option value="bad">ไม่สำเร็จ</option><option value="carry">งานค้างส่ง</option></select></div>
+    <div style="flex:1"></div>
+    <button onclick="dwlLoad()" class="px-5 py-2.5 rounded-xl text-white font-black text-sm" style="background:#0891b2;">
+      <i class="fas fa-sync-alt mr-1.5"></i>โหลดข้อมูล</button>
+    <button onclick="dwlExport()" class="px-5 py-2.5 rounded-xl font-black text-sm border border-slate-300 text-slate-600 bg-white">
+      <i class="fas fa-file-excel mr-1.5"></i>Export Excel</button>
+  </div>
+
+  <div id="dwl-total" class="bg-white rounded-2xl border border-slate-200 px-4 py-3 hidden"
+       style="display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;"></div>
+
+  <div id="dwl-body"></div>
+</div>
+
 <div id="view-driver-analytics-content" class="hidden space-y-4">
   <!-- Header -->
   <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
@@ -13517,7 +13570,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'whactivity', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'whactivity', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'driver-worklog', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13573,6 +13626,7 @@ window.switchView = function switchView(view) {
     if (view === 'loading' && window.ldInit) window.ldInit();
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
     if (view === 'driver-analytics' && window.daInit) window.daInit();
+    if (view === 'driver-worklog' && window.dwlInit) window.dwlInit();
 
     const titleEl = document.getElementById('view-title');
     if (titleEl) {
@@ -13594,6 +13648,7 @@ window.switchView = function switchView(view) {
             'loading': 'Loading Control — บันทึกการโหลดสินค้า',
             'driver-monitor': 'Driver Monitor — ติดตามคนขับ',
             'driver-analytics': 'Driver Analytics — สถิติคนขับ',
+            'driver-worklog': 'สรุปการทำงานคนขับ — รายร้าน รายเที่ยว',
             'warehouse-map': 'ผังคลังสินค้า — จำลองพื้นที่จัดเก็บ',
             'products': 'จัดการสินค้า — Product Master',
             'user-accounts': 'ตั้งค่าบัญชีผู้ใช้ — Driver & WH Staff',
@@ -37120,6 +37175,7 @@ var WMS_VIEWS=[
   {id:'truck-dispatch',label:'จัดรถส่งสินค้า'},
   {id:'driver-monitor',label:'Driver Monitor'},
   {id:'driver-analytics',label:'Driver Analytics'},
+  {id:'driver-worklog',label:'สรุปการทำงานคนขับ'},
   {id:'kpi-wh',label:'KPI WH & Logistic'},
   {id:'training',label:'Training'},
   {id:'production-block',label:'Production Block'},
@@ -37332,6 +37388,7 @@ var UP_NAV = [
   {id:'truck-dispatch',label:'จัดรถส่งสินค้า',   icon:'fa-truck'},
   {id:'driver-monitor',label:'Driver Monitor',   icon:'fa-satellite-dish'},
   {id:'driver-analytics',label:'Driver Analytics',icon:'fa-chart-line'},
+  {id:'driver-worklog',label:'สรุปการทำงานคนขับ',icon:'fa-user-clock'},
   {id:'kpi-wh',       label:'KPI WH & Logistic', icon:'fa-chart-bar'},
   {id:'training',     label:'Training',          icon:'fa-chalkboard-teacher'},
   {id:'user-accounts',label:'User Accounts',     icon:'fa-users-cog'},
@@ -46103,6 +46160,314 @@ window.drvHistLoad=async function(){
       +'</div>';
   }).join('');
 };
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// สรุปการทำงานคนขับ (รถบริษัท) — รายร้าน รายเที่ยว
+// ประกอบจาก 3 แหล่ง: logistic_plans (ร้าน/คนขับ/รถ) + trip_logs (ออก-กลับบริษัท)
+//                   + shop_visits (ถึงร้าน/ออกจากร้าน)
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+
+var _dwlRows = [];      // แถวรายร้านที่กรองแล้ว ใช้ทั้งแสดงผลและ export
+
+function _e(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+// เวลาไทยแบบ HH:MM — timestamp ใน DB เป็น UTC
+function _hm(iso){
+  if(!iso) return '';
+  try{ return new Date(iso).toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',minute:'2-digit'}); }
+  catch(e){ return ''; }
+}
+function _dur(a,b){
+  if(!a||!b) return '';
+  var ms = new Date(b) - new Date(a);
+  if(!(ms>0)) return '';
+  var m = Math.round(ms/60000);
+  return Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
+}
+function _thDate(d){
+  if(!d) return '';
+  var p = d.split('-');
+  return p[2]+'/'+p[1]+'/'+String(Number(p[0])+543).slice(2);
+}
+var _DOW = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+
+window.dwlInit = function dwlInit(){
+  var f=document.getElementById('dwl-from'), t=document.getElementById('dwl-to');
+  if(f && !f.value){
+    var today = window._bkkToday();
+    var from = new Date(new Date(today+'T00:00:00').getTime() - 6*86400000).toISOString().slice(0,10);
+    f.value = from; t.value = today;
+  }
+  if(!_dwlRows.length) dwlLoad();
+};
+
+window.dwlLoad = async function dwlLoad(){
+  var fromV=document.getElementById('dwl-from').value;
+  var toV=document.getElementById('dwl-to').value;
+  var body=document.getElementById('dwl-body');
+  if(!fromV||!toV){ showToast('เลือกช่วงวันที่ก่อน', true); return; }
+  if(fromV>toV){ showToast('วันเริ่มต้นต้องไม่เกินวันสิ้นสุด', true); return; }
+  body.innerHTML='<div class="bg-white rounded-2xl border border-slate-200 py-16 text-center text-slate-400 font-bold">'
+    +'<i class="fas fa-spinner fa-spin text-2xl block mb-2"></i>กำลังโหลด...</div>';
+
+  try{
+    // 1) แผนในช่วง — เฉพาะรถบริษัท และไม่เอางานซ่อม/PM
+    var pr = await window._sb.from('logistic_plans')
+      .select('plan_id,plan_date,status,truck_type,truck_plate,driver_transport,driver_id,trip_no,shops,job_type,origin_plan_date,cancelled_at')
+      .gte('plan_date',fromV).lte('plan_date',toV)
+      .neq('job_type','maintenance_pm')
+      .is('cancelled_at',null)
+      .order('plan_date');
+    if(pr.error) throw pr.error;
+    var plans=(pr.data||[]).filter(function(p){ return (p.truck_type||'company')==='company'; });
+    if(!plans.length){
+      _dwlRows=[];
+      document.getElementById('dwl-total').classList.add('hidden');
+      body.innerHTML='<div class="bg-white rounded-2xl border border-slate-200 py-16 text-center text-slate-400 font-bold">ไม่พบงานรถบริษัทในช่วงวันที่เลือก</div>';
+      return;
+    }
+    var ids=plans.map(function(p){ return p.plan_id; });
+
+    // 2) trip_logs + shop_visits — แบ่งก้อนกัน URL ยาวเกิน
+    async function chunk(fn){
+      var out=[];
+      for(var i=0;i<ids.length;i+=100){
+        var r=await fn(ids.slice(i,i+100));
+        if(r&&r.error) throw r.error;
+        if(r&&r.data) out=out.concat(r.data);
+      }
+      return out;
+    }
+    var logs = await chunk(function(c){
+      return window._sb.from('trip_logs').select('plan_id,status,started_at,completed_at,mileage_start,mileage_end').in('plan_id',c); });
+    var visits = await chunk(function(c){
+      return window._sb.from('shop_visits').select('plan_id,shop_seq,arrived_at,departed_at').in('plan_id',c); });
+
+    var logMap={}; logs.forEach(function(l){ logMap[l.plan_id]=l; });
+    var visMap={}; visits.forEach(function(v){
+      if(!visMap[v.plan_id]) visMap[v.plan_id]={};
+      visMap[v.plan_id][v.shop_seq]=v;
+    });
+
+    // 3) แตกเป็นรายร้าน
+    var rows=[];
+    plans.forEach(function(p){
+      var log=logMap[p.plan_id]||{};
+      var vm=visMap[p.plan_id]||{};
+      var shops=(p.shops||[]).filter(function(sh){ return sh.type!=='service_center'; });
+      if(!shops.length) return;
+      shops.forEach(function(sh,i){
+        var v=vm[i]||{};
+        var isLast = i===shops.length-1;
+        var done = !!v.departed_at || p.status==='success';
+        rows.push({
+          date: p.plan_date,
+          driver: (p.driver_transport||'').trim() || '— ไม่ระบุคนขับ —',
+          plate: (p.truck_plate||'').trim() || '—',
+          planId: p.plan_id,
+          trip: p.trip_no||'',
+          seq: i+1,
+          shop: sh.shopName||sh.shopId||('ร้านที่ '+(i+1)),
+          out: i===0 ? (log.started_at||'') : '',
+          arrive: v.arrived_at||'',
+          depart: v.departed_at||'',
+          next: isLast ? '' : (shops[i+1].shopName||shops[i+1].shopId||'ร้านถัดไป'),
+          home: isLast ? (log.completed_at||'') : '',
+          dur: _dur(v.arrived_at, v.departed_at),
+          carryFrom: p.origin_plan_date||'',
+          ok: done,
+          status: p.status||'planned',
+          // เรียงตามเวลาเช้าสุดของแถวนั้น งานที่ไม่มีเวลาเลยไปท้ายสุด
+          sortT: v.arrived_at || (i===0?log.started_at:'') || '',
+        });
+      });
+    });
+
+    _dwlRows=rows;
+    dwlRender();
+  }catch(e){
+    console.error('[dwlLoad]',e);
+    body.innerHTML='<div class="bg-white rounded-2xl border border-rose-200 py-16 text-center text-rose-500 font-bold">โหลดไม่สำเร็จ: '+_e(e.message||e)+'</div>';
+  }
+};
+
+function dwlRender(){
+  var fDrv=document.getElementById('dwl-driver').value;
+  var fPlate=document.getElementById('dwl-plate').value;
+  var fRes=document.getElementById('dwl-result').value;
+
+  // เติมตัวเลือกคนขับ/ทะเบียนจากข้อมูลจริง (คงค่าที่เลือกไว้)
+  function fill(id, vals, cur, label){
+    var el=document.getElementById(id); if(!el) return;
+    el.innerHTML='<option value="">'+label+'</option>'+vals.map(function(v){
+      return '<option value="'+_e(v)+'">'+_e(v)+'</option>'; }).join('');
+    el.value=cur||'';
+  }
+  fill('dwl-driver', Array.from(new Set(_dwlRows.map(function(r){return r.driver;}))).sort(), fDrv, 'ทุกคน');
+  fill('dwl-plate',  Array.from(new Set(_dwlRows.map(function(r){return r.plate;}))).sort(),  fPlate,'ทุกคัน');
+
+  var rows=_dwlRows.filter(function(r){
+    if(fDrv && r.driver!==fDrv) return false;
+    if(fPlate && r.plate!==fPlate) return false;
+    if(fRes==='ok'    && !r.ok) return false;
+    if(fRes==='bad'   && r.ok)  return false;
+    if(fRes==='carry' && !r.carryFrom) return false;
+    return true;
+  });
+
+  var body=document.getElementById('dwl-body');
+  var tot=document.getElementById('dwl-total');
+  if(!rows.length){
+    tot.classList.add('hidden');
+    body.innerHTML='<div class="bg-white rounded-2xl border border-slate-200 py-16 text-center text-slate-400 font-bold">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</div>';
+    return;
+  }
+
+  // จัดกลุ่มรายคน
+  var byDrv={};
+  rows.forEach(function(r){ (byDrv[r.driver]=byDrv[r.driver]||[]).push(r); });
+
+  var html=Object.keys(byDrv).sort().map(function(name){
+    var list=byDrv[name];
+    // เรียงจากเวลาเช้าสุดไปสาย แล้วต่อด้วยงานที่ไม่สำเร็จ
+    // งานไม่สำเร็จมักไม่มีเวลาที่ร้าน ถ้าเรียงปนกันจะกระจายอยู่กลางตาราง
+    list.sort(function(a,b){
+      if(a.ok!==b.ok) return a.ok?-1:1;
+      if(a.date!==b.date) return a.date<b.date?-1:1;
+      if(a.sortT&&b.sortT) return a.sortT<b.sortT?-1:1;
+      if(a.sortT) return -1;
+      if(b.sortT) return 1;
+      return (a.planId+a.seq)<(b.planId+b.seq)?-1:1;
+    });
+
+    var plates=Array.from(new Set(list.map(function(r){return r.plate;}).filter(function(p){return p&&p!=='—';})));
+    var trips=new Set(list.map(function(r){return r.planId;}));
+    var nOk=list.filter(function(r){return r.ok;}).length;
+    var nBad=list.length-nOk;
+    var durs=list.map(function(r){return (r.arrive&&r.depart)?(new Date(r.depart)-new Date(r.arrive)):0;}).filter(function(x){return x>0;});
+    var avg=durs.length?Math.round(durs.reduce(function(a,b){return a+b;},0)/durs.length/60000):0;
+    // ช่องเวลาที่ควรมีแต่ไม่มี = คนขับไม่ได้กด
+    var miss=0;
+    list.forEach(function(r){
+      if(!r.arrive) miss++;
+      if(!r.depart) miss++;
+      if(r.seq===1 && !r.out) miss++;
+      if(!r.next && !r.home) miss++;
+    });
+
+    function chip(n,l,cls){
+      return '<div style="border:1px solid #dbe2ea;border-radius:9px;padding:5px 11px;background:#f8fafc;text-align:center;min-width:62px;">'
+        +'<div class="mono" style="font-size:16px;font-weight:900;line-height:1.1;'+(cls||'')+'">'+n+'</div>'
+        +'<div style="font-size:10px;font-weight:700;color:#8496a8;margin-top:1px;white-space:nowrap;">'+l+'</div></div>';
+    }
+
+    var lastDate='', lastPlan='';
+    var trs=list.map(function(r){
+      var newGroup = (r.date!==lastDate)||(r.planId!==lastPlan);
+      var dateCell = newGroup
+        ? '<td style="font-weight:900;white-space:nowrap;">'+_thDate(r.date)
+            +'<span style="display:block;font-size:11px;color:#8496a8;font-weight:700;">'
+            + _DOW[new Date(r.date+'T00:00:00').getDay()] +'</span></td>'
+        : '<td></td>';
+      var tripCell = newGroup
+        ? '<td style="text-align:center;"><span class="mono" style="font-size:11px;font-weight:900;color:#1d4ed8;background:#e8eefc;border-radius:6px;padding:2px 7px;">'+_e(r.trip||'—')+'</span>'
+            +'<div class="mono" style="font-size:10px;color:#8496a8;margin-top:3px;">'+_e(r.plate)+'</div></td>'
+        : '<td></td>';
+      lastDate=r.date; lastPlan=r.planId;
+
+      function tc(v){
+        return v ? '<td class="mono" style="font-weight:700;white-space:nowrap;">'+_hm(v)+'</td>'
+                 : '<td class="mono" style="color:#94a3b8;">—</td>';
+      }
+      var nextCell = r.next
+        ? '<td style="font-size:12px;color:#44566b;">'+_e(r.next)+'</td>'
+        : (r.home ? '<td style="font-size:12px;color:#137a3e;font-weight:700;white-space:nowrap;">กลับบริษัท '+_hm(r.home)+'</td>'
+                  : '<td class="mono" style="color:#94a3b8;">—</td>');
+
+      var pill;
+      if(!r.ok){
+        pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fbe8e8;color:#c02626;">ไม่สำเร็จ</span>';
+      } else if(r.carryFrom){
+        pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fce8f1;color:#a8246a;">ค้างจาก '
+             +r.carryFrom.slice(8,10)+'/'+r.carryFrom.slice(5,7)+'</span>';
+      } else {
+        pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#e3f3e9;color:#137a3e;">ส่งสำเร็จ</span>';
+      }
+
+      return '<tr class="'+(newGroup?'dstart':'')+'">'
+        +dateCell+tripCell
+        +'<td style="font-weight:700;line-height:1.35;"><span class="mono" style="color:#8496a8;margin-right:5px;">'+r.seq+'.</span>'+_e(r.shop)
+          +'<span class="mono" style="display:block;font-size:11px;color:#8496a8;font-weight:500;margin-top:1px;">'+_e(r.planId)+'</span></td>'
+        +tc(r.out)+tc(r.arrive)+tc(r.depart)
+        +nextCell
+        +'<td class="mono" style="text-align:center;font-weight:700;">'+(r.dur||'—')+'</td>'
+        +'<td>'+pill+'</td></tr>';
+    }).join('');
+
+    return '<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-4">'
+      +'<div style="display:flex;align-items:center;gap:13px;padding:13px 16px;border-bottom:1px solid #dbe2ea;flex-wrap:wrap;">'
+      +'<div style="width:38px;height:38px;border-radius:11px;background:#0891b2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;flex-shrink:0;">'
+        +_e(name.replace(/^(นาย|นาง|นางสาว)/,'').trim().charAt(0)||'?')+'</div>'
+      +'<div style="font-size:15px;font-weight:900;line-height:1.3;">'+_e(name)
+        +'<span style="display:block;margin-top:3px;">'+plates.map(function(p){
+            return '<span class="mono" style="display:inline-block;font-size:11px;font-weight:700;background:#f1f5f9;border:1px solid #dbe2ea;border-radius:6px;padding:1px 6px;margin-right:4px;">'+_e(p)+'</span>';
+          }).join('')+'</span></div>'
+      +'<div style="display:flex;gap:7px;margin-left:auto;flex-wrap:wrap;">'
+        +chip(trips.size,'เที่ยว')+chip(list.length,'ร้าน')
+        +chip(nOk,'สำเร็จ','color:#137a3e;')+chip(nBad,'ไม่สำเร็จ','color:#c02626;')
+        +chip(avg?(Math.floor(avg/60)+':'+String(avg%60).padStart(2,'0')):'—','เฉลี่ย/ร้าน')
+        +chip(miss,'ขั้นตอนขาด','color:#a65a06;')
+      +'</div></div>'
+      +'<div style="overflow-x:auto;"><table><thead><tr>'
+      +'<th>วันที่</th><th style="text-align:center;">เที่ยว</th><th>ร้าน</th>'
+      +'<th>ออกจากบริษัท</th><th>ถึงร้าน</th><th>ออกจากร้าน</th><th>ไปต่อ</th>'
+      +'<th style="text-align:center;">อยู่ที่ร้าน</th><th>ผล</th>'
+      +'</tr></thead><tbody>'+trs+'</tbody></table></div></div>';
+  }).join('');
+
+  var nTrip=new Set(rows.map(function(r){return r.planId;})).size;
+  var nOkAll=rows.filter(function(r){return r.ok;}).length;
+  tot.classList.remove('hidden');
+  tot.style.display='flex';
+  function ti(n,l,c){ return '<span style="font-size:12.5px;color:#8496a8;font-weight:700;">'
+    +'<b class="mono" style="font-size:16px;font-weight:900;margin-right:4px;'+(c||'color:#0e1620;')+'">'+n+'</b>'+l+'</span>'; }
+  tot.innerHTML = ti(Object.keys(byDrv).length,'คนขับ')+ti(nTrip,'เที่ยว')+ti(rows.length,'ร้าน')
+    +ti(nOkAll,'ส่งสำเร็จ','color:#137a3e;')+ti(rows.length-nOkAll,'ไม่สำเร็จ','color:#c02626;')
+    +'<span style="margin-left:auto;font-size:12.5px;color:#8496a8;font-weight:700;">'
+    +_thDate(document.getElementById('dwl-from').value)+' – '+_thDate(document.getElementById('dwl-to').value)+'</span>';
+
+  body.innerHTML=html;
+}
+window.dwlRender = dwlRender;
+
+window.dwlExport = function dwlExport(){
+  if(!_dwlRows.length){ showToast('ยังไม่มีข้อมูลให้ export', true); return; }
+  var head=['วันที่','คนขับ','ทะเบียนรถ','เที่ยว','Plan ID','ลำดับ','ร้าน',
+            'ออกจากบริษัท','ถึงร้าน','ออกจากร้าน','ไปต่อ','ถึงบริษัท','อยู่ที่ร้าน','ผล','ค้างจาก'];
+  var lines=[head.join(',')];
+  _dwlRows.forEach(function(r){
+    var cells=[_thDate(r.date), r.driver, r.plate, r.trip, r.planId, r.seq, r.shop,
+      _hm(r.out), _hm(r.arrive), _hm(r.depart), r.next, _hm(r.home), r.dur,
+      r.ok?'ส่งสำเร็จ':'ไม่สำเร็จ', r.carryFrom?_thDate(r.carryFrom):''];
+    lines.push(cells.map(function(c){ return '"'+String(c==null?'':c).replace(/"/g,'""')+'"'; }).join(','));
+  });
+  // BOM ให้ Excel อ่านภาษาไทยถูก
+  var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='สรุปการทำงานคนขับ_'+document.getElementById('dwl-from').value+'_'+document.getElementById('dwl-to').value+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
+['dwl-driver','dwl-plate','dwl-result'].forEach(function(id){
+  document.addEventListener('change', function(ev){
+    if(ev.target && ev.target.id===id) dwlRender();
+  });
+});
 
 })();
 
