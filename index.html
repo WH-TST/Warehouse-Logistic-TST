@@ -26447,6 +26447,21 @@ window.siLoad = async function() {
     if (tbody) tbody.innerHTML = '<tr><td colspan="13" class="text-center py-16 text-slate-400 font-bold"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>กำลังโหลด...</td></tr>';
 
     try {
+        // ── .in() ต้องแบ่งเป็นก้อน ─────────────────────────────────────
+        // PostgREST ส่งค่าทั้งหมดไปทาง URL ถ้าดูช่วงยาว (เช่น 1 เดือน) ลูกค้ามี
+        // เป็นร้อยราย ชื่อไทยกินที่ตัวละ 9 ไบต์เมื่อ encode → URL ยาวเกินที่รับได้
+        // คำขอถูกปฏิเสธทั้งก้อน ผลคือหาชื่อ Sale ไม่เจอเลย ทุกแถวขึ้น "—"
+        async function _siInChunks(values, size, run) {
+            if (!values.length) return [];
+            var out = [];
+            for (var i = 0; i < values.length; i += size) {
+                var res = await run(values.slice(i, i + size));
+                if (res && res.error) throw res.error;
+                if (res && res.data) out = out.concat(res.data);
+            }
+            return out;
+        }
+
         // 1. ออเดอร์ที่โหลดเสร็จในช่วงวันที่เลือก — ยึด "ทั้งคัน" ไม่ใช่รายแถว
         //    ออเดอร์เดียวโหลดคร่อมวันได้ ถ้านับรายแถวของคันเดียวกันจะกระจาย
         //    สองวัน และ scale_diff ที่ผูกกับทั้งคันจะถูกกระจายผิด
@@ -26465,19 +26480,20 @@ window.siLoad = async function() {
         // 2. Session ของออเดอร์เหล่านั้น — เอามาทั้งคัน รวมส่วนที่โหลดวันก่อน
         //    ไม่งั้น _ldComputeFinalWeights จะกระจาย scale_diff ของทั้งคัน
         //    ลงเฉพาะแถวที่เหลือ น้ำหนัก FINAL จะเพี้ยน
-        var { data: sessions, error: sErr } = await window._sb.from('loading_sessions')
-            .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,staff_name,end_time,updated_at,created_at')
-            .neq('record_type', 'draft')
-            .in('order_id', orderIds)
-            .range(0, 19999);
-        if (sErr) throw sErr;
-        sessions = sessions || [];
+        var sessions = await _siInChunks(orderIds, 200, function(c){
+            return window._sb.from('loading_sessions')
+                .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,staff_name,end_time,updated_at,created_at')
+                .neq('record_type', 'draft')
+                .in('order_id', c)
+                .range(0, 19999);
+        });
         if (!sessions.length) { _siRows = []; siRender(); return; }
 
         // 3. Products — ช่วง min/max ต่อ SKU (ใช้ _ldComputeFinalWeights ร่วมด้วย)
         var skus = Array.from(new Set(sessions.map(function(s){ return s.sku; }).filter(Boolean)));
-        var { data: products } = await window._sb.from('products')
-            .select('sku,min_w,max_w').in('sku', skus.length ? skus : ['__none__']);
+        var products = await _siInChunks(skus, 200, function(c){
+            return window._sb.from('products').select('sku,min_w,max_w').in('sku', c);
+        });
         var prodMap = {};
         // ⚠ ห้าม reset _ldProductMap — เป็น map กลางที่หน้าโหลด/รีวิวใช้ร่วมกัน (มี name, lpb, lpr ด้วย)
         // ถ้าเคลียร์ทิ้ง หน้ารีวิวจะเห็น MIN/MAX เป็น "—" และ _ldComputeFinalWeights
@@ -26493,26 +26509,31 @@ window.siLoad = async function() {
 
         // 4. ลูกค้า → Sale
         var custNames = Array.from(new Set((orders||[]).map(function(o){ return o.customer_name; }).filter(Boolean)));
-        var { data: shops } = await window._sb.from('logi_shops')
-            .select('name,sale').in('name', custNames.length ? custNames : ['__none__']);
+        var shops = await _siInChunks(custNames, 50, function(c){
+            return window._sb.from('logi_shops').select('name,sale').in('name', c);
+        });
         var saleMap = {}; (shops||[]).forEach(function(s){ saleMap[s.name] = s.sale; });
 
         // 5. จำแนกประเภทรถ: ตรงฐานรถบริษัท (logi_trucks) → รถบริษัท
         //    ตรงแผนส่งที่บันทึกเป็นรถจ้าง (logistic_plans, truck_type='hire') → รถจ้าง (โชว์ชื่อขนส่ง)
         //    นอกเหนือจากนี้ → รถรับเอง
         var plates = Array.from(new Set((orders||[]).map(function(o){ return o.truck_plate; }).filter(Boolean)));
-        var [companyRes, hiredRes] = await Promise.all([
-            window._sb.from('logi_trucks').select('plate').in('plate', plates.length ? plates : ['__none__']),
-            window._sb.from('logistic_plans').select('truck_plate,driver_transport,plan_date')
-                .eq('truck_type', 'hire').in('truck_plate', plates.length ? plates : ['__none__'])
-                // แผนอาจอยู่ก่อนวันโหลด (วางแผน 22 โหลด 23) ถ้าค้นแค่ช่วงที่เลือก
-                // จะหาแผนรถจ้างไม่เจอแล้วขึ้นเป็น "รถรับเอง" ทั้งที่เป็นรถจ้าง
-                .gte('plan_date', new Date(new Date(fromV+'T00:00:00').getTime() - 30*86400000).toISOString().slice(0,10))
-                .lte('plan_date', toV)
+        // แผนอาจอยู่ก่อนวันโหลด (วางแผน 22 โหลด 23) ถ้าค้นแค่ช่วงที่เลือก
+        // จะหาแผนรถจ้างไม่เจอแล้วขึ้นเป็น "รถรับเอง" ทั้งที่เป็นรถจ้าง
+        var _planFrom = new Date(new Date(fromV+'T00:00:00').getTime() - 30*86400000).toISOString().slice(0,10);
+        var [companyRows, hiredRows] = await Promise.all([
+            _siInChunks(plates, 200, function(c){
+                return window._sb.from('logi_trucks').select('plate').in('plate', c);
+            }),
+            _siInChunks(plates, 200, function(c){
+                return window._sb.from('logistic_plans').select('truck_plate,driver_transport,plan_date')
+                    .eq('truck_type', 'hire').in('truck_plate', c)
+                    .gte('plan_date', _planFrom).lte('plan_date', toV);
+            })
         ]);
-        var companySet = new Set((companyRes.data||[]).map(function(t){ return t.plate; }));
+        var companySet = new Set((companyRows||[]).map(function(t){ return t.plate; }));
         var hiredMap = {};
-        (hiredRes.data||[]).forEach(function(p){ hiredMap[p.truck_plate + '|' + p.plan_date] = p.driver_transport; });
+        (hiredRows||[]).forEach(function(p){ hiredMap[p.truck_plate + '|' + p.plan_date] = p.driver_transport; });
 
         function classifyTruck(plate, dateStr) {
             if (!plate) return { type: 'self', label: '—' };

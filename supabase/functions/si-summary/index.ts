@@ -236,6 +236,21 @@ Deno.serve(async (req) => {
     const fTruck = url.searchParams.get('truck') || ''
     const fRange = url.searchParams.get('range') || ''
 
+    // ── .in() ต้องแบ่งเป็นก้อน ─────────────────────────────────────────
+    // PostgREST ส่งค่าทั้งหมดไปทาง URL ถ้าดูช่วงยาว (เช่น 1 เดือน) ลูกค้ามี
+    // เป็นร้อยราย ชื่อไทยกินที่ตัวละ 9 ไบต์เมื่อ encode → URL ยาวเกินที่รับได้
+    // คำขอถูกปฏิเสธทั้งก้อน ผลคือหาชื่อ Sale ไม่เจอเลยสักราย ทุกแถวขึ้น "—"
+    async function inChunks<T>(values: string[], size: number, run: (chunk: string[]) => any): Promise<T[]> {
+      if (!values.length) return []
+      const out: T[] = []
+      for (let i = 0; i < values.length; i += size) {
+        const res = await run(values.slice(i, i + size))
+        if (res?.error) throw res.error
+        if (res?.data) out.push(...(res.data as T[]))
+      }
+      return out
+    }
+
     // 1. ออเดอร์ที่โหลดเสร็จในช่วงที่ขอ — ยึด "ทั้งคัน" ไม่ใช่รายแถว
     //    ออเดอร์เดียวโหลดคร่อมวันได้ ถ้านับรายแถวของคันเดียวกันจะกระจายสองวัน
     //    และ scale_diff ที่ผูกกับทั้งคันจะถูกกระจายผิด น้ำหนัก FINAL เพี้ยน
@@ -255,44 +270,47 @@ Deno.serve(async (req) => {
     ;(orders || []).forEach((o: any) => (orderMap[o.id] = o))
 
     // 2. Session ของออเดอร์เหล่านั้น — เอามาทั้งคัน รวมส่วนที่โหลดวันก่อน
-    const { data: sessionsRaw, error: sErr } = await supabase
-      .from('loading_sessions')
-      .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,end_time,updated_at,created_at')
-      .neq('record_type', 'draft')
-      .in('order_id', orderIds)
-      .range(0, 19999)
-    if (sErr) throw sErr
-    const sessions = (sessionsRaw || []) as Session[]
+    const sessions = await inChunks<Session>(orderIds, 200, (c) =>
+      supabase
+        .from('loading_sessions')
+        .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,end_time,updated_at,created_at')
+        .neq('record_type', 'draft')
+        .in('order_id', c)
+        .range(0, 19999))
     if (!sessions.length) return json({ from: fromV, to: toV, count: 0, rows: [] })
 
     // 3. Products
     const skus = Array.from(new Set(sessions.map((s) => s.sku).filter(Boolean))) as string[]
-    const { data: products } = await supabase.from('products').select('sku,min_w,max_w').in('sku', skus.length ? skus : ['__none__'])
+    const products = await inChunks<any>(skus, 200, (c) =>
+      supabase.from('products').select('sku,min_w,max_w').in('sku', c))
     const prodMap: Record<string, Product> = {}
     ;(products || []).forEach((p: any) => (prodMap[p.sku] = p))
 
     // 4. Sale
     const custNames = Array.from(new Set((orders || []).map((o: any) => o.customer_name).filter(Boolean))) as string[]
-    const { data: shops } = await supabase.from('logi_shops').select('name,sale').in('name', custNames.length ? custNames : ['__none__'])
+    const shops = await inChunks<any>(custNames, 50, (c) =>
+      supabase.from('logi_shops').select('name,sale').in('name', c))
     const saleMap: Record<string, string> = {}
     ;(shops || []).forEach((s: any) => (saleMap[s.name] = s.sale))
 
     // 5. จำแนกประเภทรถ
     const plates = Array.from(new Set((orders || []).map((o: any) => o.truck_plate).filter(Boolean))) as string[]
-    const [companyRes, hiredRes] = await Promise.all([
-      supabase.from('logi_trucks').select('plate').in('plate', plates.length ? plates : ['__none__']),
-      supabase
-        .from('logistic_plans')
-        .select('truck_plate,driver_transport,plan_date')
-        .eq('truck_type', 'hire')
-        .in('truck_plate', plates.length ? plates : ['__none__'])
-        // แผนอาจอยู่ก่อนวันโหลด ถ้าค้นแค่ช่วงที่ขอจะหาแผนรถจ้างไม่เจอ
-        .gte('plan_date', new Date(new Date(fromV + 'T00:00:00').getTime() - 30 * 86400000).toISOString().slice(0, 10))
-        .lte('plan_date', toV),
+    const planFrom = new Date(new Date(fromV + 'T00:00:00').getTime() - 30 * 86400000).toISOString().slice(0, 10)
+    const [companyRows, hiredRows] = await Promise.all([
+      inChunks<any>(plates, 200, (c) => supabase.from('logi_trucks').select('plate').in('plate', c)),
+      inChunks<any>(plates, 200, (c) =>
+        supabase
+          .from('logistic_plans')
+          .select('truck_plate,driver_transport,plan_date')
+          .eq('truck_type', 'hire')
+          .in('truck_plate', c)
+          // แผนอาจอยู่ก่อนวันโหลด ถ้าค้นแค่ช่วงที่ขอจะหาแผนรถจ้างไม่เจอ
+          .gte('plan_date', planFrom)
+          .lte('plan_date', toV)),
     ])
-    const companySet = new Set((companyRes.data || []).map((t: any) => t.plate))
+    const companySet = new Set((companyRows || []).map((t: any) => t.plate))
     const hiredMap: Record<string, string> = {}
-    ;(hiredRes.data || []).forEach((p: any) => (hiredMap[p.truck_plate + '|' + p.plan_date] = p.driver_transport))
+    ;(hiredRows || []).forEach((p: any) => (hiredMap[p.truck_plate + '|' + p.plan_date] = p.driver_transport))
 
     function classifyTruck(plate: string | null, dateStr: string) {
       if (!plate) return { type: 'self', label: '—' }
