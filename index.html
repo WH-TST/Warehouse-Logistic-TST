@@ -25417,6 +25417,93 @@ async function _ldUpsertDraft(oid, unit) {
     _ldUpsertLock[_uk] = false;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  กรอกพร้อมกันหลายคนในออเดอร์เดียว — ต่างคนต่างเห็นข้อมูลของกัน
+//
+//  เดิมระบบคิดว่า 1 ออเดอร์มีคนกรอกคนเดียว ต่างคนจึงถือข้อมูลคนละชุด
+//  ในเครื่องตัวเอง พอคนที่สองเปิดการ์ดขึ้นมาแล้วพิมพ์ ข้อมูลของคนแรก
+//  ถูกทับหาย เพราะไม่มีใครบอกเครื่องที่สองว่าอีกฝั่งกรอกอะไรไว้แล้ว
+//
+//  แก้: เปิดการ์ดเมื่อไหร่ ให้ฟังการเปลี่ยนแปลงของออเดอร์นี้จาก DB
+//  มีใครพิมพ์อะไร อีกเครื่องเห็นทันที ยกเว้นช่องที่ตัวเองกำลังพิมพ์อยู่
+//  (ห้ามแย่งเคอร์เซอร์ระหว่างพิมพ์ ไม่งั้นตัวเลขจะกระโดดคาที่)
+// ══════════════════════════════════════════════════════════════════════
+var _ldDraftRtSub = {};   // {oid: channel}
+
+async function _ldApplyRemoteDrafts(oid, unit) {
+    try {
+        var od = _ldDraftOrderCache[oid];
+        if (!od) return;
+        var _u = unit || _ldTrailerUnit[oid] || 'mother';
+        var _uk = oid + '|' + _u;
+        var q = window._sb.from('loading_sessions')
+            .select('id,sku,lifts,truck_unit,staff_name')
+            .eq('order_id', oid).eq('record_type', 'draft');
+        if (od.is_trailer && od.trailer_split) q = q.eq('truck_unit', _u);
+        var { data: drafts } = await q;
+        if (!drafts || !drafts.length) return;
+
+        var orderItems = od.items || [];
+        var fOrig = window._ldFormOrigIdx && window._ldFormOrigIdx[_uk];
+        var mapItems = fOrig
+            ? fOrig.map(function(oiIdx, formIdx){ return { sku: (orderItems[oiIdx]||{}).sku, formIdx: formIdx }; })
+            : orderItems.map(function(oi, i){ return { sku: oi.sku, formIdx: i }; });
+
+        var bySku = {};
+        drafts.forEach(function(r){ if (r.sku) { if (!bySku[r.sku]) bySku[r.sku] = []; bySku[r.sku].push(r); } });
+        var pos = {};
+        var changed = false;
+        var active = document.activeElement;
+
+        mapItems.forEach(function(mi){
+            if (!mi.sku) return;
+            if (pos[mi.sku] === undefined) pos[mi.sku] = 0;
+            var row = (bySku[mi.sku] || [])[pos[mi.sku]];
+            pos[mi.sku]++;
+            if (!row) return;
+            (row.lifts || []).forEach(function(cell){
+                var c = (cell.lift_no || 1) - 1;
+                var wEl = document.getElementById('ldf-lw-'+oid+'-'+_u+'-'+mi.formIdx+'-'+c);
+                var qEl = document.getElementById('ldf-lq-'+oid+'-'+_u+'-'+mi.formIdx+'-'+c);
+                // ช่องที่กำลังพิมพ์อยู่ ห้ามแตะ
+                if (wEl && wEl !== active && String(wEl.value||'') !== String(cell.weight||'')) {
+                    wEl.value = cell.weight || ''; changed = true;
+                }
+                if (qEl && qEl !== active && String(qEl.value||'') !== String(cell.qty||'')) {
+                    qEl.value = cell.qty || ''; changed = true;
+                }
+            });
+        });
+        if (changed) {
+            _ldLocalSave(oid, _u);      // เก็บลงเครื่องด้วย จะได้ไม่ถูก localStorage เก่าทับตอนเปิดใหม่
+            ldCardStats(oid, _u);
+        }
+    } catch(e) {}
+}
+
+function _ldSubDraftRt(oid) {
+    if (_ldDraftRtSub[oid]) return;
+    var _t = null;
+    function ping() {
+        if (_t) return;
+        // รวบ event ที่ถี่ๆ — คนอีกฝั่งพิมพ์รัวๆ จะยิง event เป็นสิบครั้งต่อวินาที
+        _t = setTimeout(function(){ _t = null; _ldApplyRemoteDrafts(oid); }, 700);
+    }
+    try {
+        _ldDraftRtSub[oid] = window._sb.channel('ld-draft-'+oid)
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'loading_sessions', filter: 'order_id=eq.'+oid },
+                ping)
+            .subscribe();
+    } catch(e) {}
+}
+
+function _ldUnsubDraftRt(oid) {
+    if (!_ldDraftRtSub[oid]) return;
+    try { window._sb.removeChannel(_ldDraftRtSub[oid]); } catch(e) {}
+    delete _ldDraftRtSub[oid];
+}
+
 function _ldDraftLoad(oid, unit) {
     var _dlUnit = unit || _ldTrailerUnit[oid]||'mother';
     var usedLocal = false;
@@ -25461,6 +25548,8 @@ function _ldDraftLoad(oid, unit) {
         });
     }
     ldCardStats(oid, _dlUnit);
+    _ldSubDraftRt(oid);          // ฟังการกรอกของคนอื่นในออเดอร์เดียวกัน
+    _ldApplyRemoteDrafts(oid, _dlUnit);   // ดึงของที่คนอื่นกรอกไว้แล้วมาแสดงทันที
     // Immediately update timer display so there's no 1s flash of "—" on reopen
     var _timerEl = document.getElementById('ldf-elapsed-'+oid);
     if (_timerEl && _ldSegments[_dlSegKey||oid] && _ldSegments[_dlSegKey||oid].length) {
@@ -25474,6 +25563,7 @@ function _ldDraftLoad(oid, unit) {
 }
 
 function _ldDraftClear(oid) {
+    _ldUnsubDraftRt(oid);
     try { localStorage.removeItem('ld_draft_'+oid); localStorage.removeItem('ld_draft_'+oid+'|mother'); localStorage.removeItem('ld_draft_'+oid+'|trailer'); } catch(e){}
     clearTimeout(_ldDraftTimers[oid]);
     delete _ldDraftTimers[oid];
@@ -25598,11 +25688,22 @@ async function _ldRestoreDraftIds(oid, unit) {
             if(!skuUnitMap[k]) skuUnitMap[k]=[];
             skuUnitMap[k].push(r.id);
         });
+        // ถ้ามีแถวซ้ำ (สองคนเปิดพร้อมกันแล้วต่างคนต่าง insert) ให้เก็บแถวที่มี
+        // ข้อมูลมากที่สุด ไม่ใช่แถวล่าสุด — แถวล่าสุดอาจเป็นของคนที่เพิ่งเปิด
+        // การ์ดขึ้นมาและยังไม่ได้กรอกอะไร เก็บแถวนั้นไว้เท่ากับลบงานของอีกคนทิ้ง
+        function _ldRowWeight(id){
+            var d = drafts.find(function(r){ return r.id === id; });
+            return ((d && d.lifts) || []).reduce(function(a, c){
+                return a + (parseFloat(c.qty)||0) + (parseFloat(c.weight)||0);
+            }, 0);
+        }
         var keepIds = [], deleteIds = [];
         Object.keys(skuUnitMap).forEach(function(k){
-            var ids = skuUnitMap[k];
-            keepIds.push(ids[ids.length-1]);
-            for(var i=0;i<ids.length-1;i++) deleteIds.push(ids[i]);
+            var ids = skuUnitMap[k].slice();
+            var best = ids[ids.length-1], bestW = -1;
+            ids.forEach(function(id){ var w = _ldRowWeight(id); if (w > bestW) { bestW = w; best = id; } });
+            keepIds.push(best);
+            ids.forEach(function(id){ if (id !== best) deleteIds.push(id); });
         });
         if (deleteIds.length) {
             await window._sb.from('loading_sessions').delete().in('id', deleteIds);
