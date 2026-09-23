@@ -46309,7 +46309,10 @@ window.dwlLoad = async function dwlLoad(){
           closedNoField: (p.status==='success' && !v.departed_at && !v.arrived_at),
           ok: done,
           status: p.status||'planned',
-          // เรียงตามเวลาเช้าสุดของแถวนั้น งานที่ไม่มีเวลาเลยไปท้ายสุด
+          // เวลาออกจากบริษัทของเที่ยวนั้น — ใช้เป็นหลักในการเรียง
+          // ทุกแถวของเที่ยวเดียวกันใช้ค่าเดียวกัน เที่ยวจึงไม่ถูกแทรกสลับ
+          tripStart: log.started_at || '',
+          // สำรองไว้ตอนไม่มีเวลาออกจากบริษัท (คนขับไม่ได้กดเริ่มงาน)
           sortT: v.arrived_at || (i===0?log.started_at:'') || '',
         });
       });
@@ -46325,7 +46328,7 @@ window.dwlLoad = async function dwlLoad(){
         if(!m){ merged[k]=r; out.push(r); return; }
         // รวมทะเบียน และเติมเวลาจากฝั่งที่มีข้อมูล (บางครั้งกดฝั่งเดียว)
         if(m.plates.indexOf(r.plate)<0) m.plates.push(r.plate);
-        ['out','arrive','depart','home'].forEach(function(f){ if(!m[f] && r[f]) m[f]=r[f]; });
+        ['out','arrive','depart','home','tripStart'].forEach(function(f){ if(!m[f] && r[f]) m[f]=r[f]; });
         if(!m.next && r.next) m.next=r.next;
         if(!m.dur) m.dur=_dur(m.arrive,m.depart);
         if(r.ok) m.ok=true;
@@ -46388,10 +46391,16 @@ function dwlRender(){
     list.sort(function(a,b){
       if(a.ok!==b.ok) return a.ok?-1:1;
       if(a.date!==b.date) return a.date<b.date?-1:1;
-      if(a.sortT&&b.sortT) return a.sortT<b.sortT?-1:1;
-      if(a.sortT) return -1;
-      if(b.sortT) return 1;
-      return (a.planId+a.seq)<(b.planId+b.seq)?-1:1;
+      // เรียงเที่ยวตามเวลาออกจากบริษัท เที่ยวที่ออกเช้าสุดอยู่บนสุด
+      // ถ้าเรียงด้วยเวลาถึงร้าน เที่ยวที่ออก 08:20 แต่ถึงร้าน 09:18
+      // จะไปอยู่ใต้เที่ยวที่ออก 09:15 ซึ่งอ่านแล้วสลับที่
+      var ta=a.tripStart||a.sortT||'', tb=b.tripStart||b.sortT||'';
+      if(ta&&tb&&ta!==tb) return ta<tb?-1:1;
+      if(ta&&!tb) return -1;
+      if(tb&&!ta) return 1;
+      if((a.pairKey||a.planId)!==(b.pairKey||b.planId))
+        return (a.pairKey||a.planId)<(b.pairKey||b.planId)?-1:1;
+      return a.seq-b.seq;
     });
 
     var plates=Array.from(new Set(list.reduce(function(a,r){ return a.concat(r.plates||[r.plate]); },[])
