@@ -17970,6 +17970,16 @@ window.saveLogisticPlan = function saveLogisticPlan() {
             renderLogisticList();
             updateLogiKPI();
 
+            // ── ปฏิทิน Delivery Block Plan ต้องเห็นผลทันที ─────────────────
+            // ข้างบนแก้ logiCalPlanList ในหน่วยความจำไว้แล้ว แต่ไม่ได้วาดใหม่
+            // ผู้ใช้เลยต้องกดรีเฟรชเองถึงจะเห็นชื่อคนขับที่แก้
+            // โหลดใหม่ทั้งชุดแทนการวาดจากที่แก้ในหน่วยความจำ เพราะแถวที่แก้
+            // อาจกระทบการ์ดค้างของวันอื่นที่อ้างแผนเดียวกันด้วย
+            if (!document.getElementById('view-truck-calendar-content')?.classList.contains('hidden')
+                && typeof window.loadAndRenderLogiCalendar === 'function') {
+                window.loadAndRenderLogiCalendar();
+            }
+
         } catch(err) {
             resetSaveBtn();
             showToast('บันทึกไม่สำเร็จ: ' + (err?.message || String(err)), true);
