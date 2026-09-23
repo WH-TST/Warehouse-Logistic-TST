@@ -22764,9 +22764,14 @@ function renderLogiCalendar() {
             const badges = plans.map(p => {
                 // การ์ด "ค้างส่ง" — งานที่ส่งไม่สำเร็จจากวันก่อน ถูกเลื่อนมาแสดงในวันนี้
                 // ตัวต้นฉบับยังอยู่ที่วันเดิมและแสดงสถานะ "ไม่สำเร็จ" ตามปกติ
+                // ⚠ ห้ามใช้คลาส amber-* กับการ์ดนี้ — โปรเจกต์ override amber เป็นสีน้ำเงินทั้งระบบ
+                //   (ดู .border-amber-400 ในบล็อก <style>) จะกลายเป็นสีเดียวกับ "วางแผนแล้ว"
                 const st  = p.isCarry
-                    ? { bg:'bg-amber-50', border:'border-amber-400', dot:'bg-amber-500', text:'text-amber-800', label:'ค้างส่ง' }
+                    ? { bg:'', border:'', dot:'', text:'', label:'ค้างส่ง',
+                        inline:'background:#fffbeb;border-left-color:#f59e0b !important;', fg:'#92400e', dotBg:'#f59e0b' }
                     : (CAL_STATUS_STYLE[p.status] || { bg:'bg-slate-100', border:'border-slate-300', dot:'bg-slate-400', text:'text-slate-700', label:p.status });
+                const _cFg  = st.fg    ? ` style="color:${st.fg};"`            : '';
+                const _cDot = st.dotBg ? ` style="background:${st.dotBg};"`    : '';
                 const wt  = parseFloat(p.totalWeight||0).toLocaleString(undefined,{minimumFractionDigits:1});
                 const shops = p.shops || [];
                 const wpDotCss = (s) => {
@@ -22800,6 +22805,7 @@ function renderLogiCalendar() {
                 const _esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
                 const _openId = p.isCarry ? p.sourcePlanId : p.id;
                 return `<div class="${st.bg} border-l-4 ${st.border} rounded-r-xl rounded-l-sm p-2 text-left w-full relative group transition-all hover:shadow-md hover:brightness-95 ${p.isCarry ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'}"
+                    ${st.inline ? `style="${st.inline}"` : ''}
                     id="cal-badge-${p.id}"
                     draggable="${p.isCarry ? 'false' : 'true'}"
                     ${p.isCarry ? '' : `ondragstart="calDragStart(event,'${_esc(p.id)}')" ondragend="calDragEnd(event)"`}
@@ -22816,9 +22822,9 @@ function renderLogiCalendar() {
                             <i class="fas fa-clock" style="font-size:7px;margin-right:2px;"></i>ค้างจาก ${p.carryFrom ? p.carryFrom.slice(8,10)+'/'+p.carryFrom.slice(5,7) : '—'}</span>
                     </div>` : ''}
                     <div class="flex items-center justify-between gap-1 mb-1.5 pr-4">
-                        <span class="text-[10px] font-black ${st.text}">เที่ยว ${p.tripNo||'—'}</span>
-                        <span class="flex items-center gap-1 text-[9px] font-black ${st.text} bg-white/60 px-1.5 py-0.5 rounded-full border ${st.border}">
-                            <span class="w-1.5 h-1.5 rounded-full ${st.dot}"></span>${st.label}</span>
+                        <span class="text-[10px] font-black ${st.text}"${_cFg}>เที่ยว ${p.tripNo||'—'}</span>
+                        <span class="flex items-center gap-1 text-[9px] font-black ${st.text} bg-white/60 px-1.5 py-0.5 rounded-full border ${st.border}"${st.fg ? ` style="color:${st.fg};border-color:${st.dotBg};"` : ''}>
+                            <span class="w-1.5 h-1.5 rounded-full ${st.dot}"${_cDot}></span>${st.label}</span>
                     </div>
                     ${p.driverTransport ? `<div class="flex items-center gap-1 mb-1.5">
                         <i class="fas fa-user-circle text-[9px] opacity-60 ${st.text} flex-shrink-0"></i>
