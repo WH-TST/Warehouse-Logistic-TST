@@ -8094,7 +8094,8 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
     <div class="dwl-f"><label>ทะเบียนรถ</label><select id="dwl-plate"><option value="">ทุกคัน</option></select></div>
     <div class="dwl-f"><label>ผลการส่ง</label><select id="dwl-result">
       <option value="">ทั้งหมด</option><option value="ok">ส่งสำเร็จ</option>
-      <option value="bad">ไม่สำเร็จ</option><option value="carry">งานค้างส่ง</option></select></div>
+      <option value="bad">ไม่สำเร็จ</option><option value="carry">งานค้างส่ง</option>
+      <option value="override">ออฟฟิศกดแทน</option></select></div>
     <div style="flex:1"></div>
     <button onclick="dwlLoad()" class="px-5 py-2.5 rounded-xl text-white font-black text-sm" style="background:#0891b2;">
       <i class="fas fa-sync-alt mr-1.5"></i>โหลดข้อมูล</button>
@@ -43727,6 +43728,13 @@ window.dmHandlePhoto=function(input){
   dmRenderAction();
 };
 
+// ใครเป็นคนกด — หน้านี้คือออฟฟิศกดแทนคนขับ ต้องทิ้งร่องรอยไว้เสมอ
+// ไม่งั้นรายงานสรุปการทำงานคนขับจะนับเวลานี้เป็นของคนขับทั้งที่เขาไม่ได้กด
+function _dmActor(){
+  try{ return 'ADMIN:'+((window._cu&&(window._cu.username||window._cu.name))||'ไม่ทราบผู้ใช้'); }
+  catch(e){ return 'ADMIN:ไม่ทราบผู้ใช้'; }
+}
+
 window.dmStartTrip=async function(){
   var mile=parseInt((document.getElementById('dm-mile-start')||{}).value||'');
   if(!mile||mile<=0){showToast('❌ กรอกเลขไมล์ออกให้ถูกต้อง',true);return;}
@@ -43735,7 +43743,7 @@ window.dmStartTrip=async function(){
   var now=dmThaiNow();
   try{
     var {data,error}=await window._sb.from('trip_logs').insert({
-      plan_id:_dmTripPlan.plan_id,driver_username:'admin-override',
+      plan_id:_dmTripPlan.plan_id,driver_username:'admin-override',acted_by:_dmActor(),
       status:'traveling',current_shop_seq:0,
       mileage_start:mile,lat_start:gps.lat,lng_start:gps.lng,acc_start:gps.acc,
       started_at:now,updated_at:now
@@ -43771,11 +43779,11 @@ window.dmArriveAtShop=async function(){
     var {data:visitData,error:ve}=await window._sb.from('shop_visits').upsert({
       plan_id:_dmTripPlan.plan_id,shop_seq:seq,shop_name:shop.shopName||shop.shopId||'',
       mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
-      arrived_at:now,photo_url:photoUrl
+      arrived_at:now,photo_url:photoUrl,acted_by:_dmActor()
     },{onConflict:'plan_id,shop_seq'}).select().single();
     if(ve)throw ve;
     var {data:newLog,error:le}=await window._sb.from('trip_logs').update({
-      status:'at_shop',current_shop_seq:seq,updated_at:now
+      status:'at_shop',current_shop_seq:seq,updated_at:now,acted_by:_dmActor()
     }).eq('plan_id',_dmTripPlan.plan_id).select().single();
     if(le)throw le;
     _dmTripLog=newLog;_dmShopVisits[seq]=visitData;_dmTripLogs[_dmTripPlan.plan_id]=newLog;
@@ -43794,15 +43802,15 @@ window.dmDepartShop=async function(){
   try{
     var visit=_dmShopVisits[seq]||{};
     var updateFn=visit.id
-      ?window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('id',visit.id)
-      :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('plan_id',_dmTripPlan.plan_id).eq('shop_seq',seq);
+      ?window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng,acted_by:_dmActor()}).eq('id',visit.id)
+      :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng,acted_by:_dmActor()}).eq('plan_id',_dmTripPlan.plan_id).eq('shop_seq',seq);
     await updateFn;
     var updV=Object.assign({},_dmShopVisits);
     updV[seq]=Object.assign({},updV[seq]||{},{departed_at:now});
     var allDone=shops.every(function(sh,i){return updV[i]&&updV[i].departed_at;});
     var nextSt=allDone?'returning':'traveling';
     var {data:newLog,error:le}=await window._sb.from('trip_logs').update({
-      status:nextSt,current_shop_seq:seq,updated_at:now
+      status:nextSt,current_shop_seq:seq,updated_at:now,acted_by:_dmActor()
     }).eq('plan_id',_dmTripPlan.plan_id).select().single();
     if(le)throw le;
     var {data:freshV}=await window._sb.from('shop_visits').select('*').eq('plan_id',_dmTripPlan.plan_id);
@@ -43825,7 +43833,7 @@ window.dmFinishTrip=async function(){
   try{
     var {data:newLog,error}=await window._sb.from('trip_logs').update({
       status:'completed',mileage_end:mile,lat_end:gps.lat,lng_end:gps.lng,acc_end:gps.acc,
-      completed_at:now,updated_at:now
+      completed_at:now,updated_at:now,acted_by:_dmActor()
     }).eq('plan_id',_dmTripPlan.plan_id).select().single();
     if(error)throw error;
     _dmTripLog=newLog;_dmTripLogs[_dmTripPlan.plan_id]=newLog;
@@ -45900,6 +45908,9 @@ window.drvInspectGate = async function drvInspectGate(actionLabel){
     return false;
 }
 
+// ใครเป็นคนกด — ฝั่งนี้คือคนขับกดเอง เก็บ username ไว้เทียบกับชื่อในแผน
+function _drvActor(){ try{ return (_dSess&&_dSess.username)||''; }catch(e){ return ''; } }
+
 window.drvDoStartTrip=async function(){
   if(!await drvInspectGate('เริ่มเดินทาง')) return;
   var mile=parseInt((document.getElementById('drv-inp-mile-start')||{}).value||'');
@@ -45908,7 +45919,7 @@ window.drvDoStartTrip=async function(){
   drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
   var now=new Date().toISOString();
   var {data,error}=await window._sb.from('trip_logs').insert({
-    plan_id:_dTripPlan.plan_id,driver_username:_dSess.username,
+    plan_id:_dTripPlan.plan_id,driver_username:_dSess.username,acted_by:_drvActor(),
     status:'traveling',current_shop_seq:0,
     mileage_start:mile,lat_start:gps.lat,lng_start:gps.lng,acc_start:gps.acc,
     started_at:now,updated_at:now
@@ -45963,7 +45974,7 @@ window.drvDoArriveAtShop=async function(){
   var {data:visitData,error:ve}=await window._sb.from('shop_visits').upsert({
     plan_id:visitPlanId,shop_seq:visitSeq,shop_name:shop.shopName||shop.shopId||'',
     mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
-    arrived_at:now,photo_url:photoUrl
+    arrived_at:now,photo_url:photoUrl,acted_by:_drvActor()
   },{onConflict:'plan_id,shop_seq'}).select().single();
   // รถพ่วง: ถ้าร้านนี้เป็น shared (ซ้ำทั้ง -M และ -C) ให้บันทึก -C ด้วย
   var sharedChildSeq=(_dTripPlan._sharedChildSeqs||{})[seq];
@@ -45971,11 +45982,11 @@ window.drvDoArriveAtShop=async function(){
     await window._sb.from('shop_visits').upsert({
       plan_id:_dTripPlan._childPlanId,shop_seq:sharedChildSeq,shop_name:shop.shopName||shop.shopId||'',
       mileage_arrival:mile,lat_arrival:gps.lat,lng_arrival:gps.lng,acc_arrival:gps.acc,
-      arrived_at:now,photo_url:photoUrl
+      arrived_at:now,photo_url:photoUrl,acted_by:_drvActor()
     },{onConflict:'plan_id,shop_seq'});
   }
   var {data:newLog,error:le}=await window._sb.from('trip_logs').update({
-    status:'at_shop',current_shop_seq:seq,updated_at:now
+    status:'at_shop',current_shop_seq:seq,updated_at:now,acted_by:_drvActor()
   }).eq('plan_id',_dTripPlan.plan_id).select().single();
   drvHideL();
   if(ve||le){drvShowToast('❌ '+(ve||le).message,true);return;}
@@ -46013,13 +46024,13 @@ window.drvDoDepartShop=async function(){
   var deptPlanId=(seq>=mCount2&&_dTripPlan._childPlanId)?_dTripPlan._childPlanId:_dTripPlan.plan_id;
   var deptSeq=(seq>=mCount2&&_dTripPlan._childPlanId)?(seq-mCount2):seq;
   var updateFn=visit.id
-    ?window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('id',visit.id)
-    :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng}).eq('plan_id',deptPlanId).eq('shop_seq',deptSeq);
+    ?window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng,acted_by:_drvActor()}).eq('id',visit.id)
+    :window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng,acted_by:_drvActor()}).eq('plan_id',deptPlanId).eq('shop_seq',deptSeq);
   await updateFn;
   // รถพ่วง: ถ้าร้านนี้ shared ให้ update -C ด้วย
   var sharedDeptChildSeq=(_dTripPlan._sharedChildSeqs||{})[seq];
   if(sharedDeptChildSeq!==undefined&&_dTripPlan._childPlanId){
-    await window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng})
+    await window._sb.from('shop_visits').update({departed_at:now,lat_depart:gps.lat,lng_depart:gps.lng,acted_by:_drvActor()})
       .eq('plan_id',_dTripPlan._childPlanId).eq('shop_seq',sharedDeptChildSeq);
   }
   var updatedVisits=Object.assign({},_dShopVisits);
@@ -46056,7 +46067,7 @@ window.drvDoFinishTrip=async function(){
   var now=new Date().toISOString();
   var {data:newLog,error}=await window._sb.from('trip_logs').update({
     status:'completed',mileage_end:mile,lat_end:gps.lat,lng_end:gps.lng,acc_end:gps.acc,
-    completed_at:now,updated_at:now
+    completed_at:now,updated_at:now,acted_by:_drvActor()
   }).eq('plan_id',_dTripPlan.plan_id).select().single();
   drvHideL();
   if(error){drvShowToast('❌ '+error.message,true);return;}
@@ -46243,9 +46254,9 @@ window.dwlLoad = async function dwlLoad(){
       return out;
     }
     var logs = await chunk(function(c){
-      return window._sb.from('trip_logs').select('plan_id,status,started_at,completed_at,mileage_start,mileage_end').in('plan_id',c); });
+      return window._sb.from('trip_logs').select('plan_id,status,started_at,completed_at,mileage_start,mileage_end,driver_username,acted_by').in('plan_id',c); });
     var visits = await chunk(function(c){
-      return window._sb.from('shop_visits').select('plan_id,shop_seq,arrived_at,departed_at').in('plan_id',c); });
+      return window._sb.from('shop_visits').select('plan_id,shop_seq,arrived_at,departed_at,acted_by').in('plan_id',c); });
 
     var logMap={}; logs.forEach(function(l){ logMap[l.plan_id]=l; });
     var visMap={}; visits.forEach(function(v){
@@ -46279,6 +46290,9 @@ window.dwlLoad = async function dwlLoad(){
           home: isLast ? (log.completed_at||'') : '',
           dur: _dur(v.arrived_at, v.departed_at),
           carryFrom: p.origin_plan_date||'',
+          // ใครเป็นคนกด — ถ้าออฟฟิศกดแทน เวลาในแถวนี้ไม่ใช่เวลาที่คนขับทำจริง
+          byShop: v.acted_by||'',
+          byTrip: log.acted_by || (log.driver_username==='admin-override'?'ADMIN:(ไม่ทราบผู้ใช้)':'') || '',
           ok: done,
           status: p.status||'planned',
           // เรียงตามเวลาเช้าสุดของแถวนั้น งานที่ไม่มีเวลาเลยไปท้ายสุด
@@ -46316,6 +46330,7 @@ function dwlRender(){
     if(fRes==='ok'    && !r.ok) return false;
     if(fRes==='bad'   && r.ok)  return false;
     if(fRes==='carry' && !r.carryFrom) return false;
+    if(fRes==='override' && !((r.byShop&&r.byShop.indexOf('ADMIN:')===0)||(r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0))) return false;
     return true;
   });
 
@@ -46351,6 +46366,9 @@ function dwlRender(){
     var durs=list.map(function(r){return (r.arrive&&r.depart)?(new Date(r.depart)-new Date(r.arrive)):0;}).filter(function(x){return x>0;});
     var avg=durs.length?Math.round(durs.reduce(function(a,b){return a+b;},0)/durs.length/60000):0;
     // ช่องเวลาที่ควรมีแต่ไม่มี = คนขับไม่ได้กด
+    var nOverride=list.filter(function(r){
+      return (r.byShop&&r.byShop.indexOf('ADMIN:')===0) || (r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0);
+    }).length;
     var miss=0;
     list.forEach(function(r){
       if(!r.arrive) miss++;
@@ -46388,6 +46406,14 @@ function dwlRender(){
         : (r.home ? '<td style="font-size:12px;color:#137a3e;font-weight:700;white-space:nowrap;">กลับบริษัท '+_hm(r.home)+'</td>'
                   : '<td class="mono" style="color:#94a3b8;">—</td>');
 
+      // ออฟฟิศกดแทน — ต้องเห็นชัด ไม่งั้นเวลาในแถวนี้จะถูกอ่านเป็นผลงานคนขับ
+      var actors=[r.byShop, (r.seq===1?r.byTrip:'')].filter(function(x){ return x&&x.indexOf('ADMIN:')===0; });
+      var overrideBadge = actors.length
+        ? '<div style="margin-top:3px;font-size:11px;font-weight:700;color:#7c3aed;white-space:nowrap;">'
+          +'<i class="fas fa-user-shield" style="margin-right:4px;"></i>ออฟฟิศกดแทน · '
+          +_e(actors[0].slice(6))+'</div>'
+        : '';
+
       var pill;
       if(!r.ok){
         pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fbe8e8;color:#c02626;">ไม่สำเร็จ</span>';
@@ -46405,7 +46431,7 @@ function dwlRender(){
         +tc(r.out)+tc(r.arrive)+tc(r.depart)
         +nextCell
         +'<td class="mono" style="text-align:center;font-weight:700;">'+(r.dur||'—')+'</td>'
-        +'<td>'+pill+'</td></tr>';
+        +'<td>'+pill+overrideBadge+'</td></tr>';
     }).join('');
 
     return '<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-4">'
@@ -46421,6 +46447,7 @@ function dwlRender(){
         +chip(nOk,'สำเร็จ','color:#137a3e;')+chip(nBad,'ไม่สำเร็จ','color:#c02626;')
         +chip(avg?(Math.floor(avg/60)+':'+String(avg%60).padStart(2,'0')):'—','เฉลี่ย/ร้าน')
         +chip(miss,'ขั้นตอนขาด','color:#a65a06;')
+        +chip(nOverride,'ออฟฟิศกดแทน','color:#7c3aed;')
       +'</div></div>'
       +'<div style="overflow-x:auto;"><table><thead><tr>'
       +'<th>วันที่</th><th style="text-align:center;">เที่ยว</th><th>ร้าน</th>'
@@ -46447,12 +46474,14 @@ window.dwlRender = dwlRender;
 window.dwlExport = function dwlExport(){
   if(!_dwlRows.length){ showToast('ยังไม่มีข้อมูลให้ export', true); return; }
   var head=['วันที่','คนขับ','ทะเบียนรถ','เที่ยว','Plan ID','ลำดับ','ร้าน',
-            'ออกจากบริษัท','ถึงร้าน','ออกจากร้าน','ไปต่อ','ถึงบริษัท','อยู่ที่ร้าน','ผล','ค้างจาก'];
+            'ออกจากบริษัท','ถึงร้าน','ออกจากร้าน','ไปต่อ','ถึงบริษัท','อยู่ที่ร้าน','ผล','ค้างจาก','ผู้กดสถานะ'];
   var lines=[head.join(',')];
   _dwlRows.forEach(function(r){
     var cells=[_thDate(r.date), r.driver, r.plate, r.trip, r.planId, r.seq, r.shop,
       _hm(r.out), _hm(r.arrive), _hm(r.depart), r.next, _hm(r.home), r.dur,
-      r.ok?'ส่งสำเร็จ':'ไม่สำเร็จ', r.carryFrom?_thDate(r.carryFrom):''];
+      r.ok?'ส่งสำเร็จ':'ไม่สำเร็จ', r.carryFrom?_thDate(r.carryFrom):'',
+      (r.byShop&&r.byShop.indexOf('ADMIN:')===0) ? ('ออฟฟิศกดแทน: '+r.byShop.slice(6))
+        : ((r.seq===1&&r.byTrip&&r.byTrip.indexOf('ADMIN:')===0) ? ('ออฟฟิศกดแทน: '+r.byTrip.slice(6)) : 'คนขับ')];
     lines.push(cells.map(function(c){ return '"'+String(c==null?'':c).replace(/"/g,'""')+'"'; }).join(','));
   });
   // BOM ให้ Excel อ่านภาษาไทยถูก
