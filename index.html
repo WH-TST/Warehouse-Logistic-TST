@@ -22463,8 +22463,8 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
             .gte('plan_date', startVal).lte('plan_date', endVal).order('plan_id'),
         _needCarry
             ? window._sb.from('logistic_plans').select('*')
-                .eq('status', 'failed').is('carried_resolved_at', null)
-                .lt('plan_date', startVal).order('plan_date')
+                .neq('status', 'success').is('carried_resolved_at', null)
+                .lt('plan_date', _todayCal).order('plan_date')
             : Promise.resolve({ data: [] })
     ])
         .then(function(both) {
@@ -22485,9 +22485,15 @@ window.loadAndRenderLogiCalendar = function loadAndRenderLogiCalendar() {
             }
             const rows = result.data || [];
             // งานค้างที่อยู่ในช่วงวันที่ดูอยู่แล้ว ไม่ต้องดึงซ้ำ — คัดจาก rows ได้เลย
-            const _carryRows = (rows.filter(function(r){
-                    return r.status === 'failed' && !r.carried_resolved_at && r.plan_date < _todayCal;
-                })).concat(carryRes && carryRes.data ? carryRes.data : []);
+            // งานค้าง = แผนของวันที่ผ่านไปแล้วซึ่งยังไม่จบงาน (ไม่ใช่ success)
+            // ครอบคลุมทั้ง planned (ไม่มีใครเริ่มเลย) · inprogress (เริ่มแล้วไม่กดจบ) · failed
+            // ไม่ใช่แค่ failed เหมือนเดิม เพราะเคสที่เกิดบ่อยที่สุดคือไม่มีใครไปกดอะไรเลย
+            const _seenCarry = {};
+            const _carryRows = rows.filter(function(r){
+                    return r.status !== 'success' && !r.carried_resolved_at && r.plan_date < _todayCal;
+                }).concat(carryRes && carryRes.data ? carryRes.data : [])
+                .filter(function(r){ return r.job_type !== 'maintenance_pm'; })   // งานซ่อม/PM ไม่ใช่ของค้างส่ง
+                .filter(function(r){ if (_seenCarry[r.plan_id]) return false; _seenCarry[r.plan_id]=1; return true; });
             window._logiCarryRows = _needCarry ? _carryRows : [];
             const calPlanIds = rows.map(function(r){ return r.plan_id; });
             // sync สถานะจาก trip_logs เหมือน loadLogisticList
@@ -22840,8 +22846,14 @@ function renderLogiCalendar() {
                 // ── การ์ดงานแบบใหม่ ────────────────────────────────────────────
                 // สีสถานะกำหนดด้วย inline style ไม่ใช้คลาส amber-* เพราะโปรเจกต์
                 // override amber เป็นสีน้ำเงินทั้งระบบ (ดู .border-amber-400 ใน <style>)
-                const ST   = p.isCarry ? CAL_STATUS_HEX.carry : (CAL_STATUS_HEX[p.status] || '#64748b');
-                const LBL  = p.isCarry ? 'ค้างส่ง' : ((CAL_STATUS_STYLE[p.status]||{}).label || p.status);
+                // แผนของวันที่ผ่านไปแล้วและยังไม่จบงาน → ถือว่า "ไม่สำเร็จ" โดยอัตโนมัติ
+                // (ไม่เขียนทับสถานะในฐานข้อมูล แค่แสดงผลตามความจริงของเวลา)
+                const _overdue = !p.isCarry && p.date < todayStr && p.status !== 'success' && p.status !== 'failed';
+                const _stKey = p.isCarry ? 'carry' : (_overdue ? 'failed' : p.status);
+                const ST   = CAL_STATUS_HEX[_stKey] || '#64748b';
+                const LBL  = p.isCarry ? 'ค้างส่ง'
+                           : (_overdue ? 'ไม่สำเร็จ · ไม่ได้ส่ง'
+                           : ((CAL_STATUS_STYLE[p.status]||{}).label || p.status));
                 const shops = p.shops || [];
                 const _esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
                 const _escA = function(x){ return String(x).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
@@ -22890,7 +22902,7 @@ function renderLogiCalendar() {
                 const openId = p.isCarry ? p.sourcePlanId : p.id;
                 const headBg = (p.isCarry || p.status==='inprogress') ? `background:linear-gradient(180deg,${ST}17 0 58px,#fff 58px);` : '';
 
-                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${p.isCarry?'cursor:pointer;':'cursor:grab;'}${p.status==='failed'?'opacity:.85;':''}"
+                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${p.isCarry?'cursor:pointer;':'cursor:grab;'}${(p.status==='failed'||_overdue)?'opacity:.85;':''}"
                     class="group transition-all hover:shadow-md"
                     id="cal-badge-${p.id}"
                     draggable="${p.isCarry?'false':'true'}"
@@ -44175,11 +44187,12 @@ window.drvLoadPlan=async function(){
     .eq('plan_date',today).neq('status','success').neq('status','failed');
   if(orParts.length) q=q.or(orParts.join(','));
 
-  // งานค้างส่ง: แผนของวันก่อนที่ส่งไม่สำเร็จและยังไม่ถูกปิดงาน
-  // ต้องโผล่ในวิวคนรถด้วย ไม่งั้นเขากดอัปเดตสถานะงานที่ยกมาไม่ได้เลย
+  // งานค้างส่ง: แผนของวันก่อนที่ยังไม่จบงาน (ไม่ใช่ success) และยังไม่ถูกปิดงาน
+  // ครอบคลุม planned / inprogress / failed — ไม่ใช่แค่ failed
+  // เคสที่เกิดบ่อยสุดคือไม่มีใครไปกดอะไรเลย แผนเลยค้างเป็น planned ข้ามวัน
   var qc=window._sb.from('logistic_plans')
     .select(_PLAN_COLS)
-    .eq('status','failed').is('carried_resolved_at',null).lt('plan_date',today);
+    .neq('status','success').is('carried_resolved_at',null).lt('plan_date',today);
   if(orParts.length) qc=qc.or(orParts.join(','));
 
   var _both=await Promise.all([q, qc.then(function(r){return r;}, function(){return {data:[]};})]);
