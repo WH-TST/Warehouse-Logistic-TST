@@ -23013,14 +23013,21 @@ function renderLogiCalendar() {
                 const openId = p.isCarry ? p.sourcePlanId : p.id;
                 // พื้นการ์ดใช้สีสถานะทั้งใบ โทนอ่อน (~7%) ให้แยกสถานะได้ตั้งแต่กวาดตา
                 // ใบที่ต้องรีบดู (ค้างส่ง/กำลังวิ่ง) เข้มขึ้นอีกนิดให้เด่นกว่าใบปกติ
-                const _tint = _cancelled ? '0d' : (((p.isCarry && !p.carryDone) || _wasCarry || p.status==='inprogress') ? '1f' : '12');
+                // ── การ์ดต้นขั้ว: แผนเดิมที่ส่งไม่สำเร็จ/ไม่ได้ส่ง ───────────────
+                // งานตัวจริงถูกยกไปเป็นการ์ดค้างของวันถัดไปแล้ว ใบนี้เหลือไว้เป็น
+                // ประวัติว่าวันนั้นวางแผนไว้แล้วไม่จบ ถ้าให้ลาก/ลบได้จะกลายเป็นมี
+                // งานเดียวกันสองใบที่แก้ได้ทั้งคู่ แล้วประวัติวันเดิมจะหายไปด้วย
+                const _isOrigin = !p.isCarry && !_wasCarry && !_cancelled
+                                  && (_overdue || p.status === 'failed');
+                const _locked   = _cancelled || _isOrigin || (p.isCarry && p.carryDone);
+                const _tint = _cancelled ? '0d' :(((p.isCarry && !p.carryDone) || _wasCarry || p.status==='inprogress') ? '1f' : '12');
                 const headBg = `background:${ST}${_tint};`;
 
-                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${(p.isCarry && p.carryDone)?'cursor:pointer;':'cursor:grab;'}${_cancelled?'opacity:.6;':((p.status==='failed'||_overdue)?'opacity:.85;':'')}"
+                return `<div style="position:relative;background:#fff;${headBg}border:1px solid #dde3ea;border-left:6px solid ${ST};border-radius:4px 9px 9px 4px;padding:10px 12px 9px;box-shadow:0 1px 2px rgba(16,21,28,.07);display:flex;flex-direction:column;gap:8px;${_locked?'cursor:pointer;':'cursor:grab;'}${_cancelled?'opacity:.6;':((p.status==='failed'||_overdue)?'opacity:.85;':'')}"
                     class="group transition-all hover:shadow-md"
                     id="cal-badge-${p.id}"
-                    draggable="${(_cancelled || (p.isCarry && p.carryDone)) ? 'false' : 'true'}"
-                    ${(_cancelled || (p.isCarry && p.carryDone)) ? '' : `ondragstart="calDragStart(event,'${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" ondragend="calDragEnd(event)"`}
+                    draggable="${_locked ? 'false' : 'true'}"
+                    ${_locked ? '' : `ondragstart="calDragStart(event,'${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" ondragend="calDragEnd(event)"`}
                     onclick="viewLogiPlan('${_escA(openId)}')">
 
                     ${/* งานค้างไม่มีปุ่มปิดงานเอง — สถานะต้องมาจากการทำงานของคนขับ
@@ -23030,7 +23037,7 @@ function renderLogiCalendar() {
                     ${((p.isCarry && !p.carryDone) || _wasCarry) ? `<button onclick="event.stopPropagation();logiCancelPlan('${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" title="ยกเลิกแผนนี้ — การ์ดที่วันเดิมจะขึ้นว่าถูกลบทิ้ง"
                              class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-500 text-white text-[10px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-700 z-10 flex">
                              <i class="fas fa-times"></i></button>` : ''}
-                    ${(!p.isCarry && !_wasCarry && (p.status !== 'inprogress' || (_cu && _cu.isAdmin))) ? `<button onclick="event.stopPropagation();deleteLogiPlanFromCal('${_escA(p.id)}')"
+                    ${(!p.isCarry && !_wasCarry && !_isOrigin && (p.status !== 'inprogress' || (_cu && _cu.isAdmin))) ? `<button onclick="event.stopPropagation();deleteLogiPlanFromCal('${_escA(p.id)}')"
                              class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-500 text-white text-[10px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-700 z-10 flex">
                              <i class="fas fa-times"></i></button>` : ''}
 
