@@ -46289,6 +46289,8 @@ window.dwlLoad = async function dwlLoad(){
           driver: (p.driver_transport||'').trim() || '— ไม่ระบุคนขับ —',
           plate: (p.truck_plate||'').trim() || '—',
           planId: p.plan_id,
+          pairKey: String(p.plan_id||'').replace(/-[MC]$/,''),
+          plates: [(p.truck_plate||'').trim()||'—'],
           trip: p.trip_no||'',
           seq: i+1,
           shop: sh.shopName||sh.shopId||('ร้านที่ '+(i+1)),
@@ -46313,6 +46315,25 @@ window.dwlLoad = async function dwlLoad(){
       });
     });
 
+    // ── รถพ่วง: -M กับ -C คือคันเดียวกัน ร้านเดียวกัน ต้องเป็นแถวเดียว ──
+    // แผนรถพ่วงถูกแยกเก็บเป็นแม่/ลูก เพื่อแบ่งของ แต่ในมุมการทำงานของคนขับ
+    // มันคือการไปร้านนั้นครั้งเดียว ถ้าแสดงสองแถวจะนับร้านและเที่ยวเกินจริง
+    var merged={}, out=[];
+    rows.forEach(function(r){
+        var k = r.date+'|'+r.pairKey+'|'+r.shop;
+        var m = merged[k];
+        if(!m){ merged[k]=r; out.push(r); return; }
+        // รวมทะเบียน และเติมเวลาจากฝั่งที่มีข้อมูล (บางครั้งกดฝั่งเดียว)
+        if(m.plates.indexOf(r.plate)<0) m.plates.push(r.plate);
+        ['out','arrive','depart','home'].forEach(function(f){ if(!m[f] && r[f]) m[f]=r[f]; });
+        if(!m.next && r.next) m.next=r.next;
+        if(!m.dur) m.dur=_dur(m.arrive,m.depart);
+        if(r.ok) m.ok=true;
+        if(!m.carryFrom && r.carryFrom) m.carryFrom=r.carryFrom;
+        if(!m.sortT && r.sortT) m.sortT=r.sortT;
+    });
+    rows=out;
+
     _dwlRows=rows;
     dwlRender();
   }catch(e){
@@ -46334,11 +46355,11 @@ function dwlRender(){
     el.value=cur||'';
   }
   fill('dwl-driver', Array.from(new Set(_dwlRows.map(function(r){return r.driver;}))).sort(), fDrv, 'ทุกคน');
-  fill('dwl-plate',  Array.from(new Set(_dwlRows.map(function(r){return r.plate;}))).sort(),  fPlate,'ทุกคัน');
+  fill('dwl-plate',  Array.from(new Set(_dwlRows.reduce(function(a,r){ return a.concat(r.plates||[r.plate]); },[]))).sort(), fPlate,'ทุกคัน');
 
   var rows=_dwlRows.filter(function(r){
     if(fDrv && r.driver!==fDrv) return false;
-    if(fPlate && r.plate!==fPlate) return false;
+    if(fPlate && (r.plates||[r.plate]).indexOf(fPlate)<0) return false;
     if(fRes==='ok'    && !r.ok) return false;
     if(fRes==='bad'   && r.ok)  return false;
     if(fRes==='carry' && !r.carryFrom) return false;
@@ -46373,8 +46394,9 @@ function dwlRender(){
       return (a.planId+a.seq)<(b.planId+b.seq)?-1:1;
     });
 
-    var plates=Array.from(new Set(list.map(function(r){return r.plate;}).filter(function(p){return p&&p!=='—';})));
-    var trips=new Set(list.map(function(r){return r.planId;}));
+    var plates=Array.from(new Set(list.reduce(function(a,r){ return a.concat(r.plates||[r.plate]); },[])
+                       .filter(function(p){return p&&p!=='—';})));
+    var trips=new Set(list.map(function(r){return r.pairKey||r.planId;}));
     var nOk=list.filter(function(r){return r.ok;}).length;
     var nBad=list.length-nOk;
     var durs=list.map(function(r){return (r.arrive&&r.depart)?(new Date(r.depart)-new Date(r.arrive)):0;}).filter(function(x){return x>0;});
@@ -46403,7 +46425,7 @@ function dwlRender(){
 
     var lastDate='', lastPlan='';
     var trs=list.map(function(r){
-      var newGroup = (r.date!==lastDate)||(r.planId!==lastPlan);
+      var newGroup = (r.date!==lastDate)||((r.pairKey||r.planId)!==lastPlan);
       var dateCell = newGroup
         ? '<td style="font-weight:900;white-space:nowrap;">'+_thDate(r.date)
             +'<span style="display:block;font-size:11px;color:#8496a8;font-weight:700;">'
@@ -46411,9 +46433,9 @@ function dwlRender(){
         : '<td></td>';
       var tripCell = newGroup
         ? '<td style="text-align:center;"><span class="mono" style="font-size:11px;font-weight:900;color:#1d4ed8;background:#e8eefc;border-radius:6px;padding:2px 7px;">'+_e(r.trip||'—')+'</span>'
-            +'<div class="mono" style="font-size:10px;color:#8496a8;margin-top:3px;">'+_e(r.plate)+'</div></td>'
+            +'<div class="mono" style="font-size:10px;color:#8496a8;margin-top:3px;">'+_e((r.plates||[r.plate]).join(' + '))+'</div></td>'
         : '<td></td>';
-      lastDate=r.date; lastPlan=r.planId;
+      lastDate=r.date; lastPlan=(r.pairKey||r.planId);
 
       function tc(v){
         return v ? '<td class="mono" style="font-weight:700;white-space:nowrap;">'+_hm(v)+'</td>'
@@ -46446,7 +46468,8 @@ function dwlRender(){
       return '<tr class="'+(newGroup?'dstart':'')+'">'
         +dateCell+tripCell
         +'<td style="font-weight:700;line-height:1.35;"><span class="mono" style="color:#8496a8;margin-right:5px;">'+r.seq+'.</span>'+_e(r.shop)
-          +'<span class="mono" style="display:block;font-size:11px;color:#8496a8;font-weight:500;margin-top:1px;">'+_e(r.planId)+'</span></td>'
+          +'<span class="mono" style="display:block;font-size:11px;color:#8496a8;font-weight:500;margin-top:1px;">'+_e(r.pairKey||r.planId)
+          +((r.plates||[]).length>1?' <span style="color:#1d4ed8;font-weight:700;">พ่วง</span>':'')+'</span></td>'
         +tc(r.out)+tc(r.arrive)+tc(r.depart)
         +nextCell
         +'<td class="mono" style="text-align:center;font-weight:700;">'+(r.dur||'—')+'</td>'
@@ -46475,7 +46498,7 @@ function dwlRender(){
       +'</tr></thead><tbody>'+trs+'</tbody></table></div></div>';
   }).join('');
 
-  var nTrip=new Set(rows.map(function(r){return r.planId;})).size;
+  var nTrip=new Set(rows.map(function(r){return r.pairKey||r.planId;})).size;
   var nOkAll=rows.filter(function(r){return r.ok;}).length;
   tot.classList.remove('hidden');
   tot.style.display='flex';
@@ -46496,7 +46519,7 @@ window.dwlExport = function dwlExport(){
             'ออกจากบริษัท','ถึงร้าน','ออกจากร้าน','ไปต่อ','ถึงบริษัท','อยู่ที่ร้าน','ผล','ค้างจาก','ผู้กดสถานะ'];
   var lines=[head.join(',')];
   _dwlRows.forEach(function(r){
-    var cells=[_thDate(r.date), r.driver, r.plate, r.trip, r.planId, r.seq, r.shop,
+    var cells=[_thDate(r.date), r.driver, (r.plates||[r.plate]).join(' + '), r.trip, r.pairKey||r.planId, r.seq, r.shop,
       _hm(r.out), _hm(r.arrive), _hm(r.depart), r.next, _hm(r.home), r.dur,
       r.ok?'ส่งสำเร็จ':'ไม่สำเร็จ', r.carryFrom?_thDate(r.carryFrom):'',
       (function(){
