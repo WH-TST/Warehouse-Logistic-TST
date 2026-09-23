@@ -7954,7 +7954,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
         <button onclick="dmShiftDate(-1)" title="วันก่อน" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px 12px;color:#94a3b8;font-weight:700;font-size:13px;cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
         <input type="date" id="dm-date-pick" onchange="dmSetDate(this.value)" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;outline:none;">
         <button onclick="dmShiftDate(1)" title="วันถัดไป" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px 12px;color:#94a3b8;font-weight:700;font-size:13px;cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
-        <button onclick="dmSetDate(new Date().toISOString().split('T')[0])" style="background:#0f766e;border:none;border-radius:8px;padding:8px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;">วันนี้</button>
+        <button onclick="dmSetDate(window._bkkToday())" style="background:#0f766e;border:none;border-radius:8px;padding:8px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;">วันนี้</button>
       </div>
       <button onclick="dmRefreshAll()" style="background:#059669;border:none;border-radius:10px;padding:9px 16px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
         <i class="fas fa-sync-alt"></i> รีเฟรช
@@ -13202,7 +13202,7 @@ function exportFilteredData() {
     const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `รายการจองค้าง_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `รายการจองค้าง_${window._bkkToday()}.csv`;
     link.click();
     
     showToast(`ส่งออกข้อมูล ${filteredData.length} รายการสำเร็จ`);
@@ -14148,7 +14148,7 @@ window.downloadAISelectionAsImage = function downloadAISelectionAsImage() {
         useCORS: true
     }).then(canvas => {
         const link = document.createElement('a');
-        const timestamp = new Date().toISOString().split('T')[0];
+        const timestamp = window._bkkToday();
         link.download = `AI_Selected_Products_${timestamp}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
@@ -33780,7 +33780,7 @@ const WHA_INDIV_TYPES = new Set(['สินค้าเสียหาย-กา
 
 // ── init เมื่อเปิด tab ────────────────────────────────────────────────
 window.whaInit = function whaInit() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = window._bkkToday();
     const dateEl = safeGet('wha-date');
     if (dateEl && !dateEl.value) dateEl.value = today;
     // Reset entry form
@@ -42305,12 +42305,12 @@ var _dmDate=null; // null = today
 window.dmSetDate=function(val){
   _dmDate=val||null;
   var pick=document.getElementById('dm-date-pick');
-  if(pick) pick.value=val||new Date().toISOString().split('T')[0];
+  if(pick) pick.value=val||window._bkkToday();
   _dmCurrentDriver=null;_dmTripPlan=null;
   dmRefreshAll();
 };
 window.dmShiftDate=function(delta){
-  var base=_dmDate||new Date().toISOString().split('T')[0];
+  var base=_dmDate||window._bkkToday();
   var d=new Date(base); d.setDate(d.getDate()+delta);
   dmSetDate(d.toISOString().split('T')[0]);
 };
@@ -42320,7 +42320,7 @@ window.dmRefreshAll=async function(silent){
   var statusLine=document.getElementById('dm-status-line');
   if(!area)return;
   if(!silent) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
-  var today=_dmDate||new Date().toISOString().split('T')[0];
+  var today=_dmDate||window._bkkToday();
   // sync date picker
   var pick=document.getElementById('dm-date-pick');
   if(pick&&!pick.value) pick.value=today;
@@ -42432,11 +42432,11 @@ window.dmOpenAllDriverTrip=async function(username,silent){
   _dmSelectedShopSeq=null;
   var area=document.getElementById('dm-area');
   if(area&&!silent) area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var orParts=[];
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
-  var dateVal=_dmDate||new Date().toISOString().split('T')[0];
+  var dateVal=_dmDate||window._bkkToday();
   var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother,trip_no').eq('plan_date',dateVal).eq('is_child',false);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
@@ -42514,7 +42514,7 @@ window.dmInit=async function(){
 window.dmLoadApprovals=async function(){
   var wrap=document.getElementById('dm-approval-list');
   if(!wrap)return;
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var {data}=await window._sb.from('truck_inspections').select('*').eq('inspect_date',today).eq('approval_status','pending').order('id');
   if(!(data&&data.length)){
     wrap.innerHTML='<div style="text-align:center;padding:16px;font-size:13px;color:#94a3b8;"><i class="fas fa-check-circle" style="color:#059669;margin-right:6px;"></i>ไม่มีรายการรออนุมัติ</div>';
@@ -42566,7 +42566,7 @@ window.dmLoadInspections=async function(){
   var el=document.getElementById('dm-inspect-list');
   if(!el)return;
   var datePick=document.getElementById('dm-inspect-date-pick');
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   if(datePick&&!datePick.value) datePick.value=today;
   var dateVal=(datePick&&datePick.value)||today;
   var plateFilter=(document.getElementById('dm-inspect-plate-filter')||{}).value||'';
@@ -42788,7 +42788,7 @@ window.dmSelectDriver=async function(){
   _dmSelectedShopSeq=null;
   area.innerHTML='<div style="text-align:center;padding:60px;color:#475569;"><i class="fas fa-spinner fa-spin" style="font-size:32px;"></i></div>';
 
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var orParts=[];
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
@@ -43921,9 +43921,9 @@ window.drvInit=function(wmsUser){
   document.getElementById('drv-screen').classList.add('active');
   document.getElementById('drv-hn').textContent=_dSess.driver_name;
   document.getElementById('drv-ht').textContent='– รอโหลดแผน –';
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var w=new Date();w.setDate(w.getDate()-13);
-  document.getElementById('drv-hf').value=w.toISOString().split('T')[0];
+  document.getElementById('drv-hf').value=new Date(w.getTime()+7*3600000).toISOString().split('T')[0];
   document.getElementById('drv-ht2').value=today;
   setInterval(drvTick,1000);drvTick();
 
@@ -43942,7 +43942,7 @@ window.drvInit=function(wmsUser){
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'logistic_plans'},function(payload){
       var p=payload.new;
       if(!p)return;
-      var today2=new Date().toISOString().split('T')[0];
+      var today2=window._bkkToday();
       var mine=(_dSess.driver_id&&p.driver_id&&p.driver_id===_dSess.driver_id)||
                (_dSess.driver_name&&p.driver_transport&&p.driver_transport===_dSess.driver_name);
       if(!mine)return;
@@ -43981,7 +43981,7 @@ window.drvInit=function(wmsUser){
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'truck_inspections'},function(payload){
       var ins=payload.new;
       if(!ins)return;
-      var today2=new Date().toISOString().split('T')[0];
+      var today2=window._bkkToday();
       if(ins.inspect_date!==today2)return;
       // คนขับ: เห็นผลอนุมัติ/ระงับ
       // คนขับ: สนใจทุกคันที่อยู่ในแผนวันนี้ (ผลตรวจนับต่อคัน ไม่ผูกกับคนขับ)
@@ -44039,7 +44039,7 @@ window.drvInit=function(wmsUser){
 };
 
 async function drvSupUpdateBadge(){
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var {data}=await window._sb.from('truck_inspections').select('id').eq('inspect_date',today).in('approval_status',['pending','rejected']);
   var badge=document.getElementById('drv-sup-badge');
   if(!badge)return;
@@ -44071,8 +44071,8 @@ window.drvGoTab=function(t){
 };
 
 window.drvLoadPlan=async function(){
-  var today=new Date().toISOString().split('T')[0];
-  var tmr=new Date(new Date().getTime()+86400000).toISOString().split('T')[0];
+  var today=window._bkkToday();
+  var tmr=new Date(new Date(window._bkkToday()+'T00:00:00').getTime()+86400000).toISOString().split('T')[0];
   document.getElementById('drv-plan-cards').innerHTML='<div style="text-align:center;padding:60px 0;"><i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:12px;color:#475569;"></i><p style="font-weight:700;font-size:13px;color:#475569;">กำลังโหลด...</p></div>';
   drvShowL();
   if(_dSess&&_dSess.username){var {data:duRow}=await window._sb.from('driver_users').select('bypass_timer').eq('username',_dSess.username).maybeSingle();if(duRow)DRV_BYPASS_TIMER=DRV_TEST_MODE||(duRow.bypass_timer===true);}
@@ -44080,25 +44080,38 @@ window.drvLoadPlan=async function(){
   if(_dSess.driver_id) orParts.push('driver_id.eq.'+_dSess.driver_id);
   if(_dSess.driver_name) orParts.push('driver_transport.eq.'+_dSess.driver_name);
 
+  var _PLAN_COLS='plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type,carried_resolved_at';
+
   // โหลดแผนวันนี้
   var q=window._sb.from('logistic_plans')
-    .select('plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type')
+    .select(_PLAN_COLS)
     .eq('plan_date',today).neq('status','success').neq('status','failed');
   if(orParts.length) q=q.or(orParts.join(','));
-  var {data:plans,error}=await q;
+
+  // งานค้างส่ง: แผนของวันก่อนที่ส่งไม่สำเร็จและยังไม่ถูกปิดงาน
+  // ต้องโผล่ในวิวคนรถด้วย ไม่งั้นเขากดอัปเดตสถานะงานที่ยกมาไม่ได้เลย
+  var qc=window._sb.from('logistic_plans')
+    .select(_PLAN_COLS)
+    .eq('status','failed').is('carried_resolved_at',null).lt('plan_date',today);
+  if(orParts.length) qc=qc.or(orParts.join(','));
+
+  var _both=await Promise.all([q, qc.then(function(r){return r;}, function(){return {data:[]};})]);
+  var error=_both[0].error;
   if(error){drvHideL();drvShowToast('❌ โหลดแผนไม่สำเร็จ',true);drvRenderPlanCards([]);return;}
-  plans=plans||[];
+  var plans=_both[0].data||[];
+  var _carry=((_both[1]&&_both[1].data)||[]).map(function(p){ p._isCarry=true; p._carryFrom=p.plan_date; return p; });
+  plans=_carry.concat(plans);   // งานค้างขึ้นก่อนเสมอ ต้องเคลียร์ก่อนเริ่มงานใหม่
 
   // ถ้าวันนี้ไม่มีแผนที่ active → โหลดแผนพรุ่งนี้ (โหลดค้างคืน)
   var todayActive=plans.filter(function(p){return p.status!=='success'&&p.status!=='failed';});
-  if(!todayActive.length){
+  if(!todayActive.length&&!_carry.length){
     var q2=window._sb.from('logistic_plans')
       .select('plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type')
       .eq('plan_date',tmr).neq('status','success').neq('status','failed');
     if(orParts.length) q2=q2.or(orParts.join(','));
     var {data:tmrPlans}=await q2;
     (tmrPlans||[]).forEach(function(p){ p._isOvernight=true; });
-    plans=tmrPlans||[];
+    plans=_carry.concat(tmrPlans||[]);
   }
 
   _dPlans=plans;_dTripLogs={};
@@ -44221,7 +44234,7 @@ function _drvDetectInspectType(){
 
 // เด้งป๊อบอัพตรวจสภาพ — "วันละครั้งต่อคัน" คันไหนมีผลตรวจของวันนี้แล้ว (ใครตรวจก็นับ) → ไม่เด้งซ้ำ
 async function drvInspectDailyPrompt(){
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   window._dInspectPrompted=window._dInspectPrompted||{}; // กันเด้งซ้ำภายในรอบเดียว แยกตามทะเบียน
   // เด้งเฉพาะเมื่อยังมี "เที่ยวที่ยังไม่โหลด/ออกรถ"
   // ถ้าโหลด/ออกครบทุกเที่ยวแล้ว (รวมงานค้างคืนที่ขึ้นเย็นนี้) → ไม่ต้องเด้ง (ค่อยไปเด้งพรุ่งนี้)
@@ -44251,7 +44264,7 @@ async function drvInspectDailyPrompt(){
 }
 // เปิดป๊อบอัพตรวจสภาพเอง (ปุ่ม "ตรวจรถ") — เปิดได้ทุกเมื่อ
 window.drvManualInspect=function(){
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var dels=_dPlans.filter(function(p){return p.job_type!=='maintenance_pm'&&(p.truck_plate||'').trim();});
   // ตั้งต้นด้วย "คันที่ยังไม่ได้ตรวจวันนี้" ถ้าตรวจครบแล้วก็ใช้คันแรก
   var un=dels.find(function(p){ return !(window._dInspectByPlate||{})[(p.truck_plate||'').trim()]; });
@@ -44366,7 +44379,7 @@ window.drvInspectSave=async function(){
     drvShowToast('📷 กรุณาถ่ายรูป: '+missingPhotos.map(function(n){return n.replace('⭐ ','');}).join(', '),true,5000);
     return;
   }
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var plate=window._dInspectPlate||(_dPlans[0]?.truck_plate)||'';
   if(!plate){ drvShowToast('กรุณาเลือกทะเบียนรถก่อนบันทึก',true); return; }
   btn.disabled=true;btn.textContent='กำลังบันทึก...';
@@ -44446,7 +44459,7 @@ function drvShowInspectPending(plate,date,issueItems){
 // หัวหน้าคนขับ: โหลดรายการรออนุมัติ
 window.drvSupLoadPending=async function(){
   if(!_dSess.is_supervisor)return;
-  var today=new Date().toISOString().split('T')[0];
+  var today=window._bkkToday();
   var {data}=await window._sb.from('truck_inspections')
     .select('*').eq('inspect_date',today).in('approval_status',['pending','rejected']).order('id');
   var wrap=document.getElementById('drv-sup-pending-wrap');
@@ -45134,7 +45147,62 @@ function drvRenderCompleted(){
     +'</div></div>';
 }
 
+// ── ด่านตรวจสภาพรถ (ฝั่งคนรถ) ────────────────────────────────────────────
+//  กติกา: ขึ้นวันใหม่ตั้งแต่ 00:00 น. (เวลาไทย) รถบริษัทต้องผ่านตรวจสภาพ
+//  และได้รับอนุมัติก่อน คนรถถึงจะกดเริ่มเดินทาง/ถึงร้าน/ออกจากร้านได้
+//  เดิมมีแค่ป๊อบอัพ "เด้งเตือน" ซึ่งปิดทิ้งแล้วกดต่อได้ จึงเกิดเคสอัปเดต
+//  สถานะทั้งที่ยังไม่ตรวจรถ
+//  ขอบเขต: เฉพาะรถบริษัท (ทะเบียนที่อยู่ในตาราง logi_trucks) เหมือนฝั่งทีมโหลด
+//  รถจ้าง/รถนอกไม่กัน
+window.drvInspectGate = async function drvInspectGate(actionLabel){
+    var plan = _dTripPlan || {};
+    var plate = (plan.truck_plate||'').trim();
+    if (!plate) return true;                       // ไม่มีทะเบียนในแผน → ไม่กัน
+    var today = window._bkkToday();
+
+    // เป็นรถบริษัทไหม (fail-closed: เช็คไม่ได้ = กันไว้ก่อน เหมือนฝั่งทีมโหลด)
+    var isFleet=null;
+    for (var t=0;t<2&&isFleet===null;t++){
+        try{
+            var r=await window._sb.from('logi_trucks').select('plate').eq('plate',plate).maybeSingle();
+            if(r.error) throw r.error;
+            isFleet=!!r.data;
+        }catch(e){ if(t){ drvShowToast('❌ ตรวจสอบข้อมูลรถไม่ได้ ลองใหม่อีกครั้ง',true); return false; } }
+    }
+    if(!isFleet) return true;                      // รถจ้าง/รถนอก → ไม่กัน
+
+    // ต้องมีผลตรวจ "อนุมัติแล้ว" ของทะเบียนนี้ ในวันนี้
+    var ok=null;
+    for (var t2=0;t2<2&&ok===null;t2++){
+        try{
+            var r2=await window._sb.from('truck_inspections')
+                .select('approval_status').eq('inspect_date',today).eq('truck_plate',plate)
+                .eq('approval_status','approved').limit(1);
+            if(r2.error) throw r2.error;
+            ok=!!(r2.data && r2.data.length);
+        }catch(e){ if(t2){ drvShowToast('❌ ตรวจสอบผลตรวจสภาพรถไม่ได้ ลองใหม่อีกครั้ง',true); return false; } }
+    }
+    if(ok) return true;
+
+    // ยังไม่ผ่าน → บอกสาเหตุให้ตรงและเปิดฟอร์มตรวจให้เลย
+    var pending=null;
+    try{
+        var r3=await window._sb.from('truck_inspections')
+            .select('approval_status').eq('inspect_date',today).eq('truck_plate',plate).limit(1);
+        pending=(r3.data&&r3.data[0])?r3.data[0].approval_status:null;
+    }catch(e){}
+    if(pending==='pending'){
+        drvShowToast('⏳ '+(actionLabel||'ทำรายการ')+'ไม่ได้ — ผลตรวจสภาพรถ '+plate+' พบปัญหา รอหัวหน้าอนุมัติ',true,5000);
+        return false;
+    }
+    drvShowToast('🔍 ต้องตรวจสภาพรถ '+plate+' ก่อน'+(actionLabel?('จึงจะ'+actionLabel+'ได้'):''),true,5000);
+    _dInspectType=_drvDetectInspectType();
+    drvInspectShow(today, plate);
+    return false;
+}
+
 window.drvDoStartTrip=async function(){
+  if(!await drvInspectGate('เริ่มเดินทาง')) return;
   var mile=parseInt((document.getElementById('drv-inp-mile-start')||{}).value||'');
   if(DRV_TEST_MODE&&(!mile||mile<=0))mile=100000;
   if(!DRV_BYPASS_TIMER&&(!mile||mile<=0)){drvShowToast('❌ กรอกเลขไมล์ออกให้ถูกต้อง',true);return;}
@@ -45157,6 +45225,7 @@ window.drvDoStartTrip=async function(){
 };
 
 window.drvDoArriveAtShop=async function(){
+  if(!await drvInspectGate('กดถึงร้าน')) return;
   var seq=_dSelectedShopSeq!==null&&_dSelectedShopSeq!==undefined?_dSelectedShopSeq:_dTripLog.current_shop_seq;
   var shops=_dTripPlan.shops||[];var shop=shops[seq]||{};
   if(!DRV_BYPASS_TIMER){
@@ -45235,6 +45304,7 @@ window.drvHandlePhoto=function(input){
 };
 
 window.drvDoDepartShop=async function(){
+  if(!await drvInspectGate('กดออกจากร้าน')) return;
   var seq=_dSelectedShopSeq!==null&&_dSelectedShopSeq!==undefined?_dSelectedShopSeq:_dTripLog.current_shop_seq;
   var shops=_dTripPlan.shops||[];
   drvShowL();var gps=await drvRequireGPS();if(!gps){drvHideL();return;}
@@ -45345,7 +45415,7 @@ var _trPendingSession = null;
 
 window.trShowCreate = async function(){
   document.getElementById('tr-create-card').classList.remove('hidden');
-  document.getElementById('tr-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('tr-date').value = window._bkkToday();
   var [{data:drivers},{data:whStaff},{data:wmsUsers}] = await Promise.all([
     window._sb.from('driver_users').select('username,driver_name').eq('active',true).order('driver_name'),
     window._sb.from('logi_wh_staff').select('id,name,team,username').order('name'),
@@ -45870,20 +45940,20 @@ window.dmgClearForm = function(){
       b.classList.remove('border-amber-400','text-amber-600','bg-amber-50','border-blue-400','text-blue-600','bg-blue-50');
       b.classList.add('border-slate-200','text-slate-600');
     });
-    document.getElementById('dmg-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('dmg-date').value=window._bkkToday();
     _dmgPhotos.forEach(function(p){URL.revokeObjectURL(p.previewUrl);}); _dmgPhotos=[];
     dmgRenderPhotoPreviews();
   } else if(reqType==='stock'){
     ['stock-sku','stock-itemname','stock-qty','stock-from','stock-to','stock-reason'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.value='';
     });
-    document.getElementById('stock-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('stock-date').value=window._bkkToday();
     document.getElementById('stock-warehouse').value='';
   } else {
     ['other-subject','other-detail','other-warehouse'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.value='';
     });
-    document.getElementById('other-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('other-date').value=window._bkkToday();
   }
 };
 
@@ -45920,7 +45990,7 @@ window.dmgSendEmail = async function(){
       var photoUrls=await dmgUploadPhotos(prefix);
       if(photoUrls.length) body+='\n\n📎 รูปภาพ:\n'+photoUrls.join('\n');
     }
-    dbPayload={request_date:date||new Date().toISOString().split('T')[0], warehouse, item_sku:sku, item_name:itemname,
+    dbPayload={request_date:date||window._bkkToday(), warehouse, item_sku:sku, item_name:itemname,
       quantity:Number(qty)||0, unit, damage_type:type, damage_desc:desc,
       returned_from:returned, action_requested:action, recipient_email:recipient,
       request_type:'damage', created_by:window._currentUser||''};
@@ -45944,7 +46014,7 @@ window.dmgSendEmail = async function(){
     if(fromQty&&toQty) body+='ปรับจาก '+fromQty+' → '+toQty+' '+unit+'\n';
     else if(qty) body+='จำนวน '+qty+' '+unit+'\n';
     body+='สาเหตุ: '+reason+'\n\nผู้แจ้ง: '+(window._currentUser||'');
-    dbPayload={request_date:date||new Date().toISOString().split('T')[0], warehouse, item_sku:sku, item_name:itemname,
+    dbPayload={request_date:date||window._bkkToday(), warehouse, item_sku:sku, item_name:itemname,
       quantity:Number(qty)||0, unit, damage_desc:reason,
       action_requested:'ปรับสต็อก '+fromQty+'→'+toQty, recipient_email:recipient,
       request_type:'stock', created_by:window._currentUser||''};
@@ -45960,7 +46030,7 @@ window.dmgSendEmail = async function(){
     body='ถึง ผู้อนุมัติ\n';
     if(warehouse) body+='>> '+warehouse+'\n';
     body+=detail+'\n\nผู้แจ้ง: '+(window._currentUser||'');
-    dbPayload={request_date:date||new Date().toISOString().split('T')[0], warehouse,
+    dbPayload={request_date:date||window._bkkToday(), warehouse,
       damage_desc:detail, action_requested:subj, recipient_email:recipient,
       request_type:'other', created_by:window._currentUser||''};
   }
@@ -46005,7 +46075,7 @@ if(_origInvSWT){
       dmgLoadContacts();
       dmgRenderSelectChips();
       var dateEl = document.getElementById('dmg-date');
-      if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+      if(dateEl && !dateEl.value) dateEl.value = window._bkkToday();
     }
   };
 }
