@@ -44706,7 +44706,10 @@ function _drvFirstUnapprovedPlate(){
     if(!pl) continue;
     var ins=(window._dInspectByPlate||{})[pl];
     if(!ins) return {plate:pl, status:'none'};
-    if(ins.approval_status!=='approved') return {plate:pl, status:ins.approval_status||'pending', note:ins.approval_note||''};
+    // แถวเก่าบางแถวอาจไม่มีค่า approval_status — ถ้าผลตรวจไม่พบอาการ ถือว่าผ่าน
+    // ไม่งั้นคนที่ตรวจผ่านแล้วจะติดค้างอยู่หน้ารออนุมัติทั้งที่ไม่มีอะไรให้อนุมัติ
+    var _passed = ins.approval_status==='approved' || (!ins.approval_status && ins.overall==='ok');
+    if(!_passed) return {plate:pl, status:ins.approval_status||'pending', note:ins.approval_note||''};
   }
   return null;
 }
@@ -45740,8 +45743,11 @@ window.drvInspectGate = async function drvInspectGate(actionLabel){
     var pending=null;
     try{
         var r3=await window._sb.from('truck_inspections')
-            .select('approval_status').eq('inspect_date',today).eq('truck_plate',plate).limit(1);
-        pending=(r3.data&&r3.data[0])?r3.data[0].approval_status:null;
+            .select('approval_status,overall').eq('inspect_date',today).eq('truck_plate',plate).limit(1);
+        var _row3=(r3.data&&r3.data[0])||null;
+        // แถวเก่าที่ไม่มี approval_status แต่ตรวจแล้วไม่พบอาการ ถือว่าผ่าน
+        if(_row3 && !_row3.approval_status && _row3.overall==='ok') return true;
+        pending=_row3?_row3.approval_status:null;
     }catch(e){}
     if(pending==='pending'){
         drvShowToast('⏳ '+(actionLabel||'ทำรายการ')+'ไม่ได้ — ผลตรวจสภาพรถ '+plate+' พบปัญหา รอหัวหน้าอนุมัติ',true,5000);
