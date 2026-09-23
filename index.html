@@ -46041,10 +46041,66 @@ window.drvHistLoad=async function(){
   if(error||!logs||!logs.length){list.innerHTML='<div style="text-align:center;padding:40px 0;color:#334155;font-weight:700;font-size:13px;">ไม่พบข้อมูลในช่วงวันที่นี้</div>';return;}
   var stColor={completed:'#059669',returning:'#7c3aed',traveling:'#3b82f6',at_shop:'#f59e0b',idle:'#475569'};
   var stLabel={completed:'เสร็จสิ้น',returning:'กลับบริษัท',traveling:'เดินทาง',at_shop:'ที่ร้าน',idle:'ยังไม่เริ่ม'};
+
+  // ── ไทม์ไลน์รายร้าน ────────────────────────────────────────────────
+  // เดิมการ์ดบอกแค่เลขแผน/ระยะทาง/เวลาจบ ไม่รู้ว่าแวะร้านไหน ถึงกี่โมง ออกกี่โมง
+  // ดึงชื่อร้านจากแผน และเวลาถึง/ออก จาก shop_visits มาประกอบเป็นลำดับเวลา
+  var planIds=logs.map(function(l){return l.plan_id;}).filter(Boolean);
+  var shopsByPlan={}, visitsByPlan={};
+  if(planIds.length){
+    try{
+      var _pr=await window._sb.from('logistic_plans').select('plan_id,shops').in('plan_id',planIds);
+      (_pr.data||[]).forEach(function(p){ shopsByPlan[p.plan_id]=p.shops||[]; });
+    }catch(e){}
+    try{
+      var _vr=await window._sb.from('shop_visits')
+        .select('plan_id,shop_seq,arrived_at,departed_at').in('plan_id',planIds);
+      (_vr.data||[]).forEach(function(v){
+        if(!visitsByPlan[v.plan_id]) visitsByPlan[v.plan_id]={};
+        visitsByPlan[v.plan_id][v.shop_seq]=v;
+      });
+    }catch(e){}
+  }
+
+  function _row(icon,color,label,time,sub){
+    return '<div style="display:flex;align-items:flex-start;gap:9px;padding:6px 0;">'
+      +'<i class="fas '+icon+'" style="color:'+color+';font-size:12px;width:14px;text-align:center;margin-top:3px;flex-shrink:0;"></i>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="font-size:12px;font-weight:700;color:#cbd5e1;line-height:1.4;">'+label+'</div>'
+      +(sub?'<div style="font-size:11px;color:#64748b;margin-top:1px;">'+sub+'</div>':'')
+      +'</div>'
+      +'<div style="font-size:12px;font-weight:900;color:'+(time?color:'#475569')+';flex-shrink:0;">'+(time||'—')+'</div></div>';
+  }
+
   list.innerHTML=logs.map(function(l){
     var km=l.mileage_end&&l.mileage_start?(l.mileage_end-l.mileage_start):null;
-    var dateStr=l.started_at?new Date(l.started_at).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})+' '+drvFmtTime(l.started_at):'–';
-    return '<div class="drv-card" style="margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div style="font-weight:900;color:#fff;font-size:14px;">'+drvEsc(l.plan_id)+'</div><span style="font-size:11px;font-weight:700;color:'+(stColor[l.status]||'#475569')+'">'+(stLabel[l.status]||l.status)+'</span></div><div style="font-size:12px;color:#64748b;">'+dateStr+(km!==null?' • '+km+' กม.':'')+(l.completed_at?' • จบ '+drvFmtTime(l.completed_at):'')+'</div></div>';
+    var dateStr=l.started_at?new Date(l.started_at).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}):'–';
+    var shops=(shopsByPlan[l.plan_id]||[]).filter(function(sh){return sh.type!=='service_center';});
+    var vmap=visitsByPlan[l.plan_id]||{};
+
+    var timeline=_row('fa-play-circle','#34d399','ออกจากบริษัท',
+      l.started_at?drvFmtTime(l.started_at):'',
+      l.mileage_start?('ไมล์ออก '+l.mileage_start):'');
+
+    shops.forEach(function(sh,i){
+      var v=vmap[i]||{};
+      var nm=drvEsc(sh.shopName||sh.shopId||('ร้านที่ '+(i+1)));
+      timeline+=_row('fa-store','#f59e0b','ถึง '+nm, v.arrived_at?drvFmtTime(v.arrived_at):'', '');
+      timeline+=_row('fa-sign-out-alt','#3b82f6','ออกจาก '+nm, v.departed_at?drvFmtTime(v.departed_at):'',
+        (i<shops.length-1)?('ไปต่อ '+drvEsc(shops[i+1].shopName||shops[i+1].shopId||'ร้านถัดไป')):'กลับบริษัท');
+    });
+
+    timeline+=_row('fa-flag-checkered','#059669','ถึงบริษัท', l.completed_at?drvFmtTime(l.completed_at):'',
+      l.mileage_end?('ไมล์กลับ '+l.mileage_end):'');
+
+    return '<div class="drv-card" style="margin-bottom:8px;">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
+      +'<div style="font-weight:900;color:#fff;font-size:14px;">'+drvEsc(l.plan_id)+'</div>'
+      +'<span style="font-size:11px;font-weight:700;color:'+(stColor[l.status]||'#475569')+'">'+(stLabel[l.status]||l.status)+'</span></div>'
+      +'<div style="font-size:12px;color:#64748b;margin-bottom:8px;">'+dateStr
+        +(shops.length?' • '+shops.length+' ร้าน':'')+(km!==null?' • '+km+' กม.':'')+'</div>'
+      +'<div style="border-top:1px solid #334155;padding-top:6px;">'+timeline+'</div>'
+      +'</div>';
   }).join('');
 };
 
