@@ -44525,6 +44525,9 @@ window.drvLogout=function(){
 };
 
 window.drvGoTab=function(t){
+  // กดแท็บอื่นแล้วต้องออกจากหน้าผลตรวจก่อน ไม่งั้นมันค้างทับหน้าที่เลือก
+  var _hist=document.getElementById('drv-inspect-hist-overlay');
+  if(_hist) _hist.style.display='none';
   document.getElementById('drv-tab-plan').style.display=t==='plan'?'block':'none';
   document.getElementById('drv-tab-history').style.display=t==='history'?'block':'none';
   var supTab=document.getElementById('drv-tab-supervisor');
@@ -44820,12 +44823,14 @@ window.drvShowInspectHistory=async function(){
   if(!ov){
     ov=document.createElement('div');
     ov.id='drv-inspect-hist-overlay';
-    ov.style.cssText='display:none;position:absolute;inset:0;background:#0f172a;z-index:900;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    // เว้นแถบแท็บล่าง 60px ไว้ — หน้านี้เป็นแค่การดูข้อมูล ไม่ใช่หน้าบล็อก
+    // ถ้าปูเต็มจอเหมือนเช็คลิสต์ แท็บล่างจะถูกทับจนกดไปหน้าอื่นไม่ได้
+    ov.style.cssText='display:none;position:absolute;top:0;left:0;right:0;bottom:60px;background:#0f172a;z-index:880;overflow-y:auto;-webkit-overflow-scrolling:touch;';
     var host=document.getElementById('drv-inspect-overlay');
     if(host&&host.parentNode) host.parentNode.appendChild(ov); else document.body.appendChild(ov);
   }
   ov.style.display='block';
-  ov.innerHTML='<div style="padding:16px 14px 100px;"><div style="text-align:center;padding:40px 0;color:#64748b;">'
+  ov.innerHTML='<div style="padding:16px 14px 24px;"><div style="text-align:center;padding:40px 0;color:#64748b;">'
     +'<i class="fas fa-spinner fa-spin" style="font-size:22px;"></i></div></div>';
 
   var plates=Array.from(new Set((_dPlans||[]).map(function(p){return (p.truck_plate||'').trim();}).filter(Boolean)));
@@ -44864,7 +44869,7 @@ window.drvShowInspectHistory=async function(){
       +'</div>';
   }).join('');
 
-  ov.innerHTML='<div style="padding:16px 14px 100px;">'
+  ov.innerHTML='<div style="padding:16px 14px 24px;">'
     +'<div style="text-align:center;margin-bottom:16px;">'
     +'<div style="font-size:17px;font-weight:900;color:#fff;">📋 ผลตรวจสภาพรถวันนี้</div>'
     +'<div style="font-size:12px;color:#64748b;margin-top:3px;">'+today+' · ตรวจวันละครั้งต่อคัน</div></div>'
