@@ -18027,12 +18027,23 @@ window.loadLogisticList = async function loadLogisticList() {
     if (wrap) wrap.classList.add('hidden');
 
     try {
-        const { data, error } = await window._sb
-            .from('logistic_plans')
-            .select('*')
-            .eq('plan_date', filterDate)
-            .order('plan_id');
-        if (error) throw error;
+        // ── ต้องตรงกับ Delivery Block Plan ────────────────────────────────
+        // ปฏิทินยกงานค้าง (ยังไม่สำเร็จ ยังไม่ปิด ยังไม่ถูกยกเลิก) มาแสดงที่วันนี้
+        // ถ้ารายการแผนไม่ยกมาด้วย สองหน้าจะบอกงานของวันนี้ไม่ตรงกัน
+        // เงื่อนไขชุดเดียวกับ loadAndRenderLogiCalendar เป๊ะ
+        const _lgToday = window._bkkToday();
+        const [listRes, carryRes] = await Promise.all([
+            window._sb.from('logistic_plans').select('*')
+                .eq('plan_date', filterDate).order('plan_id'),
+            filterDate === _lgToday
+                ? window._sb.from('logistic_plans').select('*')
+                    .neq('status', 'success').is('carried_resolved_at', null).is('cancelled_at', null)
+                    .lt('plan_date', _lgToday).order('plan_date')
+                : Promise.resolve({ data: [] })
+        ]);
+        if (listRes.error) throw listRes.error;
+        // งานค้างขึ้นก่อน เหมือนการ์ดค้างที่อยู่ลำดับแรกของทะเบียนรถในปฏิทิน
+        const data = (carryRes.data || []).concat(listRes.data || []);
 
         const planIds = (data || []).map(r => r.plan_id);
         // โหลด trip_logs พร้อมกัน เพื่อ sync สถานะจริงจาก Driver App
@@ -18077,6 +18088,8 @@ window.loadLogisticList = async function loadLogisticList() {
             isMother:        row.is_mother || (!!row.pair_id && row.plan_id?.endsWith('-M')) || false,
             isChild:         row.is_child  || (!!row.pair_id && row.plan_id?.endsWith('-C')) || false,
             date:            row.plan_date,
+            // งานค้างที่ยกมาจากวันก่อน — ใช้ติดป้ายบอกว่ามาจากวันไหน
+            carryFrom:       row.plan_date !== filterDate ? row.plan_date : '',
             truckType:       row.truck_type      || 'company',
             driverTransport: row.driver_transport || '',
             driverId:        row.driver_id        || '',
@@ -18243,6 +18256,7 @@ window.renderLogisticList = function renderLogisticList() {
                 <div class="text-[10px] text-slate-400 mt-0.5">${p.id}</div>
                 <div class="text-xl font-black text-slate-600 font-mono mt-1">${trip}</div>
                 <div class="mt-1">${statusBadge}</div>
+                ${p.carryFrom ? `<div class="mt-1 inline-block px-2 py-0.5 rounded-md text-[10px] font-black" style="background:#fce7f0;color:#a12a5e;border:1px solid #f3c6d8;">ค้างจาก ${p.carryFrom.slice(8,10)}/${p.carryFrom.slice(5,7)}</div>` : ''}
             </td>
             <td rowspan="${rs}" class="px-3 pt-2 pb-2 align-top border-r border-slate-200" style="vertical-align:top;${sepTop}background:${rowBgColor}">
                 <div class="text-xs font-semibold text-slate-700">${driver}</div>
