@@ -22379,7 +22379,8 @@ window.logiCopyPlanId = function logiCopyPlanId(id){
     } else { _ldCopyFallback(id); done(); }
 };
 
-// ปิดงานค้างส่ง — ใช้เมื่อวิ่งซ้ำให้ลูกค้าเสร็จแล้ว หรือลูกค้ายกเลิก
+// ปิดงานค้างส่ง — ไม่มีปุ่มบนการ์ดแล้ว สถานะต้องมาจากการทำงานของคนขับ
+// เก็บไว้สำหรับงานดูแลระบบ (เช่น ปิดงานค้างเก่าทีเดียวหลายรายการ)
 // บันทึกเวลาไว้ในคอลัมน์ carried_resolved_at การ์ดจะหายจากวันนี้
 // แต่แผนเดิมยังอยู่ที่วันของมัน สถานะ "ไม่สำเร็จ" เหมือนเดิม ไม่ลบประวัติ
 window.logiResolveCarry = async function logiResolveCarry(planId) {
@@ -22991,13 +22992,13 @@ function renderLogiCalendar() {
                     ${(p.isCarry && p.carryDone) ? '' : `ondragstart="calDragStart(event,'${_escA(p.isCarry ? p.sourcePlanId : p.id)}')" ondragend="calDragEnd(event)"`}
                     onclick="viewLogiPlan('${_escA(openId)}')">
 
-                    ${p.isCarry
-                        ? `<button onclick="event.stopPropagation();logiResolveCarry('${_escA(p.sourcePlanId)}')" title="ปิดงานค้าง"
-                             class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full text-white text-[10px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10 flex" style="background:${CAL_STATUS_HEX.success};">
-                             <i class="fas fa-check"></i></button>`
-                        : ((p.status !== 'inprogress' || (_cu && _cu.isAdmin)) ? `<button onclick="event.stopPropagation();deleteLogiPlanFromCal('${_escA(p.id)}')"
+                    ${/* งานค้างไม่มีปุ่มปิดงานเอง — สถานะต้องมาจากการทำงานของคนขับ
+                          พอคนขับกดจบงาน แผนเป็น success แล้วการ์ดจะเปลี่ยนเป็น
+                          "ส่งสำเร็จ (ค้างส่ง)" และเลิกยกมาเอง
+                          ถ้าจะยกเลิกงานจริงๆ ให้ไปลบ/แก้ที่แผนต้นฉบับในวันของมัน */''}
+                    ${(!p.isCarry && (p.status !== 'inprogress' || (_cu && _cu.isAdmin))) ? `<button onclick="event.stopPropagation();deleteLogiPlanFromCal('${_escA(p.id)}')"
                              class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-rose-500 text-white text-[10px] items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-700 z-10 flex">
-                             <i class="fas fa-times"></i></button>` : '')}
+                             <i class="fas fa-times"></i></button>` : ''}
 
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                         <span style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;background:${ST}24;color:${ST};padding:2px 7px;border-radius:5px;">เที่ยว ${_esc(p.tripNo||'—')}</span>
