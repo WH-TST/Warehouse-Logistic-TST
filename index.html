@@ -44811,6 +44811,15 @@ window.drvManualInspect=function(){
   drvInspectShow(today, (un.truck_plate||'').trim());
 };
 
+window.drvToggleInsDetail=function(id){
+  var d=document.getElementById('drv-ins-det-'+id);
+  var b=document.getElementById('drv-ins-btn-'+id);
+  if(!d) return;
+  var open=d.style.display!=='none';
+  d.style.display=open?'none':'block';
+  if(b) b.textContent=open?'ดูผลการตรวจรายข้อ':'ซ่อนรายละเอียด';
+};
+
 window.drvCloseInspectHistory=function(){
   var el=document.getElementById('drv-inspect-hist-overlay');
   if(el) el.style.display='none';
@@ -44866,6 +44875,21 @@ window.drvShowInspectHistory=async function(){
       +(ins.approval_note?'<div style="margin-top:8px;font-size:12px;color:#c4b5fd;background:#2e1065;border-radius:8px;padding:7px 10px;">'
           +'<i class="fas fa-comment-alt" style="margin-right:5px;"></i>'+drvEsc(ins.approval_note)+'</div>':'')
       +(ins.notes?'<div style="margin-top:8px;font-size:12px;color:#94a3b8;">หมายเหตุ: '+drvEsc(ins.notes)+'</div>':'')
+      // รายละเอียดรายข้อ — กดดูได้ว่าตรวจอะไรไปบ้าง ผลแต่ละข้อเป็นยังไง
+      +'<div id="drv-ins-det-'+ins.id+'" style="display:none;margin-top:10px;border-top:1px solid #334155;padding-top:10px;">'
+      +((ins.items||[]).map(function(it){
+          var isIss=it.status==='issue';
+          return '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid rgba(51,65,85,.5);">'
+            +'<i class="fas '+(isIss?'fa-exclamation-circle':'fa-check-circle')+'" style="color:'+(isIss?'#ef4444':'#34d399')+';font-size:13px;margin-top:2px;flex-shrink:0;"></i>'
+            +'<div style="flex:1;min-width:0;">'
+            +'<div style="font-size:12px;font-weight:700;color:'+(isIss?'#fca5a5':'#cbd5e1')+';line-height:1.4;">'+drvEsc(String(it.name||'').replace('⭐ ',''))+'</div>'
+            +(it.symptom?'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">'+drvEsc(it.symptom)+'</div>':'')
+            +(it.photo_url?'<a href="'+drvEsc(it.photo_url)+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;">'
+                +'<img src="'+drvEsc(it.photo_url)+'" style="width:86px;height:86px;object-fit:cover;border-radius:8px;border:1px solid #334155;"></a>':'')
+            +'</div></div>';
+        }).join('')||'<div style="font-size:12px;color:#475569;">ไม่มีรายละเอียดรายข้อ</div>')
+      +'</div>'
+      +'<button onclick="drvToggleInsDetail(\''+ins.id+'\')" id="drv-ins-btn-'+ins.id+'" style="width:100%;margin-top:10px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:9px;color:#94a3b8;font-weight:900;font-size:12px;cursor:pointer;">ดูผลการตรวจรายข้อ</button>'
       +'</div>';
   }).join('');
 
