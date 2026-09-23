@@ -26026,7 +26026,8 @@ window.ldCardSave = async function(oid, unit) {
 
 async function _ldRefreshGlobalStats(dateVal) {
     try {
-        var {data} = await window._sb.from('loading_sessions').select('qty,weight').eq('plan_date', dateVal);
+        // ยึดวันที่โหลดจริง (load_date) ไม่ใช่วันของแผน
+        var {data} = await window._sb.from('loading_sessions').select('qty,weight').eq('load_date', dateVal);
         var totalWt=0, totalPcs=0;
         (data||[]).forEach(function(r){ totalWt+=(parseFloat(r.weight)||0); totalPcs+=(parseFloat(r.qty)||0); });
         var setEl=function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
@@ -26441,9 +26442,11 @@ window.siLoad = async function() {
     try {
         // 1. Session ที่ปิดงานแล้ว (record_type != 'draft') ในช่วงวันที่เลือก
         var { data: sessions, error: sErr } = await window._sb.from('loading_sessions')
-            .select('id,order_id,plan_date,sku,product_name,qty,weight,team,staff_name,end_time,updated_at,created_at')
+            .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,staff_name,end_time,updated_at,created_at')
             .neq('record_type', 'draft')
-            .gte('plan_date', fromV).lte('plan_date', toV)
+            // ยึดวันที่โหลดจริง ไม่ใช่วันของแผน — วางแผน 22 แต่โหลด 23
+            // ของออกจากคลังวันที่ 23 ยอดต้องอยู่วันที่ 23
+            .gte('load_date', fromV).lte('load_date', toV)
             .range(0, 19999);
         if (sErr) throw sErr;
         sessions = sessions || [];
@@ -26531,6 +26534,12 @@ window.siLoad = async function() {
                 if (t > bySku[k]._t) { bySku[k]._t = t; bySku[k].team = s.team || bySku[k].team; }
             });
 
+            // วันที่แสดง = วันที่โหลดจริง (session ล่าสุดของออเดอร์)
+            var loadD = sess.reduce(function(m, s){
+                return (s.load_date && s.load_date > m) ? s.load_date : m;
+            }, '') || order.order_date || fromV;
+            // ประเภทรถยังเทียบกับ "แผนของวันที่วางไว้" — รถคันนี้ถูกวางแผนวันไหน
+            // ไม่ใช่วันที่โหลด ถ้าใช้วันโหลดจะหาแผนไม่เจอแล้วกลายเป็นรถรับเองหมด
             var truck = classifyTruck(order.truck_plate, order.order_date || fromV);
 
             Object.keys(bySku).forEach(function(sk){
@@ -26543,7 +26552,7 @@ window.siLoad = async function() {
                 else if (prod.min_w != null && perUnit < prod.min_w) rangeStatus = 'under';
 
                 rows.push({
-                    date: order.order_date || fromV,
+                    date: loadD,
                     sortKey: r._t || '',
                     time: r._t ? new Date(r._t).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : '—',
                     customer: order.customer_name || '—',
@@ -27213,8 +27222,10 @@ window.ldSaveSession = async function() {
             qty: totalQty, weight: totalWt,
             lift_count: lifts.length,
             lifts: lifts,
-            start_time: startTime ? planDate+'T'+startTime+':00' : null,
-            end_time:   endTime   ? planDate+'T'+endTime+':00'   : null,
+            // เวลาที่กรอกเป็นเวลาไทย ต้องติด offset +07:00 ไปด้วย
+            // ถ้าส่งเปล่าๆ Postgres อ่านเป็น UTC แล้วขยับไป 7 ชม. งานตอนเย็นจะข้ามวัน
+            start_time: startTime ? planDate+'T'+startTime+':00+07:00' : null,
+            end_time:   endTime   ? planDate+'T'+endTime+':00+07:00'   : null,
             note: note,
             photo_urls: photoUrls,
         };
@@ -27225,8 +27236,8 @@ window.ldSaveSession = async function() {
         sku: sku, product_name: productName,
         qty: totalQty, weight: totalWt,
         lift_count: lifts.length, lifts: lifts,
-        start_time: startTime ? planDate+'T'+startTime+':00' : null,
-        end_time:   endTime   ? planDate+'T'+endTime+':00'   : null,
+        start_time: startTime ? planDate+'T'+startTime+':00+07:00' : null,
+        end_time:   endTime   ? planDate+'T'+endTime+':00+07:00'   : null,
         note: note, photo_urls: photoUrls,
     }];
 
