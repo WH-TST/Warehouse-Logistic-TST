@@ -44412,26 +44412,40 @@ window.drvLoadPlan=async function(){
   if(_dSess.driver_id) orParts.push('driver_id.eq.'+_dSess.driver_id);
   if(_dSess.driver_name) orParts.push('driver_transport.eq.'+_dSess.driver_name);
 
-  var _PLAN_COLS='plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type,carried_resolved_at';
+  var _PLAN_COLS='plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type,carried_resolved_at,cancelled_at,origin_plan_date';
 
   // โหลดแผนวันนี้
+  // ห้ามตัด failed ออกที่นี่ — คนวางแผนลากงานค้างเมื่อวานมาลงวันนี้ได้
+  // แผนนั้น plan_date = วันนี้ แต่ status ยังเป็น failed อยู่ ถ้าตัดออก
+  // คนขับจะมองไม่เห็นงานเลย (คิวรีงานค้างก็ไม่เจอเพราะ plan_date ไม่ได้ < วันนี้)
+  // งานที่ปิดไปแล้วจริงๆ กรองทีหลังด้วย carried_resolved_at
   var q=window._sb.from('logistic_plans')
     .select(_PLAN_COLS)
-    .eq('plan_date',today).neq('status','success').neq('status','failed');
+    .eq('plan_date',today).neq('status','success').is('cancelled_at',null);
   if(orParts.length) q=q.or(orParts.join(','));
 
   // งานค้างส่ง: แผนของวันก่อนที่ยังไม่จบงาน (ไม่ใช่ success) และยังไม่ถูกปิดงาน
   // ครอบคลุม planned / inprogress / failed — ไม่ใช่แค่ failed
   // เคสที่เกิดบ่อยสุดคือไม่มีใครไปกดอะไรเลย แผนเลยค้างเป็น planned ข้ามวัน
+  // เงื่อนไขชุดเดียวกับ Delivery Block Plan — รวม is('cancelled_at',null)
+  // แผนที่คนวางแผนกด X ยกเลิก ต้องหายจากมือถือคนขับด้วย
   var qc=window._sb.from('logistic_plans')
     .select(_PLAN_COLS)
-    .neq('status','success').is('carried_resolved_at',null).lt('plan_date',today);
+    .neq('status','success').is('carried_resolved_at',null).is('cancelled_at',null)
+    .lt('plan_date',today);
   if(orParts.length) qc=qc.or(orParts.join(','));
 
   var _both=await Promise.all([q, qc.then(function(r){return r;}, function(){return {data:[]};})]);
   var error=_both[0].error;
   if(error){drvHideL();drvShowToast('❌ โหลดแผนไม่สำเร็จ',true);drvRenderPlanCards([]);return;}
-  var plans=_both[0].data||[];
+  // งานของวันนี้ที่เป็น failed และถูกปิดงานไปแล้ว = จบแล้ว ไม่ต้องโชว์
+  var plans=(_both[0].data||[]).filter(function(p){
+    return !(p.status==='failed' && p.carried_resolved_at);
+  });
+  // แผนที่เคยค้างแล้วถูกลากมาลงวันนี้ ยังเป็นงานค้างอยู่ ติดป้ายให้เหมือนกัน
+  plans.forEach(function(p){
+    if(p.origin_plan_date && p.status!=='success'){ p._isCarry=true; p._carryFrom=p.origin_plan_date; }
+  });
   var _carry=((_both[1]&&_both[1].data)||[]).map(function(p){ p._isCarry=true; p._carryFrom=p.plan_date; return p; });
   plans=_carry.concat(plans);   // งานค้างขึ้นก่อนเสมอ ต้องเคลียร์ก่อนเริ่มงานใหม่
 
@@ -44440,7 +44454,7 @@ window.drvLoadPlan=async function(){
   if(!todayActive.length&&!_carry.length){
     var q2=window._sb.from('logistic_plans')
       .select('plan_id,plan_date,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,job_type')
-      .eq('plan_date',tmr).neq('status','success').neq('status','failed');
+      .eq('plan_date',tmr).neq('status','success').neq('status','failed').is('cancelled_at',null);
     if(orParts.length) q2=q2.or(orParts.join(','));
     var {data:tmrPlans}=await q2;
     (tmrPlans||[]).forEach(function(p){ p._isOvernight=true; });
@@ -44900,6 +44914,13 @@ function drvRenderPlanCards(plans){
         +'<div><div style="font-size:12px;font-weight:900;color:#7dd3fc;">โหลดค้างคืน</div>'
         +'<div style="font-size:11px;color:#475569;">ส่งพรุ่งนี้ '+p.plan_date+'</div></div></div>'
       :'';
+    // งานค้างส่งจากวันก่อน — ต้องเด่นกว่างานปกติ คนขับต้องเคลียร์ก่อน
+    var carryBadge=p._isCarry
+      ?'<div style="background:linear-gradient(90deg,#7f1d3a,#4a0e22);border:1px solid #be185d;border-radius:10px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">'
+        +'<span style="font-size:18px;">⏳</span>'
+        +'<div><div style="font-size:12px;font-weight:900;color:#fbcfe8;">งานค้างส่ง — ต้องเคลียร์ก่อน</div>'
+        +'<div style="font-size:11px;color:#f9a8d4;">ค้างจากวันที่ '+drvEsc(p._carryFrom||'')+'</div></div></div>'
+      :'';
     // Gate ออกรถ: คันนี้ต้องมีผลตรวจของวันนี้ (ตรวจวันละครั้งต่อคัน — ใครตรวจก็นับ) และผ่านอนุมัติ
     var _insP=(window._dInspectByPlate||{})[(p.truck_plate||'').trim()]||null;
     var _insBlock='';
@@ -44908,12 +44929,13 @@ function drvRenderPlanCards(plans){
       else if(_insP.approval_status==='pending')    _insBlock='รอหัวหน้าอนุมัติก่อนออกรถ';
       else if(_insP.approval_status==='rejected')   _insBlock='หัวหน้าระงับการออกรถ';
     }
-    return '<div class="drv-fade-up drv-card" style="border:2px solid '+(p._isOvernight?'#1d4ed8':m.border)+';">'
+    return '<div class="drv-fade-up drv-card" style="border:2px solid '+(p._isCarry?'#be185d':p._isOvernight?'#1d4ed8':m.border)+';">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
       +'<div><div style="font-weight:900;color:#fff;font-size:18px;">'+(p._isOvernight?'🌙 ':'')+'เที่ยวที่ '+(pi+1)+'</div>'
       +'<div style="font-size:13px;color:#64748b;margin-top:2px;">'+drvEsc(p.plan_id)+'</div></div>'
       +'<span style="font-size:12px;font-weight:900;color:'+m.color+';background:rgba(0,0,0,.3);padding:5px 12px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
       +'<i class="fas '+m.icon+'"></i>'+m.label+'</span></div>'
+      +carryBadge
       +overnightBadge
       +contextLine
       +'<div style="font-size:14px;color:#64748b;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:5px;opacity:.6;"></i>'+routeText+'</div>'
