@@ -45145,6 +45145,8 @@ function drvRenderPlanCards(plans){
 window.drvOpenTrip=async function(planId){
   _dTripPlan=_dPlans.find(function(p){return p.plan_id===planId;})||null;
   if(!_dTripPlan)return;
+  // กันตั้งแต่ประตูหน้า — ไม่ให้เข้าหน้าที่มีปุ่มอัปเดตสถานะ ถ้ายังไม่ผ่านตรวจ
+  if(!await drvInspectGate('เปิดงาน')){ _dTripPlan=null; return; }
   _dCapturedFile=null;_dCapturedPreviewUrl=null;_dSelectedShopSeq=null;
   drvShowL();
   await drvLoadTripState(planId);
@@ -45745,6 +45747,12 @@ window.drvInspectGate = async function drvInspectGate(actionLabel){
         drvShowToast('⏳ '+(actionLabel||'ทำรายการ')+'ไม่ได้ — ผลตรวจสภาพรถ '+plate+' พบปัญหา รอหัวหน้าอนุมัติ',true,5000);
         return false;
     }
+    if(pending==='rejected'){
+        // ถูกระงับ ไม่ใช่ยังไม่ตรวจ — เปิดฟอร์มให้ตรวจซ้ำเงียบๆ จะทำให้เข้าใจผิด
+        // ว่าตรวจใหม่แล้วออกรถได้เลย ทั้งที่ต้องให้หัวหน้าปลดก่อน
+        drvShowToast('🚫 '+(actionLabel||'ทำรายการ')+'ไม่ได้ — หัวหน้าระงับการออกรถ '+plate+' ติดต่อหัวหน้างาน',true,6000);
+        return false;
+    }
     drvShowToast('🔍 ต้องตรวจสภาพรถ '+plate+' ก่อน'+(actionLabel?('จึงจะ'+actionLabel+'ได้'):''),true,5000);
     _dInspectType=_drvDetectInspectType();
     drvInspectShow(today, plate);
@@ -45895,6 +45903,9 @@ window.drvDoDepartShop=async function(){
 };
 
 window.drvDoFinishTrip=async function(){
+  // จบงานก็เป็นการอัปเดตสถานะ ต้องผ่านด่านเดียวกัน
+  // (ถ้าหัวหน้าระงับกลางทาง ต้องให้หัวหน้าอนุมัติใหม่ก่อนจึงปิดงานได้)
+  if(!await drvInspectGate('จบงาน')) return;
   if(_dSess&&_dSess.username){try{var {data:_bpRow}=await window._sb.from('driver_users').select('bypass_timer').eq('username',_dSess.username).maybeSingle();if(_bpRow)DRV_BYPASS_TIMER=DRV_TEST_MODE||(_bpRow.bypass_timer===true);}catch(e){}}
   var mile=parseInt((document.getElementById('drv-inp-mile-end')||{}).value||'');
   if(DRV_TEST_MODE&&(!mile||mile<=_dTripLog.mileage_start))mile=(_dTripLog.mileage_start||100000)+50;
