@@ -26480,7 +26480,7 @@ window.siLoad = async function() {
         // 2. Session ของออเดอร์เหล่านั้น — เอามาทั้งคัน รวมส่วนที่โหลดวันก่อน
         //    ไม่งั้น _ldComputeFinalWeights จะกระจาย scale_diff ของทั้งคัน
         //    ลงเฉพาะแถวที่เหลือ น้ำหนัก FINAL จะเพี้ยน
-        var sessions = await _siInChunks(orderIds, 200, function(c){
+        var sessions = await _siInChunks(orderIds, 100, function(c){
             return window._sb.from('loading_sessions')
                 .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,staff_name,end_time,updated_at,created_at')
                 .neq('record_type', 'draft')
@@ -26491,7 +26491,7 @@ window.siLoad = async function() {
 
         // 3. Products — ช่วง min/max ต่อ SKU (ใช้ _ldComputeFinalWeights ร่วมด้วย)
         var skus = Array.from(new Set(sessions.map(function(s){ return s.sku; }).filter(Boolean)));
-        var products = await _siInChunks(skus, 200, function(c){
+        var products = await _siInChunks(skus, 100, function(c){
             return window._sb.from('products').select('sku,min_w,max_w').in('sku', c);
         });
         var prodMap = {};
@@ -26508,10 +26508,11 @@ window.siLoad = async function() {
         });
 
         // 4. ลูกค้า → Sale
-        var custNames = Array.from(new Set((orders||[]).map(function(o){ return o.customer_name; }).filter(Boolean)));
-        var shops = await _siInChunks(custNames, 50, function(c){
-            return window._sb.from('logi_shops').select('name,sale').in('name', c);
-        });
+        // ดึงตารางลูกค้ามาทั้งตารางแล้วจับคู่ในเครื่อง — ห้ามส่งชื่อไปใน URL
+        // ชื่อไทยยาวมากเมื่อ encode แบ่งก้อนเล็กแค่ไหน URL ก็ยังเสี่ยงยาวเกิน
+        // ตารางนี้มีแค่ name กับ sale ข้อมูลเล็ก ดึงมาทั้งก้อนถูกกว่า
+        var { data: shops } = await window._sb.from('logi_shops')
+            .select('name,sale').range(0, 9999);
         var saleMap = {}; (shops||[]).forEach(function(s){ saleMap[s.name] = s.sale; });
 
         // 5. จำแนกประเภทรถ: ตรงฐานรถบริษัท (logi_trucks) → รถบริษัท
@@ -26522,10 +26523,10 @@ window.siLoad = async function() {
         // จะหาแผนรถจ้างไม่เจอแล้วขึ้นเป็น "รถรับเอง" ทั้งที่เป็นรถจ้าง
         var _planFrom = new Date(new Date(fromV+'T00:00:00').getTime() - 30*86400000).toISOString().slice(0,10);
         var [companyRows, hiredRows] = await Promise.all([
-            _siInChunks(plates, 200, function(c){
-                return window._sb.from('logi_trucks').select('plate').in('plate', c);
-            }),
-            _siInChunks(plates, 200, function(c){
+            // ตารางรถบริษัทมีไม่กี่สิบคัน ดึงมาทั้งตารางเลย
+            window._sb.from('logi_trucks').select('plate').range(0, 999)
+                .then(function(r){ return r.data || []; }),
+            _siInChunks(plates, 100, function(c){
                 return window._sb.from('logistic_plans').select('truck_plate,driver_transport,plan_date')
                     .eq('truck_type', 'hire').in('truck_plate', c)
                     .gte('plan_date', _planFrom).lte('plan_date', toV);

@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
     ;(orders || []).forEach((o: any) => (orderMap[o.id] = o))
 
     // 2. Session ของออเดอร์เหล่านั้น — เอามาทั้งคัน รวมส่วนที่โหลดวันก่อน
-    const sessions = await inChunks<Session>(orderIds, 200, (c) =>
+    const sessions = await inChunks<Session>(orderIds, 100, (c) =>
       supabase
         .from('loading_sessions')
         .select('id,order_id,plan_date,load_date,sku,product_name,qty,weight,team,end_time,updated_at,created_at')
@@ -281,15 +281,15 @@ Deno.serve(async (req) => {
 
     // 3. Products
     const skus = Array.from(new Set(sessions.map((s) => s.sku).filter(Boolean))) as string[]
-    const products = await inChunks<any>(skus, 200, (c) =>
+    const products = await inChunks<any>(skus, 100, (c) =>
       supabase.from('products').select('sku,min_w,max_w').in('sku', c))
     const prodMap: Record<string, Product> = {}
     ;(products || []).forEach((p: any) => (prodMap[p.sku] = p))
 
     // 4. Sale
-    const custNames = Array.from(new Set((orders || []).map((o: any) => o.customer_name).filter(Boolean))) as string[]
-    const shops = await inChunks<any>(custNames, 50, (c) =>
-      supabase.from('logi_shops').select('name,sale').in('name', c))
+    // ดึงตารางลูกค้ามาทั้งตารางแล้วจับคู่ในเครื่อง — ห้ามส่งชื่อไปใน URL
+    // ชื่อไทยยาวมากเมื่อ encode แบ่งก้อนเล็กแค่ไหน URL ก็ยังเสี่ยงยาวเกิน
+    const { data: shops } = await supabase.from('logi_shops').select('name,sale').range(0, 9999)
     const saleMap: Record<string, string> = {}
     ;(shops || []).forEach((s: any) => (saleMap[s.name] = s.sale))
 
@@ -297,8 +297,9 @@ Deno.serve(async (req) => {
     const plates = Array.from(new Set((orders || []).map((o: any) => o.truck_plate).filter(Boolean))) as string[]
     const planFrom = new Date(new Date(fromV + 'T00:00:00').getTime() - 30 * 86400000).toISOString().slice(0, 10)
     const [companyRows, hiredRows] = await Promise.all([
-      inChunks<any>(plates, 200, (c) => supabase.from('logi_trucks').select('plate').in('plate', c)),
-      inChunks<any>(plates, 200, (c) =>
+      // ตารางรถบริษัทมีไม่กี่สิบคัน ดึงมาทั้งตารางเลย
+      supabase.from('logi_trucks').select('plate').range(0, 999).then((r: any) => r.data || []),
+      inChunks<any>(plates, 100, (c) =>
         supabase
           .from('logistic_plans')
           .select('truck_plate,driver_transport,plan_date')
