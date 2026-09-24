@@ -22467,6 +22467,32 @@ window.logiCopyPlanId = function logiCopyPlanId(id){
 // ยกเลิกแผน (จากปุ่ม X บนการ์ดงานค้าง)
 // ไม่ลบแถวทิ้ง — เขียน cancelled_at ไว้ การ์ดที่วันเดิมยังอยู่แต่ขึ้นว่า "ถูกลบทิ้ง"
 // ถ้าลบแถวจริงจะไม่เหลือร่องรอยว่าเคยวางแผนไว้แล้วเกิดอะไรขึ้น
+// ══════════════════════════════════════════════════════════════════════
+//  งานค้างที่ต้องยกมาแสดง "วันนี้" — กฎกลางของทั้งระบบ
+//
+//  แผนที่ยังไม่จบงานไม่ได้เปลี่ยนวันที่ของตัวเอง ทุกหน้าที่กรองด้วย plan_date
+//  ตรงๆ จึงมองไม่เห็นงานค้าง ต้องเรียกตัวนี้มาต่อท้ายเสมอ
+//  เงื่อนไขเดียวกับ Delivery Block Plan: ยังไม่สำเร็จ · ยังไม่ปิดงาน ·
+//  ยังไม่ถูกยกเลิก · วันที่แผนก่อนวันนี้ (ยกมาเฉพาะตอนดู "วันนี้")
+// ══════════════════════════════════════════════════════════════════════
+window._logiCarryPlans = async function _logiCarryPlans(dateVal, selectCols, opts) {
+    opts = opts || {};
+    try {
+        if (dateVal !== window._bkkToday()) return [];   // ดูย้อนหลัง/ล่วงหน้า ไม่ยกงานค้าง
+        var q = window._sb.from('logistic_plans')
+            .select(selectCols || '*')
+            .neq('status', 'success')
+            .is('carried_resolved_at', null)
+            .is('cancelled_at', null)
+            .lt('plan_date', dateVal);
+        if (opts.noChild)  q = q.eq('is_child', false);
+        if (opts.noMaint)  q = q.neq('job_type', 'maintenance_pm');
+        if (opts.or)       q = q.or(opts.or);
+        var r = await q.order('plan_date');
+        return (r && r.data) || [];
+    } catch (e) { return []; }
+};
+
 window.logiCancelPlan = async function logiCancelPlan(planId) {
     if (!planId) return;
     if (!confirm('ยกเลิกแผนนี้?\n\n• งานค้างจะหายจากวันนี้\n• การ์ดที่วันเดิมยังอยู่ แต่จะขึ้นว่า "ถูกลบทิ้ง"\n• ข้อมูลและประวัติไม่ถูกลบ')) return;
@@ -27244,11 +27270,16 @@ window.ldLoadPlans = async function() {
     if (!sel) return;
     sel.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
     try {
+        var _lpCols='plan_id,plan_date,truck_plate,child_plate,driver_transport,shops,total_weight,is_child,job_type,status';
         var {data} = await window._sb.from('logistic_plans')
-            .select('plan_id,plan_date,truck_plate,child_plate,driver_transport,shops,total_weight,is_child,job_type,status')
+            .select(_lpCols)
             .gte('plan_date',dateVal).in('status',['planned','inprogress']).order('plan_date').order('plan_id');
+        // งานค้างจากวันก่อนยังต้องโหลดของอยู่ ถ้าไม่ดึงมาจะเลือกแผนไม่เจอ
+        var _lpCarry = await window._logiCarryPlans(dateVal,_lpCols,{noChild:true,noMaint:true});
+        var _lpSeen={}; (data||[]).forEach(function(r){_lpSeen[r.plan_id]=1;});
+        var _all = _lpCarry.filter(function(r){return !_lpSeen[r.plan_id];}).concat(data||[]);
         // กรองออก: แผนรถลูก + แผน maintenance_pm (ไม่มีสินค้าโหลด)
-        var plans = (data||[]).filter(function(r){ return !r.is_child && r.job_type !== 'maintenance_pm'; });
+        var plans = _all.filter(function(r){ return !r.is_child && r.job_type !== 'maintenance_pm'; });
         sel.innerHTML = '<option value="">-- เลือกแผน หรือ กรอกเอง --</option>';
         plans.forEach(function(p){
             // แสดงเฉพาะ delivery shop (ไม่ใช่ SC / transfer / pickup waypoint)
@@ -30131,13 +30162,17 @@ window.loModalLoadPlans = async function() {
     sel.innerHTML = '<option value="">-- เลือกแผน หรือ กรอกเอง --</option>';
     try {
         var today = window._bkkToday();
+        var _loCols='plan_id,plan_date,truck_plate,child_plate,shops,total_weight,is_mother,pair_id';
         var {data} = await window._sb.from('logistic_plans')
-            .select('plan_id,plan_date,truck_plate,child_plate,shops,total_weight,is_mother,pair_id')
+            .select(_loCols)
             .gte('plan_date', today)
             .eq('is_child', false)
             .in('status', ['planned','inprogress'])
             .order('plan_date').order('plan_id');
-        _loPlansCache = data || [];
+        // งานค้างจากวันก่อนยังต้องสร้างใบโหลดได้
+        var _loCarry = await window._logiCarryPlans(today,_loCols,{noChild:true,noMaint:true});
+        var _loSeen={}; (data||[]).forEach(function(r){_loSeen[r.plan_id]=1;});
+        _loPlansCache = _loCarry.filter(function(r){return !_loSeen[r.plan_id];}).concat(data||[]);
         _loPlansCache.forEach(function(p){
             var dateDisp = (p.plan_date||'').slice(5).replace('-','/');
             // ร้านที่มีสินค้าจริง
@@ -38436,9 +38471,14 @@ if (false)(function(){
 
     try {
     // โหลด plans ของวันนั้น
+    var _dtCols='plan_id,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child,plan_date';
     var {data: plans, error: pe} = await window._sb.from('logistic_plans')
-      .select('plan_id,status,truck_plate,child_plate,driver_id,driver_transport,shops,is_mother,is_child')
+      .select(_dtCols)
       .eq('plan_date', dateVal).order('plan_id');
+    // งานค้างจากวันก่อนยังต้องจัดรถ/ตามงานวันนี้
+    var _dtCarry = await window._logiCarryPlans(dateVal,_dtCols,{noMaint:true});
+    var _dtSeen={}; (plans||[]).forEach(function(p){_dtSeen[p.plan_id]=1;});
+    plans = _dtCarry.filter(function(p){return !_dtSeen[p.plan_id];}).concat(plans||[]);
     if (pe || !plans || !plans.length) {
       if (listEl) listEl.innerHTML = '<div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-400"><i class="fas fa-inbox text-4xl mb-3 block opacity-30"></i><p class="font-bold">ไม่พบแผนสำหรับวันที่นี้</p></div>';
       return;
@@ -42861,10 +42901,15 @@ window.dmRefreshAll=async function(silent){
     return;
   }
   // Load all plans for today — exclude child trailer plans
+  var _dmCols='plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,driver_id,job_type,is_child,is_mother,trip_no';
   var {data:allPlans}=await window._sb.from('logistic_plans')
-    .select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,driver_id,job_type,is_child,is_mother,trip_no')
+    .select(_dmCols)
     .eq('plan_date',today).eq('is_child',false);
   allPlans=allPlans||[];
+  // งานค้างจากวันก่อนก็ต้องเห็นในมอนิเตอร์ ไม่งั้นออฟฟิศตามงานที่คนขับทำอยู่จริงไม่ได้
+  var _dmCarry=await window._logiCarryPlans(today,_dmCols,{noChild:true});
+  var _dmSeen={}; allPlans.forEach(function(p){_dmSeen[p.plan_id]=1;});
+  allPlans=_dmCarry.filter(function(p){return !_dmSeen[p.plan_id];}).concat(allPlans);
   var allPlanIds=allPlans.map(function(p){return p.plan_id;});
   var tripLogsMap={}, svMap={};
   if(allPlanIds.length){
@@ -42968,9 +43013,13 @@ window.dmOpenAllDriverTrip=async function(username,silent){
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
   var dateVal=_dmDate||window._bkkToday();
-  var q=window._sb.from('logistic_plans').select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother,trip_no').eq('plan_date',dateVal).eq('is_child',false);
+  var _aCols='plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother,trip_no';
+  var q=window._sb.from('logistic_plans').select(_aCols).eq('plan_date',dateVal).eq('is_child',false);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
+  var _carry2=await window._logiCarryPlans(dateVal,_aCols,{noChild:true,or:orParts.length?orParts.join(','):null});
+  var _seen2={}; (plans||[]).forEach(function(p){_seen2[p.plan_id]=1;});
+  plans=_carry2.filter(function(p){return !_seen2[p.plan_id];}).concat(plans||[]);
   _dmPlans=(plans||[]).sort(function(a,b){ return (parseInt(a.trip_no)||9999)-(parseInt(b.trip_no)||9999); });
   _dmTripLogs={};_dmSvMap={};
   if(_dmPlans.length){
@@ -43105,6 +43154,9 @@ window.dmLoadInspections=async function(){
 
   var {data:plans}=await window._sb.from('logistic_plans')
     .select('driver_id,driver_transport,truck_plate').eq('plan_date',dateVal).eq('is_child',false);
+  // รถที่ติดงานค้างก็ต้องตรวจวันนี้เหมือนกัน ไม่งั้นหายไปจากรายการตรวจ
+  var _iCarry=await window._logiCarryPlans(dateVal,'driver_id,driver_transport,truck_plate',{noChild:true});
+  plans=(_iCarry||[]).concat(plans||[]);
   var {data:inspects}=await window._sb.from('truck_inspections').select('*').eq('inspect_date',dateVal);
   var inspectByPlate={};
   (inspects||[]).forEach(function(r){inspectByPlate[r.truck_plate]=r;});
@@ -43323,11 +43375,15 @@ window.dmSelectDriver=async function(){
   var orParts=[];
   if(driver.driver_id) orParts.push('driver_id.eq.'+driver.driver_id);
   if(driver.driver_name) orParts.push('driver_transport.eq.'+driver.driver_name);
+  var _selCols='plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother,trip_no';
   var q=window._sb.from('logistic_plans')
-    .select('plan_id,plan_date,status,truck_plate,child_plate,shops,driver_transport,job_type,is_child,is_mother')
+    .select(_selCols)
     .eq('plan_date',today).eq('is_child',false);
   if(orParts.length) q=q.or(orParts.join(','));
   var {data:plans}=await q;
+  var _carry1=await window._logiCarryPlans(today,_selCols,{noChild:true,or:orParts.length?orParts.join(','):null});
+  var _seen1={}; (plans||[]).forEach(function(p){_seen1[p.plan_id]=1;});
+  plans=_carry1.filter(function(p){return !_seen1[p.plan_id];}).concat(plans||[]);
   _dmPlans=(plans||[]).sort(function(a,b){ return (parseInt(a.trip_no)||9999)-(parseInt(b.trip_no)||9999); });
   _dmTripLogs={};_dmSvMap={};
 
@@ -43927,12 +43983,28 @@ window.daLoad=async function(){
   if(driverSel) planQ=planQ.or('driver_id.eq.'+driverSel+',driver_transport.ilike.%'+(_daDrivers.find(function(d){return d.username===driverSel;})||{}).driver_name+'%');
   var [{data:plans},{data:logs},{data:inspects},{data:incidents},{data:maintPlans},{data:shopVisits}]=await Promise.all([
     planQ,
-    window._sb.from('trip_logs').select('*').gte('started_at',dateFrom+'T00:00:00').lte('started_at',dateTo+'T23:59:59'),
+    // ต้องระบุ +07:00 — ถ้าส่งเวลาเปล่าๆ Postgres อ่านเป็น UTC
+    // งานช่วง 00:00–07:00 ตามเวลาไทยจะถูกนับเป็นของเมื่อวาน
+    window._sb.from('trip_logs').select('*').gte('started_at',dateFrom+'T00:00:00+07:00').lte('started_at',dateTo+'T23:59:59+07:00'),
     window._sb.from('truck_inspections').select('*').gte('inspect_date',dateFrom).lte('inspect_date',dateTo),
     window._sb.from('driver_incidents').select('*').gte('incident_date',dateFrom).lte('incident_date',dateTo).then(function(r){return r;},function(){return{data:[]};}),
     window._sb.from('logistic_plans').select('plan_id,driver_id,driver_transport,status').eq('job_type','maintenance_pm').gte('plan_date',dateFrom).lte('plan_date',dateTo).eq('is_child',false),
-    window._sb.from('shop_visits').select('plan_id,shop_seq,lat_arrival,lng_arrival,lat_depart,lng_depart').gte('arrived_at',dateFrom+'T00:00:00').lte('arrived_at',dateTo+'T23:59:59')
+    window._sb.from('shop_visits').select('plan_id,shop_seq,lat_arrival,lng_arrival,lat_depart,lng_depart').gte('arrived_at',dateFrom+'T00:00:00+07:00').lte('arrived_at',dateTo+'T23:59:59+07:00')
   ]);
+
+  // งานค้าง: แผนวางไว้ก่อนช่วงที่เลือก แต่ถูกทำจริงในช่วงนี้
+  // trip_logs จับได้แต่ตัวแผนไม่ถูกดึงมา สถิติเลยขาดไปทั้งเที่ยว
+  try{
+    var _daHave={}; (plans||[]).forEach(function(p){_daHave[p.plan_id]=1;});
+    var _daMiss=Array.from(new Set((logs||[]).map(function(l){return l.plan_id;})
+                  .filter(function(id){return id && !_daHave[id];})));
+    for(var _i=0;_i<_daMiss.length;_i+=100){
+      var _r=await window._sb.from('logistic_plans')
+        .select('plan_id,driver_id,driver_transport,truck_plate,plan_date,status,job_type')
+        .in('plan_id',_daMiss.slice(_i,_i+100)).eq('is_child',false);
+      if(_r&&_r.data&&_r.data.length) plans=(plans||[]).concat(_r.data);
+    }
+  }catch(e){}
 
   // ── shop_visits grouped by plan_id (sorted by seq) ──────
   var shopVisitMap={};
@@ -46137,8 +46209,8 @@ window.drvHistLoad=async function(){
   drvShowL();
   var {data:logs,error}=await window._sb.from('trip_logs').select('*')
     .eq('driver_username',_dSess.username)
-    .gte('started_at',from+'T00:00:00.000Z')
-    .lte('started_at',to+'T23:59:59.999Z')
+    .gte('started_at',from+'T00:00:00+07:00')
+    .lte('started_at',to+'T23:59:59+07:00')
     .order('started_at',{ascending:false});
   drvHideL();
   var list=document.getElementById('drv-hist-list');
