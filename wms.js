@@ -2242,37 +2242,67 @@ function updateLogisticStatus(planId, newStatus) {
 // Legs: Origin→S1, S1→S2, S2→S3, ...
 // Return: { success, legs: [{ shopId, shopName, distanceKm }] }
 // ─────────────────────────────────────────────────────────────────────────────
-function calcRouteDistance(shopIds, optimize) {
+function calcRouteDistance(shops, optimize) {
   try {
-    if (!shopIds || shopIds.length === 0) {
-      return { success: false, message: 'ไม่มี shopIds ที่ส่งมา' };
+    if (!shops || shops.length === 0) {
+      return { success: false, message: 'ไม่มีข้อมูลร้านที่ส่งมา' };
     }
     var doOptimize = (optimize !== false);  // default = true
 
     var ORIGIN = 'ที.แสตนดาร์ด สตีล ซ.บางปลา 8 บางพลี สมุทรปราการ';
 
-    // โหลดข้อมูลร้านค้าจาก Customers sheet (A=id, B=ชื่อ, C=ที่อยู่)
-    var ss        = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var custSheet = ss.getSheetByName(LOGI_SH_CUSTOMER);
-    if (!custSheet) return { success: false, message: 'ไม่พบชีต Customers' };
-
-    var shopMap = {};
-    var cd = custSheet.getDataRange().getValues();
-    for (var i = 1; i < cd.length; i++) {
-      var sid  = String(cd[i][0] || '').trim();
-      var snam = String(cd[i][1] || '').trim();
-      var sadd = String(cd[i][2] || '').trim();
-      if (sid) shopMap[sid] = { name: snam, address: sadd };
+    // ── รับที่อยู่มาจากฝั่งเว็บโดยตรง ────────────────────────────────────
+    // ข้อมูลลูกค้าย้ายไปอยู่ Supabase แล้ว ที่นี่จึงอ่านจากชีตเดิมไม่ได้
+    // (เคยพังเงียบด้วย ReferenceError: LOGI_SH_CUSTOMER is not defined
+    //  ระยะทางขากลับเลยเป็น 0 ทุกแผนตั้งแต่ 18/09/2569)
+    // รูปแบบที่รับ: [{shopId, name, address}, ...]
+    // ยังรองรับแบบเดิม [shopId, ...] ไว้เผื่อมีที่อื่นเรียกอยู่ โดยอ่านจากชีตถ้ามี
+    var addresses = [];
+    var legacyIds = [];
+    for (var j = 0; j < shops.length; j++) {
+      var it = shops[j];
+      if (it && typeof it === 'object' && it.address) {
+        addresses.push({
+          shopId:  String(it.shopId || ''),
+          name:    String(it.name || it.shopName || ''),
+          address: String(it.address).trim()
+        });
+      } else {
+        legacyIds.push(String(it && it.shopId ? it.shopId : it).trim());
+        addresses.push(null);   // เติมทีหลังจากชีต
+      }
     }
 
-    // สร้างลิสต์ที่อยู่ตาม shopIds
-    var addresses = [];
-    for (var j = 0; j < shopIds.length; j++) {
-      var info = shopMap[String(shopIds[j]).trim()];
-      if (!info || !info.address) {
-        return { success: false, message: 'ไม่พบที่อยู่ของร้าน: ' + shopIds[j] };
+    if (legacyIds.length) {
+      var shopMap = {};
+      try {
+        var ss        = SpreadsheetApp.openById(SPREADSHEET_ID);
+        var custSheet = ss.getSheetByName(typeof LOGI_SH_CUSTOMER !== 'undefined' ? LOGI_SH_CUSTOMER : 'Customers');
+        if (custSheet) {
+          var cd = custSheet.getDataRange().getValues();
+          for (var i = 1; i < cd.length; i++) {
+            var sid = String(cd[i][0] || '').trim();
+            if (sid) shopMap[sid] = { name: String(cd[i][1] || '').trim(), address: String(cd[i][2] || '').trim() };
+          }
+        }
+      } catch (sheetErr) { /* ไม่มีชีตแล้วก็ไม่เป็นไร ให้ไปแจ้งด้านล่างว่าร้านไหนขาดที่อยู่ */ }
+
+      var li = 0;
+      for (var m = 0; m < addresses.length; m++) {
+        if (addresses[m]) continue;
+        var wantId = legacyIds[li++];
+        var info   = shopMap[wantId];
+        if (!info || !info.address) {
+          return { success: false, message: 'ไม่พบที่อยู่ของร้าน: ' + wantId + ' — กรุณาส่งที่อยู่มาพร้อมคำขอ' };
+        }
+        addresses[m] = { shopId: wantId, name: info.name, address: info.address };
       }
-      addresses.push({ shopId: shopIds[j], name: info.name, address: info.address });
+    }
+
+    for (var n = 0; n < addresses.length; n++) {
+      if (!addresses[n] || !addresses[n].address) {
+        return { success: false, message: 'ร้านลำดับที่ ' + (n + 1) + ' ไม่มีที่อยู่' };
+      }
     }
 
     // สร้าง DirectionFinder: Origin → Shop1 → ... → ShopN → Origin (วนกลับบริษัท)

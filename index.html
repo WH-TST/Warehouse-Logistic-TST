@@ -17016,7 +17016,16 @@ async function _doCalcRouteDistance(noOptimize, forceOptimize) {
     const shopEntries = cardEls.map(card => {
         const idx = parseInt(card.id.replace('logi-shop-card-', ''), 10);
         const sel = document.getElementById(`logi-shop-sel-${idx}`);
-        return { idx, shopId: sel ? sel.value : '', card };
+        const opt = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+        return {
+            idx,
+            shopId: sel ? sel.value : '',
+            // ที่อยู่ต้องส่งไปด้วย — ข้อมูลลูกค้าอยู่ Supabase แล้ว ฝั่ง Apps Script
+            // เปิดชีตเดิมไม่ได้ ที่ผ่านมามันจึง error เงียบและระยะขากลับเป็น 0
+            shopName: opt ? (opt.dataset.name || '') : '',
+            address:  opt ? (opt.dataset.address || '') : '',
+            card
+        };
     });
 
     // ต้องเลือกครบทุกร้านก่อน
@@ -17033,16 +17042,24 @@ async function _doCalcRouteDistance(noOptimize, forceOptimize) {
     });
 
     try {
-        const shopIds = shopEntries.map(e => e.shopId);
+        const _missingAddr = shopEntries.filter(e => !e.address).map(e => e.shopName || e.shopId);
+        if (_missingAddr.length) {
+            showToast('คำนวณระยะทางไม่ได้ — ไม่มีที่อยู่ของ: ' + _missingAddr.join(', ') + ' (แก้ที่หน้าลูกค้า)', true);
+            return;
+        }
+        const _payload = shopEntries.map(e => ({ shopId: e.shopId, name: e.shopName, address: e.address }));
         const res = await new Promise((resolve, reject) => {
             google.script.run
                 .withSuccessHandler(resolve)
                 .withFailureHandler(err => reject(new Error(err.message || String(err))))
-                .calcRouteDistance(shopIds, optimize);
+                .calcRouteDistance(_payload, optimize);
         });
 
         if (!res || !res.success) {
+            // ห้ามเงียบ — ที่ผ่านมามันพังมาตั้งแต่ 18/09 โดยไม่มีใครรู้
+            // คนวางแผนนึกว่าระบบคำนวณให้แล้ว ระยะขากลับเลยเป็น 0 ทุกแผน
             console.warn('calcRouteDistance failed:', res?.message);
+            showToast('คำนวณระยะทางไม่สำเร็จ: ' + ((res && res.message) || 'ไม่ทราบสาเหตุ') + ' — กรอกระยะทางเองได้', true);
             return;
         }
 
@@ -17082,6 +17099,7 @@ async function _doCalcRouteDistance(noOptimize, forceOptimize) {
 
     } catch (err) {
         console.warn('Route calc error:', err.message);
+        showToast('คำนวณระยะทางไม่สำเร็จ: ' + (err.message || err) + ' — กรอกระยะทางเองได้', true);
     } finally {
         // คืนสถานะ input
         document.querySelectorAll('[id^="logi-shop-dist-"]').forEach(el => {
