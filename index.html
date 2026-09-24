@@ -25664,6 +25664,8 @@ async function _ldUpsertDraft(oid, unit) {
             var oi = orderItems[_dOiIdx]||{};
             var row = {
                 order_id: oid, plan_id: od.plan_id||'', plan_date: od.order_date||'',
+                // ลำดับรายการในออเดอร์ — ใช้จับคู่แทน sku เพราะ SKU ซ้ำกันได้ในใบเดียว
+                item_idx: _dOiIdx,
                 record_type: 'draft',
                 staff_id: staff.id, staff_name: staff.name, team: staff.team,
                 sku: oi.sku||'', product_name: oi.product_name||'',
@@ -25715,7 +25717,7 @@ async function _ldApplyRemoteDrafts(oid, unit) {
         var _u = unit || _ldTrailerUnit[oid] || 'mother';
         var _uk = oid + '|' + _u;
         var q = window._sb.from('loading_sessions')
-            .select('id,sku,lifts,truck_unit,staff_name')
+            .select('id,sku,lifts,truck_unit,staff_name,item_idx')
             .eq('order_id', oid).eq('record_type', 'draft');
         if (od.is_trailer && od.trailer_split) q = q.eq('truck_unit', _u);
         var { data: drafts } = await q;
@@ -25724,20 +25726,28 @@ async function _ldApplyRemoteDrafts(oid, unit) {
         var orderItems = od.items || [];
         var fOrig = window._ldFormOrigIdx && window._ldFormOrigIdx[_uk];
         var mapItems = fOrig
-            ? fOrig.map(function(oiIdx, formIdx){ return { sku: (orderItems[oiIdx]||{}).sku, formIdx: formIdx }; })
-            : orderItems.map(function(oi, i){ return { sku: oi.sku, formIdx: i }; });
+            ? fOrig.map(function(oiIdx, formIdx){ return { sku: (orderItems[oiIdx]||{}).sku, formIdx: formIdx, oiIdx: oiIdx }; })
+            : orderItems.map(function(oi, i){ return { sku: oi.sku, formIdx: i, oiIdx: i }; });
 
-        var bySku = {};
-        drafts.forEach(function(r){ if (r.sku) { if (!bySku[r.sku]) bySku[r.sku] = []; bySku[r.sku].push(r); } });
+        // จับคู่ด้วยลำดับรายการก่อน — SKU ซ้ำกันในใบเดียวได้ ถ้าจับด้วย sku
+        // ค่าของแถวหนึ่งจะไปโผล่อีกแถว
+        var byIdx = {}, bySku = {};
+        drafts.forEach(function(r){
+            if (r.item_idx != null) byIdx[r.item_idx] = r;
+            else if (r.sku) { if (!bySku[r.sku]) bySku[r.sku] = []; bySku[r.sku].push(r); }
+        });
         var pos = {};
         var changed = false;
         var active = document.activeElement;
 
         mapItems.forEach(function(mi){
             if (!mi.sku) return;
-            if (pos[mi.sku] === undefined) pos[mi.sku] = 0;
-            var row = (bySku[mi.sku] || [])[pos[mi.sku]];
-            pos[mi.sku]++;
+            var row = byIdx[mi.oiIdx];
+            if (!row) {
+                if (pos[mi.sku] === undefined) pos[mi.sku] = 0;
+                row = (bySku[mi.sku] || [])[pos[mi.sku]];
+                pos[mi.sku]++;
+            }
             if (!row) return;
             (row.lifts || []).forEach(function(cell){
                 var c = (cell.lift_no || 1) - 1;
@@ -25937,7 +25947,7 @@ async function _ldRestoreDraftIds(oid, unit) {
         }
 
         // Fetch draft rows for this order+unit (trailer split: mother and trailer are separate)
-        var _restoreQ = window._sb.from('loading_sessions').select('id,sku,lifts,start_time,truck_unit').eq('order_id', oid).eq('record_type', 'draft');
+        var _restoreQ = window._sb.from('loading_sessions').select('id,sku,lifts,start_time,truck_unit,item_idx').eq('order_id', oid).eq('record_type', 'draft');
         if (od.is_trailer && od.trailer_split) _restoreQ = _restoreQ.eq('truck_unit', _restoreUnit);
         var {data:drafts} = await _restoreQ;
         if (!drafts || !drafts.length) return;
@@ -25960,9 +25970,11 @@ async function _ldRestoreDraftIds(oid, unit) {
 
         // Delete orphan duplicates — keep only the latest row per sku+truck_unit
         // (trailer split: แม่ and ลูก may both have draft rows for same sku)
+        // กุญแจกันซ้ำ: ใช้ลำดับรายการก่อน (แถวคนละลำดับไม่ใช่แถวซ้ำ แม้ SKU เดียวกัน)
+        // แถวเก่าที่ยังไม่มี item_idx ค่อย fallback ไปใช้ sku
         var skuUnitMap = {};
         drafts.forEach(function(r){
-            var k = r.sku+'|'+(r.truck_unit||'mother');
+            var k = (r.item_idx != null ? ('#'+r.item_idx) : ('sku:'+r.sku)) + '|' + (r.truck_unit||'mother');
             if(!skuUnitMap[k]) skuUnitMap[k]=[];
             skuUnitMap[k].push(r.id);
         });
@@ -25987,9 +25999,14 @@ async function _ldRestoreDraftIds(oid, unit) {
             await window._sb.from('loading_sessions').delete().in('id', deleteIds);
         }
 
-        // Map positionally: group drafts per sku, match to order items in order
-        var skuDrafts = {};
-        keepIds.forEach(function(kId){ var d=drafts.find(function(r){return r.id===kId;}); if(d){ if(!skuDrafts[d.sku]) skuDrafts[d.sku]=[]; skuDrafts[d.sku].push(d); } });
+        // จับคู่แถวใน DB กับรายการในออเดอร์
+        // ใช้ item_idx ตรงๆ ถ้ามี — SKU ซ้ำกันในใบเดียวได้ จับด้วย sku จะสลับแถวกัน
+        var keep = keepIds.map(function(kId){ return drafts.find(function(r){return r.id===kId;}); }).filter(Boolean);
+        var byIdx = {}, skuDrafts = {};
+        keep.forEach(function(d){
+            if (d.item_idx != null) byIdx[d.item_idx] = d;
+            else { if(!skuDrafts[d.sku]) skuDrafts[d.sku]=[]; skuDrafts[d.sku].push(d); }
+        });
         if (!_ldDraftRowIds[_restoreUk]) _ldDraftRowIds[_restoreUk] = {};
         if (!_ldDraftDBCache[_restoreUk]) _ldDraftDBCache[_restoreUk] = {};
         // Use _ldFormOrigIdx if available (trailer split filters some items out)
@@ -26001,14 +26018,17 @@ async function _ldRestoreDraftIds(oid, unit) {
         _restoreMapItems.forEach(function(entry){
             var oi=entry.oi, oiIdx=entry.oiIdx;
             if(!oi.sku) return;
-            if(!skuPos[oi.sku]) skuPos[oi.sku]=0;
-            var arr = skuDrafts[oi.sku]||[];
-            if(arr[skuPos[oi.sku]]) {
-                _ldDraftRowIds[_restoreUk][oiIdx] = arr[skuPos[oi.sku]].id;
-                if(arr[skuPos[oi.sku]].lifts && arr[skuPos[oi.sku]].lifts.length)
-                    _ldDraftDBCache[_restoreUk][oiIdx] = arr[skuPos[oi.sku]].lifts;
+            var d = byIdx[oiIdx];
+            if (!d) {   // แถวเก่าที่ไม่มี item_idx — จับคู่ตามลำดับของ SKU เหมือนเดิม
+                if(!skuPos[oi.sku]) skuPos[oi.sku]=0;
+                var arr = skuDrafts[oi.sku]||[];
+                d = arr[skuPos[oi.sku]];
+                skuPos[oi.sku]++;
             }
-            skuPos[oi.sku]++;
+            if (d) {
+                _ldDraftRowIds[_restoreUk][oiIdx] = d.id;
+                if (d.lifts && d.lifts.length) _ldDraftDBCache[_restoreUk][oiIdx] = d.lifts;
+            }
         });
     } catch(e){}
 }
@@ -26279,14 +26299,16 @@ window.ldCardSave = async function(oid, unit) {
     {
         var skuIdMap = {}, skuOldPhotos = {}; // declared here so always in scope for photo merge below
         var {data:existSess} = await window._sb.from('loading_sessions')
-            .select('id,sku,photo_urls,truck_unit,updated_at').eq('order_id', oid).neq('record_type','draft')
+            .select('id,sku,photo_urls,truck_unit,updated_at,item_idx').eq('order_id', oid).neq('record_type','draft')
             .order('updated_at', {ascending:true});
         if (existSess && existSess.length) {
             // Key by sku|unit|position so duplicate SKU rows each get their own session ID
-            var _eSkuPos = {};
+            var _eSkuPos = {}, idxIdMap = {};
             existSess.forEach(function(r){
                 var unit_r = r.truck_unit||'mother';
                 if (unit_r !== curUnit) return;
+                // ลำดับรายการเป็นกุญแจหลัก sku ใช้เฉพาะแถวเก่าที่ยังไม่มี item_idx
+                if (r.item_idx != null) idxIdMap[r.item_idx] = r.id;
                 var sk = r.sku||'';
                 if (!_eSkuPos[sk]) _eSkuPos[sk] = 0;
                 var posKey = sk+'|'+curUnit+'|'+_eSkuPos[sk];
@@ -26305,7 +26327,8 @@ window.ldCardSave = async function(oid, unit) {
                 if (!_iSkuPos[sk]) _iSkuPos[sk] = 0;
                 var posKey = sk+'|'+curUnit+'|'+_iSkuPos[sk];
                 _iSkuPos[sk]++;
-                if (oi.sku && skuIdMap[posKey] && !draftIds[iIdx]) draftIds[iIdx] = skuIdMap[posKey];
+                if (!draftIds[iIdx] && idxIdMap[iIdx] != null) draftIds[iIdx] = idxIdMap[iIdx];
+                else if (oi.sku && skuIdMap[posKey] && !draftIds[iIdx]) draftIds[iIdx] = skuIdMap[posKey];
             };
             if (_fOrigIdx) {
                 _fOrigIdx.forEach(function(origIdx){ _assignDraft(orderItems[origIdx]||{}, origIdx); });
@@ -26329,6 +26352,7 @@ window.ldCardSave = async function(oid, unit) {
             var s = staffList[0];
             var finalRow = {
                 order_id: oid, plan_id: planId, plan_date: planDate,
+                item_idx: _oiIdx,
                 record_type: 'บันทึกการโหลด',
                 staff_id: s.id, staff_name: s.name, team: s.team,
                 sku: oi.sku||'', product_name: oi.product_name||'',
@@ -27811,7 +27835,7 @@ async function _ldMonFetch(dateVal, showSpinner) {
             // ระบุคอลัมน์แทน select('*') — คอลัมน์ lifts เป็น JSON ก้อนใหญ่ (~7% ของ payload)
             // ที่หน้ามอนิเตอร์ไม่ได้ใช้เลย ดึงมาเปล่าๆ ทุก 20 วินาที
             var {data:s2} = await window._sb.from('loading_sessions')
-                .select('id,order_id,plan_id,sku,product_name,qty,weight,team,staff_name,record_type,truck_unit,note,photo_urls,start_time,end_time,created_at,updated_at,load_date')
+                .select('id,order_id,plan_id,sku,product_name,qty,weight,team,staff_name,record_type,truck_unit,note,photo_urls,start_time,end_time,created_at,updated_at,load_date,item_idx')
                 .in('order_id', candIds);
             allSess = s2 || [];
         }
@@ -27918,12 +27942,21 @@ function _ldRenderMonitorTable(sessions, orders) {
 
     // index sessions by order_id+sku — array per sku to support duplicate SKU order items
     var sessMap = {}; // {order_id: {sku: [session, ...]}}
+    // และ index ด้วยลำดับรายการ ซึ่งแม่นกว่า — SKU ซ้ำกันในใบเดียวได้
+    // เดิมจับด้วย sku อย่างเดียว แถวที่ SKU เหมือนกันจึงสลับค่ากันหรือไม่ขึ้นเลย
+    var idxMap = {};  // {order_id: {item_idx: session}}
     sessions.forEach(function(s) {
         var k = s.order_id;
         if (!sessMap[k]) sessMap[k] = {};
         var sk = s.sku||('__'+s.id);
         if (!sessMap[k][sk]) sessMap[k][sk] = [];
         sessMap[k][sk].push(s);
+        if (s.item_idx != null) {
+            if (!idxMap[k]) idxMap[k] = {};
+            var ik = s.item_idx + '|' + (s.truck_unit||'mother');
+            if (!idxMap[k][ik]) idxMap[k][ik] = [];
+            idxMap[k][ik].push(s);
+        }
     });
 
     var html = orders.map(function(o) {
@@ -27965,8 +27998,13 @@ function _ldRenderMonitorTable(sessions, orders) {
             : '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-500 border border-slate-200">'+_ldEsc(o.status||'—')+'</span>';
 
         var _skuUsedIds = {}; // track matched session ids per sku to avoid reuse
+        var im = idxMap[o.id]||{};
         var itemRows = items.map(function(it, idx) {
-            var arr = (sm[it.sku]||[]).filter(function(s){ return !(_skuUsedIds[it.sku]||{})[s.id]; });
+            // ถ้ามีแถวที่ระบุลำดับรายการตรงกัน ใช้ตัวนั้นเลย ไม่ต้องเดาจาก sku
+            var _byIdx = (im[idx+'|mother']||[]).concat(im[idx+'|trailer']||[]);
+            var arr = _byIdx.length
+                ? _byIdx
+                : (sm[it.sku]||[]).filter(function(s){ return !(_skuUsedIds[it.sku]||{})[s.id]; });
             // pick best match: for rejected+reloading prefer draft; otherwise prefer done
             var _closestReduce = function(best,s,qty){ if(!best) return s; return Math.abs((parseFloat(s.qty)||0)-qty) <= Math.abs((parseFloat(best.qty)||0)-qty) ? s : best; };
             var draftRow = arr.filter(function(s){return s.record_type==='draft';}).reduce(function(best,s){ return _closestReduce(best,s,it.qty); }, null);
