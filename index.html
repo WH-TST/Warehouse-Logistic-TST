@@ -42648,7 +42648,7 @@ window.viewTripResult = async function(planId) {
         <i class="fas fa-arrow-left" style="font-size:18px;"></i>
       </button>
       <div style="min-width:0;flex:1;">
-        <div id="drv-trip-title" style="font-weight:900;color:#fff;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
+        <div id="drv-trip-title" style="font-family:ui-monospace,Menlo,monospace;font-weight:900;color:#fff;font-size:18px;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
         <div id="drv-trip-sub" style="font-size:13px;color:#64748b;font-weight:600;margin-top:2px;">–</div>
       </div>
     </div>
@@ -45381,14 +45381,24 @@ function drvRenderPlanCards(plans){
     }
     return '<div class="drv-fade-up drv-card" style="border:2px solid '+(p._isCarry?'#be185d':m.border)+';">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
-      +'<div><div style="font-weight:900;color:#fff;font-size:18px;">เที่ยวที่ '+(pi+1)+'</div>'
-      +'<div style="font-size:13px;color:#64748b;margin-top:2px;">'+drvEsc(p.plan_id)+'</div></div>'
+      +'<div style="min-width:0;">'
+      // Plan ID คือตัวระบุงาน ไม่ใช่ชื่อร้าน — คนเดียวกันมีหลายเที่ยวไปร้านเดียวกันได้
+      // ถ้าเอาชื่อร้านเป็นหลัก การ์ดจะหน้าตาเหมือนกันจนกดผิดใบ
+      +'<div style="font-family:ui-monospace,Menlo,monospace;font-weight:900;color:#fff;font-size:20px;letter-spacing:.01em;word-break:break-all;">'+drvEsc(p.plan_id)+'</div>'
+      +'<div style="font-size:12px;color:#94a3b8;margin-top:3px;font-weight:700;">เที่ยวที่ '+drvEsc(p.trip_no||(pi+1))+' · '+drvEsc(p.truck_plate||'–')+'</div></div>'
       +'<span style="font-size:12px;font-weight:900;color:'+m.color+';background:rgba(0,0,0,.3);padding:5px 12px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
       +'<i class="fas '+m.icon+'"></i>'+m.label+'</span></div>'
       +carryBadge
       +contextLine
       +'<div style="font-size:14px;color:#64748b;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-signs" style="margin-right:5px;opacity:.6;"></i>'+routeText+'</div>'
-      +'<div style="font-size:14px;color:#94a3b8;margin-bottom:12px;"><i class="fas fa-truck" style="margin-right:5px;"></i>'+drvEsc(p.truck_plate||'–')+'</div>'
+      +(function(){
+          // น้ำหนักรวมของเที่ยว — ใช้แยกใบที่ไปร้านเดียวกันได้อีกชั้น
+          var _wt=(p.shops||[]).reduce(function(a,sh){
+            return a+((sh.items||[]).reduce(function(b,it){ return b+(parseFloat(it.weight)||0); },0)); },0);
+          return '<div style="font-size:14px;color:#94a3b8;margin-bottom:12px;">'
+            +'<i class="fas fa-weight-hanging" style="margin-right:5px;"></i>'
+            +(_wt?Math.round(_wt).toLocaleString()+' กก.':'—')+'</div>';
+        })()
       +(_insBlock
         ?'<button disabled style="width:100%;background:#374151;border:none;border-radius:12px;padding:16px;color:#6b7280;font-weight:900;font-size:15px;cursor:not-allowed;"><i class="fas fa-lock" style="margin-right:8px;"></i>'+_insBlock+'</button>'
         :'<button onclick="drvOpenTrip(\''+drvEsc(p.plan_id)+'\')" style="width:100%;background:'+m.btnBg+';border:none;border-radius:12px;padding:16px;color:#fff;font-weight:900;font-size:17px;cursor:pointer;">'+m.btnLabel+'</button>')
