@@ -46497,6 +46497,34 @@ window.dwlLoad = async function dwlLoad(){
         // ให้ไปอยู่วันนี้ นอกนั้นใช้วันของแผน
         var _workDate = _bkkOf(v.arrived_at||v.departed_at||log.started_at||'');
         var _showDate = _workDate || (_pending ? _today : p.plan_date);
+
+        // ── งานค้างต้องขึ้น 2 แถว ────────────────────────────────────────
+        // แถวแรก: วันที่วางแผนไว้เดิม นับเป็น "ไม่สำเร็จ" ของวันนั้นและของคนเดิม
+        //          ไม่งั้น KPI ของวันนั้นหายไปเฉยๆ ทั้งที่งานไม่ได้ส่ง
+        // แถวสอง: วันที่ยกมาทำจริง เป็นงานค้างของคนที่ถือแผนอยู่ตอนนี้
+        // (เหมือนบล็อกที่การ์ดต้นขั้วยังอยู่วันเดิม แล้วมีการ์ดค้างโผล่วันนี้)
+        if(_showDate !== p.plan_date && p.plan_date >= fromV && p.plan_date <= toV){
+            rows.push({
+                date: p.plan_date, planDate: p.plan_date,
+                driver: (p.origin_driver||'').trim() || (p.driver_transport||'').trim() || '— ไม่ระบุคนขับ —',
+                plate: (p.origin_truck_plate||'').trim() || (p.truck_plate||'').trim() || '—',
+                planId: p.plan_id,
+                pairKey: String(p.plan_id||'').replace(/-[MC]$/,''),
+                plates: [ (p.origin_truck_plate||'').trim() || (p.truck_plate||'').trim() || '—' ],
+                trip: p.trip_no||'', seq: i+1,
+                shop: sh.shopName||sh.shopId||('ร้านที่ '+(i+1)),
+                remark: String(sh.remark||'').trim(),
+                shopId: String(sh.shopId||'').trim(),
+                out:'', arrive:'', depart:'', next:'', home:'', dur:'',
+                carryFrom:'', fromPlate:'', fromDriver:'',
+                byShop:'', byTrip:'', byPlan:'', closedNoField:false,
+                ok:false, missed:true,          // ไม่ได้ส่งในวันที่วางแผนไว้
+                movedTo:_showDate,
+                status:p.status||'planned',
+                tripStart:'', sortT:''
+            });
+        }
+
         if(_showDate < fromV || _showDate > toV) return;
         rows.push({
           date: _showDate,
@@ -46643,7 +46671,7 @@ function dwlRender(){
     }
     var nOverride=list.filter(_isOverride).length;
     var miss=0;
-    list.forEach(function(r){
+    list.filter(function(r){ return !r.missed; }).forEach(function(r){
       if(!r.arrive) miss++;
       if(!r.depart) miss++;
       if(r.seq===1 && !r.out) miss++;
@@ -46703,16 +46731,21 @@ function dwlRender(){
           +'</div>'
         : '';
       var pill;
-      if(!r.ok){
+      if(r.missed){
+        // แถวต้นขั้ว: วันนั้นไม่ได้ส่ง และงานถูกยกไปวันอื่น
+        pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fbe8e8;color:#c02626;">ไม่สำเร็จ · ไม่ได้ส่ง</span>'
+            +(r.movedTo?'<div style="font-size:11px;color:#a8246a;margin-top:3px;font-weight:700;white-space:nowrap;">'
+              +'<i class="fas fa-arrow-right" style="margin-right:4px;opacity:.7;"></i>ยกไป '+r.movedTo.slice(8,10)+'/'+r.movedTo.slice(5,7)+'</div>':'');
+      } else if(!r.ok){
         pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fbe8e8;color:#c02626;">ยังไม่ส่ง</span>';
       } else {
         pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#e3f3e9;color:#137a3e;">ส่งสำเร็จ</span>';
       }
       pill += carryChip;
 
-      var _carryRow = r.carryFrom
-        ? ' style="box-shadow:inset 4px 0 0 #e879b0;background:#fdf2f7;"'
-        : '';
+      var _carryRow = r.missed
+        ? ' style="box-shadow:inset 4px 0 0 #e06666;background:#fdf3f3;"'
+        : (r.carryFrom ? ' style="box-shadow:inset 4px 0 0 #e879b0;background:#fdf2f7;"' : '');
       return '<tr class="'+(newGroup?'dstart':'')+'"'+_carryRow+'>'
         +dateCell+tripCell
         +'<td style="font-weight:700;line-height:1.35;"><span class="mono" style="color:#8496a8;margin-right:5px;">'+r.seq+'.</span>'+_e(r.shop)
@@ -46771,7 +46804,7 @@ window.dwlExport = function dwlExport(){
   _dwlRows.forEach(function(r){
     var cells=[_thDate(r.date), r.driver, (r.plates||[r.plate]).join(' + '), r.trip, r.pairKey||r.planId, r.seq, r.shop, r.remark,
       _hm(r.out), _hm(r.arrive), _hm(r.depart), r.next, _hm(r.home), r.dur,
-      r.ok?'ส่งสำเร็จ':'ไม่สำเร็จ', r.carryFrom?_thDate(r.carryFrom):'',
+      r.missed?'ไม่สำเร็จ · ไม่ได้ส่ง':(r.ok?'ส่งสำเร็จ':'ยังไม่ส่ง'), r.carryFrom?_thDate(r.carryFrom):'',
       [r.fromPlate, r.fromDriver].filter(Boolean).join(' · '),
       (function(){
         var a=[r.byShop,(r.seq===1?r.byTrip:''),r.byPlan].filter(function(x){return x&&x.indexOf('ADMIN:')===0;});
