@@ -3136,10 +3136,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all bg-emerald-600 text-white shadow">
       <i class="fas fa-list-ul mr-2"></i>รายการแผน
     </button>
-    <button id="logi-tab-preshipment" onclick="switchLogiTab('preshipment')"
-      class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-orange-600">
-      <i class="fas fa-file-invoice mr-2"></i>Print PRE-SHIPMENT
-    </button>
+    <!-- แท็บ Print PRE-SHIPMENT ถูกเอาออกตามที่ผู้ใช้สั่ง
+         แผงข้างล่าง (logi-panel-preshipment) ยังอยู่ เพราะปุ่มพิมพ์รายแผน
+         ในตารางและในหน้ารายละเอียดใช้ DOM ของแผงนี้สร้างเอกสาร -->
     <button id="logi-tab-driverlog" onclick="switchLogiTab('driverlog')"
       class="flex-1 py-2.5 px-5 rounded-xl font-black text-sm transition-all text-gray-500 hover:bg-white hover:text-teal-700">
       <i class="fas fa-clipboard-list mr-2"></i>บันทึกการปฏิบัติงาน
@@ -11540,9 +11539,7 @@ window.refreshCurrentView = function refreshCurrentView() {
     } else if (_isActive('nav-logistic-plan')) {
         // ตรวจ sub-tab ที่ active โดยดูจาก panel ที่ไม่ hidden
         const _logiPanelVisible = id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); };
-        if (_logiPanelVisible('logi-panel-preshipment')) {
-            initPreShipmentTab();
-        } else if (_logiPanelVisible('logi-panel-driverlog')) {
+        if (_logiPanelVisible('logi-panel-driverlog')) {
             dlogInit();
         } else if (_logiPanelVisible('logi-panel-driverperf')) {
             perfInit();
@@ -22250,7 +22247,8 @@ var _psdAutoPrintAfterLoad = false;
 
 window.printPreShipmentFromPlan = function printPreShipmentFromPlan(planId) {
     _psdAutoPrintAfterLoad = true;  // auto-print mode
-    switchLogiTab('preshipment');
+    // ไม่สลับแท็บแล้ว — แท็บถูกเอาออก แผงยังซ่อนอยู่แต่ DOM ใช้งานได้ปกติ
+    if (typeof initPreShipmentTab === 'function') initPreShipmentTab();
 
     // โหลดข้อมูลแผนตาม planId โดยตรง — ไม่รอ dropdown
     // reset UI
