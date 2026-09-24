@@ -46429,7 +46429,7 @@ window.dwlLoad = async function dwlLoad(){
     // จะหายไปทั้งใบ ต้องดึงมากว้างกว่าแล้วค่อยตัดด้วย "วันที่ทำงานจริง"
     var _wideFrom = new Date(new Date(fromV+'T00:00:00').getTime() - 30*86400000).toISOString().slice(0,10);
     var pr = await window._sb.from('logistic_plans')
-      .select('plan_id,plan_date,status,truck_type,truck_plate,driver_transport,driver_id,trip_no,shops,job_type,origin_plan_date,cancelled_at,status_by,carried_resolved_at')
+      .select('plan_id,plan_date,status,truck_type,truck_plate,driver_transport,driver_id,trip_no,shops,job_type,origin_plan_date,cancelled_at,status_by,carried_resolved_at,origin_truck_plate,origin_driver')
       .gte('plan_date',_wideFrom).lte('plan_date',toV)
       .neq('job_type','maintenance_pm')
       .is('cancelled_at',null)
@@ -46513,6 +46513,9 @@ window.dwlLoad = async function dwlLoad(){
           home: isLast ? (log.completed_at||'') : '',
           dur: _dur(v.arrived_at, v.departed_at),
           carryFrom: p.origin_plan_date || (_showDate!==p.plan_date ? p.plan_date : ''),
+          // งานค้างที่ถูกโยกมาจากคนอื่น/รถคันอื่น — ต้องรู้ว่าเดิมเป็นของใคร
+          fromPlate:  (p.origin_truck_plate||'').trim(),
+          fromDriver: (p.origin_driver||'').trim(),
           // ใครเป็นคนกด — ถ้าออฟฟิศกดแทน เวลาในแถวนี้ไม่ใช่เวลาที่คนขับทำจริง
           byShop: v.acted_by||'',
           byTrip: log.acted_by || (log.driver_username==='admin-override'?'ADMIN:(ไม่ทราบผู้ใช้)':'') || '',
@@ -46684,7 +46687,14 @@ function dwlRender(){
       // ซึ่งเป็นตัวที่ต้องเห็นชัดที่สุด
       var carryChip = r.carryFrom
         ? '<div style="margin-top:3px;"><span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fce8f1;color:#a8246a;">'
-          +'ค้างจาก '+r.carryFrom.slice(8,10)+'/'+r.carryFrom.slice(5,7)+'</span></div>'
+          +'ค้างจาก '+r.carryFrom.slice(8,10)+'/'+r.carryFrom.slice(5,7)+'</span>'
+          // ถ้าเคยเป็นของคนอื่น/รถคันอื่น ต้องบอกด้วย ไม่งั้นดูไม่ออกว่างานนี้ถูกโยกมา
+          +((r.fromPlate||r.fromDriver)
+            ? '<div style="font-size:11px;color:#a8246a;margin-top:3px;font-weight:700;white-space:nowrap;">'
+              +'<i class="fas fa-exchange-alt" style="margin-right:4px;opacity:.7;"></i>เดิม '
+              +_e([r.fromPlate, r.fromDriver].filter(Boolean).join(' · '))+'</div>'
+            : '')
+          +'</div>'
         : '';
       var pill;
       if(!r.ok){
@@ -46750,12 +46760,13 @@ window.dwlRender = dwlRender;
 window.dwlExport = function dwlExport(){
   if(!_dwlRows.length){ showToast('ยังไม่มีข้อมูลให้ export', true); return; }
   var head=['วันที่','คนขับ','ทะเบียนรถ','เที่ยว','Plan ID','ลำดับ','ร้าน','จุดส่ง/หมายเหตุ',
-            'ออกจากบริษัท','ถึงร้าน','ออกจากร้าน','ไปต่อ','ถึงบริษัท','อยู่ที่ร้าน','ผล','ค้างจาก','ผู้กดสถานะ'];
+            'ออกจากบริษัท','ถึงร้าน','ออกจากร้าน','ไปต่อ','ถึงบริษัท','อยู่ที่ร้าน','ผล','ค้างจาก','เดิมเป็นของ','ผู้กดสถานะ'];
   var lines=[head.join(',')];
   _dwlRows.forEach(function(r){
     var cells=[_thDate(r.date), r.driver, (r.plates||[r.plate]).join(' + '), r.trip, r.pairKey||r.planId, r.seq, r.shop, r.remark,
       _hm(r.out), _hm(r.arrive), _hm(r.depart), r.next, _hm(r.home), r.dur,
       r.ok?'ส่งสำเร็จ':'ไม่สำเร็จ', r.carryFrom?_thDate(r.carryFrom):'',
+      [r.fromPlate, r.fromDriver].filter(Boolean).join(' · '),
       (function(){
         var a=[r.byShop,(r.seq===1?r.byTrip:''),r.byPlan].filter(function(x){return x&&x.indexOf('ADMIN:')===0;});
         if(a.length) return 'ออฟฟิศกดแทน: '+a[0].slice(6);
