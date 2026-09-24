@@ -44726,8 +44726,37 @@ window.drvLoadPlan=async function(){
   // เดิมการ์ดงานขึ้นมาก่อน แล้วค่อยเด้งฟอร์มตรวจทับ ปุ่ม "เริ่มงาน" ถูกล็อกไว้
   // แต่คนขับเห็นงานทั้งหมดแล้วและปิดฟอร์มเลื่อนดูได้ ทำให้ข้ามขั้นตอนตรวจได้
   // ตอนนี้ถ้ายังมีคันที่ยังไม่ตรวจวันนี้ จะไม่แสดงการ์ดงานเลย
+  // บล็อกเป็นรายคัน ไม่ใช่ทั้งหน้า — คนขับอาจมีหลายคันในวันเดียว
+  // ตรวจคันหนึ่งแล้วต้องทำงานของคันนั้นได้ ไม่ใช่ถูกซ่อนหมดเพราะอีกคันยังไม่ตรวจ
   var _blk = _drvFirstUnapprovedPlate();
-  if (_blk) {
+  var _okPlans = (_dPlans||[]).filter(function(p){
+    if (p.job_type==='maintenance_pm') return true;          // งานซ่อมไม่ต้องรอผลตรวจ
+    var pl=(p.truck_plate||'').trim();
+    if (!pl) return true;
+    var ins=(window._dInspectByPlate||{})[pl];
+    return !!ins && (ins.approval_status==='approved' || (!ins.approval_status && ins.overall==='ok'));
+  });
+  if (_blk && _okPlans.length) {
+    // มีงานที่ทำได้อยู่ → แสดงงานเหล่านั้น พร้อมแถบเตือนคันที่ยังติดอยู่ข้างบน
+    drvRenderPlanCards(_okPlans);
+    var _w2 = document.getElementById('drv-plan-cards');
+    if (_w2) {
+      var _msg = _blk.status==='none'   ? 'ยังไม่ได้ตรวจสภาพรถ '+drvEsc(_blk.plate)
+               : _blk.status==='rejected'? 'หัวหน้าระงับการออกรถ '+drvEsc(_blk.plate)
+               : 'รอหัวหน้าอนุมัติผลตรวจ '+drvEsc(_blk.plate);
+      var _btn2 = _blk.status==='none'
+        ? '<button onclick="drvManualInspect()" style="margin-top:8px;background:#f59e0b;border:none;border-radius:10px;padding:10px 18px;color:#0f172a;font-weight:900;font-size:13px;cursor:pointer;">เปิดแบบตรวจสภาพรถ</button>'
+        : '';
+      _w2.insertAdjacentHTML('afterbegin',
+        '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:12px 14px;margin-bottom:12px;">'
+        +'<div style="font-size:13px;font-weight:900;color:#fcd34d;">'+_msg+'</div>'
+        +'<div style="font-size:11px;color:#94a3b8;margin-top:3px;">งานของคันนี้จะแสดงเมื่อผ่านตรวจแล้ว</div>'
+        +_btn2+'</div>');
+    }
+    var _st2=document.getElementById('drv-st-total'); if(_st2) _st2.textContent=_dPlans.length;
+    var _sd2=document.getElementById('drv-st-done');
+    if(_sd2) _sd2.textContent=_okPlans.filter(function(p){var l=_dTripLogs[p.plan_id];return l&&l.status==='completed';}).length;
+  } else if (_blk) {
     var _w = document.getElementById('drv-plan-cards');
     var _icon, _color, _head, _sub, _btn;
     if (_blk.status === 'none') {
