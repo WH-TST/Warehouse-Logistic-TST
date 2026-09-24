@@ -46426,6 +46426,7 @@ window.dwlLoad = async function dwlLoad(){
           shop: sh.shopName||sh.shopId||('ร้านที่ '+(i+1)),
           // ร้านชื่อเดียวกันแต่คนละจุดส่ง แยกกันด้วยหมายเหตุ (เช่น คลอง 3 / คลอง 7)
           remark: String(sh.remark||'').trim(),
+          shopId: String(sh.shopId||'').trim(),
           out: i===0 ? (log.started_at||'') : '',
           arrive: v.arrived_at||'',
           depart: v.departed_at||'',
@@ -46455,10 +46456,11 @@ window.dwlLoad = async function dwlLoad(){
     // มันคือการไปร้านนั้นครั้งเดียว ถ้าแสดงสองแถวจะนับร้านและเที่ยวเกินจริง
     var merged={}, out=[];
     rows.forEach(function(r){
-        var k = r.date+'|'+r.pairKey+'|'+r.shop+'|'+r.remark;
+        // กุญแจคือ "เลขแผน" ไม่ใช่ชื่อร้าน — ร้านชื่อเดียวกันเป็นคนละงานได้
+        // ใช้รหัสร้าน (shopId) เป็นตัวแยกจุดส่งภายในแผน ถ้าไม่มีค่อยใช้ชื่อ
+        var k = r.pairKey+'|'+(r.shopId||r.shop);
         var m = merged[k];
         // รวมได้เฉพาะแผนคนละใบ (คู่ -M กับ -C ของรถพ่วง)
-        // ถ้าเป็นแผนใบเดียวกัน แปลว่าเป็นคนละจุดส่งที่บังเอิญชื่อร้านเหมือนกัน
         if(!m || m.planId===r.planId){ if(!m) merged[k]=r; out.push(r); return; }
         // รวมทะเบียน และเติมเวลาจากฝั่งที่มีข้อมูล (บางครั้งกดฝั่งเดียว)
         if(m.plates.indexOf(r.plate)<0) m.plates.push(r.plate);
