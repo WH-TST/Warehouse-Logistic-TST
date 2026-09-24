@@ -3218,9 +3218,25 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
               <th class="px-3 py-3 text-center whitespace-nowrap">
                 <i class="fas fa-store text-emerald-300 mr-1"></i>ร้าน
               </th>
-              <th class="px-3 py-3 text-right leading-snug">
+              <th class="px-3 py-3 text-right leading-snug whitespace-nowrap">
+                <i class="fas fa-arrow-right text-emerald-300 mr-1"></i>ขาไป<br>
+                <span class="text-emerald-300 text-[10px] font-semibold normal-case">กม.</span>
+              </th>
+              <th class="px-3 py-3 text-right leading-snug whitespace-nowrap">
+                <i class="fas fa-gift text-amber-300 mr-1"></i>ฟรี<br>
+                <span class="text-emerald-300 text-[10px] font-semibold normal-case">กม.</span>
+              </th>
+              <th class="px-3 py-3 text-right leading-snug whitespace-nowrap">
+                <i class="fas fa-arrow-left text-sky-300 mr-1"></i>ขากลับ<br>
+                <span class="text-emerald-300 text-[10px] font-semibold normal-case">กม.</span>
+              </th>
+              <th class="px-3 py-3 text-right leading-snug whitespace-nowrap">
+                <i class="fas fa-pause text-violet-300 mr-1"></i>Stop<br>
+                <span class="text-emerald-300 text-[10px] font-semibold normal-case">ที่บริษัท</span>
+              </th>
+              <th class="px-3 py-3 text-right leading-snug whitespace-nowrap">
                 <i class="fas fa-road text-emerald-300 mr-1"></i>ระยะทางรวม<br>
-                <span class="text-emerald-300 text-[10px] font-semibold normal-case">(ไป+กลับ+Stop) กม.</span>
+                <span class="text-emerald-300 text-[10px] font-semibold normal-case">กด = ดูรายจุด</span>
               </th>
               <th class="px-3 py-3 text-right leading-snug">
                 <i class="fas fa-weight-hanging text-emerald-300 mr-1"></i>น้ำหนักรวม<br>
@@ -18593,6 +18609,12 @@ function updateLogiKPI() {
                 trips:   0,
                 shops:   0,
                 dist:    0,
+                // แยกเก็บทีละก้อน เพื่อให้กางดูได้ว่าระยะทางรวมมาจากไหน
+                go:      0,   // ขาไป (ระยะร้าน)
+                free:    0,   // ระยะฟรีตามข้อตกลงร้าน
+                ret:     0,   // ขากลับบริษัท
+                stop:    0,   // Stop ที่บริษัทเพื่อขึ้นเที่ยวถัดไป
+                detail:  [],  // รายเที่ยว ไว้กางดู
                 weight:  0,
                 success: 0,
                 failed:  0,
@@ -18647,7 +18669,38 @@ function updateLogiKPI() {
             }
 
             // สูตรรวม: Σ(ร้าน) + Σ(Stop ร้าน) + ขากลับ + Stop บริษัท
-            d.dist += (dist + childDist) + (stopDist + childStopDist) + retDist + companyStop;
+            const _go   = dist + childDist;
+            const _free = stopDist + childStopDist;
+            d.dist += _go + _free + retDist + companyStop;
+            d.go   += _go;
+            d.free += _free;
+            d.ret  += retDist;
+            d.stop += companyStop;
+
+            // เก็บรายละเอียดรายเที่ยว ไว้กางดูว่าตัวเลขมาจากไหน
+            const _shopRows = (p.shops || []).map(sh => ({
+                name: sh.shopName || sh.shopId || '—',
+                remark: String(sh.remark || '').trim(),
+                go:   parseFloat(sh.distance)     || 0,
+                free: parseFloat(sh.freeDistance) || 0,
+                paired: false
+            })).concat(_childUniqueShops.map(sh => ({
+                name: sh.shopName || sh.shopId || '—',
+                remark: String(sh.remark || '').trim(),
+                go:   parseFloat(sh.distance)     || 0,
+                free: parseFloat(sh.freeDistance) || 0,
+                paired: true
+            })));
+            d.detail.push({
+                tripNo:  p.tripNo || '',
+                planId:  p.id,
+                plates:  [p.truckPlate, _childPlan ? _childPlan.truckPlate : ''].filter(Boolean),
+                trailer: !!_childPlan,
+                shops:   _shopRows,
+                ret:     retDist,
+                stop:    companyStop,
+                total:   _go + _free + retDist + companyStop
+            });
         }
         d.weight  += parseFloat(p.totalWeight) || 0;
         if (p.status === 'success') d.success += 1;
@@ -18674,6 +18727,10 @@ function updateLogiKPI() {
         // รหัสพนักงาน: ใช้จาก plan ถ้ามี, ไม่งั้น lookup จาก Master Cache
         d.id = (d.id && d.id !== '—') ? d.id : (driverIdLookup[d.name.trim()] || '—');
 
+        const _dKey = 'dd' + i;
+        window._logiDistDetail = window._logiDistDetail || {};
+        window._logiDistDetail[_dKey] = d.detail;
+
         return `<tr style="background:${bg};" class="border-b border-slate-100 transition-colors">
             <td class="px-3 py-1.5">
                 <div class="flex items-center gap-2 min-w-0">
@@ -18692,8 +18749,15 @@ function updateLogiKPI() {
             <td class="px-3 py-1.5 text-center">
                 <span class="text-sm font-black text-teal-600 font-mono">${d.shops}</span>
             </td>
+            <td class="px-3 py-1.5 text-right"><span class="text-xs font-mono font-bold text-emerald-700">${d.go ? d.go.toFixed(1) : '—'}</span></td>
+            <td class="px-3 py-1.5 text-right"><span class="text-xs font-mono font-bold text-amber-600">${d.free ? d.free.toFixed(1) : '—'}</span></td>
+            <td class="px-3 py-1.5 text-right"><span class="text-xs font-mono font-bold ${d.ret ? 'text-sky-700' : 'text-rose-400'}" ${d.ret ? '' : 'title="ยังไม่มีระยะขากลับในแผนนี้"'}>${d.ret ? d.ret.toFixed(1) : '0.0'}</span></td>
+            <td class="px-3 py-1.5 text-right"><span class="text-xs font-mono font-bold text-violet-600">${d.stop ? d.stop.toFixed(1) : '—'}</span></td>
             <td class="px-3 py-1.5 text-right">
-                <span class="text-xs font-mono ${distCls}">${dist}${lowDist ? ' <i class="fas fa-exclamation-triangle text-rose-400 text-[9px]"></i>' : ''}</span>
+                <button onclick="logiToggleDistDetail('${_dKey}')" class="text-xs font-mono ${distCls}" style="background:none;border:none;cursor:pointer;padding:0;text-decoration:underline dotted;">
+                    ${dist}${lowDist ? ' <i class="fas fa-exclamation-triangle text-rose-400 text-[9px]"></i>' : ''}
+                    <i class="fas fa-chevron-down text-[8px] text-slate-400 ml-1"></i>
+                </button>
             </td>
             <td class="px-3 py-1.5 text-right">
                 <div class="text-sm font-black text-slate-800 font-mono">${wt}</div>
@@ -18705,7 +18769,42 @@ function updateLogiKPI() {
             <td class="px-3 py-1.5 text-center">
                 <span class="text-sm font-mono ${failCls}">${d.failed}</span>
             </td>
-        </tr>`;
+        </tr>
+        <tr id="row-${_dKey}" style="display:none;background:#f8fafc;"><td colspan="11" class="px-4 py-3">
+            ${d.detail.map(t => `
+              <div style="border:1px solid #e2e8f0;border-radius:10px;background:#fff;margin-bottom:8px;overflow:hidden;">
+                <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;">
+                  <span style="font-size:11px;font-weight:900;color:#0f172a;">เที่ยว ${t.tripNo || '—'}</span>
+                  ${t.plates.map(pl => `<span style="font-family:monospace;font-size:10px;font-weight:700;background:#1e2f42;color:#fff;border-radius:4px;padding:1px 6px;">${pl}</span>`).join('')}
+                  ${t.trailer ? '<span style="font-size:10px;font-weight:800;color:#1d4ed8;">พ่วง</span>' : ''}
+                  <span style="font-family:monospace;font-size:10px;color:#94a3b8;">${t.planId}</span>
+                  <span style="margin-left:auto;font-family:monospace;font-size:12px;font-weight:900;color:#0f172a;">${t.total.toFixed(1)} กม.</span>
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tbody>
+                    ${t.shops.map((sh, si) => `
+                      <tr style="border-bottom:1px solid #f1f5f9;">
+                        <td style="padding:5px 11px;font-size:11.5px;color:#334155;font-weight:600;">
+                          <span style="color:#94a3b8;font-family:monospace;margin-right:5px;">${si+1}.</span>${sh.name}
+                          ${sh.remark ? `<span style="margin-left:6px;font-size:10px;font-weight:700;color:#a65a06;background:#fdf0dd;border-radius:5px;padding:1px 6px;">${sh.remark}</span>` : ''}
+                          ${sh.paired ? '<span style="margin-left:6px;font-size:10px;color:#1d4ed8;font-weight:700;">เฉพาะรถลูก</span>' : ''}
+                        </td>
+                        <td style="padding:5px 11px;text-align:right;font-family:monospace;font-size:11.5px;font-weight:700;color:#047857;white-space:nowrap;">${sh.go.toFixed(1)}<span style="color:#94a3b8;font-weight:500;font-size:10px;"> ขาไป</span></td>
+                        <td style="padding:5px 11px;text-align:right;font-family:monospace;font-size:11.5px;font-weight:700;color:#b45309;white-space:nowrap;">${sh.free.toFixed(1)}<span style="color:#94a3b8;font-weight:500;font-size:10px;"> ฟรี</span></td>
+                      </tr>`).join('')}
+                    <tr style="border-bottom:1px solid #f1f5f9;">
+                      <td style="padding:5px 11px;font-size:11.5px;color:#0369a1;font-weight:700;"><span style="color:#94a3b8;font-family:monospace;margin-right:5px;">↩</span>ขากลับบริษัท</td>
+                      <td colspan="2" style="padding:5px 11px;text-align:right;font-family:monospace;font-size:11.5px;font-weight:700;color:${t.ret ? '#0369a1' : '#dc2626'};white-space:nowrap;">
+                        ${t.ret.toFixed(1)}${t.ret ? '' : ' — ยังไม่มีข้อมูล'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 11px;font-size:11.5px;color:#6d28d9;font-weight:700;"><span style="color:#94a3b8;font-family:monospace;margin-right:5px;">⏸</span>Stop ที่บริษัท ${t.stop ? '(มีเที่ยวถัดไป)' : '(ไม่มีเที่ยวถัดไป)'}</td>
+                      <td colspan="2" style="padding:5px 11px;text-align:right;font-family:monospace;font-size:11.5px;font-weight:700;color:#6d28d9;white-space:nowrap;">${t.stop.toFixed(1)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>`).join('') || '<div style="font-size:12px;color:#94a3b8;">ไม่มีรายละเอียด</div>'}
+        </td></tr>`;
     }).join('');
 
     // Footer รวม
@@ -18713,10 +18812,14 @@ function updateLogiKPI() {
         trips:   acc.trips   + d.trips,
         shops:   acc.shops   + d.shops,
         dist:    acc.dist    + d.dist,
+        go:      acc.go      + d.go,
+        free:    acc.free    + d.free,
+        ret:     acc.ret     + d.ret,
+        stop:    acc.stop    + d.stop,
         weight:  acc.weight  + d.weight,
         success: acc.success + d.success,
         failed:  acc.failed  + d.failed,
-    }), { trips:0, shops:0, dist:0, weight:0, success:0, failed:0 });
+    }), { trips:0, shops:0, dist:0, go:0, free:0, ret:0, stop:0, weight:0, success:0, failed:0 });
 
     tfoot.innerHTML = `<tr style="background:#e8f5e9;border-top:2px solid #10b981;">
         <td class="px-3 py-2 text-left text-xs font-black" style="color:#065f46">
@@ -18725,6 +18828,10 @@ function updateLogiKPI() {
         <td class="px-3 py-2 text-center text-xs" style="color:#94a3b8">—</td>
         <td class="px-3 py-2 text-center text-base font-mono font-black" style="color:#065f46">${tot.trips}</td>
         <td class="px-3 py-2 text-center text-sm font-mono font-black" style="color:#0f766e">${tot.shops}</td>
+        <td class="px-3 py-2 text-right text-xs font-mono font-bold" style="color:#047857">${tot.go ? tot.go.toFixed(1) : '—'}</td>
+        <td class="px-3 py-2 text-right text-xs font-mono font-bold" style="color:#b45309">${tot.free ? tot.free.toFixed(1) : '—'}</td>
+        <td class="px-3 py-2 text-right text-xs font-mono font-bold" style="color:${tot.ret ? '#0369a1' : '#dc2626'}">${tot.ret ? tot.ret.toFixed(1) : '0.0'}</td>
+        <td class="px-3 py-2 text-right text-xs font-mono font-bold" style="color:#6d28d9">${tot.stop ? tot.stop.toFixed(1) : '—'}</td>
         <td class="px-3 py-2 text-right text-xs font-mono font-bold" style="color:#0f766e">
             ${tot.dist > 0 ? tot.dist.toLocaleString('th-TH',{minimumFractionDigits:1}) : '—'}
         </td>
@@ -18736,6 +18843,13 @@ function updateLogiKPI() {
         <td class="px-3 py-2 text-center text-sm font-mono font-black" style="color:#dc2626">${tot.failed}</td>
     </tr>`;
 }
+
+// กาง/พับ รายละเอียดระยะทางของคนขับแต่ละคน
+window.logiToggleDistDetail = function logiToggleDistDetail(key) {
+    var row = document.getElementById('row-' + key);
+    if (!row) return;
+    row.style.display = (row.style.display === 'none') ? 'table-row' : 'none';
+};
 
 // ── Tab switching ──────────────────────────────────────────────────────────
 window.switchLogiTab = function switchLogiTab(tab) {
