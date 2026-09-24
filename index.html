@@ -42651,6 +42651,10 @@ window.viewTripResult = async function(planId) {
         <div id="drv-trip-title" style="font-family:ui-monospace,Menlo,monospace;font-weight:900;color:#fff;font-size:18px;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
         <div id="drv-trip-sub" style="font-size:13px;color:#64748b;font-weight:600;margin-top:2px;">–</div>
       </div>
+      <button onclick="drvShowItems(_dTripPlan&&_dTripPlan.plan_id)" title="รายการสินค้า"
+        style="width:40px;height:40px;border-radius:10px;background:#1e293b;border:none;color:#93c5fd;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-boxes" style="font-size:17px;"></i>
+      </button>
     </div>
     <div id="drv-trip-timeline" style="background:#0d1b2a;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;overflow-x:auto;"></div>
     <div class="drv-action-area" id="drv-trip-action"></div>
@@ -44672,6 +44676,8 @@ window.drvGoTab=function(t){
   // กดแท็บอื่นแล้วต้องออกจากหน้าผลตรวจก่อน ไม่งั้นมันค้างทับหน้าที่เลือก
   var _hist=document.getElementById('drv-inspect-hist-overlay');
   if(_hist) _hist.style.display='none';
+  var _itm=document.getElementById('drv-items-overlay');
+  if(_itm) _itm.style.display='none';
   document.getElementById('drv-tab-plan').style.display=t==='plan'?'block':'none';
   document.getElementById('drv-tab-history').style.display=t==='history'?'block':'none';
   var supTab=document.getElementById('drv-tab-supervisor');
@@ -45399,9 +45405,15 @@ function drvRenderPlanCards(plans){
           // น้ำหนักรวมของเที่ยว — ใช้แยกใบที่ไปร้านเดียวกันได้อีกชั้น
           var _wt=(p.shops||[]).reduce(function(a,sh){
             return a+((sh.items||[]).reduce(function(b,it){ return b+(parseFloat(it.weight)||0); },0)); },0);
-          return '<div style="font-size:14px;color:#94a3b8;margin-bottom:12px;">'
-            +'<i class="fas fa-weight-hanging" style="margin-right:5px;"></i>'
-            +(_wt?Math.round(_wt).toLocaleString()+' กก.':'—')+'</div>';
+          var _n=(p.shops||[]).reduce(function(a,sh){ return a+((sh.items||[]).length); },0);
+          return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'
+            +'<span style="font-size:14px;color:#94a3b8;"><i class="fas fa-weight-hanging" style="margin-right:5px;"></i>'
+            +(_wt?Math.round(_wt).toLocaleString()+' กก.':'—')+'</span>'
+            +(_n?'<button onclick="event.stopPropagation();drvShowItems(\''+drvEsc(p.plan_id)+'\')" '
+                +'style="margin-left:auto;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:7px 12px;'
+                +'color:#93c5fd;font-weight:800;font-size:12px;cursor:pointer;">'
+                +'<i class="fas fa-boxes" style="margin-right:5px;"></i>ดูรายการสินค้า ('+_n+')</button>':'')
+            +'</div>';
         })()
       +(_insBlock
         ?'<button disabled style="width:100%;background:#374151;border:none;border-radius:12px;padding:16px;color:#6b7280;font-weight:900;font-size:15px;cursor:not-allowed;"><i class="fas fa-lock" style="margin-right:8px;"></i>'+_insBlock+'</button>'
@@ -46116,6 +46128,69 @@ window.drvDoArriveAtShop=async function(){
   _dCapturedFile=null;_dCapturedPreviewUrl=null;
   drvRenderTimeline();drvRenderAction();
   drvShowToast('✅ บันทึกถึงร้าน — GPS ±'+gps.acc+'ม.');
+};
+
+// ── รายการสินค้าของเที่ยว ─────────────────────────────────────────────
+// คนขับต้องรู้ว่าบรรทุกอะไรไปบ้าง ก่อนหน้านี้เห็นแต่ยอดน้ำหนักรวม
+// เปิดจากการ์ดงาน หรือจากในหน้าจอเที่ยวก็ได้
+window.drvCloseItems=function(){
+  var el=document.getElementById('drv-items-overlay');
+  if(el) el.style.display='none';
+};
+
+window.drvShowItems=function(planId){
+  var p=(_dPlans||[]).find(function(x){return x.plan_id===planId;})
+        || ((_dTripPlan&&_dTripPlan.plan_id===planId)?_dTripPlan:null);
+  if(!p){ drvShowToast('ไม่พบข้อมูลแผน',true); return; }
+
+  var ov=document.getElementById('drv-items-overlay');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='drv-items-overlay';
+    // เว้นแถบแท็บล่างไว้ หน้านี้เป็นแค่การดูข้อมูล ไม่ใช่หน้าบล็อก
+    ov.style.cssText='display:none;position:absolute;top:0;left:0;right:0;bottom:60px;background:#0f172a;z-index:880;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    var host=document.getElementById('drv-inspect-overlay');
+    if(host&&host.parentNode) host.parentNode.appendChild(ov); else document.body.appendChild(ov);
+  }
+
+  var shops=(p.shops||[]);
+  var grand=0, gq=0;
+  var body=shops.map(function(sh,i){
+    var items=sh.items||[];
+    var wt=items.reduce(function(a,it){return a+(parseFloat(it.weight)||0);},0);
+    var qt=items.reduce(function(a,it){return a+(parseFloat(it.qty)||0);},0);
+    grand+=wt; gq+=qt;
+    var rows=items.map(function(it){
+      return '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid rgba(51,65,85,.5);">'
+        +'<div style="flex:1;min-width:0;">'
+        +'<div style="font-size:13px;font-weight:700;color:#e2e8f0;line-height:1.35;">'+drvEsc(it.productName||it.sku||'–')+'</div>'
+        +'<div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#64748b;margin-top:2px;">'+drvEsc(it.sku||'')+'</div></div>'
+        +'<div style="text-align:right;flex-shrink:0;">'
+        +'<div style="font-family:ui-monospace,Menlo,monospace;font-size:14px;font-weight:900;color:#fff;">'+Number(it.qty||0).toLocaleString()+'</div>'
+        +'<div style="font-size:11px;color:#64748b;">เส้น</div></div>'
+        +'<div style="text-align:right;flex-shrink:0;min-width:78px;">'
+        +'<div style="font-family:ui-monospace,Menlo,monospace;font-size:14px;font-weight:900;color:#34d399;">'+Math.round(parseFloat(it.weight)||0).toLocaleString()+'</div>'
+        +'<div style="font-size:11px;color:#64748b;">กก.</div></div></div>';
+    }).join('') || '<div style="font-size:12px;color:#475569;padding:8px 0;">ไม่มีรายการสินค้า</div>';
+
+    return '<div style="background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;">'
+      +'<div style="font-size:14px;font-weight:900;color:#fff;margin-bottom:2px;">'
+        +'<span style="color:#64748b;margin-right:6px;">'+(i+1)+'.</span>'+drvEsc(sh.shopName||sh.shopId||'–')+'</div>'
+      +(sh.remark?'<div style="font-size:12px;color:#fbbf24;margin-bottom:6px;">'+drvEsc(sh.remark)+'</div>':'')
+      +'<div style="font-size:12px;color:#64748b;margin-bottom:6px;">'+items.length+' รายการ · '
+        +Number(qt).toLocaleString()+' เส้น · '+Math.round(wt).toLocaleString()+' กก.</div>'
+      +'<div style="border-top:1px solid #334155;">'+rows+'</div></div>';
+  }).join('');
+
+  ov.innerHTML='<div style="padding:16px 14px 24px;">'
+    +'<div style="text-align:center;margin-bottom:14px;">'
+    +'<div style="font-size:16px;font-weight:900;color:#fff;">📦 รายการสินค้า</div>'
+    +'<div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#64748b;margin-top:3px;">'+drvEsc(p.plan_id)+'</div>'
+    +'<div style="font-size:12px;color:#94a3b8;margin-top:4px;font-weight:700;">รวม '+Number(gq).toLocaleString()+' เส้น · '+Math.round(grand).toLocaleString()+' กก.</div></div>'
+    +(body||'<div style="text-align:center;padding:40px 0;color:#475569;font-size:13px;">ไม่มีข้อมูลสินค้า</div>')
+    +'<button onclick="drvCloseItems()" style="width:100%;margin-top:12px;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;color:#94a3b8;font-weight:900;font-size:15px;cursor:pointer;">ปิด</button>'
+    +'</div>';
+  ov.style.display='block';
 };
 
 window.drvOpenCamera=function(){var inp=document.getElementById('drv-photo-input');inp.value='';inp.click();};
