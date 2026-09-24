@@ -17265,13 +17265,15 @@ function autoCalcFreeStop() {
     const shopCount = cards.length;
     if (shopCount === 0) return;
 
-    // ถือว่าเป็น trailer trip ก็ต่อเมื่อรถมี childPlate (hasChildPlate)
-    // ไม่จำเป็นต้องมีร้าน label='child' — กรณีร้านเดียวทั้งพ่วง label จะเป็น 'split' หรือ 'mother'
-    const isTrailerTrip = hasChildPlate;
+    // ถือว่าเป็น trailer trip ก็ต่อเมื่อรถมี childPlate และวิ่งทั้งพ่วงจริง
+    // รถพ่วงที่วิ่งเฉพาะแม่ (mother_only) คิดเรตเดียวกับรถสิบล้อ
+    const isTrailerTrip = hasChildPlate && logiTrailerMode !== 'mother_only';
 
-    // รถพ่วง: 1 Stop=30, >1=15/Stop | รถเดี่ยว/แม่คนเดียว: 1 Stop=15, >1=10/Stop
+    // ── เรตระยะฟรี ───────────────────────────────────────────────────────
+    // รถพ่วงทั้งพ่วง : ลงที่เดียว 30 · หลายจุด จุดละ 20
+    // รถสิบล้อ/แม่เดี่ยว : ลงร้านเดียว 15 · หลายร้าน ร้านละ 10
     const ratePerShop = isTrailerTrip
-        ? (shopCount === 1 ? 30 : 15)
+        ? (shopCount === 1 ? 30 : 20)
         : (shopCount === 1 ? 15 : 10);
 
     cards.forEach(card => {
@@ -18665,7 +18667,10 @@ function updateLogiKPI() {
                 const _nextChildPlan = _nextTrip.isMother
                     ? companyPlans.find(q => q.id === _nextTrip.pairId + '-C')
                     : null;
-                companyStop = (_nextTrip.isMother && _nextChildPlan) ? 30 : 15;
+                // เที่ยวถัดไปเป็นรถพ่วงที่วิ่งทั้งพ่วง → ฟรี 30 · นอกนั้น (รวมแม่เดี่ยว) → 15
+                var _nextFull = _nextTrip.isMother && _nextChildPlan
+                                && _nextTrip.trailerMode !== 'mother_only';
+                companyStop = _nextFull ? 30 : 15;
             }
 
             // สูตรรวม: Σ(ร้าน) + Σ(Stop ร้าน) + ขากลับ + Stop บริษัท
@@ -31815,7 +31820,8 @@ window.exportLogisticImage = async function exportLogisticImage() {
                 let companyStop = 0;
                 if (_nextTrip) {
                     const _nextChild = _nextTrip.isMother ? companyPlansExp.find(q => q.id === _nextTrip.pairId + '-C') : null;
-                    companyStop = (_nextTrip.isMother && _nextChild) ? 30 : 15;
+                    // แม่เดี่ยวคิดแบบรถสิบล้อ
+                    companyStop = (_nextTrip.isMother && _nextChild && _nextTrip.trailerMode !== 'mother_only') ? 30 : 15;
                 }
                 d.dist += (dist + childDist) + (stopDist + childStopDist) + retDist + companyStop;
             }
