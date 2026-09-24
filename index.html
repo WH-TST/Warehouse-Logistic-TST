@@ -1010,7 +1010,10 @@
     (function () {
       // ▶ ใส่ Deployment URL ของ GAS Web App ตรงนี้
       var GAS_URL = 'https://script.google.com/macros/s/AKfycbxEj4CkODhQCJsThO0CN2PrOBlc6fNN7Or3HcHiQxSvsvWxpzYmaXEqze_Ofj2nwX8r/exec';
-      window._WMS_GAS_URL = GAS_URL; // expose สำหรับ write operations ที่ต้องใช้ POST โดยตรง
+      // ค่านี้เป็นแค่ "ค่าสำรอง" ตอนยังโหลด config ไม่เสร็จ
+      // ค่าจริงมาจากหน้าตั้งค่า → app_config.gas_sync_url (ทับค่านี้ตอนรันไทม์)
+      // deploy Apps Script ใหม่ให้ไปแก้ที่หน้าตั้งค่า ไม่ต้องแก้ไฟล์
+      window._WMS_GAS_URL = GAS_URL;
 
       // รันเฉพาะเมื่ออยู่นอก GAS environment
       if (typeof google !== 'undefined' && google.script) return;
@@ -1061,7 +1064,9 @@
 
       // POST fetch — ใช้กับ payload ขนาดใหญ่ที่ไม่พอใส่ใน URL
       function _postFetch(action, args, successFn, failureFn) {
-        fetch(GAS_URL, {
+        // ต้องอ่านจากค่าที่ตั้งไว้ในหน้าเว็บเหมือนกัน เดิมใช้ค่าคงที่ในไฟล์
+        // ทำให้ตั้งค่า GAS URL ใหม่แล้วฝั่ง POST ยังยิงไป deployment เก่า
+        fetch(window._WMS_GAS_URL || GAS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: action, args: args })
@@ -2419,6 +2424,14 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px;">GAS Web App URL</div>
             <input id="cfg-gas-url" type="text" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:600;color:#0f172a;outline:none;background:#f8fafc;box-sizing:border-box;font-family:monospace;">
           </div>
+            <div style="font-size:11px;color:#64748b;margin-top:6px;line-height:1.5;">
+              ทุกจุดในระบบที่เรียก Apps Script อ่าน URL จากช่องนี้
+              — deploy ใหม่แล้วมาแก้ที่นี่จุดเดียว ไม่ต้องแก้โค้ด
+            </div>
+            <button onclick="wmCfgTestGas()" style="margin-top:8px;width:100%;padding:9px;border-radius:10px;background:#f1f5f9;color:#334155;border:1.5px solid #cbd5e1;font-size:12px;font-weight:800;cursor:pointer;">
+              <i class="fas fa-plug mr-1"></i> ทดสอบการเชื่อมต่อ
+            </button>
+            <div id="cfg-gas-test" style="display:none;margin-top:6px;padding:8px 10px;border-radius:10px;font-size:11.5px;font-weight:700;line-height:1.5;"></div>
           <div id="cfg-status" style="display:none;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:700;text-align:center;"></div>
           <button onclick="wmCfgSave()" style="width:100%;padding:11px;border-radius:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;font-size:13px;font-weight:800;cursor:pointer;">
             <i class="fas fa-save mr-1"></i> บันทึกทั้งหมด
@@ -10242,6 +10255,48 @@ const _safeStorage = {
         if (m) m.style.display = 'none';
       };
 
+      // ทดสอบว่า GAS URL ที่กรอกไว้ใช้ได้จริง จะได้รู้ตั้งแต่ตอนตั้งค่า
+      // ไม่ใช่ไปรู้ตอนคนวางแผนกดแล้วเงียบ (แบบที่เพิ่งเกิดมา 6 วัน)
+      window.wmCfgTestGas = async function wmCfgTestGas() {
+        var box = document.getElementById('cfg-gas-test');
+        var url = (document.getElementById('cfg-gas-url')||{}).value || '';
+        if (!box) return;
+        box.style.display = 'block';
+        if (!url.trim()) {
+          box.style.background='#fef2f2'; box.style.color='#b91c1c';
+          box.textContent = 'ยังไม่ได้กรอก URL'; return;
+        }
+        box.style.background='#f1f5f9'; box.style.color='#475569';
+        box.textContent = 'กำลังทดสอบ...';
+        // ยิงคำนวณเส้นทางด้วยที่อยู่จริง 1 จุด ตรวจได้ทั้งการเชื่อมต่อและ Maps
+        var payload = [[{ shopId:'__TEST__', name:'ทดสอบ',
+          address:'ที.แสตนดาร์ด สตีล ซ.บางปลา 8 บางพลี สมุทรปราการ' }], false];
+        var done = false;
+        var timer = setTimeout(function(){
+          if (done) return; done = true; delete window._cfgGasCb;
+          box.style.background='#fef2f2'; box.style.color='#b91c1c';
+          box.textContent = 'เชื่อมต่อไม่ได้ — หมดเวลารอ ตรวจว่า deploy เป็น "ทุกคน (ไม่ระบุตัวตน)" หรือยัง';
+        }, 45000);
+        window._cfgGasCb = function(res){
+          if (done) return; done = true; clearTimeout(timer); delete window._cfgGasCb;
+          if (res && res.success) {
+            box.style.background='#ecfdf5'; box.style.color='#047857';
+            box.textContent = '✅ เชื่อมต่อได้ และคำนวณระยะทางได้ปกติ';
+          } else {
+            box.style.background='#fef2f2'; box.style.color='#b91c1c';
+            box.textContent = '❌ เชื่อมต่อได้ แต่ Apps Script ตอบว่า: ' + ((res && res.message) || 'ไม่ทราบสาเหตุ');
+          }
+        };
+        var sc = document.createElement('script');
+        sc.src = url.trim() + '?action=calcRouteDistance&args=' + encodeURIComponent(JSON.stringify(payload)) + '&callback=_cfgGasCb';
+        sc.onerror = function(){
+          if (done) return; done = true; clearTimeout(timer); delete window._cfgGasCb;
+          box.style.background='#fef2f2'; box.style.color='#b91c1c';
+          box.textContent = 'เชื่อมต่อไม่ได้ — URL ผิด หรือยังไม่ได้ deploy';
+        };
+        document.body.appendChild(sc);
+      };
+
       window.wmCfgSave = async function() {
         var statusEl = safeGet('cfg-status');
         if (statusEl) { statusEl.style.display='block'; statusEl.style.background='#eff6ff'; statusEl.style.color='#1d4ed8'; statusEl.textContent='กำลังบันทึก...'; }
@@ -10253,6 +10308,9 @@ const _safeStorage = {
           { key: 'production_block_sheet_name',     value: (safeGet('cfg-pb-sheet')||{}).value||'',       updated_at: now }
         ];
         var { error } = await window._sb.from('app_config').upsert(rows, { onConflict: 'key' });
+        // ให้มีผลทันทีโดยไม่ต้องรีเฟรชหน้า
+        var _newGas = (safeGet('cfg-gas-url')||{}).value || '';
+        if (!error && _newGas) window._WMS_GAS_URL = _newGas.trim();
         if (statusEl) {
           statusEl.style.background = error ? '#fef2f2' : '#f0fdf4';
           statusEl.style.color      = error ? '#dc2626' : '#15803d';
