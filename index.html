@@ -46679,17 +46679,25 @@ function dwlRender(){
           +_e(actors[0].slice(6))+'</div>'
         : '';
 
+      // ป้ายงานค้างต้องขึ้นเสมอ ไม่ว่าจะส่งสำเร็จแล้วหรือยัง
+      // เดิมอยู่ใน else ของ "ส่งสำเร็จ" งานค้างที่ยังไม่ได้ส่งจึงไม่มีป้าย
+      // ซึ่งเป็นตัวที่ต้องเห็นชัดที่สุด
+      var carryChip = r.carryFrom
+        ? '<div style="margin-top:3px;"><span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fce8f1;color:#a8246a;">'
+          +'ค้างจาก '+r.carryFrom.slice(8,10)+'/'+r.carryFrom.slice(5,7)+'</span></div>'
+        : '';
       var pill;
       if(!r.ok){
-        pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fbe8e8;color:#c02626;">ไม่สำเร็จ</span>';
-      } else if(r.carryFrom){
-        pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fce8f1;color:#a8246a;">ค้างจาก '
-             +r.carryFrom.slice(8,10)+'/'+r.carryFrom.slice(5,7)+'</span>';
+        pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#fbe8e8;color:#c02626;">ยังไม่ส่ง</span>';
       } else {
         pill='<span style="display:inline-block;font-size:11px;font-weight:900;border-radius:999px;padding:3px 10px;background:#e3f3e9;color:#137a3e;">ส่งสำเร็จ</span>';
       }
+      pill += carryChip;
 
-      return '<tr class="'+(newGroup?'dstart':'')+'">'
+      var _carryRow = r.carryFrom
+        ? ' style="box-shadow:inset 4px 0 0 #e879b0;background:#fdf2f7;"'
+        : '';
+      return '<tr class="'+(newGroup?'dstart':'')+'"'+_carryRow+'>'
         +dateCell+tripCell
         +'<td style="font-weight:700;line-height:1.35;"><span class="mono" style="color:#8496a8;margin-right:5px;">'+r.seq+'.</span>'+_e(r.shop)
           +(r.remark?'<span style="display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#a65a06;background:#fdf0dd;border-radius:6px;padding:1px 7px;">'+_e(r.remark)+'</span>':'')
@@ -46715,6 +46723,7 @@ function dwlRender(){
         +chip(avg?(Math.floor(avg/60)+':'+String(avg%60).padStart(2,'0')):'—','เฉลี่ย/ร้าน')
         +chip(miss,'ขั้นตอนขาด','color:#a65a06;')
         +chip(nOverride,'ออฟฟิศกดแทน','color:#7c3aed;')
+        +chip(list.filter(function(r){return r.carryFrom;}).length,'งานค้าง','color:#a8246a;')
       +'</div></div>'
       +'<div style="overflow-x:auto;"><table><thead><tr>'
       +'<th>วันที่</th><th style="text-align:center;">เที่ยว</th><th>ร้าน</th>'
