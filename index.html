@@ -46263,9 +46263,13 @@ window.dwlLoad = async function dwlLoad(){
 
   try{
     // 1) แผนในช่วง — เฉพาะรถบริษัท และไม่เอางานซ่อม/PM
+    // ขยายช่วงค้นย้อนหลัง 30 วัน — งานค้างที่ถูกยกมาทำในช่วงนี้ วันที่ของแผน
+    // ยังเป็นวันเดิม (เช่นแผนวันที่ 23 แต่ส่งวันที่ 24) ถ้าค้นด้วยวันแผนตรงๆ
+    // จะหายไปทั้งใบ ต้องดึงมากว้างกว่าแล้วค่อยตัดด้วย "วันที่ทำงานจริง"
+    var _wideFrom = new Date(new Date(fromV+'T00:00:00').getTime() - 30*86400000).toISOString().slice(0,10);
     var pr = await window._sb.from('logistic_plans')
-      .select('plan_id,plan_date,status,truck_type,truck_plate,driver_transport,driver_id,trip_no,shops,job_type,origin_plan_date,cancelled_at,status_by')
-      .gte('plan_date',fromV).lte('plan_date',toV)
+      .select('plan_id,plan_date,status,truck_type,truck_plate,driver_transport,driver_id,trip_no,shops,job_type,origin_plan_date,cancelled_at,status_by,carried_resolved_at')
+      .gte('plan_date',_wideFrom).lte('plan_date',toV)
       .neq('job_type','maintenance_pm')
       .is('cancelled_at',null)
       .order('plan_date');
@@ -46301,18 +46305,35 @@ window.dwlLoad = async function dwlLoad(){
     });
 
     // 3) แตกเป็นรายร้าน
+    // วันที่ที่ใช้แสดง = วันที่ทำงานจริง ไม่ใช่วันที่ของแผน
+    // timestamp ใน DB เป็น UTC ต้องบวก 7 ชม. ก่อนตัดวัน
+    var _today = window._bkkToday();
+    function _bkkOf(t){
+      if(!t) return '';
+      var ms=new Date(t).getTime();
+      if(isNaN(ms)) return String(t).slice(0,10);
+      return new Date(ms+7*3600000).toISOString().slice(0,10);
+    }
     var rows=[];
     plans.forEach(function(p){
       var log=logMap[p.plan_id]||{};
       var vm=visMap[p.plan_id]||{};
       var shops=(p.shops||[]).filter(function(sh){ return sh.type!=='service_center'; });
       if(!shops.length) return;
+      // งานค้างที่ยังไม่จบ → ตามกฎของบล็อก คือยกมาแสดง "วันนี้"
+      var _pending = p.status!=='success' && !p.carried_resolved_at && p.plan_date < _today;
       shops.forEach(function(sh,i){
         var v=vm[i]||{};
         var isLast = i===shops.length-1;
         var done = !!v.departed_at || p.status==='success';
+        // วันที่แสดง: ทำงานจริงวันไหนใช้วันนั้น ถ้ายังไม่ได้ทำและเป็นงานค้าง
+        // ให้ไปอยู่วันนี้ นอกนั้นใช้วันของแผน
+        var _workDate = _bkkOf(v.arrived_at||v.departed_at||log.started_at||'');
+        var _showDate = _workDate || (_pending ? _today : p.plan_date);
+        if(_showDate < fromV || _showDate > toV) return;
         rows.push({
-          date: p.plan_date,
+          date: _showDate,
+          planDate: p.plan_date,
           driver: (p.driver_transport||'').trim() || '— ไม่ระบุคนขับ —',
           plate: (p.truck_plate||'').trim() || '—',
           planId: p.plan_id,
@@ -46329,7 +46350,7 @@ window.dwlLoad = async function dwlLoad(){
           next: isLast ? '' : (shops[i+1].shopName||shops[i+1].shopId||'ร้านถัดไป'),
           home: isLast ? (log.completed_at||'') : '',
           dur: _dur(v.arrived_at, v.departed_at),
-          carryFrom: p.origin_plan_date||'',
+          carryFrom: p.origin_plan_date || (_showDate!==p.plan_date ? p.plan_date : ''),
           // ใครเป็นคนกด — ถ้าออฟฟิศกดแทน เวลาในแถวนี้ไม่ใช่เวลาที่คนขับทำจริง
           byShop: v.acted_by||'',
           byTrip: log.acted_by || (log.driver_username==='admin-override'?'ADMIN:(ไม่ทราบผู้ใช้)':'') || '',
