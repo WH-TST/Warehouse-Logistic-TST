@@ -45382,10 +45382,14 @@ function drvRenderPlanCards(plans){
     return '<div class="drv-fade-up drv-card" style="border:2px solid '+(p._isCarry?'#be185d':m.border)+';">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
       +'<div style="min-width:0;">'
-      // Plan ID คือตัวระบุงาน ไม่ใช่ชื่อร้าน — คนเดียวกันมีหลายเที่ยวไปร้านเดียวกันได้
-      // ถ้าเอาชื่อร้านเป็นหลัก การ์ดจะหน้าตาเหมือนกันจนกดผิดใบ
-      +'<div style="font-family:ui-monospace,Menlo,monospace;font-weight:900;color:#fff;font-size:20px;letter-spacing:.01em;word-break:break-all;">'+drvEsc(p.plan_id)+'</div>'
-      +'<div style="font-size:12px;color:#94a3b8;margin-top:3px;font-weight:700;">เที่ยวที่ '+drvEsc(p.trip_no||(pi+1))+' · '+drvEsc(p.truck_plate||'–')+'</div></div>'
+      // ชื่อร้านเป็นหัวการ์ด — คนขับมองหาร้านก่อน
+      // เลขแผนอยู่บรรทัดรอง ตัวเล็กแต่ฟอนต์ mono อ่านทีละตัวได้
+      // ใช้ยืนยันว่าหยิบถูกใบเวลามีหลายเที่ยวไปร้านเดียวกัน
+      +'<div style="font-weight:900;color:#fff;font-size:17px;line-height:1.3;">'+(shops.length?drvEsc(shops[0].shopName||shops[0].shopId||'–'):'–')
+        +(shops.length>1?'<span style="font-size:12px;color:#93c5fd;font-weight:700;"> +'+(shops.length-1)+' ร้าน</span>':'')+'</div>'
+      +'<div style="font-size:12px;color:#94a3b8;margin-top:3px;font-weight:700;">'
+        +'<span style="font-family:ui-monospace,Menlo,monospace;color:#cbd5e1;">'+drvEsc(p.plan_id)+'</span>'
+        +' · เที่ยวที่ '+drvEsc(p.trip_no||(pi+1))+' · '+drvEsc(p.truck_plate||'–')+'</div></div>'
       +'<span style="font-size:12px;font-weight:900;color:'+m.color+';background:rgba(0,0,0,.3);padding:5px 12px;border-radius:20px;display:flex;align-items:center;gap:5px;flex-shrink:0;white-space:nowrap;">'
       +'<i class="fas '+m.icon+'"></i>'+m.label+'</span></div>'
       +carryBadge
