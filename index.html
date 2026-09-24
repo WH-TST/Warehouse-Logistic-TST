@@ -42648,7 +42648,7 @@ window.viewTripResult = async function(planId) {
         <i class="fas fa-arrow-left" style="font-size:18px;"></i>
       </button>
       <div style="min-width:0;flex:1;">
-        <div id="drv-trip-title" style="font-family:ui-monospace,Menlo,monospace;font-weight:900;color:#fff;font-size:18px;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
+        <div id="drv-trip-title" style="font-weight:900;color:#fff;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</div>
         <div id="drv-trip-sub" style="font-size:13px;color:#64748b;font-weight:600;margin-top:2px;">–</div>
       </div>
       <button onclick="drvShowItems(_dTripPlan&&_dTripPlan.plan_id)" title="รายการสินค้า"
@@ -45431,10 +45431,16 @@ window.drvOpenTrip=async function(planId){
   drvShowL();
   await drvLoadTripState(planId);
   drvHideL();
-  document.getElementById('drv-trip-title').textContent=_dTripPlan.plan_id;
   var _delivShops=(_dTripPlan.shops||[]).filter(function(s){return s.type!=='service_center';});
   var _scCount=(_dTripPlan.shops||[]).length-_delivShops.length;
-  document.getElementById('drv-trip-sub').textContent='🚛 '+(_dTripPlan.truck_plate||'–')+' • '+_delivShops.length+' จุดส่ง'+(_scCount>0?' + 🔧 '+_scCount+' ศูนย์':'');
+  // หัวจอเป็นชื่อร้าน คนขับมองหาร้านก่อน เลขแผนลงมาเป็นบรรทัดรอง
+  var _t0=_delivShops[0]||{};
+  document.getElementById('drv-trip-title').textContent=
+    (_t0.shopName||_t0.shopId||'–')+(_delivShops.length>1?' +'+(_delivShops.length-1)+' ร้าน':'');
+  document.getElementById('drv-trip-sub').innerHTML=
+    '<span style="font-family:ui-monospace,Menlo,monospace;color:#94a3b8;">'+drvEsc(_dTripPlan.plan_id)+'</span>'
+    +' · 🚛 '+drvEsc(_dTripPlan.truck_plate||'–')+' · '+_delivShops.length+' จุดส่ง'
+    +(_scCount>0?' + 🔧 '+_scCount+' ศูนย์':'');
   drvRenderTimeline();drvRenderAction();
   var ts=document.getElementById('drv-trip-screen');
   ts.style.display='flex';
