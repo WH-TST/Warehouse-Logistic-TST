@@ -2159,6 +2159,9 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
             <button onclick="switchView('whactivity')" id="nav-whactivity" class="nav-btn" data-tip="WH ACTIVITY LOG">
                 <span class="nav-icon"><i class="fas fa-clipboard-list"></i></span> WH ACTIVITY LOG
             </button>
+            <button onclick="switchView('stock-movement')" id="nav-stock-movement" class="nav-btn" data-tip="รายการเคลื่อนไหว">
+                <span class="nav-icon"><i class="fas fa-right-left"></i></span> รายการเคลื่อนไหว
+            </button>
 
             <!-- ─── PRODUCTION ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
@@ -8072,6 +8075,56 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
 <!-- DRIVER ANALYTICS                                              -->
 <!-- ============================================================ -->
 <!-- ══════ สรุปการทำงานคนขับ (รถบริษัท) ══════ -->
+<!-- ══════ รายการเคลื่อนไหวสินค้า ══════ -->
+<div id="view-stock-movement-content" class="hidden space-y-4">
+  <style>
+    #view-stock-movement-content .smv-f{display:flex;flex-direction:column;gap:5px}
+    #view-stock-movement-content .smv-f label{font-size:10.5px;font-weight:900;color:#8496a8;letter-spacing:.06em;text-transform:uppercase}
+    #view-stock-movement-content .smv-f input,#view-stock-movement-content .smv-f select{
+      font-size:13px;font-weight:700;color:#0e1620;background:#f1f5f9;border:1px solid #dbe2ea;
+      border-radius:9px;padding:8px 11px;outline:none;min-width:150px;}
+    #view-stock-movement-content table{border-collapse:collapse;width:100%;min-width:880px}
+    #view-stock-movement-content thead th{background:#13202b;color:#cfdcea;font-size:10px;font-weight:900;
+      letter-spacing:.05em;text-align:right;padding:9px 11px;white-space:nowrap;position:sticky;top:0;z-index:2}
+    #view-stock-movement-content thead th.l{text-align:left}
+    #view-stock-movement-content tbody td{padding:8px 11px;border-bottom:1px solid #eef3f1;font-size:13px;text-align:right;white-space:nowrap}
+    #view-stock-movement-content tbody td.l{text-align:left;white-space:normal}
+    #view-stock-movement-content tbody tr:hover td{background:#e8eefc}
+    #view-stock-movement-content .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+  </style>
+
+  <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,#0f766e,#115e59);">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="width:48px;height:48px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-right-left" style="color:#fff;font-size:21px;"></i>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:20px;font-weight:900;color:#fff;">รายการเคลื่อนไหวสินค้า</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.72);font-weight:600;">ผลิตเข้า จากระบบฝ่ายผลิต · ส่งออก จากสรุป SI — สินค้าเดียวกันรวมเป็นแถวเดียว</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 p-4" style="display:flex;gap:13px;align-items:flex-end;flex-wrap:wrap;">
+    <div class="smv-f"><label>ตั้งแต่วันที่</label><input type="date" id="smv-from"></div>
+    <div class="smv-f"><label>ถึงวันที่</label><input type="date" id="smv-to"></div>
+    <div class="smv-f"><label>แหล่งที่มา</label><select id="smv-src">
+      <option value="">ทั้งหมด</option><option value="both">มีทั้งผลิตและส่งออก</option>
+      <option value="in">ผลิตอย่างเดียว</option><option value="out">ส่งออกอย่างเดียว</option></select></div>
+    <div class="smv-f"><label>ค้นหา รหัส / ชื่อสินค้า</label><input type="text" id="smv-q" placeholder="พิมพ์เพื่อค้นหา..." style="min-width:220px"></div>
+    <div style="flex:1"></div>
+    <button onclick="smvLoad()" class="px-5 py-2.5 rounded-xl text-white font-black text-sm" style="background:#0f766e;">
+      <i class="fas fa-sync-alt mr-1.5"></i>โหลดข้อมูล</button>
+    <button onclick="smvExportCsv()" class="px-4 py-2.5 rounded-xl font-black text-sm border border-slate-300 text-slate-600 bg-white">
+      <i class="fas fa-file-excel mr-1.5"></i>Excel</button>
+    <button onclick="smvExportPdf()" class="px-4 py-2.5 rounded-xl text-white font-black text-sm" style="background:#b91c1c;">
+      <i class="fas fa-file-pdf mr-1.5"></i>ใบนับสต๊อก PDF</button>
+  </div>
+
+  <div id="smv-kpi" class="hidden" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:12px;"></div>
+  <div id="smv-body"></div>
+</div>
+
 <div id="view-driver-worklog-content" class="hidden space-y-4">
   <style>
     #view-driver-worklog-content .dwl-f{display:flex;flex-direction:column;gap:5px}
@@ -13620,7 +13673,7 @@ window.switchView = function switchView(view) {
     // redirect เส้นทางเก่า → view ใหม่
     if (view === 'input' || view === 'warehouse-map') view = 'wm-manage';
 
-    const views = ['wm-manage', 'printtag', 'analytics', 'whactivity', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'driver-worklog', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['wm-manage', 'printtag', 'analytics', 'whactivity', 'stock-movement', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'driver-worklog', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13677,6 +13730,7 @@ window.switchView = function switchView(view) {
     if (view === 'driver-monitor' && window.dmInit) window.dmInit();
     if (view === 'driver-analytics' && window.daInit) window.daInit();
     if (view === 'driver-worklog' && window.dwlInit) window.dwlInit();
+    if (view === 'stock-movement' && window.smvInit) window.smvInit();
 
     const titleEl = document.getElementById('view-title');
     if (titleEl) {
@@ -13686,6 +13740,7 @@ window.switchView = function switchView(view) {
             'printtag': 'Print Tag FG System',
             'analytics': 'Warehouse Analytics & Flow',
             'whactivity': 'WH Activity Log — บันทึกข้อมูลจริงจากหน้างาน',
+            'stock-movement': 'รายการเคลื่อนไหวสินค้า — ผลิตเข้า · ส่งออก',
             'production-block': 'Production Block — ดูแผนผลิต (อ่านอย่างเดียว)',
             'logistic-plan': 'Logistic — วางแผนส่งมอบ',
             'truck-calendar': 'Logistic — Delivery Block Plan',
@@ -37438,6 +37493,7 @@ var WMS_VIEWS=[
   {id:'driver-monitor',label:'Driver Monitor'},
   {id:'driver-analytics',label:'Driver Analytics'},
   {id:'driver-worklog',label:'สรุปการทำงานคนขับ'},
+  {id:'stock-movement',label:'รายการเคลื่อนไหว'},
   {id:'kpi-wh',label:'KPI WH & Logistic'},
   {id:'training',label:'Training'},
   {id:'production-block',label:'Production Block'},
@@ -37651,6 +37707,7 @@ var UP_NAV = [
   {id:'driver-monitor',label:'Driver Monitor',   icon:'fa-satellite-dish'},
   {id:'driver-analytics',label:'Driver Analytics',icon:'fa-chart-line'},
   {id:'driver-worklog',label:'สรุปการทำงานคนขับ',icon:'fa-user-clock'},
+  {id:'stock-movement',label:'รายการเคลื่อนไหว',icon:'fa-right-left'},
   {id:'kpi-wh',       label:'KPI WH & Logistic', icon:'fa-chart-bar'},
   {id:'training',     label:'Training',          icon:'fa-chalkboard-teacher'},
   {id:'user-accounts',label:'User Accounts',     icon:'fa-users-cog'},
@@ -47046,6 +47103,306 @@ window.dwlExport = function dwlExport(){
     if(ev.target && ev.target.id===id) dwlRender();
   });
 });
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// รายการเคลื่อนไหวสินค้า — ผลิตเข้า (ฝ่ายผลิต) + ส่งออก (สรุป SI)
+// สินค้าเดียวกันจากทั้งสองฝั่งรวมเป็นแถวเดียว
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+
+var _smvRows = [];     // แถวที่รวมแล้ว
+var _smvProdMap = {};  // sku -> {search_name, lines_per_bundle}
+var PROD_API = 'https://tstproduction.vercel.app';
+
+function _e(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function _n(v,d){ d=d||0; return v ? Number(v).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d}) : '—'; }
+function _thDate(d){ if(!d) return ''; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+String(Number(p[0])+543).slice(2); }
+
+window.smvInit = function smvInit(){
+  var f=document.getElementById('smv-from'), t=document.getElementById('smv-to');
+  if (f && !f.value){
+    var today = window._bkkToday();
+    f.value = new Date(new Date(today+'T00:00:00').getTime() - 6*86400000).toISOString().slice(0,10);
+    t.value = today;
+  }
+  ['smv-src','smv-q'].forEach(function(id){
+    var el=document.getElementById(id); if(el && !el._smvBound){ el._smvBound=1; el.addEventListener('input', smvRender); el.addEventListener('change', smvRender); }
+  });
+  if (!_smvRows.length) smvLoad();
+};
+
+window.smvLoad = async function smvLoad(){
+  var fromV=document.getElementById('smv-from').value;
+  var toV=document.getElementById('smv-to').value;
+  var body=document.getElementById('smv-body');
+  if(!fromV||!toV){ showToast('เลือกช่วงวันที่ก่อน', true); return; }
+  if(fromV>toV){ showToast('วันเริ่มต้นต้องไม่เกินวันสิ้นสุด', true); return; }
+  body.innerHTML='<div class="bg-white rounded-2xl border border-slate-200 py-16 text-center text-slate-400 font-bold">'
+    +'<i class="fas fa-spinner fa-spin text-2xl block mb-2"></i>กำลังโหลด...</div>';
+
+  try{
+    // ── ฝั่งผลิต: ยอดที่คีย์เข้าคลัง ────────────────────────────────
+    var prodRows = [];
+    try{
+      var pr = await fetch(PROD_API+'/api/trans/fg?from='+fromV+'&to='+toV);
+      if (pr.ok) { var pj = await pr.json(); prodRows = pj.rows || []; }
+      else throw new Error('HTTP '+pr.status);
+    }catch(pe){
+      showToast('ดึงยอดผลิตไม่สำเร็จ: '+(pe.message||pe)+' — แสดงเฉพาะฝั่งส่งออก', true);
+    }
+
+    // ── ฝั่ง WMS: ยอดส่งออกจริง (เงื่อนไขเดียวกับสรุป SI) ──────────
+    var or = await window._sb.from('loading_orders')
+      .select('id').gte('load_date',fromV).lte('load_date',toV).range(0,4999);
+    if (or.error) throw or.error;
+    var oids = (or.data||[]).map(function(o){ return o.id; });
+    var sess = [];
+    for (var i=0;i<oids.length;i+=100){
+      var sr = await window._sb.from('loading_sessions')
+        .select('sku,product_name,qty,weight')
+        .neq('record_type','draft').in('order_id', oids.slice(i,i+100)).range(0,19999);
+      if (sr.error) throw sr.error;
+      sess = sess.concat(sr.data||[]);
+    }
+
+    // ── รวมเป็นแถวเดียวต่อสินค้า ──────────────────────────────────
+    var map = {};
+    function _row(sku){
+      if(!map[sku]) map[sku]={ sku:sku, name:'', inQ:0, inW:0, outQ:0, outW:0, scrapQ:0, scrapW:0 };
+      return map[sku];
+    }
+    prodRows.forEach(function(r){
+      var k=r.product_code; if(!k) return;
+      var x=_row(k); x.name = x.name || r.product_name || '';
+      // แยกของเสีย/ปรับยอดออกจากยอดผลิตปกติ จะได้ไม่ปนกัน
+      if (r.row_type === 'old_scrap') { x.scrapQ += Number(r.qty_lines)||0; x.scrapW += Number(r.weight_kg)||0; }
+      else { x.inQ += Number(r.qty_lines)||0; x.inW += Number(r.weight_kg)||0; }
+    });
+    sess.forEach(function(r){
+      var k=r.sku; if(!k) return;
+      var x=_row(k); x.name = x.name || r.product_name || '';
+      x.outQ += Number(r.qty)||0; x.outW += Number(r.weight)||0;
+    });
+
+    _smvRows = Object.keys(map).map(function(k){ return map[k]; })
+      .filter(function(r){ return r.inQ||r.inW||r.outQ||r.outW||r.scrapQ||r.scrapW; });
+
+    // ── ข้อมูลสินค้า (SEARCH NAME / เส้นต่อมัด) ใช้ตอนออกใบนับ ────
+    var skus = _smvRows.map(function(r){ return r.sku; });
+    for (var j=0;j<skus.length;j+=100){
+      var prr = await window._sb.from('products')
+        .select('sku,search_name,lines_per_bundle,name').in('sku', skus.slice(j,j+100));
+      (prr.data||[]).forEach(function(p){ _smvProdMap[p.sku]=p; });
+    }
+    _smvRows.forEach(function(r){ if(!r.name) r.name = (_smvProdMap[r.sku]||{}).name || ''; });
+
+    smvRender();
+  }catch(e){
+    console.error('[smvLoad]',e);
+    body.innerHTML='<div class="bg-white rounded-2xl border border-rose-200 py-16 text-center text-rose-500 font-bold">โหลดไม่สำเร็จ: '+_e(e.message||e)+'</div>';
+  }
+};
+
+function _smvFiltered(){
+  var src=(document.getElementById('smv-src')||{}).value||'';
+  var q=((document.getElementById('smv-q')||{}).value||'').trim().toLowerCase();
+  return _smvRows.filter(function(r){
+    var hasIn = !!(r.inQ||r.inW), hasOut = !!(r.outQ||r.outW);
+    if (src==='both' && !(hasIn&&hasOut)) return false;
+    if (src==='in'   && !(hasIn&&!hasOut)) return false;
+    if (src==='out'  && !(hasOut&&!hasIn)) return false;
+    if (q && (r.sku+' '+r.name+' '+((_smvProdMap[r.sku]||{}).search_name||'')).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  }).sort(function(a,b){ return (Math.abs(b.inW)+Math.abs(b.outW)) - (Math.abs(a.inW)+Math.abs(a.outW)); });
+}
+window._smvFiltered = _smvFiltered;
+
+window.smvRender = function smvRender(){
+  var rows=_smvFiltered();
+  var body=document.getElementById('smv-body');
+  var kpi=document.getElementById('smv-kpi');
+  if(!rows.length){
+    kpi.classList.add('hidden'); kpi.style.display='none';
+    body.innerHTML='<div class="bg-white rounded-2xl border border-slate-200 py-16 text-center text-slate-400 font-bold">ไม่มีรายการเคลื่อนไหวตามเงื่อนไขที่เลือก</div>';
+    return;
+  }
+  var tin=0,tout=0,tinq=0,toutq=0,nBoth=0,nIn=0,nOut=0;
+  rows.forEach(function(r){
+    tin+=r.inW; tout+=r.outW; tinq+=r.inQ; toutq+=r.outQ;
+    var hi=!!(r.inQ||r.inW), ho=!!(r.outQ||r.outW);
+    if(hi&&ho) nBoth++; else if(hi) nIn++; else nOut++;
+  });
+  var net=tin-tout;
+  function card(k,v,u,s,c){
+    return '<div class="bg-white rounded-2xl border border-slate-200" style="padding:13px 15px;">'
+      +'<div style="font-size:10.5px;font-weight:900;color:#8496a8;letter-spacing:.06em;">'+k+'</div>'
+      +'<div class="mono" style="font-size:24px;font-weight:900;margin-top:4px;'+(c||'')+'">'+v
+      +(u?'<span style="font-size:12px;font-weight:700;color:#8496a8;margin-left:4px;">'+u+'</span>':'')+'</div>'
+      +(s?'<div style="font-size:11.5px;color:#8496a8;font-weight:700;margin-top:3px;">'+s+'</div>':'')+'</div>';
+  }
+  kpi.classList.remove('hidden'); kpi.style.display='grid';
+  kpi.innerHTML = card('รายการสินค้า', rows.length, 'SKU',
+      'มีทั้งสองฝั่ง '+nBoth+' · ผลิตอย่างเดียว '+nIn+' · ส่งออกอย่างเดียว '+nOut)
+    + card('ผลิตเข้า', _n(tin), 'กก.', _n(tinq)+' เส้น', 'color:#0f766e;')
+    + card('ส่งออก', _n(tout), 'กก.', _n(toutq)+' เส้น', 'color:#b45309;')
+    + card('สุทธิ', (net>0?'+':net<0?'−':'')+_n(Math.abs(net)), 'กก.', 'ผลิตเข้า − ส่งออก',
+           net>0?'color:#137a3e;':net<0?'color:#c02626;':'');
+
+  var trs = rows.map(function(r){
+    var hi=!!(r.inQ||r.inW), ho=!!(r.outQ||r.outW);
+    var src = (hi&&ho) ? '<span style="display:inline-block;font-size:10.5px;font-weight:900;border-radius:6px;padding:2px 8px;background:#e8eefc;color:#1d4ed8;">ผลิต + ส่งออก</span>'
+            : hi ? '<span style="display:inline-block;font-size:10.5px;font-weight:900;border-radius:6px;padding:2px 8px;background:#e3f2f0;color:#0f766e;">ผลิตอย่างเดียว</span>'
+            : '<span style="display:inline-block;font-size:10.5px;font-weight:900;border-radius:6px;padding:2px 8px;background:#fdf0dd;color:#b45309;">ส่งออกอย่างเดียว</span>';
+    var net=r.inW-r.outW;
+    var netCol = net>0?'#137a3e':net<0?'#c02626':'#8496a8';
+    return '<tr>'
+      +'<td class="l"><div style="font-weight:700;line-height:1.35;">'+_e(r.name||r.sku)+'</div>'
+        +'<div class="mono" style="font-size:11px;color:#8496a8;font-weight:500;margin-top:1px;">'+_e(r.sku)
+        +(r.scrapW?' <span style="color:#b45309;font-weight:700;">· ปรับยอด '+_n(r.scrapQ)+' เส้น</span>':'')+'</div></td>'
+      +'<td class="l">'+src+'</td>'
+      +'<td class="mono" style="font-weight:700;color:#0f766e;">'+_n(r.inQ)+'</td>'
+      +'<td class="mono" style="font-size:11.5px;color:#8496a8;">'+_n(r.inW)+'</td>'
+      +'<td class="mono" style="font-weight:700;color:#b45309;">'+_n(r.outQ)+'</td>'
+      +'<td class="mono" style="font-size:11.5px;color:#8496a8;">'+_n(r.outW)+'</td>'
+      +'<td class="mono" style="font-weight:900;color:'+netCol+';">'+(net>0?'+':net<0?'−':'')+_n(Math.abs(net))+'</td>'
+      +'</tr>';
+  }).join('');
+
+  body.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">'
+    +'<div style="padding:12px 15px;border-bottom:1px solid #dbe2ea;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+      +'<span style="font-size:14px;font-weight:900;">รายการเคลื่อนไหว</span>'
+      +'<span style="font-size:12px;color:#8496a8;font-weight:700;">'+rows.length+' แถว · '
+      +_thDate(document.getElementById('smv-from').value)+' – '+_thDate(document.getElementById('smv-to').value)
+      +' · เรียงตามปริมาณเคลื่อนไหวมากสุด</span></div>'
+    +'<div style="overflow-x:auto;"><table><thead><tr>'
+      +'<th class="l">สินค้า</th><th class="l">แหล่งที่มา</th>'
+      +'<th>ผลิตเข้า (เส้น)</th><th>กก.</th><th>ส่งออก (เส้น)</th><th>กก.</th><th>สุทธิ (กก.)</th>'
+    +'</tr></thead><tbody>'+trs+'</tbody></table></div></div>';
+};
+
+window.smvExportCsv = function smvExportCsv(){
+  var rows=_smvFiltered();
+  if(!rows.length){ showToast('ยังไม่มีข้อมูลให้ export', true); return; }
+  var head=['รหัสสินค้า','ชื่อสินค้า','SEARCH NAME','ผลิตเข้า (เส้น)','ผลิตเข้า (กก.)',
+            'ส่งออก (เส้น)','ส่งออก (กก.)','ปรับยอด (เส้น)','ปรับยอด (กก.)','สุทธิ (กก.)'];
+  var lines=[head.join(',')];
+  rows.forEach(function(r){
+    var p=_smvProdMap[r.sku]||{};
+    var c=[r.sku,r.name,p.search_name||'',r.inQ,r.inW.toFixed(2),r.outQ,r.outW.toFixed(2),
+           r.scrapQ,r.scrapW.toFixed(2),(r.inW-r.outW).toFixed(2)];
+    lines.push(c.map(function(x){ return '"'+String(x==null?'':x).replace(/"/g,'""')+'"'; }).join(','));
+  });
+  var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='รายการเคลื่อนไหว_'+document.getElementById('smv-from').value+'_'+document.getElementById('smv-to').value+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
+// ── ใบนับสต๊อก PDF ───────────────────────────────────────────────────
+// เลือกได้ว่าจะนับเฉพาะของที่เคลื่อนไหว หรือทั้งคลัง
+window.smvExportPdf = async function smvExportPdf(){
+  var mode = confirm('ใบนับสต๊อก — เลือกชุดรายการ\n\n[ตกลง]  = เฉพาะสินค้าที่มีการเคลื่อนไหวในช่วงที่เลือก\n[ยกเลิก] = ทุกตัวที่มีของค้างอยู่ในคลัง FG-BP')
+    ? 'moved' : 'all';
+  var rows = [];
+  try{
+    if (mode==='moved'){
+      rows = _smvFiltered().map(function(r){ return { sku:r.sku, name:r.name }; });
+    } else {
+      var oh = await window._sb.from('onhand_fg')
+        .select('item_number,product_name,cw_physical_inventory')
+        .eq('warehouse','FG-BP').gt('cw_physical_inventory',0).range(0,4999);
+      if (oh.error) throw oh.error;
+      rows = (oh.data||[]).map(function(r){ return { sku:r.item_number, name:r.product_name }; });
+      var sk = rows.map(function(r){ return r.sku; });
+      for (var i=0;i<sk.length;i+=100){
+        var pr = await window._sb.from('products').select('sku,search_name,name').in('sku', sk.slice(i,i+100));
+        (pr.data||[]).forEach(function(p){ _smvProdMap[p.sku]=p; });
+      }
+    }
+  }catch(e){ showToast('เตรียมใบนับไม่สำเร็จ: '+(e.message||e), true); return; }
+
+  if(!rows.length){ showToast('ไม่มีรายการให้พิมพ์', true); return; }
+  rows.sort(function(a,b){ return String(a.sku).localeCompare(String(b.sku)); });
+  _smvPrintCountSheet(rows, mode);
+};
+
+function _smvPrintCountSheet(rows, mode){
+  var PER=24;
+  var fromV=document.getElementById('smv-from').value, toV=document.getElementById('smv-to').value;
+  var rnd = (mode==='moved') ? (_thDate(fromV)+' – '+_thDate(toV)) : 'ทั้งคลัง';
+  var now = new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  var pages=[]; for(var i=0;i<rows.length;i+=PER) pages.push(rows.slice(i,i+PER));
+  var secs = pages.map(function(pg,pi){
+    var trs = pg.map(function(r,ri){
+      var p=_smvProdMap[r.sku]||{};
+      return '<tr><td class="no">'+(pi*PER+ri+1)+'</td><td class="wh">FG-BP</td>'
+        +'<td class="sku">'+_e(r.sku)+'</td>'
+        +'<td class="nm"><div class="sn">'+_e(p.search_name||'')+'</div><div class="th">'+_e(r.name||'')+'</div></td>'
+        +'<td class="box"></td><td class="box"></td><td class="box"></td><td class="box"></td><td class="box hold"></td></tr>';
+    }).join('');
+    return '<section class="sheet">'
+      +'<header class="ph"><div class="brand"><div class="logo">TST</div><div>'
+        +'<div class="t1">ใบนับสต๊อกสินค้าสำเร็จรูป</div>'
+        +'<div class="t2">บริษัท ที.แสตนดาร์ด สตีล จำกัด · PHYSICAL COUNT SHEET</div></div></div>'
+      +'<div class="meta"><div><span>คลัง</span><b>FG-BP</b></div>'
+        +'<div><span>รอบนับ</span><b>'+_e(rnd)+'</b></div>'
+        +'<div><span>พิมพ์เมื่อ</span><b>'+_e(now)+'</b></div>'
+        +'<div><span>หน้า</span><b>'+(pi+1)+' / '+pages.length+'</b></div></div></header>'
+      +'<div class="who"><div class="w"><span>ผู้นับ</span><div class="line"></div></div>'
+        +'<div class="w"><span>ผู้ทาน</span><div class="line"></div></div>'
+        +'<div class="w"><span>วันที่นับ</span><div class="line"></div></div>'
+        +'<div class="w"><span>เวลา</span><div class="line"></div></div></div>'
+      +'<table><thead><tr><th class="no">ลำดับ</th><th class="wh">WH</th><th class="sku">SKU</th><th class="nm">SEARCH NAME</th>'
+        +'<th class="box">Bundle 1</th><th class="box">Bundle 2</th><th class="box">Pcs 1</th><th class="box">Pcs 2</th>'
+        +'<th class="box hold">Hold pcs</th></tr></thead><tbody>'+trs+'</tbody></table>'
+      +'<footer class="pf"><div>รวมหน้านี้ '+pg.length+' รายการ</div>'
+        +'<div class="sig"><span>ลงชื่อผู้นับ</span><div class="line"></div>'
+        +'<span>ลงชื่อหัวหน้า</span><div class="line"></div></div></footer></section>';
+  }).join('');
+
+  var css = '*{box-sizing:border-box}'
+    +'body{margin:0;background:#e9edf1;color:#0b1117;font-family:"Sarabun","IBM Plex Sans Thai",sans-serif;line-height:1.35;padding:18px}'
+    +'.sheet{width:794px;min-height:1123px;margin:0 auto 18px;background:#fff;padding:26px 28px 22px;display:flex;flex-direction:column;box-shadow:0 2px 14px rgba(13,30,45,.14)}'
+    +'.ph{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-bottom:2px solid #0b1117;padding-bottom:10px}'
+    +'.brand{display:flex;gap:11px;align-items:center}'
+    +'.logo{width:42px;height:42px;border:2px solid #0b1117;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}'
+    +'.t1{font-size:17px;font-weight:700}.t2{font-size:10.5px;color:#3d4e5c;font-weight:600;margin-top:1px}'
+    +'.meta{display:flex;flex-direction:column;gap:2px;text-align:right}.meta div{font-size:11px}'
+    +'.meta span{color:#8a9aa8;font-weight:600;margin-right:7px}.meta b{font-family:monospace;font-weight:600}'
+    +'.who{display:flex;gap:16px;margin:11px 0 9px}.who .w{flex:1;display:flex;align-items:flex-end;gap:7px}'
+    +'.who span{font-size:10.5px;color:#3d4e5c;font-weight:700;white-space:nowrap}'
+    +'.who .line{flex:1;border-bottom:1px dotted #b9c6d1;height:15px}'
+    +'table{width:100%;border-collapse:collapse;table-layout:fixed}'
+    +'thead th{background:#f2f5f8;border:1px solid #b9c6d1;font-size:9.5px;font-weight:700;padding:6px 4px;color:#3d4e5c}'
+    +'tbody td{border:1px solid #dde5ec;border-left-color:#b9c6d1;border-right-color:#b9c6d1;padding:0 5px;height:30px;font-size:11px}'
+    +'tbody tr:nth-child(even) td{background:#fbfcfd}'
+    +'.no{width:34px;text-align:center;font-family:monospace;color:#3d4e5c;font-size:10.5px}'
+    +'.wh{width:52px;text-align:center;font-family:monospace;font-size:10px;font-weight:600}'
+    +'.sku{width:88px;font-family:monospace;font-size:10.5px;font-weight:600}'
+    +'.sn{font-size:10.5px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.th{font-size:9px;color:#8a9aa8;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.box{width:62px;background:#fff}thead th.box{width:62px}'
+    +'.hold{background:#f6f1e4}tbody td.hold{background:#f6f1e4}tbody tr:nth-child(even) td.hold{background:#f2ecdd}'
+    +'.pf{margin-top:auto;padding-top:11px;border-top:1px solid #b9c6d1;display:flex;align-items:flex-end;justify-content:space-between;gap:18px}'
+    +'.pf>div:first-child{font-size:10px;color:#8a9aa8;font-weight:600}'
+    +'.sig{display:flex;align-items:flex-end;gap:9px;flex:1;max-width:440px}'
+    +'.sig span{font-size:10px;color:#3d4e5c;font-weight:700;white-space:nowrap}'
+    +'.sig .line{flex:1;border-bottom:1px dotted #b9c6d1;height:17px}'
+    +'@media print{@page{size:A4 portrait;margin:0}body{background:#fff;padding:0}'
+    +'.sheet{box-shadow:none;margin:0;width:210mm;min-height:297mm;page-break-after:always}'
+    +'.sheet:last-child{page-break-after:auto}}';
+
+  var w = window.open('', '_blank');
+  if (!w) { showToast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต popup ก่อน', true); return; }
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ใบนับสต๊อก FG-BP</title>'
+    +'<style>'+css+'</style></head><body>'+secs
+    +'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},500);};</scr'+'ipt>'
+    +'</body></html>');
+  w.document.close();
+}
 
 })();
 
