@@ -24603,15 +24603,43 @@ window._ldGuardStartLoading = _ldGuardStartLoading;
 window._ldApplyInspectionGate = _ldApplyInspectionGate;
 window._ldCheckInspectionAllowed = _ldCheckInspectionAllowed;
 
+// แสดงรูปจากการโหลดรอบแรกในฟอร์ม เพื่อให้หน้างานรู้ว่ามีรูปติดไปแล้ว
+// ไม่งั้นจะนึกว่าต้องถ่ายใหม่ หรือกดส่งไม่ได้เพราะคิดว่ายังไม่มีรูป
+function _ldShowOldPhotos(oid, urls) {
+    try {
+        if (!urls || !urls.length) return;
+        var wrap = document.getElementById('ldf-photo-prev-' + oid)
+                || document.getElementById('ldf-photo-wrap-' + oid);
+        if (!wrap) return;
+        if (document.getElementById('ldf-oldphoto-' + oid)) return;
+        if (wrap.querySelector('[data-oldwrap]')) return;   // บล็อกเดิมแสดงไปแล้ว
+        var box = document.createElement('div');
+        box.id = 'ldf-oldphoto-' + oid;
+        box.setAttribute('data-oldwrap','1');   // ใช้ marker เดียวกับบล็อกเดิม กันแสดงซ้ำ
+        box.style.cssText = 'margin-top:8px;padding:8px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;';
+        box.innerHTML = '<div style="font-size:11px;font-weight:900;color:#475569;margin-bottom:6px;">'
+            + '📎 รูปจากการโหลดรอบแรก (' + urls.length + ') — ติดไปกับงานอยู่แล้ว ไม่ต้องถ่ายซ้ำ</div>'
+            + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+            + urls.map(function(u){
+                return '<a href="' + u + '" target="_blank" rel="noopener">'
+                     + '<img src="' + u + '" style="width:62px;height:62px;object-fit:cover;border-radius:8px;border:1px solid #cbd5e1;"></a>';
+              }).join('')
+            + '</div>';
+        wrap.appendChild(box);
+    } catch (e) {}
+}
+
 async function _ldRestoreRejectedForm(oid, orderItems) {
     try {
-        // If user has already explicitly edited this form, preserve their data
+        // เช็คทีหลัง — ต้องเก็บรูปของรอบแรกไว้ก่อนเสมอ
+        // ถ้า return ตรงนี้เลย รูปจากการโหลดครั้งแรกจะหายไปทั้งหมด
+        var _rjUserEdited = false;
         try {
             var _rjUnitCheck = _ldTrailerUnit[oid]||'mother';
             var _localRaw = localStorage.getItem('ld_draft_'+oid+'|'+_rjUnitCheck) || localStorage.getItem('ld_draft_'+oid);
             if (_localRaw) {
                 var _localDraft = JSON.parse(_localRaw);
-                if (_localDraft && _localDraft.userEdited) return;
+                if (_localDraft && _localDraft.userEdited) _rjUserEdited = true;
             }
         } catch(e){}
 
@@ -24648,6 +24676,10 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         var _rjPhotos = [];
         done.forEach(function(r){ (r.photo_urls||[]).forEach(function(u){ if(u && _rjPhotos.indexOf(u)<0) _rjPhotos.push(u); }); });
         window._ldOldPhotos[oid] = _rjPhotos;
+        _ldShowOldPhotos(oid, _rjPhotos);
+
+        // ผู้ใช้แก้ฟอร์มนี้ไปแล้ว ไม่ต้องเติมตัวเลขทับ แต่รูปรอบแรกเก็บไว้แล้วข้างบน
+        if (_rjUserEdited) return;
 
         // Group done sessions by SKU, sorted oldest-first for positional matching
         // (supports duplicate SKU order items — each iIdx gets its own session)
