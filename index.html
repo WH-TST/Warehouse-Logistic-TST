@@ -24572,11 +24572,14 @@ async function _ldApplyInspectionGate(oid) {
     var o = (window._ldOrdersById||{})[oid];
     if (!o) return;
     var res = await _ldCheckInspectionAllowed(o);
-    var gate    = document.getElementById('ldf-inspect-gate-'+oid);
-    var saveBtn = document.getElementById('ldf-save-btn-'+oid);
+    var gate = document.getElementById('ldf-inspect-gate-'+oid);
+    // ปุ่มของทั้งสองหน่วยรถ (รถพ่วงเปิดพร้อมกันได้)
+    var _btns = [oid, oid+'-mother', oid+'-trailer']
+        .map(function(k){ return document.getElementById('ldf-save-btn-'+k); })
+        .filter(Boolean);
     if (!res.gated || res.allowed) {
         if (gate) gate.innerHTML = '';
-        if (saveBtn) { saveBtn.disabled=false; saveBtn.style.opacity=''; saveBtn.style.filter=''; saveBtn.style.cursor='pointer'; }
+        _btns.forEach(function(b){ b.style.opacity=''; b.style.filter=''; });
         return;
     }
     // ถูกบล็อก — รถบริษัทยังไม่ผ่านตรวจสภาพ
@@ -24585,7 +24588,9 @@ async function _ldApplyInspectionGate(oid) {
         +'<div><div style="font-size:14px;font-weight:900;color:#fff;">'+(res.reason==='offline'?'ยังโหลดไม่ได้ — ตรวจสอบผลตรวจสภาพไม่ได้':'ยังโหลดไม่ได้ — รถยังไม่ผ่านตรวจสภาพ')+'</div>'
         +'<div style="font-size:12px;color:#fecaca;margin-top:2px;">'+_ldEsc(_ldInspBlockMsg(res,''))+'</div></div>'
         +'</div>';
-    if (saveBtn) { saveBtn.disabled=true; saveBtn.style.opacity='0.5'; saveBtn.style.filter='grayscale(1)'; saveBtn.style.cursor='not-allowed'; }
+    // หรี่ปุ่มให้เห็นว่าติดด่าน แต่ไม่ปิดการกด — ldCardSave ตรวจซ้ำและขึ้นข้อความบอกเหตุผลเอง
+    // (เดิมปิดปุ่มไว้ กดครั้งแรกไม่ติดแบบเงียบๆ กลายเป็นต้องกดสองรอบ)
+    _btns.forEach(function(b){ b.style.opacity='0.5'; b.style.filter='grayscale(1)'; });
 }
 // เดินสถานะ pending → in_progress ได้เฉพาะเมื่อรถผ่านตรวจสภาพแล้ว
 async function _ldGuardStartLoading(orderId) {
@@ -25231,7 +25236,7 @@ function _ldBuildFormMobile(order) {
             +'<div id="ldf-photo-prev-'+_pKey+'" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>'
         +'</div>'
         +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="Note (optional)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;outline:none;resize:none;box-sizing:border-box;background:#fff;"></textarea>'
-        +'<button id="ldf-save-btn-'+oid+'" onclick="ldCardSave(\''+oid+'\',\''+unit+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);">'
+        +'<button id="ldf-save-btn-'+_ldPhotoKey(oid,unit)+'" onclick="ldCardSave(\''+oid+'\',\''+unit+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);">'
             +'<i class="fas fa-save"></i> SAVE LOADING RECORD'
         +'</button>'
     +'</div>';
@@ -25495,7 +25500,7 @@ function _ldBuildForm(order) {
         // note
         +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="Note (optional)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;outline:none;resize:none;box-sizing:border-box;background:#fff;"></textarea>'
         // save
-        +'<button id="ldf-save-btn-'+oid+'" onclick="ldCardSave(\''+oid+'\',\''+_formUnit+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);letter-spacing:0.5px;">'
+        +'<button id="ldf-save-btn-'+_ldPhotoKey(oid,_formUnit)+'" onclick="ldCardSave(\''+oid+'\',\''+_formUnit+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);letter-spacing:0.5px;">'
             +'<i class="fas fa-save"></i> SAVE LOADING RECORD'
         +'</button>'
     +'</div>';
@@ -26317,8 +26322,25 @@ window.ldCardRemovePhoto = function(oid, i) {
 };
 
 window.ldCardSave = async function(oid, unit) {
-    var _saveBtn = document.getElementById('ldf-save-btn-'+oid);
-    if (_saveBtn && _saveBtn.disabled) return; // ป้องกันกดซ้ำ
+    var _btnUnit = unit || _ldTrailerUnit[oid] || 'mother';
+    var _saveBtn = document.getElementById('ldf-save-btn-'+_ldPhotoKey(oid,_btnUnit))
+                || document.getElementById('ldf-save-btn-'+oid);
+    // ปุ่มถูกปิดได้ทางเดียวคือกำลังบันทึกอยู่ — บอกให้รู้ อย่าเงียบ
+    // (เดิมด่านตรวจสภาพรถปิดปุ่มไว้ด้วย กดครั้งแรกเลยไม่ติด ต้องกดสองรอบ)
+    if (_saveBtn && _saveBtn.disabled) { showToast('กำลังบันทึกอยู่ กรุณารอสักครู่', true); return; }
+    // คืนปุ่มให้กดได้ใหม่ทุกครั้งที่ออกกลางคัน ไม่งั้นค้างเป็นสีเทากดไม่ได้อีกเลย
+    var _abort = function(msg) {
+        if (msg) showToast(msg, true);
+        if (_saveBtn) {
+            _saveBtn.disabled = false;
+            _saveBtn.style.background = '#16a34a';
+            _saveBtn.style.cursor = 'pointer';
+            _saveBtn.innerHTML = '<i class="fas fa-save"></i> SAVE LOADING RECORD';
+        }
+        [oid, oid+'|mother', oid+'|trailer'].forEach(function(k){
+            if (window._ldSubmitting) delete window._ldSubmitting[k];
+        });
+    };
     // Force commit any focused input before reading values (mobile may not commit on tap)
     var _ae = document.activeElement;
     if (_ae && _ae.tagName === 'INPUT' && _ae !== document.body) {
@@ -26360,6 +26382,7 @@ window.ldCardSave = async function(oid, unit) {
     // collect items from per-lift inputs
     var items = [];
     var idx2 = 0;
+    var _badCells = [];
     while (true) {
         if (!document.getElementById('ldf-lq-'+oid+'-'+curUnit+'-'+idx2+'-0')) break;
         var lifts = [];
@@ -26371,21 +26394,32 @@ window.ldCardSave = async function(oid, unit) {
             var q = parseFloat((qEl&&qEl.value)||0)||0;
             var w = parseFloat((wEl&&wEl.value)||0)||0;
             if (q>0||w>0) { lifts.push({lift_no:c+1, qty:q, weight:w}); totalQty+=q; totalWt+=w; }
+            // ช่องที่มีน้ำหนักแต่ไม่มีจำนวน = ของค้างที่ล้างไม่หมด ไม่ใช่ของที่โหลดจริง
+            // เคส LD2610054: ลิฟต์ที่ 6 ของรถลูกหลุดมาอยู่ฝั่งรถแม่ หน้างานล้าง PCS
+            // แต่ KG ยังค้าง แถวเลยรอดการลบ (เงื่อนไขลบต้องเป็น 0 ทั้งคู่)
+            // มอนิเตอร์เลยโชว์น้ำหนัก 1,908 ทั้งที่ของไม่มีอยู่จริง
+            if (w>0 && q<=0) _badCells.push('รายการที่ '+(idx2+1)+' ช่องที่ '+(c+1));
         }
         items.push({qty:totalQty, weight:totalWt, lifts:lifts});
         idx2++;
     }
+    if (_badCells.length) {
+        _abort('⚠️ มีช่องที่กรอกน้ำหนักแต่ไม่มีจำนวน (' + _badCells.slice(0,3).join(', ')
+             + (_badCells.length>3 ? ' และอีก '+(_badCells.length-3)+' ช่อง' : '')
+             + ') — ถ้าไม่ได้โหลดจริงให้ล้างน้ำหนักออกด้วย');
+        return;
+    }
     var hasData = items.some(function(it){ return it.qty>0||it.weight>0; });
-    if (!hasData) { showToast('กรุณากรอกข้อมูลอย่างน้อย 1 รายการ', true); return; }
+    if (!hasData) { _abort('กรุณากรอกข้อมูลอย่างน้อย 1 รายการ'); return; }
 
     // QC validation — all 5 checkboxes must be checked
     var qcState = _ldQcState[oid] || [];
     var qcLabels = ['No cracks / deformation','Rust check','SKU & qty correct','Dunnage placed','Strapped & tied'];
     for (var qi=0; qi<5; qi++) {
         if (!qcState[qi]) {
-            showToast('⚠️ QC not checked: '+qcLabels[qi], true);
             var lbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+qi);
             if (lbl) { lbl.style.borderColor='#dc2626'; lbl.style.background='#fff1f2'; setTimeout(function(l){ l.style.borderColor='#fde68a'; l.style.background='#fffbeb'; }.bind(null,lbl),2000); }
+            _abort('⚠️ QC not checked: '+qcLabels[qi]);
             return;
         }
     }
@@ -26393,9 +26427,9 @@ window.ldCardSave = async function(oid, unit) {
     // Photo validation — at least 1 photo required (รูปเก่าจากงานที่ตีกลับก็นับ)
     var _pkChk = _ldPhotoKey(oid, curUnit);
     if (!(_ldCardPhotos[_pkChk]||[]).length && !((window._ldOldPhotos||{})[_pkChk]||[]).length && !((window._ldOldPhotos||{})[oid]||[]).length) {
-        showToast('⚠️ At least 1 product photo is required', true);
-        var pw = document.getElementById('ldf-photo-wrap-'+oid);
+        var pw = document.getElementById('ldf-photo-wrap-'+_pkChk) || document.getElementById('ldf-photo-wrap-'+oid);
         if (pw) { pw.style.borderColor='#dc2626'; setTimeout(function(){ pw.style.borderColor='#e2e8f0'; },2000); }
+        _abort('⚠️ At least 1 product photo is required');
         return;
     }
 
@@ -26410,7 +26444,7 @@ window.ldCardSave = async function(oid, unit) {
     if (orderData) {
         var _insp = await _ldCheckInspectionAllowed(orderData);
         if (_insp.gated && !_insp.allowed) {
-            showToast('🚫 รถยังไม่ผ่านตรวจสภาพ — ทะเบียน '+_insp.plate+' ต้องตรวจสภาพรถและได้รับอนุมัติก่อนจึงจะโหลดได้', true);
+            _abort('🚫 รถยังไม่ผ่านตรวจสภาพ — ทะเบียน '+_insp.plate+' ต้องตรวจสภาพรถและได้รับอนุมัติก่อนจึงจะโหลดได้');
             if (typeof _ldApplyInspectionGate==='function') _ldApplyInspectionGate(oid);
             return;
         }
