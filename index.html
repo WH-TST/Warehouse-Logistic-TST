@@ -24244,18 +24244,22 @@ function _ldGetCardsWrap() {
 }
 
 // ── โหลด+แสดง Order Cards ──
-async function _ldLoadOrderCards(dateVal, background) {
+async function _ldLoadOrderCards(dateVal, background, force) {
     var wrap = _ldGetCardsWrap();
     if (!wrap) return;
     var focused = document.activeElement;
     var typing = focused && (focused.tagName==='INPUT'||focused.tagName==='TEXTAREA') && wrap.contains(focused);
     // การ์ดที่กำลังเปิดกรอกอยู่ (ปกติ/รถพ่วง)
     var formOpen = !!_ldActiveOrderId || Object.keys(_ldTrailerActive||{}).some(function(k){ var t=_ldTrailerActive[k]; return t && (t.mother||t.trailer); });
-    // เลื่อน re-render เมื่อ: กำลังพิมพ์ หรือ (refresh เบื้องหลังขณะการ์ดเปิดอยู่)
+    // เลื่อน re-render เมื่อ: กำลังพิมพ์ หรือ มีการ์ดเปิดกรอกอยู่
     // กัน re-render ทับขณะกรอก → QC เด้ง/ตัวเลขกระพริบ/ค่าที่ยังไม่ save หาย
-    if (typing || (background && formOpen)) {
+    // ⚠ เดิมเลื่อนเฉพาะ background=true แต่ event เรียลไทม์หลายจุดเรียกแบบไม่ใช่
+    // background ด้วย มันเลยล้าง innerHTML ทั้งก้อนขณะฟอร์มเปิดอยู่ ปุ่ม Save ถูก
+    // สร้างใหม่ระหว่าง mousedown→mouseup เบราว์เซอร์จึงไม่ยิง click เลย
+    // อาการที่หน้างานเจอคือ "ต้องกด Save สองรอบ" (ครั้งแรกโดนกลืน)
+    if (typing || (formOpen && !force)) {
         clearTimeout(_ldLoadOrderCards._defer);
-        _ldLoadOrderCards._defer = setTimeout(function(){ _ldLoadOrderCards(dateVal, background); }, 2000);
+        _ldLoadOrderCards._defer = setTimeout(function(){ _ldLoadOrderCards(dateVal, background, force); }, 2000);
         return;
     }
     try {
@@ -24502,9 +24506,16 @@ function _ldRenderCards(orders) {
     // แต่หน่วยที่โดนตีกลับก็ต้องได้ข้อมูลเดิมกลับมาแก้เหมือนกัน
     orders.forEach(function(o){
         var _ur = o.unit_review || {};
-        var _anyUnitRejected = Object.keys(_ur).some(function(k){ return (_ur[k]||{}).status==='rejected'; });
-        if ((o.review_status||'')==='rejected' || _anyUnitRejected) {
-            _ldRestoreRejectedForm(o.id, o.items||[]);
+        // ⚠ ต้องระบุหน่วยรถตอนเรียก — เดิมปล่อยให้ไปอ่าน _ldTrailerUnit[oid]
+        // ซึ่งเป็น "หน่วยที่เปิดดูอยู่" ตัวเดียวทั้งใบ ตอนรายการโหลดใหม่ยังไม่มีฟอร์มเปิด
+        // ค่าจึงค้างเป็นของอีกหน่วย แล้วดึงข้อมูลของอีกหน่วยมาเติมผิดฟอร์ม
+        // (LD2610054: แม่ถูกตีกลับ แต่ได้ลิฟต์ของลูกมาทั้งชุด 300 เส้น/11,434 KG)
+        if (o.is_trailer) {
+            ['mother','trailer'].forEach(function(u){
+                if ((_ur[u]||{}).status === 'rejected') _ldRestoreRejectedForm(o.id, o.items||[], u);
+            });
+        } else if ((o.review_status||'')==='rejected') {
+            _ldRestoreRejectedForm(o.id, o.items||[], 'mother');
         }
     });
     // cache orders for inspection-gate lookup
@@ -24637,13 +24648,13 @@ function _ldShowOldPhotos(oid, urls, unit) {
     } catch (e) {}
 }
 
-async function _ldRestoreRejectedForm(oid, orderItems) {
+async function _ldRestoreRejectedForm(oid, orderItems, unit) {
     try {
         // เช็คทีหลัง — ต้องเก็บรูปของรอบแรกไว้ก่อนเสมอ
         // ถ้า return ตรงนี้เลย รูปจากการโหลดครั้งแรกจะหายไปทั้งหมด
         var _rjUserEdited = false;
         try {
-            var _rjUnitCheck = _ldTrailerUnit[oid]||'mother';
+            var _rjUnitCheck = unit || _ldTrailerUnit[oid] || 'mother';
             var _localRaw = localStorage.getItem('ld_draft_'+oid+'|'+_rjUnitCheck) || localStorage.getItem('ld_draft_'+oid);
             if (_localRaw) {
                 var _localDraft = JSON.parse(_localRaw);
@@ -24654,7 +24665,7 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         // ⚠ ต้องกรองหน่วยรถ — ฟอร์มที่กำลังเปิดเป็นของแม่หรือลูกหน่วยเดียว
         // เดิมดึงมาทั้งใบแล้วจับคู่ด้วย SKU สินค้าไซส์เดียวกันที่ขึ้นทั้งสองคัน
         // จึงเอาข้อมูลของอีกหน่วยมาเติม กลายเป็น "กรอกแม่โชว์ลูก"
-        var _rjUnit = _ldTrailerUnit[oid] || 'mother';
+        var _rjUnit = unit || _ldTrailerUnit[oid] || 'mother';
         var _rjCache = _ldDraftOrderCache[oid];
         var _rjIsTrailer = _rjCache ? !!_rjCache.is_trailer
                          : !!((window._ldOrdersById||{})[oid]||{}).is_trailer;
@@ -24726,12 +24737,11 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         if (!Object.keys(itemLiftsMap).length) return;
 
         // Store in DB cache for cross-device support (unit-keyed so mother/trailer don't overwrite each other)
-        var _dlUk = oid+'|'+(_ldTrailerUnit[oid]||'mother');
+        var _dlUk = oid+'|'+_rjUnit;
         if (!_ldDraftDBCache[_dlUk]) _ldDraftDBCache[_dlUk] = {};
         Object.keys(itemLiftsMap).forEach(function(k){ _ldDraftDBCache[_dlUk][k] = itemLiftsMap[k]; });
 
         // Directly set DOM values for empty fields (bypasses the localStorage vs DB cache conflict)
-        var _rjUnit = _ldTrailerUnit[oid]||'mother';
         setTimeout(function(){
             Object.keys(itemLiftsMap).forEach(function(iIdxStr){
                 var iIdx = parseInt(iIdxStr, 10);
@@ -26393,22 +26403,43 @@ window.ldCardSave = async function(oid, unit) {
             var wEl = document.getElementById('ldf-lw-'+oid+'-'+curUnit+'-'+idx2+'-'+c);
             var q = parseFloat((qEl&&qEl.value)||0)||0;
             var w = parseFloat((wEl&&wEl.value)||0)||0;
-            if (q>0||w>0) { lifts.push({lift_no:c+1, qty:q, weight:w}); totalQty+=q; totalWt+=w; }
             // ช่องที่มีน้ำหนักแต่ไม่มีจำนวน = ของค้างที่ล้างไม่หมด ไม่ใช่ของที่โหลดจริง
             // เคส LD2610054: ลิฟต์ที่ 6 ของรถลูกหลุดมาอยู่ฝั่งรถแม่ หน้างานล้าง PCS
             // แต่ KG ยังค้าง แถวเลยรอดการลบ (เงื่อนไขลบต้องเป็น 0 ทั้งคู่)
             // มอนิเตอร์เลยโชว์น้ำหนัก 1,908 ทั้งที่ของไม่มีอยู่จริง
-            if (w>0 && q<=0) _badCells.push('รายการที่ '+(idx2+1)+' ช่องที่ '+(c+1));
+            // ⚠ ไม่บล็อกการบันทึก — หน้างานต้องส่งงานได้เสมอ แค่ไม่เอาช่องขยะไปด้วย
+            if (w>0 && q<=0) { _badCells.push('รายการที่ '+(idx2+1)+' ช่องที่ '+(c+1)); continue; }
+            if (q>0||w>0) { lifts.push({lift_no:c+1, qty:q, weight:w}); totalQty+=q; totalWt+=w; }
         }
         items.push({qty:totalQty, weight:totalWt, lifts:lifts});
         idx2++;
     }
     if (_badCells.length) {
-        _abort('⚠️ มีช่องที่กรอกน้ำหนักแต่ไม่มีจำนวน (' + _badCells.slice(0,3).join(', ')
-             + (_badCells.length>3 ? ' และอีก '+(_badCells.length-3)+' ช่อง' : '')
-             + ') — ถ้าไม่ได้โหลดจริงให้ล้างน้ำหนักออกด้วย');
-        return;
+        showToast('ข้ามช่องที่มีน้ำหนักแต่ไม่มีจำนวน (' + _badCells.slice(0,3).join(', ')
+             + (_badCells.length>3 ? ' และอีก '+(_badCells.length-3)+' ช่อง' : '') + ')', true);
     }
+    // รถพ่วง: รายการที่แผนไม่ได้แบ่งของให้หน่วยนี้ ห้ามมีตัวเลข
+    // กันข้อมูลของอีกหน่วยที่หลุดเข้ามาทางการกู้ฟอร์ม/ซิงก์ ถูกบันทึกทับ
+    try {
+        var _odChk = _ldDraftOrderCache[oid] || (window._ldOrdersById||{})[oid];
+        var _spChk = _odChk && _odChk.trailer_split;
+        if (_spChk) {
+            var _fo = window._ldFormOrigIdx && window._ldFormOrigIdx[oid+'|'+curUnit];
+            var _wrongUnit = [];
+            items.forEach(function(it, fi){
+                if (!(it.qty>0||it.weight>0)) return;
+                var oiIdx = (_fo && _fo[fi]!==undefined) ? _fo[fi] : fi;
+                var alloc = _spChk[String(oiIdx)] || {};
+                var pcs = curUnit==='trailer' ? (alloc.trailer_pcs||0) : (alloc.mother_pcs||0);
+                var kg  = curUnit==='trailer' ? (alloc.trailer_kg||0)  : (alloc.mother_kg||0);
+                if (pcs<=0 && kg<=0) _wrongUnit.push('รายการที่ '+(fi+1));
+            });
+            if (_wrongUnit.length) {
+                showToast('⚠️ ' + _wrongUnit.join(', ') + ' ไม่ได้อยู่ใน'
+                     + (curUnit==='trailer'?'รถลูก':'รถแม่') + ' ตามแผนแบ่งของ — ช่วยตรวจอีกครั้ง', true);
+            }
+        }
+    } catch(e){}
     var hasData = items.some(function(it){ return it.qty>0||it.weight>0; });
     if (!hasData) { _abort('กรุณากรอกข้อมูลอย่างน้อย 1 รายการ'); return; }
 
@@ -26666,7 +26697,7 @@ window.ldCardSave = async function(oid, unit) {
             _saveBtn.innerHTML = '<i class="fas fa-check-circle"></i> บันทึกเรียบร้อยแล้ว';
             _saveBtn.style.background = '#065f46';
         }
-        _ldLoadOrderCards(today);
+        _ldLoadOrderCards(today, false, true);
         _ldRefreshGlobalStats(today);
     } catch(e) {
         showToast('Error: '+(e?.message||String(e)), true);
