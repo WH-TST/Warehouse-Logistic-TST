@@ -24615,11 +24615,20 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
             }
         } catch(e){}
 
-        var {data:done} = await window._sb.from('loading_sessions')
-            .select('sku,qty,weight,lifts,created_at,note,photo_urls')
+        // ⚠ ต้องกรองหน่วยรถ — ฟอร์มที่กำลังเปิดเป็นของแม่หรือลูกหน่วยเดียว
+        // เดิมดึงมาทั้งใบแล้วจับคู่ด้วย SKU สินค้าไซส์เดียวกันที่ขึ้นทั้งสองคัน
+        // จึงเอาข้อมูลของอีกหน่วยมาเติม กลายเป็น "กรอกแม่โชว์ลูก"
+        var _rjUnit = _ldTrailerUnit[oid] || 'mother';
+        var _rjCache = _ldDraftOrderCache[oid];
+        var _rjIsTrailer = _rjCache ? !!_rjCache.is_trailer
+                         : !!((window._ldOrdersById||{})[oid]||{}).is_trailer;
+        var _rjQ = window._sb.from('loading_sessions')
+            .select('sku,item_idx,truck_unit,qty,weight,lifts,created_at,note,photo_urls')
             .eq('order_id', oid)
             .neq('record_type', 'draft')
             .order('created_at', {ascending:true});
+        if (_rjIsTrailer) _rjQ = _rjQ.eq('truck_unit', _rjUnit);
+        var {data:done} = await _rjQ;
         if (!done || !done.length) return;
 
         // ── parse เหล็กรอง (dunnage) + QC จาก note เดิม เพื่อ restore ──
@@ -24652,13 +24661,19 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         });
 
         // Build item index → lifts map (positional: first iIdx with SKU gets first session, etc.)
+        // จับคู่ด้วยลำดับรายการก่อน SKU ใช้เฉพาะแถวเก่าที่ไม่มี item_idx
+        var _rjByIdx = {};
+        done.forEach(function(r){ if (r.item_idx != null) _rjByIdx[r.item_idx] = r; });
         var skuPos = {};
         var itemLiftsMap = {};
         orderItems.forEach(function(oi, iIdx){
             var sku = oi.sku;
-            if (!skuPos[sku]) skuPos[sku] = 0;
-            var r = (skuQueues[sku]||[])[skuPos[sku]];
-            skuPos[sku]++;
+            var r = _rjByIdx[iIdx];
+            if (!r) {
+                if (!skuPos[sku]) skuPos[sku] = 0;
+                r = (skuQueues[sku]||[])[skuPos[sku]];
+                skuPos[sku]++;
+            }
             if (!r) return;
             if (r.lifts && r.lifts.length) {
                 itemLiftsMap[iIdx] = r.lifts;
@@ -25675,7 +25690,10 @@ async function _ldUpsertDraft(oid, unit) {
         // This is the safety net — covers cases where memory was cleared
         var _syncFOrigIdx = window._ldFormOrigIdx && window._ldFormOrigIdx[_uk];
         var _syncQ = window._sb.from('loading_sessions').select('id,sku,created_at').eq('order_id',oid).eq('record_type','draft');
-        if (od.is_trailer && od.trailer_split) _syncQ = _syncQ.eq('truck_unit', _curUnit);
+        // กรองหน่วยรถเสมอเมื่อเป็นรถพ่วง — เดิมกรองเฉพาะตอนมี trailer_split
+        // ถ้าไม่กรอง ร่างของแม่กับลูกจะปนกัน สินค้าไซส์เดียวกันที่ขึ้นทั้งสองคัน
+        // จะกรอกฝั่งหนึ่งแล้วไปโผล่อีกฝั่ง
+        if (od.is_trailer) _syncQ = _syncQ.eq('truck_unit', _curUnit);
         var {data:existingDrafts} = await _syncQ;
         if (existingDrafts && existingDrafts.length) {
             // Count only SKUs that appear in the form (trailer split may filter some items out)
@@ -25785,7 +25803,7 @@ async function _ldApplyRemoteDrafts(oid, unit) {
         var q = window._sb.from('loading_sessions')
             .select('id,sku,lifts,truck_unit,staff_name,item_idx')
             .eq('order_id', oid).eq('record_type', 'draft');
-        if (od.is_trailer && od.trailer_split) q = q.eq('truck_unit', _u);
+        if (od.is_trailer) q = q.eq('truck_unit', _u);
         var { data: drafts } = await q;
         if (!drafts || !drafts.length) return;
 
@@ -26018,7 +26036,7 @@ async function _ldRestoreDraftIds(oid, unit) {
 
         // Fetch draft rows for this order+unit (trailer split: mother and trailer are separate)
         var _restoreQ = window._sb.from('loading_sessions').select('id,sku,lifts,start_time,truck_unit,item_idx').eq('order_id', oid).eq('record_type', 'draft');
-        if (od.is_trailer && od.trailer_split) _restoreQ = _restoreQ.eq('truck_unit', _restoreUnit);
+        if (od.is_trailer) _restoreQ = _restoreQ.eq('truck_unit', _restoreUnit);
         var {data:drafts} = await _restoreQ;
         if (!drafts || !drafts.length) return;
 
@@ -26425,9 +26443,17 @@ window.ldCardSave = async function(oid, unit) {
         var toUpdate = []; // [{id, row}]
         var toInsert = []; // [row]
         var _fOrigIdx2 = window._ldFormOrigIdx && window._ldFormOrigIdx[_saveUk];
+        var toDelete = [];   // แถวที่เคยมีข้อมูล แต่รอบนี้หน้างานล้างออกหมดแล้ว
         for (var iIdx2=0; iIdx2<items.length; iIdx2++) {
             var it = items[iIdx2];
-            if (!it.qty && !it.weight) continue;
+            if (!it.qty && !it.weight) {
+                // ⚠ ห้าม continue เฉยๆ
+                // ถ้าแถวนี้มีข้อมูลเก่าอยู่ใน DB (เช่นงานถูกตีกลับแล้วหน้างานล้างค่าเป็น 0)
+                // การข้ามไปจะทิ้งค่าเดิมไว้ มอนิเตอร์จะยังโชว์น้ำหนักเก่าทั้งที่หน้างานล้างแล้ว
+                var _oiSkip = (_fOrigIdx2 && _fOrigIdx2[iIdx2] !== undefined) ? _fOrigIdx2[iIdx2] : iIdx2;
+                if (draftIds[_oiSkip]) { toDelete.push(draftIds[_oiSkip]); delete draftIds[_oiSkip]; }
+                continue;
+            }
             var _oiIdx = (_fOrigIdx2 && _fOrigIdx2[iIdx2] !== undefined) ? _fOrigIdx2[iIdx2] : iIdx2;
             var oi = orderItems[_oiIdx]||{};
             var s = staffList[0];
@@ -26453,6 +26479,9 @@ window.ldCardSave = async function(oid, unit) {
         // Run all UPDATEs in parallel + batch INSERT together
         var saveOps = toUpdate.map(function(u){ return window._sb.from('loading_sessions').update(u.row).eq('id',u.id); });
         if (toInsert.length) saveOps.push(window._sb.from('loading_sessions').insert(toInsert));
+        // รายการที่หน้างานล้างค่าออกหมดแล้ว ต้องลบแถวเดิมทิ้ง ไม่ใช่ปล่อยค้างไว้
+        // (เคสงานถูกตีกลับแล้วล้างน้ำหนักเป็น 0 แต่มอนิเตอร์ยังโชว์ค่าเก่า)
+        if (toDelete.length) saveOps.push(window._sb.from('loading_sessions').delete().in('id', toDelete));
         await Promise.all(saveOps);
         delete _ldDraftRowIds[_saveUk];
         // Clean up duplicate rows: keep N latest per sku+truck_unit where N = count in orderItems
