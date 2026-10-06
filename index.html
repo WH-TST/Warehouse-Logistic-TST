@@ -24498,8 +24498,12 @@ function _ldRenderCards(orders) {
         }
     });
     // Restore rejected orders — pre-fill form from previously saved done sessions
+    // รถพ่วงที่ถูกตีกลับแค่หน่วยเดียว ทั้งใบจะยังเป็น pending_review
+    // แต่หน่วยที่โดนตีกลับก็ต้องได้ข้อมูลเดิมกลับมาแก้เหมือนกัน
     orders.forEach(function(o){
-        if ((o.review_status||'')==='rejected') {
+        var _ur = o.unit_review || {};
+        var _anyUnitRejected = Object.keys(_ur).some(function(k){ return (_ur[k]||{}).status==='rejected'; });
+        if ((o.review_status||'')==='rejected' || _anyUnitRejected) {
             _ldRestoreRejectedForm(o.id, o.items||[]);
         }
     });
@@ -29448,9 +29452,13 @@ window.ldMonResetOrder = async function(orderId, truckPlate) {
       var ur = (cur&&cur.unit_review) ? Object.assign({},cur.unit_review) : {};
       ur[unit] = {status:'rejected', rejection_reason_type:type, rejection_note:note,
                   reviewed_by:(window._cu&&window._cu.name)||'admin', reviewed_at:new Date().toISOString()};
-      // overall review_status: if any unit still pending → pending_review, else rejected
-      var anyPending = Object.entries(ur).some(function(e){ return e[1]&&e[1].status==='pending_review'; });
-      var newRv = anyPending ? 'pending_review' : 'rejected';
+      // สถานะระดับใบ: เป็น rejected ได้ก็ต่อเมื่อ "ทุกหน่วยถูกตีกลับ" เท่านั้น
+      // ถ้าแม่ถูกตีกลับแต่ลูกอนุมัติแล้ว แล้วตั้งทั้งใบเป็น rejected
+      // ฝั่งหน้างานจะถือว่าทั้งพ่วงถูกตีกลับ แล้วเปิดให้แก้ทั้งคู่
+      // รวมถึงหน่วยที่อนุมัติไปแล้ว — ตรงกับอาการ "ตีกลับยกพ่วง"
+      var _sts = Object.keys(ur).map(function(k){ return (ur[k]||{}).status||''; });
+      var allRejected = _sts.length > 0 && _sts.every(function(x){ return x==='rejected'; });
+      var newRv = allRejected ? 'rejected' : 'pending_review';
       var {error} = await window._sb.from('loading_orders').update({
           unit_review:ur, review_status:newRv, status:'done', updated_at:new Date().toISOString()
       }).eq('id',oid);
