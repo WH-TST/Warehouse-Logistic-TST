@@ -29026,8 +29026,14 @@ function _ldRenderMonitorTable(rows, orders) {
                 };
                 var mDiff=_sdUnit.mother!=null?_sdUnit.mother:null;
                 var tDiff=_sdUnit.trailer!=null?_sdUnit.trailer:null;
-                var mSubmitted = !!(ur.mother);
-                var tSubmitted = !!(ur.trailer);
+                // ⚠ อย่ายึด unit_review อย่างเดียว
+                // ถ้าหน้างานกรอกไม่ครบทุกรายการ ระบบจะไม่ปิดงานและไม่เขียน unit_review
+                // แต่ของที่กรอกไปแล้วถูกบันทึกจริง (record_type = 'บันทึกการโหลด')
+                // เดิมมอนิเตอร์เลยขึ้น "กำลังโหลดอยู่ — รอข้อมูลจากหน้างาน" แล้วซ่อนข้อมูลที่มีอยู่
+                // (LD2610055 รถลูกกรอกไป 2 จาก 3 รายการ จัดส่งมองไม่เห็นเลย)
+                var _hasFinal = function(arr){ return (arr||[]).some(function(r){ return r.record_type && r.record_type!=='draft'; }); };
+                var mSubmitted = !!(ur.mother)  || _hasFinal(mSess);
+                var tSubmitted = !!(ur.trailer) || _hasFinal(tSess);
                 var _stillLoadingPlaceholder = function(label, bgCls, txtCls, borderCls) {
                     return '<div style="background:'+bgCls+';padding:10px 14px;border-top:1px solid '+borderCls+';display:flex;align-items:center;gap:8px;">'
                         +'<span style="font-size:12px;font-weight:700;color:'+txtCls+';">'+label+'</span>'
