@@ -25605,8 +25605,12 @@ var _ldDraftOrderCache= {};   // {oid: orderData} — cached order for draft ups
 var _ldDraftDBCache   = {};   // {oid: {iIdx: lifts[]}} — lifts from Supabase for cross-device restore
 
 // ── called on every input; debounce 1.5s then upsert to DB ──
+window._ldLastEdit = window._ldLastEdit || {};
 window.ldDraftSave = function(oid, unit) {
     var _saveUnit = unit || _ldTrailerUnit[oid] || 'mother';
+    // จำว่าผู้ใช้เพิ่งแก้ฟอร์มนี้เมื่อไหร่ — ใช้กันไม่ให้ตัวซิงก์เขียนทับ
+    window._ldLastEdit[oid+'|'+_saveUnit] = Date.now();
+    window._ldLastEdit[oid] = Date.now();
     // ── Start timer on FIRST keystroke, not on card-open ──
     var _od = _ldDraftOrderCache[oid];
     var _segKey = (_od && _od.trailer_split) ? oid+'-'+_saveUnit : oid;
@@ -25765,10 +25769,19 @@ async function _ldUpsertDraft(oid, unit) {
                 if (totalQty > 0 || totalWt > 0) {
                     await window._sb.from('loading_sessions').update(row).eq('id', existingId).eq('record_type','draft');
                 } else {
-                    // Don't overwrite existing data with zeros — check DB first
-                    var {data:_ex} = await window._sb.from('loading_sessions').select('qty,weight').eq('id', existingId).maybeSingle();
-                    if (!_ex || (_ex.qty === 0 && _ex.weight === 0)) {
+                    // ล้างค่าเป็นศูนย์: ยอมเขียนทับถ้า "ผู้ใช้เครื่องนี้เป็นคนแก้เอง"
+                    // ด่านกันศูนย์มีไว้กันเครื่องที่ฟอร์มยังว่าง (เพิ่งเปิด/ยังโหลดไม่เสร็จ)
+                    // ไปลบข้อมูลของคนอื่นทิ้ง ไม่ได้มีไว้กันคนที่ตั้งใจลบ
+                    // ถ้าไม่ยอมเขียน ค่าที่ลบจะถูกซิงก์กลับมาจาก DB อีกรอบ
+                    var _uk2 = oid+'|'+_curUnit;
+                    var _userDidEdit = !!(window._ldLastEdit && (window._ldLastEdit[_uk2] || window._ldLastEdit[oid]));
+                    if (_userDidEdit) {
                         await window._sb.from('loading_sessions').update(row).eq('id', existingId).eq('record_type','draft');
+                    } else {
+                        var {data:_ex} = await window._sb.from('loading_sessions').select('qty,weight').eq('id', existingId).maybeSingle();
+                        if (!_ex || (_ex.qty === 0 && _ex.weight === 0)) {
+                            await window._sb.from('loading_sessions').update(row).eq('id', existingId).eq('record_type','draft');
+                        }
                     }
                 }
             } else {
@@ -25805,6 +25818,12 @@ async function _ldApplyRemoteDrafts(oid, unit) {
             .eq('order_id', oid).eq('record_type', 'draft');
         if (od.is_trailer) q = q.eq('truck_unit', _u);
         var { data: drafts } = await q;
+        // ผู้ใช้เพิ่งพิมพ์/ลบในฟอร์มนี้ภายใน 5 วิ — ห้ามเขียนทับ
+        // ไม่งั้นค่าที่เพิ่งลบจะถูกเติมกลับมาจากข้อมูลเก่าที่ยังไม่ทันบันทึก
+        // (อาการ "ลบแล้วขยับไปช่องอื่น เลขที่ลบโผล่มาอีก")
+        var _leKey = oid+'|'+_u;
+        var _le = Math.max(window._ldLastEdit[_leKey]||0, window._ldLastEdit[oid]||0);
+        if (Date.now() - _le < 5000) return;
         if (!drafts || !drafts.length) return;
 
         var orderItems = od.items || [];
