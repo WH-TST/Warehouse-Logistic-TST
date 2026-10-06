@@ -25612,7 +25612,11 @@ window.ldDraftSave = function(oid, unit) {
     if (_isFirstStroke) {
         _ldUpsertDraft(oid, _saveUnit);
     } else {
-        _ldDraftTimers[_timerKey] = setTimeout(function(){ _ldUpsertDraft(oid, _saveUnit); }, 1500);
+        _ldDraftTimers[_timerKey] = setTimeout(function(){
+            // กำลังกดส่งอยู่ ห้ามเขียนร่างทับ
+            if (window._ldSubmitting && (window._ldSubmitting[oid] || window._ldSubmitting[_timerKey])) return;
+            _ldUpsertDraft(oid, _saveUnit);
+        }, 1500);
     }
 };
 
@@ -25733,13 +25737,16 @@ async function _ldUpsertDraft(oid, unit) {
             };
             var existingId = _ldDraftRowIds[_uk][_dOiIdx];
             if (existingId) {
+                // ⚠ .eq('record_type','draft') คือด่านสุดท้าย
+                // ถ้าแถวนี้ถูกปิดงานไปแล้ว (เป็น 'บันทึกการโหลด') การเขียนร่างทับ
+                // จะทำให้ข้อมูลที่ส่งไปแล้วกลายเป็นร่างอีกครั้ง — เคยเกิดกับ LD2610055
                 if (totalQty > 0 || totalWt > 0) {
-                    await window._sb.from('loading_sessions').update(row).eq('id', existingId);
+                    await window._sb.from('loading_sessions').update(row).eq('id', existingId).eq('record_type','draft');
                 } else {
                     // Don't overwrite existing data with zeros — check DB first
                     var {data:_ex} = await window._sb.from('loading_sessions').select('qty,weight').eq('id', existingId).maybeSingle();
                     if (!_ex || (_ex.qty === 0 && _ex.weight === 0)) {
-                        await window._sb.from('loading_sessions').update(row).eq('id', existingId);
+                        await window._sb.from('loading_sessions').update(row).eq('id', existingId).eq('record_type','draft');
                     }
                 }
             } else {
@@ -25907,6 +25914,10 @@ function _ldDraftLoad(oid, unit) {
 
 function _ldDraftClear(oid) {
     _ldUnsubDraftRt(oid);
+    // ปลดล็อกกันกรณีงานถูกตีกลับแล้วหน้างานกรอกใหม่ ไม่งั้น autosave จะเงียบไปเลย
+    if (window._ldSubmitting) {
+        [oid, oid+'|mother', oid+'|trailer'].forEach(function(k){ delete window._ldSubmitting[k]; });
+    }
     try { localStorage.removeItem('ld_draft_'+oid); localStorage.removeItem('ld_draft_'+oid+'|mother'); localStorage.removeItem('ld_draft_'+oid+'|trailer'); } catch(e){}
     clearTimeout(_ldDraftTimers[oid]);
     delete _ldDraftTimers[oid];
@@ -26230,6 +26241,17 @@ window.ldCardSave = async function(oid, unit) {
     }
     var today = window._bkkToday();
     var curUnit = unit || _ldTrailerUnit[oid] || 'mother';
+
+    // ── หยุดบันทึกร่างอัตโนมัติก่อน ─────────────────────────────────────
+    // autosave หน่วง 1.5 วิ ถ้าไม่ยกเลิก มันจะยิงตามหลังการกดส่ง
+    // แล้วเขียนทับแถวที่เพิ่งปิดงานกลับเป็น draft
+    // ผลคือออเดอร์ขึ้นว่าส่งแล้ว แต่ไม่มีข้อมูลจริงเหลือ มอนิเตอร์ไม่มีอะไรให้แสดง
+    // (เกิดจริงกับ LD2610055 เมื่อ 06/10)
+    window._ldSubmitting = window._ldSubmitting || {};
+    [oid, oid+'|mother', oid+'|trailer', oid+'|'+curUnit].forEach(function(k){
+        window._ldSubmitting[k] = true;
+        if (_ldDraftTimers[k]) { clearTimeout(_ldDraftTimers[k]); delete _ldDraftTimers[k]; }
+    });
 
     // ── ดึงของที่คนอื่นกรอกมารวมก่อนบันทึก ─────────────────────────────
     // ตอนกดส่ง ระบบอ่านค่าจากช่องกรอกบนหน้าจอเครื่องนี้เท่านั้น
