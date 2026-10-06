@@ -28845,7 +28845,12 @@ function _ldRenderMonitorTable(rows, orders) {
                     var qDiff=tQ>0?aQ-tQ:0;
                     var qColor=aQ>0?'#16a34a':'#cbd5e1';
                     var qBadge='';
-                    if(tQ>0&&aQ>0&&qDiff!==0){var ov=qDiff>0;qColor=ov?'#d97706':'#dc2626';qBadge=' <span style="font-size:10px;font-weight:900;padding:1px 5px;border-radius:4px;background:'+(ov?'#fef3c7':'#fee2e2')+';color:'+(ov?'#92400e':'#991b1b')+'">'+( ov?'▲ +':'▼ ')+Math.abs(qDiff)+'</span>';}
+                    if(tQ>0&&qDiff!==0){var ov=qDiff>0;qColor=ov?'#d97706':'#dc2626';qBadge=' <span style="font-size:10px;font-weight:900;padding:1px 5px;border-radius:4px;background:'+(ov?'#fef3c7':'#fee2e2')+';color:'+(ov?'#92400e':'#991b1b')+'">'+( ov?'▲ +':'▼ ')+Math.abs(qDiff)+'</span>';}
+                    // จัดรถไว้แต่ไม่ได้โหลดเลย → ต้องเห็นเป็น 0 ไม่ใช่ขีด
+                    // ขีด (—) เก็บไว้สำหรับแถวที่ไม่มีทั้งแผนและของจริงเท่านั้น
+                    var _planned = tQ>0;
+                    var _qCell = (aQ>0||_planned) ? aQ.toLocaleString() : '—';
+                    var _wCell = (aW>0||_planned) ? aW.toLocaleString(undefined,{maximumFractionDigits:1}) : '—';
                     tTotQ+=aQ; tTotW+=aW;
                     var scaleCell='';
                     if (isLW) {
@@ -28900,8 +28905,8 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:#0369a1;text-align:right;">'+tQ.toLocaleString()+'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(minW!=null?minW:'—')+'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(maxW!=null?maxW:'—')+'</td>'
-                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+qColor+';text-align:right;">'+(aQ>0?aQ.toLocaleString():'—')+qBadge+'</td>'
-                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+(aW>0?'#16a34a':'#cbd5e1')+';text-align:right;">'+(aW>0?aW.toLocaleString(undefined,{maximumFractionDigits:1}):'—')+'</td>'
+                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+qColor+';text-align:right;">'+_qCell+qBadge+'</td>'
+                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+(aW>0?'#16a34a':'#cbd5e1')+';text-align:right;">'+_wCell+'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;text-align:right;">'+avgCell+'</td>'
                         +scaleCell
                         +finalCells
