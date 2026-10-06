@@ -24605,16 +24605,19 @@ window._ldCheckInspectionAllowed = _ldCheckInspectionAllowed;
 
 // แสดงรูปจากการโหลดรอบแรกในฟอร์ม เพื่อให้หน้างานรู้ว่ามีรูปติดไปแล้ว
 // ไม่งั้นจะนึกว่าต้องถ่ายใหม่ หรือกดส่งไม่ได้เพราะคิดว่ายังไม่มีรูป
-function _ldShowOldPhotos(oid, urls) {
+function _ldShowOldPhotos(oid, urls, unit) {
     try {
         if (!urls || !urls.length) return;
-        var wrap = document.getElementById('ldf-photo-prev-' + oid)
+        var _pk = _ldPhotoKey(oid, unit);
+        var wrap = document.getElementById('ldf-photo-prev-' + _pk)
+                || document.getElementById('ldf-photo-prev-' + oid)
+                || document.getElementById('ldf-photo-wrap-' + _pk)
                 || document.getElementById('ldf-photo-wrap-' + oid);
         if (!wrap) return;
-        if (document.getElementById('ldf-oldphoto-' + oid)) return;
+        if (document.getElementById('ldf-oldphoto-' + _pk)) return;
         if (wrap.querySelector('[data-oldwrap]')) return;   // บล็อกเดิมแสดงไปแล้ว
         var box = document.createElement('div');
-        box.id = 'ldf-oldphoto-' + oid;
+        box.id = 'ldf-oldphoto-' + _pk;
         box.setAttribute('data-oldwrap','1');   // ใช้ marker เดียวกับบล็อกเดิม กันแสดงซ้ำ
         box.style.cssText = 'margin-top:8px;padding:8px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;';
         box.innerHTML = '<div style="font-size:11px;font-weight:900;color:#475569;margin-bottom:6px;">'
@@ -24675,8 +24678,10 @@ async function _ldRestoreRejectedForm(oid, orderItems) {
         window._ldOldPhotos = window._ldOldPhotos || {};
         var _rjPhotos = [];
         done.forEach(function(r){ (r.photo_urls||[]).forEach(function(u){ if(u && _rjPhotos.indexOf(u)<0) _rjPhotos.push(u); }); });
+        // เก็บแยกตามหน่วยรถด้วย — รถพ่วงถ่ายรูปคนละชุด
         window._ldOldPhotos[oid] = _rjPhotos;
-        _ldShowOldPhotos(oid, _rjPhotos);
+        window._ldOldPhotos[_ldPhotoKey(oid, _rjUnit)] = _rjPhotos;
+        _ldShowOldPhotos(oid, _rjPhotos, _rjUnit);
 
         // ผู้ใช้แก้ฟอร์มนี้ไปแล้ว ไม่ต้องเติมตัวเลขทับ แต่รูปรอบแรกเก็บไว้แล้วข้างบน
         if (_rjUserEdited) return;
@@ -24984,6 +24989,10 @@ function _ldBuildFormMobile(order) {
     if (order.is_trailer && !order.trailer_split) return _ldBuildTrailerSplitScreen(order);
     if (order.is_trailer && order.trailer_split && !_ldTrailerUnit[oid]) return _ldBuildTrailerPicker(order);
     var items = order.items||[];
+    // กุญแจของส่วนรูป — รถพ่วงถ่ายแยกแม่/ลูก จึงต้องแยก id ตามหน่วยรถ
+    var _isTrailerForm = !!order.is_trailer;
+    var _formUnitPhoto = _ldTrailerUnit[oid]||'mother';
+    var _pKey = _isTrailerForm ? (oid+'-'+_formUnitPhoto) : oid;
     if (order.is_trailer && _ldTrailerUnit[oid]) {
         var unit=_ldTrailerUnit[oid], split=order.trailer_split||{};
         items = items.map(function(it,_idx){
@@ -25205,17 +25214,21 @@ function _ldBuildFormMobile(order) {
                 +'</div>'
             +'</div>'
         +'</div>'
-        +'<div id="ldf-photo-wrap-'+oid+'" style="background:#fff;border-radius:14px;border:2px solid #e2e8f0;padding:12px;">'
+        // ⚠ รถพ่วงถ่ายรูปแยกแม่/ลูก ส่วนรูปจึงต้องแยกตามหน่วยรถ
+        // เดิมใช้ id ผูกกับใบออเดอร์อย่างเดียว พอเปิดฟอร์มทั้งสองหน่วยพร้อมกัน
+        // จะมี id ซ้ำใน DOM และรูปไปกองรวมถังเดียว ติดไปกับหน่วยที่กดส่งก่อน
+        +'<div id="ldf-photo-wrap-'+_pKey+'" style="background:#fff;border-radius:14px;border:2px solid #e2e8f0;padding:12px;">'
             +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-                +'<span style="font-size:11px;font-weight:900;color:#64748b;">PHOTO</span>'
-                +'<span id="ldf-photo-req-'+oid+'" style="font-size:10px;font-weight:700;color:#dc2626;">* At least 1 photo required</span>'
+                +'<span style="font-size:11px;font-weight:900;color:#64748b;">PHOTO'
+                + (_isTrailerForm ? ' — '+(_formUnitPhoto==='trailer'?'รถลูก':'รถแม่') : '') + '</span>'
+                +'<span id="ldf-photo-req-'+_pKey+'" style="font-size:10px;font-weight:700;color:#dc2626;">* At least 1 photo required</span>'
             +'</div>'
-            +'<input type="file" id="ldf-photo-input-'+oid+'" accept="image/*" capture="environment" multiple style="display:none;" onchange="ldCardHandlePhotos(this,\''+oid+'\')">'
-            +'<div onclick="document.getElementById(\'ldf-photo-input-'+oid+'\').click()" style="border:2px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;cursor:pointer;">'
+            +'<input type="file" id="ldf-photo-input-'+_pKey+'" accept="image/*" capture="environment" multiple style="display:none;" onchange="ldCardHandlePhotos(this,\''+oid+'\',\''+_formUnitPhoto+'\')">'
+            +'<div onclick="document.getElementById(\'ldf-photo-input-'+_pKey+'\').click()" style="border:2px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;cursor:pointer;">'
                 +'<i class="fas fa-camera" style="font-size:24px;color:#94a3b8;display:block;margin-bottom:6px;"></i>'
                 +'<span style="font-size:12px;font-weight:700;color:#94a3b8;">Tap to take photo</span>'
             +'</div>'
-            +'<div id="ldf-photo-prev-'+oid+'" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>'
+            +'<div id="ldf-photo-prev-'+_pKey+'" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>'
         +'</div>'
         +'<textarea id="ldf-note-'+oid+'" rows="2" placeholder="Note (optional)" style="width:100%;border:2px solid #e2e8f0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;outline:none;resize:none;box-sizing:border-box;background:#fff;"></textarea>'
         +'<button id="ldf-save-btn-'+oid+'" onclick="ldCardSave(\''+oid+'\',\''+unit+'\')" style="width:100%;padding:18px;background:#16a34a;color:#fff;font-weight:900;font-size:16px;border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(22,163,74,.4);">'
@@ -25570,8 +25583,9 @@ window.ldPauseConfirm = function(oid, unit) {
     if (!segs[segs.length-1].e) segs[segs.length-1].e = now;
     _ldPaused[oid] = true; _ldPaused[segKey] = true;
     // move pause photos → main photos
-    if (!_ldCardPhotos[oid]) _ldCardPhotos[oid] = [];
-    _ldPausePhotos[oid].forEach(function(f){ _ldCardPhotos[oid].push(f); });
+    var _pkPause = _ldPhotoKey(oid);
+    if (!_ldCardPhotos[_pkPause]) _ldCardPhotos[_pkPause] = [];
+    _ldPausePhotos[oid].forEach(function(f){ _ldCardPhotos[_pkPause].push(f); });
     _ldPausePhotos[oid] = [];
     var workMs = _ldGetWorkMs(segKey);
     // update UI
@@ -26225,11 +26239,19 @@ window.ldCardLookupStaff = function(oid) {
     if (el) el.innerHTML = names.join(' · ');
 };
 
-var _ldCardPhotos = {};  // {orderId: [File, ...]}
-window.ldCardHandlePhotos = function(inp, oid) {
-    if (!_ldCardPhotos[oid]) _ldCardPhotos[oid] = [];
+var _ldCardPhotos = {};  // {orderId|unit: [File, ...]} — รถพ่วงถ่ายแยกแม่/ลูก
+// รถเดี่ยวใช้ oid เฉยๆ เหมือนเดิม รถพ่วงใช้ oid-หน่วย
+function _ldPhotoKey(oid, unit) {
+    var od = _ldDraftOrderCache[oid] || (window._ldOrdersById||{})[oid];
+    var isTr = od ? !!od.is_trailer : !!_ldTrailerUnit[oid];
+    if (!isTr) return oid;
+    return oid + '-' + (unit || _ldTrailerUnit[oid] || 'mother');
+}
+window.ldCardHandlePhotos = function(inp, oid, unit) {
+    var _pk = _ldPhotoKey(oid, unit);
+    if (!_ldCardPhotos[_pk]) _ldCardPhotos[_pk] = [];
     var newFiles = Array.from(inp.files||[]);
-    _ldCardPhotos[oid] = _ldCardPhotos[oid].concat(newFiles);
+    _ldCardPhotos[_pk] = _ldCardPhotos[_pk].concat(newFiles);
 
     // Android: auto-download with delay to avoid keyboard dismiss
     if (!/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
@@ -26247,11 +26269,12 @@ window.ldCardHandlePhotos = function(inp, oid) {
     }
     // iOS: photos taken with camera are already saved to Camera Roll by the OS automatically
 
-    var prev = document.getElementById('ldf-photo-prev-'+oid);
+    var _pk = _ldPhotoKey(oid);
+    var prev = document.getElementById('ldf-photo-prev-'+_pk) || document.getElementById('ldf-photo-prev-'+oid);
     if (!prev) return;
     // ล้างเฉพาะ thumbnail รูปใหม่ คงรูปเดิม (data-oldwrap) ไว้
     Array.from(prev.children).forEach(function(c){ if(!c.hasAttribute('data-oldwrap')) c.remove(); });
-    _ldCardPhotos[oid].forEach(function(f, i){
+    (_ldCardPhotos[_pk]||[]).forEach(function(f, i){
         var url = URL.createObjectURL(f);
         var div = document.createElement('div');
         div.className = 'relative w-16 h-16';
@@ -26262,7 +26285,7 @@ window.ldCardHandlePhotos = function(inp, oid) {
 };
 
 window.ldPhotoSaveToDevice = function(oid, i) {
-    var f = (_ldCardPhotos[oid]||[])[i];
+    var f = (_ldCardPhotos[_ldPhotoKey(oid)]||[])[i];
     if (!f) return;
     try {
         if (navigator.share && navigator.canShare && navigator.canShare({files:[f]})) {
@@ -26278,11 +26301,12 @@ window.ldPhotoSaveToDevice = function(oid, i) {
 };
 
 window.ldCardRemovePhoto = function(oid, i) {
-    if (_ldCardPhotos[oid]) _ldCardPhotos[oid].splice(i,1);
-    var prev = document.getElementById('ldf-photo-prev-'+oid);
+    var _pk = _ldPhotoKey(oid);
+    if (_ldCardPhotos[_pk]) _ldCardPhotos[_pk].splice(i,1);
+    var prev = document.getElementById('ldf-photo-prev-'+_pk) || document.getElementById('ldf-photo-prev-'+oid);
     if (!prev) return;
     prev.innerHTML = '';
-    (_ldCardPhotos[oid]||[]).forEach(function(f,idx){
+    (_ldCardPhotos[_pk]||[]).forEach(function(f,idx){
         var url = URL.createObjectURL(f);
         var div = document.createElement('div');
         div.className = 'relative w-16 h-16';
@@ -26367,7 +26391,8 @@ window.ldCardSave = async function(oid, unit) {
     }
 
     // Photo validation — at least 1 photo required (รูปเก่าจากงานที่ตีกลับก็นับ)
-    if (!(_ldCardPhotos[oid]||[]).length && !((window._ldOldPhotos||{})[oid]||[]).length) {
+    var _pkChk = _ldPhotoKey(oid, curUnit);
+    if (!(_ldCardPhotos[_pkChk]||[]).length && !((window._ldOldPhotos||{})[_pkChk]||[]).length && !((window._ldOldPhotos||{})[oid]||[]).length) {
         showToast('⚠️ At least 1 product photo is required', true);
         var pw = document.getElementById('ldf-photo-wrap-'+oid);
         if (pw) { pw.style.borderColor='#dc2626'; setTimeout(function(){ pw.style.borderColor='#e2e8f0'; },2000); }
@@ -26434,7 +26459,7 @@ window.ldCardSave = async function(oid, unit) {
     var note = [timeNote, dunnageNote, qcNote, userNote].filter(Boolean).join('\n');
 
     // upload photos — parallel
-    var _photoFiles = _ldCardPhotos[oid]||[];
+    var _photoFiles = _ldCardPhotos[_ldPhotoKey(oid, curUnit)]||[];
     var _ts = Date.now();
     var photoUrls = (await Promise.all(_photoFiles.map(function(f){
         return window._cldUpload(f, 'loading');
@@ -26601,6 +26626,7 @@ window.ldCardSave = async function(oid, unit) {
         showToast('✅ Loading record saved');
         _ldActiveOrderId = null;
         delete _ldCardPhotos[oid];
+        delete _ldCardPhotos[_ldPhotoKey(oid, curUnit)];
         delete _ldQcState[oid];
         if (_saveBtn) {
             _saveBtn.innerHTML = '<i class="fas fa-check-circle"></i> บันทึกเรียบร้อยแล้ว';
