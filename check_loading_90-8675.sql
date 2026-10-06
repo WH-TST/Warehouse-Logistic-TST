@@ -64,6 +64,8 @@ select s.truck_unit  as หน่วยรถ,
               then '⚠ ผิดหน่วย — แผนไม่ได้แบ่งของให้หน่วยนี้'
          when s.qty = 0 and s.weight > 0
               then '⚠ มีน้ำหนักแต่ไม่มีจำนวน'
+         when s.weight = 0 and s.qty > 0
+              then '⚠ มีจำนวนแต่ไม่มีน้ำหนัก'
          else 'ปกติ'
        end as ผลตรวจ
   from public.loading_sessions s
