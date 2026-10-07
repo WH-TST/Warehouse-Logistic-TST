@@ -29243,10 +29243,28 @@ window.ldMonSwitchTab = function(tab, skipStore) {
     var wrap = document.getElementById('ld-mon-table-wrap');
     if (!wrap) return;
     var t1 = window._ldMonTab1Html, t2 = window._ldMonTab2Html;
-    if (tab === 'approved') {
-        wrap.innerHTML = '<div style="padding:16px;">'+(t2 || '<div class="text-center py-16 text-slate-400 font-bold">ยังไม่มีรายการที่อนุมัติแล้ว</div>')+'</div>';
-    } else {
-        wrap.innerHTML = '<div style="padding:16px;">'+(t1 || '<div class="text-center py-16 text-slate-400 font-bold">ไม่มีงานกำลังโหลดหรือรออนุมัติ</div>')+'</div>';
+    var _html = (tab === 'approved')
+        ? '<div style="padding:16px;">'+(t2 || '<div class="text-center py-16 text-slate-400 font-bold">ยังไม่มีรายการที่อนุมัติแล้ว</div>')+'</div>'
+        : '<div style="padding:16px;">'+(t1 || '<div class="text-center py-16 text-slate-400 font-bold">ไม่มีงานกำลังโหลดหรือรออนุมัติ</div>')+'</div>';
+    // ⚠ เขียนทับเฉพาะตอนเนื้อหาเปลี่ยนจริง
+    // มอนิเตอร์วาดใหม่ทุก event เรียลไทม์ + poll ทุก 20 วิ ส่วนใหญ่ได้ HTML
+    // ก้อนเดิมเป๊ะ แต่ innerHTML สร้าง DOM ใหม่ทั้งตาราง ภาพจึงกระพริบ
+    // และตำแหน่งสกรอลล์กับช่องที่พิมพ์ค้างไว้หายทุกครั้ง
+    var _key = tab + '|' + _html;
+    if (wrap._ldLastKey !== _key) {
+        var _sc = wrap.scrollTop;
+        // เก็บค่าที่พิมพ์ค้างไว้ในช่องตราชั่ง (ยังไม่กดคำนวณ) ไม่ให้หายตอนวาดใหม่
+        var _keep = {};
+        wrap.querySelectorAll('input[id^="ld-scale-diff-"],input[id^="ld-sw-"]').forEach(function(el){
+            if (el.value !== '') _keep[el.id] = el.value;
+        });
+        wrap.innerHTML = _html;
+        wrap._ldLastKey = _key;
+        Object.keys(_keep).forEach(function(id){
+            var el = document.getElementById(id);
+            if (el && el.value === '') el.value = _keep[id];
+        });
+        wrap.scrollTop = _sc;
     }
     // style active/inactive tabs
     var btnA = document.getElementById('ld-mon-tab-active');
