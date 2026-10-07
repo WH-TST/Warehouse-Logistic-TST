@@ -28217,7 +28217,7 @@ async function _ldMonFetch(dateVal, showSpinner) {
             // ระบุคอลัมน์แทน select('*') — คอลัมน์ lifts เป็น JSON ก้อนใหญ่ (~7% ของ payload)
             // ที่หน้ามอนิเตอร์ไม่ได้ใช้เลย ดึงมาเปล่าๆ ทุก 20 วินาที
             var {data:s2} = await window._sb.from('loading_sessions')
-                .select('id,order_id,plan_id,sku,product_name,qty,weight,team,staff_name,record_type,truck_unit,note,photo_urls,start_time,end_time,created_at,updated_at,load_date,item_idx')
+                .select('id,order_id,plan_id,sku,product_name,qty,weight,team,staff_name,record_type,truck_unit,note,photo_urls,start_time,end_time,created_at,updated_at,load_date,item_idx,mo_number')
                 .in('order_id', candIds);
             allSess = s2 || [];
         }
@@ -28693,6 +28693,19 @@ function _ldRenderMonitorTable(rows, orders) {
                                     +'<span style="font-size:12px;font-weight:700;color:#1e293b;">'+_ldEsc(pName)+'</span>'
                                 +'</div>'
                                 +'<div style="font-size:10px;color:#94a3b8;">'+_ldEsc(sk)+'</div>'
+                                // เลข MO ของสินค้า มอก. (เจ้าของสั่ง 7 ต.ค. 69) — ออฟฟิศต้องเห็นจากจอนี้
+                                // โดยไม่ต้องเปิดเข้าไปในใบงาน เวลาถูก สมอ. เรียกตรวจย้อนหลัง
+                                // สินค้า มอก. ที่ยังไม่มีเลข = ของที่สอบกลับไม่ได้ ต้องเห็นว่าขาด ไม่ใช่เงียบ
+                                +((r&&r.mo_number)
+                                    ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:#fee2e2;border:1px solid #fca5a5;border-radius:4px;padding:1px 6px;">'
+                                        +'<span style="font-size:9px;font-weight:900;color:#b91c1c;">มอก.</span>'
+                                        +'<span style="font-size:11px;font-weight:900;color:#b91c1c;font-family:monospace;letter-spacing:.5px;">MO '+_ldEsc(String(r.mo_number))+'</span>'
+                                      +'</div>'
+                                    : (_ldNeedsMo(sk) && actQ>0
+                                        ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:4px;padding:1px 6px;">'
+                                            +'<span style="font-size:10px;font-weight:900;color:#b45309;">⚠ ไม่มีเลข MO</span>'
+                                          +'</div>'
+                                        : ''))
                                 +(canCut?'<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:1px 6px;">'
                                     +'<span style="font-size:10px;">✂</span>'
                                     +'<span style="font-size:10px;font-weight:900;color:#b45309;">ตัดได้</span>'
@@ -29028,7 +29041,15 @@ function _ldRenderMonitorTable(rows, orders) {
                     var canCutDone = it.can_cut;
                     return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
                         +'<td style="padding:7px 10px;font-size:11px;color:#94a3b8;text-align:center;">'+(idx+1)+'</td>'
-                        +'<td style="padding:7px 10px;font-size:10px;color:#64748b;font-family:monospace;font-weight:700;">'+_ldEsc(it.sku||'')+'</td>'
+                        +'<td style="padding:7px 10px;font-size:10px;color:#64748b;font-family:monospace;font-weight:700;">'+_ldEsc(it.sku||'')
+                            // เลข MO ของสินค้า มอก. (เจ้าของสั่ง 7 ต.ค. 69) — งานที่ปิดแล้วก็ต้องเห็น
+                            // เพราะตอน สมอ. เรียกตรวจย้อนหลัง จะมาดูที่งานที่ส่งไปแล้วทั้งนั้น
+                            +((_sr&&_sr.mo_number)
+                                ? '<div style="margin-top:3px;font-size:11px;font-weight:900;color:#b91c1c;">MO '+_ldEsc(String(_sr.mo_number))+'</div>'
+                                : (_ldNeedsMo(it.sku) && aQ>0
+                                    ? '<div style="margin-top:3px;font-size:10px;font-weight:900;color:#b45309;">⚠ ไม่มีเลข MO</div>'
+                                    : ''))
+                        +'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#1e293b;min-width:120px;">'+_ldEsc(pName)
                             +(canCutDone?'<span style="display:inline-flex;align-items:center;gap:2px;margin-left:5px;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:0 5px;font-size:9px;font-weight:900;color:#b45309;vertical-align:middle;">✂ ตัดได้</span>':'')
                         +'</td>'
