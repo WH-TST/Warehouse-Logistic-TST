@@ -24499,7 +24499,11 @@ function _ldRenderCards(orders) {
     // After re-render — restore form values and timer
     if (_ldActiveOrderId) {
         var _aidSnap = _ldActiveOrderId;
-        setTimeout(function(){ _ldDraftLoad(_aidSnap); _ldStartTimer(_aidSnap); _ldRestoreQcVisual(_aidSnap); }, 120);
+        setTimeout(function(){
+            _ldDraftLoad(_aidSnap); _ldStartTimer(_aidSnap); _ldRestoreQcVisual(_aidSnap);
+            // เลข MO ต้องกลับมาด้วย ไม่งั้นหน้างานกรอกแล้วหายทุกครั้งที่หน้าวาดใหม่
+            _ldApplyMo(_aidSnap, _ldTrailerUnit[_aidSnap] || 'mother');
+        }, 120);
     }
     Object.keys(_ldTrailerActive).forEach(function(oid){
         var ta = _ldTrailerActive[oid];
@@ -25687,6 +25691,25 @@ var LD_QC_COUNT = 7;
 // ไม่รับ: ช่องว่าง อักขระไทย และสัญลักษณ์อื่น — กรองทิ้งตอนพิมพ์
 function _ldNeedsMo(sku) { return /t$/i.test(String(sku||'').trim()); }
 
+// ── เลข MO ที่พิมพ์ไว้ เก็บในหน่วยความจำด้วย ไม่ใช่อยู่แต่ในช่อง input ────────
+//
+// (หน้างานแจ้ง 7 ต.ค. 69) "กรอกเลข MO แล้ว พอจะกดส่ง กดไม่ได้ แล้วเลขก็หายไป"
+//
+// รายการงานถูกวาดใหม่ทั้งก้อนเป็นระยะ (realtime + poll) ช่อง input จึงถูกสร้าง
+// ขึ้นมาใหม่เป็นช่องว่าง เลขที่พิมพ์ไว้หายไปกับการวาด แล้วด่านตรวจก็ไม่ให้กดส่ง
+// — QC เจอปัญหาเดียวกันมาก่อน จึงมี _ldQcState + _ldRestoreQcVisual อยู่แล้ว
+// ช่อง MO ที่เพิ่งเพิ่มวันนี้ยังไม่มี เลยพลาดจุดนี้ไป
+//
+// ⚠ ค่าที่ถูกต้องอยู่ในแมปนี้เสมอ ไม่ใช่ใน DOM — ตอนอ่านไปบันทึกต้องถอยมาอ่าน
+// จากแมปด้วย ไม่งั้นถ้าวาดใหม่พอดีจังหวะกดส่ง จะได้ค่าว่าง
+var _ldMoState = {};   // {oid: {formIdx: 'เลขที่พิมพ์'}}
+
+window._ldMoInput = function(oid, idx, el) {
+    var v = _ldMoClean(el.value);
+    if (el.value !== v) el.value = v;
+    (_ldMoState[oid] = _ldMoState[oid] || {})[idx] = v;
+};
+
 /** ทำความสะอาดเลข MO / ล็อตพ่น — ที่เดียว ใช้ทั้งตอนพิมพ์และตอนอ่านค่าไปบันทึก */
 function _ldMoClean(v) {
     return String(v||'').toUpperCase().replace(/[^0-9A-Z/-]/g, '');
@@ -25696,7 +25719,7 @@ function _ldMoClean(v) {
 function _ldMoBox(oid, idx, sku, unit) {
     if (!_ldNeedsMo(sku)) return '';
     var id = 'ldf-mo-'+oid+'-'+idx;
-    var ev = "this.value=_ldMoClean(this.value);ldDraftSave('"+oid+"','"+(unit||'mother')+"')";
+    var ev = "_ldMoInput('"+oid+"',"+idx+",this);ldDraftSave('"+oid+"','"+(unit||'mother')+"')";
     return '<div style="margin-top:6px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:6px 8px;">'
         +'<div style="font-size:9px;font-weight:900;color:#b91c1c;margin-bottom:3px;letter-spacing:.3px;">'
             +'<i class="fas fa-certificate" style="margin-right:4px;"></i>สินค้า มอก. — ต้องระบุเลข MO หรือ ล็อตพ่น'
@@ -25711,6 +25734,12 @@ function _ldMoBox(oid, idx, sku, unit) {
 /** เติมเลข MO ที่เคยกรอกไว้กลับเข้าช่อง — เรียกได้ซ้ำ ไม่ทับค่าที่คนกำลังพิมพ์ */
 function _ldApplyMo(oid, unit) {
     try {
+        // ค่าที่หน้างานเพิ่งพิมพ์ มาก่อนเสมอ (แมปในหน่วยความจำ)
+        var mine = _ldMoState[oid] || {};
+        Object.keys(mine).forEach(function(idx){
+            var el = document.getElementById('ldf-mo-'+oid+'-'+idx);
+            if (el && !el.value && mine[idx]) el.value = mine[idx];
+        });
         var uk = oid+'|'+(unit||'mother');
         var map = (window._ldMoCache||{})[uk] || {};
         var fOrig = window._ldFormOrigIdx && window._ldFormOrigIdx[uk];
@@ -25728,7 +25757,10 @@ function _ldApplyMo(oid, unit) {
 /** เลข MO ที่กรอกไว้ของแถวนั้น — '' ถ้าไม่มีช่อง/ยังไม่กรอก */
 function _ldMoValue(oid, idx) {
     var el = document.getElementById('ldf-mo-'+oid+'-'+idx);
-    return el ? _ldMoClean(el.value) : '';
+    var fromDom = el ? _ldMoClean(el.value) : '';
+    if (fromDom) return fromDom;
+    // ช่องว่างเพราะเพิ่งถูกวาดใหม่ — ค่าจริงอยู่ในแมป
+    return _ldMoClean(((_ldMoState[oid] || {})[idx]) || '');
 }
 var _ldQcState = {}; // {oid: [bool x LD_QC_COUNT]}
 window.ldQcToggle = function(oid, i) {
@@ -26118,6 +26150,7 @@ function _ldDraftLoad(oid, unit) {
 }
 
 function _ldDraftClear(oid) {
+    delete _ldMoState[oid];   // ส่งงานแล้ว เลข MO ของใบนี้ไม่ต้องจำต่อ
     _ldUnsubDraftRt(oid);
     // ปลดล็อกกันกรณีงานถูกตีกลับแล้วหน้างานกรอกใหม่ ไม่งั้น autosave จะเงียบไปเลย
     if (window._ldSubmitting) {
