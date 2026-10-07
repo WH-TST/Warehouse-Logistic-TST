@@ -27181,8 +27181,23 @@ function _ldSubOrders() {
         })
         .subscribe(function(status){
             console.log('[WMS-LD] realtime:', status);
+            // ── ต่อใหม่แบบถอยห่างขึ้นเรื่อยๆ ────────────────────────────────
+            //
+            // (7 ต.ค. 69) console หน้างานขึ้นวน SUBSCRIBED → CLOSED →
+            // CHANNEL_ERROR → SUBSCRIBED ไม่หยุด เพราะเดิมต่อใหม่ทุก 5 วินาที
+            // แบบไม่จำกัดครั้ง ต่อไม่ติดก็วนทั้งวัน กินทรัพยากรฝั่ง Supabase ฟรีๆ
+            //
+            // งานไม่พังถ้า realtime ไม่ติด — มี polling ทุก 15 วิ รองอยู่แล้วข้างล่าง
+            // จึงถอยห่างขึ้นเรื่อยๆ (5 → 10 → 20 → 40 → 60 วิ) แล้วหยุดที่ 60
+            if (status === 'SUBSCRIBED') { window._ldRtTries = 0; return; }
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                setTimeout(function(){ if (typeof _ldSubOrders === 'function') _ldSubOrders(); }, 5000);
+                window._ldRtTries = (window._ldRtTries || 0) + 1;
+                var wait = Math.min(60000, 5000 * Math.pow(2, window._ldRtTries - 1));
+                setTimeout(function(){
+                    // แท็บที่ไม่ได้เปิดดูอยู่ ไม่ต้องรีบต่อ — ต่อตอนกลับมามองก็ทัน
+                    if (document.hidden) return;
+                    if (typeof _ldSubOrders === 'function') _ldSubOrders();
+                }, wait);
             }
         });
 
