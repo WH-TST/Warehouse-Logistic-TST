@@ -25678,20 +25678,30 @@ var LD_QC_COUNT = 7;
 // รหัสลงท้าย T = สินค้าที่อยู่ในมาตรฐาน มอก. · ของที่ส่งออกไปต้องย้อนกลับได้ว่า
 // มาจาก MO ไหน ถ้าถูกเรียกตรวจย้อนหลัง
 //
-// ⚠ กรอกตัวเลขล้วน ไม่ต้องมี - และไม่ต้องพิมพ์ MO (เจ้าของกำหนด) — พนักงานหน้างาน
-// พิมพ์บนมือถือ ยิ่งน้อยปุ่มยิ่งผิดน้อย · ระบบกรองอักขระอื่นทิ้งให้เองตอนพิมพ์
+// ⚠ รับได้ทั้งเลข MO และ "ล็อตพ่น" แบบเดิม (เจ้าของแจ้ง 7 ต.ค. 69)
+// "เราเพิ่งมาเริ่มใช้ระบบผลิต ก่อนหน้านี้ล็อตผลิตจะไม่ใช่ MO แต่จะเป็นแบบรูป P262/01"
+// ของที่อยู่ในคลังตอนนี้ยังเป็นล็อตพ่นแบบเก่าอยู่มาก ถ้ารับแต่ตัวเลข พนักงานจะกรอก
+// ไม่ได้เลยสำหรับของเก่า แล้วจะติดด่านจนบันทึกงานไม่ได้ทั้งใบ
+//
+// รับ: ตัวเลข · A-Z · / · - (ตัวพิมพ์เล็กแปลงเป็นใหญ่ให้เอง)
+// ไม่รับ: ช่องว่าง อักขระไทย และสัญลักษณ์อื่น — กรองทิ้งตอนพิมพ์
 function _ldNeedsMo(sku) { return /t$/i.test(String(sku||'').trim()); }
+
+/** ทำความสะอาดเลข MO / ล็อตพ่น — ที่เดียว ใช้ทั้งตอนพิมพ์และตอนอ่านค่าไปบันทึก */
+function _ldMoClean(v) {
+    return String(v||'').toUpperCase().replace(/[^0-9A-Z/-]/g, '');
+}
 
 /** กล่องกรอก MO ของแถวสินค้า — คืนสตริงว่างถ้าสินค้านี้ไม่ใช่ของ มอก. */
 function _ldMoBox(oid, idx, sku, unit) {
     if (!_ldNeedsMo(sku)) return '';
     var id = 'ldf-mo-'+oid+'-'+idx;
-    var ev = "this.value=this.value.replace(/\\D/g,'');ldDraftSave('"+oid+"','"+(unit||'mother')+"')";
+    var ev = "this.value=_ldMoClean(this.value);ldDraftSave('"+oid+"','"+(unit||'mother')+"')";
     return '<div style="margin-top:6px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:6px 8px;">'
         +'<div style="font-size:9px;font-weight:900;color:#b91c1c;margin-bottom:3px;letter-spacing:.3px;">'
-            +'<i class="fas fa-certificate" style="margin-right:4px;"></i>สินค้า มอก. — ต้องระบุเลข MO'
+            +'<i class="fas fa-certificate" style="margin-right:4px;"></i>สินค้า มอก. — ต้องระบุเลข MO หรือ ล็อตพ่น'
         +'</div>'
-        +'<input type="text" inputmode="numeric" pattern="[0-9]*" id="'+id+'" placeholder="กรอกตัวเลขติดกัน เช่น 2610035"'
+        +'<input type="text" id="'+id+'" autocapitalize="characters" autocomplete="off" placeholder="เช่น 2610035 หรือ P262/01"'
             +' style="width:100%;box-sizing:border-box;border:2px solid #fca5a5;border-radius:8px;padding:9px 10px;'
             +'font-size:16px;font-weight:900;text-align:center;letter-spacing:1px;outline:none;background:#fff;color:#b91c1c;"'
             +' oninput="'+ev+'">'
@@ -25718,7 +25728,7 @@ function _ldApplyMo(oid, unit) {
 /** เลข MO ที่กรอกไว้ของแถวนั้น — '' ถ้าไม่มีช่อง/ยังไม่กรอก */
 function _ldMoValue(oid, idx) {
     var el = document.getElementById('ldf-mo-'+oid+'-'+idx);
-    return el ? String(el.value||'').replace(/\D/g,'') : '';
+    return el ? _ldMoClean(el.value) : '';
 }
 var _ldQcState = {}; // {oid: [bool x LD_QC_COUNT]}
 window.ldQcToggle = function(oid, i) {
@@ -26578,7 +26588,7 @@ window.ldCardSave = async function(oid, unit) {
                 _moEl.focus();
                 setTimeout(function(el){ el.style.borderColor='#fca5a5'; el.style.background='#fff'; }.bind(null,_moEl), 2500);
             }
-            _abort('⚠️ สินค้า มอก. ('+_mSku+') ต้องกรอกเลข MO ก่อนบันทึก');
+            _abort('⚠️ สินค้า มอก. ('+_mSku+') ต้องกรอกเลข MO หรือ ล็อตพ่น ก่อนบันทึก');
             return;
         }
     }
@@ -28699,11 +28709,13 @@ function _ldRenderMonitorTable(rows, orders) {
                                 +((r&&r.mo_number)
                                     ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:#fee2e2;border:1px solid #fca5a5;border-radius:4px;padding:1px 6px;">'
                                         +'<span style="font-size:9px;font-weight:900;color:#b91c1c;">มอก.</span>'
-                                        +'<span style="font-size:11px;font-weight:900;color:#b91c1c;font-family:monospace;letter-spacing:.5px;">MO '+_ldEsc(String(r.mo_number))+'</span>'
+                                        // แสดงค่าที่กรอกตรงๆ ห้ามเติมคำว่า MO นำหน้า —
+                                        // ของเก่าเป็นล็อตพ่น (P262/01) จะกลายเป็น "MO P262/01" ซึ่งอ่านผิด
+                                        +'<span style="font-size:11px;font-weight:900;color:#b91c1c;font-family:monospace;letter-spacing:.5px;">'+_ldEsc(String(r.mo_number))+'</span>'
                                       +'</div>'
                                     : (_ldNeedsMo(sk) && actQ>0
                                         ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:4px;padding:1px 6px;">'
-                                            +'<span style="font-size:10px;font-weight:900;color:#b45309;">⚠ ไม่มีเลข MO</span>'
+                                            +'<span style="font-size:10px;font-weight:900;color:#b45309;">⚠ ไม่มีเลข MO/ล็อตพ่น</span>'
                                           +'</div>'
                                         : ''))
                                 +(canCut?'<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:1px 6px;">'
@@ -29045,9 +29057,9 @@ function _ldRenderMonitorTable(rows, orders) {
                             // เลข MO ของสินค้า มอก. (เจ้าของสั่ง 7 ต.ค. 69) — งานที่ปิดแล้วก็ต้องเห็น
                             // เพราะตอน สมอ. เรียกตรวจย้อนหลัง จะมาดูที่งานที่ส่งไปแล้วทั้งนั้น
                             +((_sr&&_sr.mo_number)
-                                ? '<div style="margin-top:3px;font-size:11px;font-weight:900;color:#b91c1c;">MO '+_ldEsc(String(_sr.mo_number))+'</div>'
+                                ? '<div style="margin-top:3px;font-size:11px;font-weight:900;color:#b91c1c;">มอก. '+_ldEsc(String(_sr.mo_number))+'</div>'
                                 : (_ldNeedsMo(it.sku) && aQ>0
-                                    ? '<div style="margin-top:3px;font-size:10px;font-weight:900;color:#b45309;">⚠ ไม่มีเลข MO</div>'
+                                    ? '<div style="margin-top:3px;font-size:10px;font-weight:900;color:#b45309;">⚠ ไม่มีเลข MO/ล็อตพ่น</div>'
                                     : ''))
                         +'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#1e293b;min-width:120px;">'+_ldEsc(pName)
