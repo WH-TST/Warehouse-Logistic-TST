@@ -24676,7 +24676,7 @@ async function _ldRestoreRejectedForm(oid, orderItems, unit) {
         var _rjIsTrailer = _rjCache ? !!_rjCache.is_trailer
                          : !!((window._ldOrdersById||{})[oid]||{}).is_trailer;
         var _rjQ = window._sb.from('loading_sessions')
-            .select('sku,item_idx,truck_unit,qty,weight,lifts,created_at,note,photo_urls')
+            .select('sku,item_idx,truck_unit,qty,weight,lifts,created_at,note,photo_urls,mo_number')
             .eq('order_id', oid)
             .neq('record_type', 'draft')
             .order('created_at', {ascending:true});
@@ -24692,10 +24692,23 @@ async function _ldRestoreRejectedForm(oid, orderItems, unit) {
                 if (m) _rjDun = { pcs: m[1], kg: m[2] };
             }
             if (!_rjQc) {
-                var mq = (r.note||'').match(/\[QC:([01]{5})\]/);
+                // ของเก่าบันทึกไว้ 5 หลัก ของใหม่ 7 หลัก (เพิ่มข้อ มอก. 7 ต.ค. 69)
+                // ต้องอ่านได้ทั้งคู่ ไม่งั้นงานเก่าที่ถูกตีกลับจะ restore QC ไม่ได้เลย
+                var mq = (r.note||'').match(/\[QC:([01]{5,})\]/);
                 if (mq) _rjQc = mq[1].split('').map(function(c){ return c === '1'; });
             }
         });
+        // ── เลข MO ของสินค้า มอก. จากงานครั้งแรก — ต้องกลับมาให้ครบ ────────────
+        // งานที่ถูกตีกลับแล้วกรอกใหม่ ถ้าเลขหาย พนักงานต้องไปตามหาเลขเดิมใหม่
+        // ทั้งที่ของมัดเดิมยังอยู่บนรถ
+        window._ldMoCache = window._ldMoCache || {};
+        var _rjMoKey = oid+'|'+_rjUnit;
+        done.forEach(function(r){
+            if (r.mo_number != null && r.item_idx != null) {
+                (window._ldMoCache[_rjMoKey] = window._ldMoCache[_rjMoKey]||{})[r.item_idx] = String(r.mo_number);
+            }
+        });
+
         // ── รวมรูปเก่าจากงานครั้งแรก (แสดงในฟอร์ม + เก็บไว้ merge ตอน save) ──
         window._ldOldPhotos = window._ldOldPhotos || {};
         var _rjPhotos = [];
@@ -24767,15 +24780,20 @@ async function _ldRestoreRejectedForm(oid, orderItems, unit) {
                 if (_dkEl && !_dkEl.value) _dkEl.value = _rjDun.kg;
             }
             // restore QC — ใช้ค่าที่ติ๊กไว้ครั้งแรก (parse จาก note); ข้อมูลเก่าไม่มี marker → ติ๊กครบ (เคยผ่าน QC มาแล้ว)
-            var _qcRestore = _rjQc || [true,true,true,true,true];
+            // ข้อมูลเก่าไม่มี marker → ติ๊กครบ (เคยผ่าน QC มาแล้ว)
+            // ⚠ ของเก่าที่บันทึกไว้ 5 หลัก (ก่อนเพิ่มข้อ มอก. 7 ต.ค. 69) จะได้ false
+            //   สองข้อท้าย = บังคับให้คนตรวจ มอก. ใหม่ ถูกต้องแล้ว ไม่ใช่เดาว่าเคยตรวจ
+            var _qcRestore = _rjQc || new Array(LD_QC_COUNT).fill(true);
+            while (_qcRestore.length < LD_QC_COUNT) _qcRestore.push(false);
             _ldQcState[oid] = _qcRestore.slice();
-            for (var _qi=0; _qi<5; _qi++) {
+            for (var _qi=0; _qi<LD_QC_COUNT; _qi++) {
                 var _on = !!_qcRestore[_qi];
                 var _qbox = document.getElementById('ldf-qc-box-'+oid+'-'+_qi);
                 var _qlbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+_qi);
                 if (_qbox) { _qbox.style.background=_on?'#16a34a':'#fff'; _qbox.style.borderColor=_on?'#16a34a':'#d97706'; var _qic=_qbox.querySelector('i'); if(_qic) _qic.style.display=_on?'block':'none'; }
                 if (_qlbl) { _qlbl.style.background=_on?'#f0fdf4':'#fffbeb'; _qlbl.style.borderColor=_on?'#86efac':'#fde68a'; }
             }
+            _ldApplyMo(oid, _rjUnit);   // เลข MO ของสินค้า มอก. จากงานครั้งแรก
             // แสดงรูปเก่าจากงานครั้งแรก (read-only) ในช่องพรีวิว
             var _prevEl = document.getElementById('ldf-photo-prev-'+oid);
             if (_prevEl && _rjPhotos.length) {
@@ -25104,6 +25122,8 @@ function _ldBuildFormMobile(order) {
                         +'</div>'
                     +'</div>'
                 +'</div>'
+                // สินค้า มอก. (รหัสลงท้าย T) — ช่องกรอก MO 1 ครั้งต่อแถวสินค้า
+                +_ldMoBox(oid, idx, it.sku, unit)
             +'</td>'
         +'</tr>';
         var ev='ldCardStats(\''+oid+'\',\''+unit+'\');ldDraftSave(\''+oid+'\',\''+unit+'\')';
@@ -25213,7 +25233,9 @@ function _ldBuildFormMobile(order) {
               'Rust — within acceptable level',
               'SKU and quantity correct per order',
               'Dunnage placed every 3 points per layer',
-              'Strapped / tied neatly, ready to load'].map(function(label,i){
+              'Strapped / tied neatly, ready to load',
+              'TIS mark sprayed on product — clear and readable',
+              'TIS sticker attached on every bundle'].map(function(label,i){
                 return '<label id="ldf-qc-lbl-'+oid+'-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;background:#fffbeb;border:1.5px solid #fde68a;margin-bottom:6px;" onclick="ldQcToggle(\''+oid+'\','+i+')">'
                     +'<div id="ldf-qc-box-'+oid+'-'+i+'" style="width:22px;height:22px;border-radius:6px;border:2px solid #d97706;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
                         +'<i class="fas fa-check" style="font-size:12px;color:#fff;display:none;"></i>'
@@ -25355,6 +25377,8 @@ function _ldBuildForm(order) {
                 +'<div style="font-size:22px;font-weight:900;color:#38bdf8;font-family:monospace;line-height:1;">'+(it.qty||0)+'<span style="font-size:12px;margin-left:3px;">PCS</span></div>'
                 +'<div style="font-size:11px;color:#475569;margin-top:2px;">'+planWt+' KG</div>'
             +'</div>'
+            // สินค้า มอก. (รหัสลงท้าย T) — ช่องกรอก MO 1 ครั้งต่อแถวสินค้า
+            +_ldMoBox(oid, idx, it.sku, _formUnit)
         +'</td>';
         var actualCell = '<td rowspan="'+numRowGroups+'" style="padding:10px 12px;vertical-align:middle;background:#f0fdf4;text-align:center;position:sticky;right:0;z-index:2;min-width:90px;border-left:2px solid #d1fae5;">'
             +'<div style="font-size:9px;font-weight:900;color:#64748b;margin-bottom:2px;">ACTUAL KG</div>'
@@ -25471,11 +25495,16 @@ function _ldBuildForm(order) {
                 +'<span style="font-size:10px;color:#dc2626;font-weight:700;margin-left:auto;">* ต้องครบทุกข้อ</span>'
             +'</div>'
             // checkboxes
+            // ⚠ มอก. 2 ข้อท้าย (เจ้าของสั่ง 7 ต.ค. 69) — สมอ. ควบคุมเรื่องนี้ตามกฎหมาย
+            // ต้องสอบกลับได้ว่าของที่ส่งออกไปมีเครื่องหมายครบ ถ้าไม่มีคือของผิดกฎหมาย
+            // ห้ามสลับลำดับข้อเดิม 5 ข้อ — เลข QC ที่บันทึกไว้ใน note อ้างตามลำดับนี้
             +['ตรวจสภาพสินค้า — ไม่มีรอยแตก งอ หรือโก่งผิดปกติ',
               'ตรวจสนิม — อยู่ในระดับที่ยอมรับได้',
               'SKU และจำนวนถูกต้องตามออเดอร์',
               'ใช้ไม้หมอน หรือท่อนเหล็กรองสินค้า 3 ช่วง ต่อชั้น',
-              'มัด / รัดเรียบร้อย พร้อมโหลด'].map(function(label, i){
+              'มัด / รัดเรียบร้อย พร้อมโหลด',
+              'พ่นเครื่องหมายมาตรฐาน มอก. ที่ตัวสินค้า — ชัดเจน อ่านออก',
+              'ติดสติ๊กเกอร์ มอก. ครบทุกมัด'].map(function(label, i){
                 return '<label id="ldf-qc-lbl-'+oid+'-'+i+'" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;background:#fffbeb;border:1.5px solid #fde68a;margin-bottom:6px;" onclick="ldQcToggle(\''+oid+'\','+i+')">'
                     +'<div id="ldf-qc-box-'+oid+'-'+i+'" style="width:22px;height:22px;border-radius:6px;border:2px solid #d97706;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;">'
                         +'<i class="fas fa-check" style="font-size:12px;color:#fff;display:none;"></i>'
@@ -25635,9 +25664,65 @@ window.ldPauseResume = function(oid, unit) {
 };
 
 // QC checkbox toggle
-var _ldQcState = {}; // {oid: [bool x5]}
+// จำนวนข้อ QC — 5 ข้อเดิม + 2 ข้อ มอก. (เจ้าของสั่ง 7 ต.ค. 69)
+// ⚠ ประกาศที่เดียว ทุกที่ต้องอ้างตัวนี้ ห้ามเขียนเลข 5/7 ทิ้งไว้ตามจุดต่างๆ
+// ไม่งั้นเพิ่มข้อครั้งหน้าจะมีที่ที่ลืมแก้ แล้วเช็กไม่ครบโดยไม่มีใครรู้
+var LD_QC_COUNT = 7;
+
+// ── สินค้า มอก. ต้องผูกเลข MO ไว้ให้สอบกลับได้ ─────────────────────────────
+//
+// (เจ้าของสั่ง 7 ต.ค. 69) "ถ้าสินค้านั้นมีรหัสสินค้าที่ลงท้ายด้วย T แถวนั้น
+// จะต้องมีช่องให้กรอก MO … เพราะประเทศไทยประกาศกฎหมายเรื่องสินค้า สมอ.
+// เป็นคนควบคุมดูแลเรื่อง มอก. จะได้สอบกลับได้ · 1 แถวสินค้า กรอกแค่ 1 ครั้ง"
+//
+// รหัสลงท้าย T = สินค้าที่อยู่ในมาตรฐาน มอก. · ของที่ส่งออกไปต้องย้อนกลับได้ว่า
+// มาจาก MO ไหน ถ้าถูกเรียกตรวจย้อนหลัง
+//
+// ⚠ กรอกตัวเลขล้วน ไม่ต้องมี - และไม่ต้องพิมพ์ MO (เจ้าของกำหนด) — พนักงานหน้างาน
+// พิมพ์บนมือถือ ยิ่งน้อยปุ่มยิ่งผิดน้อย · ระบบกรองอักขระอื่นทิ้งให้เองตอนพิมพ์
+function _ldNeedsMo(sku) { return /t$/i.test(String(sku||'').trim()); }
+
+/** กล่องกรอก MO ของแถวสินค้า — คืนสตริงว่างถ้าสินค้านี้ไม่ใช่ของ มอก. */
+function _ldMoBox(oid, idx, sku, unit) {
+    if (!_ldNeedsMo(sku)) return '';
+    var id = 'ldf-mo-'+oid+'-'+idx;
+    var ev = "this.value=this.value.replace(/\\D/g,'');ldDraftSave('"+oid+"','"+(unit||'mother')+"')";
+    return '<div style="margin-top:6px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:6px 8px;">'
+        +'<div style="font-size:9px;font-weight:900;color:#b91c1c;margin-bottom:3px;letter-spacing:.3px;">'
+            +'<i class="fas fa-certificate" style="margin-right:4px;"></i>สินค้า มอก. — ต้องระบุเลข MO'
+        +'</div>'
+        +'<input type="text" inputmode="numeric" pattern="[0-9]*" id="'+id+'" placeholder="กรอกตัวเลขติดกัน เช่น 2610035"'
+            +' style="width:100%;box-sizing:border-box;border:2px solid #fca5a5;border-radius:8px;padding:9px 10px;'
+            +'font-size:16px;font-weight:900;text-align:center;letter-spacing:1px;outline:none;background:#fff;color:#b91c1c;"'
+            +' oninput="'+ev+'">'
+    +'</div>';
+}
+
+/** เติมเลข MO ที่เคยกรอกไว้กลับเข้าช่อง — เรียกได้ซ้ำ ไม่ทับค่าที่คนกำลังพิมพ์ */
+function _ldApplyMo(oid, unit) {
+    try {
+        var uk = oid+'|'+(unit||'mother');
+        var map = (window._ldMoCache||{})[uk] || {};
+        var fOrig = window._ldFormOrigIdx && window._ldFormOrigIdx[uk];
+        Object.keys(map).forEach(function(oiIdxStr){
+            var oiIdx = parseInt(oiIdxStr, 10);
+            // แถวในฟอร์มอาจไม่ตรงลำดับในออเดอร์ (กรณีแยกหางลาก) ต้องแปลงกลับ
+            var formIdx = oiIdx;
+            if (fOrig) { var f = fOrig.indexOf(oiIdx); if (f >= 0) formIdx = f; }
+            var el = document.getElementById('ldf-mo-'+oid+'-'+formIdx);
+            if (el && !el.value) el.value = map[oiIdxStr];
+        });
+    } catch(e){}
+}
+
+/** เลข MO ที่กรอกไว้ของแถวนั้น — '' ถ้าไม่มีช่อง/ยังไม่กรอก */
+function _ldMoValue(oid, idx) {
+    var el = document.getElementById('ldf-mo-'+oid+'-'+idx);
+    return el ? String(el.value||'').replace(/\D/g,'') : '';
+}
+var _ldQcState = {}; // {oid: [bool x LD_QC_COUNT]}
 window.ldQcToggle = function(oid, i) {
-    if (!_ldQcState[oid]) _ldQcState[oid] = [false,false,false,false,false];
+    if (!_ldQcState[oid]) _ldQcState[oid] = new Array(LD_QC_COUNT).fill(false);
     _ldQcState[oid][i] = !_ldQcState[oid][i];
     var checked = _ldQcState[oid][i];
     var box = document.getElementById('ldf-qc-box-'+oid+'-'+i);
@@ -25656,7 +25741,7 @@ window.ldQcToggle = function(oid, i) {
 // คืนภาพติ๊ก QC หลัง re-render (กัน QC เด้งกลับเป็นยังไม่ติ๊ก)
 function _ldRestoreQcVisual(oid) {
     var st = _ldQcState[oid]; if (!st) return;
-    for (var i=0; i<5; i++) {
+    for (var i=0; i<LD_QC_COUNT; i++) {
         var on = !!st[i];
         var box = document.getElementById('ldf-qc-box-'+oid+'-'+i);
         var lbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+i);
@@ -25826,6 +25911,7 @@ async function _ldUpsertDraft(oid, unit) {
                 start_time: _ldCardStartTimes[oid] || _ldCardStartTimes[oid+'-'+_curUnit] || null,
                 end_time: null,
                 truck_unit: _curUnit,
+                mo_number: _ldMoValue(oid, iIdx) || null,
                 updated_at: new Date().toISOString()
             };
             var existingId = _ldDraftRowIds[_uk][_dOiIdx];
@@ -26005,6 +26091,7 @@ function _ldDraftLoad(oid, unit) {
             });
         });
     }
+    _ldApplyMo(oid, _dlUnit);   // เติมเลข MO ของสินค้า มอก. ที่เคยกรอกไว้
     ldCardStats(oid, _dlUnit);
     _ldSubDraftRt(oid);          // ฟังการกรอกของคนอื่นในออเดอร์เดียวกัน
     _ldApplyRemoteDrafts(oid, _dlUnit);   // ดึงของที่คนอื่นกรอกไว้แล้วมาแสดงทันที
@@ -26206,6 +26293,12 @@ async function _ldRestoreDraftIds(oid, unit) {
             if (d) {
                 _ldDraftRowIds[_restoreUk][oiIdx] = d.id;
                 if (d.lifts && d.lifts.length) _ldDraftDBCache[_restoreUk][oiIdx] = d.lifts;
+                // เลข MO ของสินค้า มอก. — ต้องกลับมาด้วย ไม่งั้นสลับเครื่อง/รีเฟรชแล้วหาย
+                // แล้วพนักงานต้องตามหาเลขเดิมใหม่ทั้งที่กรอกไปแล้ว
+                if (d.mo_number) {
+                    if (!window._ldMoCache) window._ldMoCache = {};
+                    (window._ldMoCache[_restoreUk] = window._ldMoCache[_restoreUk]||{})[oiIdx] = String(d.mo_number);
+                }
             }
         });
     } catch(e){}
@@ -26453,14 +26546,39 @@ window.ldCardSave = async function(oid, unit) {
     var hasData = items.some(function(it){ return it.qty>0||it.weight>0; });
     if (!hasData) { _abort('กรุณากรอกข้อมูลอย่างน้อย 1 รายการ'); return; }
 
-    // QC validation — all 5 checkboxes must be checked
+    // QC validation — ต้องติ๊กครบทุกข้อ (รวม 2 ข้อ มอก. ที่เพิ่ม 7 ต.ค. 69)
     var qcState = _ldQcState[oid] || [];
-    var qcLabels = ['No cracks / deformation','Rust check','SKU & qty correct','Dunnage placed','Strapped & tied'];
-    for (var qi=0; qi<5; qi++) {
+    var qcLabels = ['ตรวจสภาพสินค้า','ตรวจสนิม','SKU และจำนวน','ไม้หมอน/เหล็กรอง','มัด/รัดเรียบร้อย',
+                    'พ่นเครื่องหมาย มอก. ที่ตัวสินค้า','ติดสติ๊กเกอร์ มอก. ทุกมัด'];
+    for (var qi=0; qi<LD_QC_COUNT; qi++) {
         if (!qcState[qi]) {
             var lbl = document.getElementById('ldf-qc-lbl-'+oid+'-'+qi);
             if (lbl) { lbl.style.borderColor='#dc2626'; lbl.style.background='#fff1f2'; setTimeout(function(l){ l.style.borderColor='#fde68a'; l.style.background='#fffbeb'; }.bind(null,lbl),2000); }
-            _abort('⚠️ QC not checked: '+qcLabels[qi]);
+            _abort('⚠️ ยังไม่ได้ตรวจ: '+qcLabels[qi]);
+            return;
+        }
+    }
+
+    // ── สินค้า มอก. ต้องมีเลข MO (เจ้าของสั่ง 7 ต.ค. 69) ────────────────────
+    // ของที่ส่งออกไปแล้วย้อนกลับไม่ได้ว่ามาจาก MO ไหน = สอบกลับไม่ได้ตามที่ สมอ. กำหนด
+    // ตรวจเฉพาะแถวที่มีการโหลดจริง — แถวที่ไม่ได้โหลดไม่ต้องกรอก
+    for (var _mi=0; _mi<items.length; _mi++) {
+        var _mit = items[_mi];
+        if (!_mit || (!_mit.qty && !_mit.weight)) continue;
+        var _moUk = oid+'|'+((_ldTrailerUnit[oid])||'mother');
+        var _moFOrig = window._ldFormOrigIdx && window._ldFormOrigIdx[_moUk];
+        var _moIdx = (_moFOrig && _moFOrig[_mi] !== undefined) ? _moFOrig[_mi] : _mi;
+        var _mSku = (orderItems[_moIdx]||{}).sku || '';
+        if (!_ldNeedsMo(_mSku)) continue;
+        if (!_ldMoValue(oid, _mi)) {
+            var _moEl = document.getElementById('ldf-mo-'+oid+'-'+_mi);
+            if (_moEl) {
+                _moEl.style.borderColor = '#dc2626';
+                _moEl.style.background = '#fff1f2';
+                _moEl.focus();
+                setTimeout(function(el){ el.style.borderColor='#fca5a5'; el.style.background='#fff'; }.bind(null,_moEl), 2500);
+            }
+            _abort('⚠️ สินค้า มอก. ('+_mSku+') ต้องกรอกเลข MO ก่อนบันทึก');
             return;
         }
     }
@@ -26530,7 +26648,7 @@ window.ldCardSave = async function(oid, unit) {
     var timeNote = segCount>1 ? '[เวลาโหลดจริง: '+workMin+' · '+segCount+' ช่วง]' : '';
     // บันทึกสถานะ QC รายข้อ (5 หลัก 0/1) เพื่อ restore ตอนงานถูกรีเจกต์
     var _qcArr = _ldQcState[oid] || [];
-    var qcNote = '[QC:' + [0,1,2,3,4].map(function(i){ return _qcArr[i] ? 1 : 0; }).join('') + ']';
+    var qcNote = '[QC:' + Array.from({length: LD_QC_COUNT}, function(_, i){ return _qcArr[i] ? 1 : 0; }).join('') + ']';
     var note = [timeNote, dunnageNote, qcNote, userNote].filter(Boolean).join('\n');
 
     // upload photos — parallel
@@ -26619,6 +26737,8 @@ window.ldCardSave = async function(oid, unit) {
                 start_time: startIso, end_time: endIso,
                 note: note, photo_urls: (function(){ var mk=(oi.sku||'')+'|'+curUnit; var old=skuOldPhotos&&(skuOldPhotos[mk]||skuOldPhotos[oi.sku||''])||[]; var merged=old.slice(); photoUrls.forEach(function(u){ if(merged.indexOf(u)<0) merged.push(u); }); return merged; })(),
                 truck_unit: curUnit,
+                // เลข MO ของสินค้า มอก. (รหัสลงท้าย T) — ใช้สอบกลับตามที่ สมอ. กำหนด
+                mo_number: _ldMoValue(oid, iIdx2) || null,
                 work_time_min: workMin,
                 pause_count: pauseCount,
                 round_no: roundNo,
