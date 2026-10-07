@@ -26569,30 +26569,6 @@ window.ldCardSave = async function(oid, unit) {
         }
     }
 
-    // ── สินค้า มอก. ต้องมีเลข MO (เจ้าของสั่ง 7 ต.ค. 69) ────────────────────
-    // ของที่ส่งออกไปแล้วย้อนกลับไม่ได้ว่ามาจาก MO ไหน = สอบกลับไม่ได้ตามที่ สมอ. กำหนด
-    // ตรวจเฉพาะแถวที่มีการโหลดจริง — แถวที่ไม่ได้โหลดไม่ต้องกรอก
-    for (var _mi=0; _mi<items.length; _mi++) {
-        var _mit = items[_mi];
-        if (!_mit || (!_mit.qty && !_mit.weight)) continue;
-        var _moUk = oid+'|'+((_ldTrailerUnit[oid])||'mother');
-        var _moFOrig = window._ldFormOrigIdx && window._ldFormOrigIdx[_moUk];
-        var _moIdx = (_moFOrig && _moFOrig[_mi] !== undefined) ? _moFOrig[_mi] : _mi;
-        var _mSku = (orderItems[_moIdx]||{}).sku || '';
-        if (!_ldNeedsMo(_mSku)) continue;
-        if (!_ldMoValue(oid, _mi)) {
-            var _moEl = document.getElementById('ldf-mo-'+oid+'-'+_mi);
-            if (_moEl) {
-                _moEl.style.borderColor = '#dc2626';
-                _moEl.style.background = '#fff1f2';
-                _moEl.focus();
-                setTimeout(function(el){ el.style.borderColor='#fca5a5'; el.style.background='#fff'; }.bind(null,_moEl), 2500);
-            }
-            _abort('⚠️ สินค้า มอก. ('+_mSku+') ต้องกรอกเลข MO หรือ ล็อตพ่น ก่อนบันทึก');
-            return;
-        }
-    }
-
     // Photo validation — at least 1 photo required (รูปเก่าจากงานที่ตีกลับก็นับ)
     var _pkChk = _ldPhotoKey(oid, curUnit);
     if (!(_ldCardPhotos[_pkChk]||[]).length && !((window._ldOldPhotos||{})[_pkChk]||[]).length && !((window._ldOldPhotos||{})[oid]||[]).length) {
@@ -26608,6 +26584,35 @@ window.ldCardSave = async function(oid, unit) {
     var planId     = orderData?.plan_id||'';
     var planDate   = orderData?.order_date||today;
     var truckPlate = orderData?.truck_plate||'';
+
+    // ── สินค้า มอก. ต้องมีเลข MO (เจ้าของสั่ง 7 ต.ค. 69) ────────────────────
+    // ของที่ส่งออกไปแล้วย้อนกลับไม่ได้ว่ามาจาก MO ไหน = สอบกลับไม่ได้ตามที่ สมอ. กำหนด
+    // ตรวจเฉพาะแถวที่มีการโหลดจริง — แถวที่ไม่ได้โหลดไม่ต้องกรอก
+    //
+    // ⚠ ด่านนี้ต้องอยู่ "หลัง" บรรทัดที่สร้าง orderItems เท่านั้น
+    // ครั้งแรกผมวางไว้ก่อนหน้านั้น (7 ต.ค. 69) ทำให้ orderItems เป็น undefined
+    // แล้วพังทั้งการบันทึก — หน้างานโหลดเสร็จแล้วส่งงานไม่ได้ทั้งโรงงาน
+    // อาการที่เห็นคือ "Cannot read properties of undefined (reading '0')"
+    for (var _mi=0; _mi<items.length; _mi++) {
+        var _mit = items[_mi];
+        if (!_mit || (!_mit.qty && !_mit.weight)) continue;
+        var _moUk = oid+'|'+((_ldTrailerUnit[oid])||'mother');
+        var _moFOrig = window._ldFormOrigIdx && window._ldFormOrigIdx[_moUk];
+        var _moIdx = (_moFOrig && _moFOrig[_mi] !== undefined) ? _moFOrig[_mi] : _mi;
+        var _mSku = ((orderItems||[])[_moIdx]||{}).sku || '';
+        if (!_ldNeedsMo(_mSku)) continue;
+        if (!_ldMoValue(oid, _mi)) {
+            var _moEl = document.getElementById('ldf-mo-'+oid+'-'+_mi);
+            if (_moEl) {
+                _moEl.style.borderColor = '#dc2626';
+                _moEl.style.background = '#fff1f2';
+                _moEl.focus();
+                setTimeout(function(el){ el.style.borderColor='#fca5a5'; el.style.background='#fff'; }.bind(null,_moEl), 2500);
+            }
+            _abort('⚠️ สินค้า มอก. ('+_mSku+') ต้องกรอกเลข MO หรือ ล็อตพ่น ก่อนบันทึก');
+            return;
+        }
+    }
 
     // ── Gate: รถบริษัทต้องผ่านตรวจสภาพรถ (approved) ของวันนั้นก่อน ทีมโหลดถึงจะบันทึกได้ ──
     if (orderData) {
