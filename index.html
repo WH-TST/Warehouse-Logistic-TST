@@ -24258,10 +24258,16 @@ async function _ldLoadOrderCards(dateVal, background, force) {
     // สร้างใหม่ระหว่าง mousedown→mouseup เบราว์เซอร์จึงไม่ยิง click เลย
     // อาการที่หน้างานเจอคือ "ต้องกด Save สองรอบ" (ครั้งแรกโดนกลืน)
     if (typing || (formOpen && !force)) {
-        clearTimeout(_ldLoadOrderCards._defer);
-        _ldLoadOrderCards._defer = setTimeout(function(){ _ldLoadOrderCards(dateVal, background, force); }, 2000);
-        return;
-    }
+        // กันเลื่อนไม่รู้จบ — ถ้าการ์ดเปิดค้างไว้นานๆ ข้อมูลจะไม่อัปเดตเลย
+        // ปล่อยให้วาดทุก 5 รอบ (ราว 10 วินาที) เว้นแต่กำลังพิมพ์อยู่จริงๆ
+        _ldLoadOrderCards._skips = (_ldLoadOrderCards._skips||0) + 1;
+        if (!typing && _ldLoadOrderCards._skips >= 5) { _ldLoadOrderCards._skips = 0; }
+        else {
+            clearTimeout(_ldLoadOrderCards._defer);
+            _ldLoadOrderCards._defer = setTimeout(function(){ _ldLoadOrderCards(dateVal, background, force); }, 2000);
+            return;
+        }
+    } else { _ldLoadOrderCards._skips = 0; }
     try {
         var today = window._bkkToday();
         var data;
@@ -24932,7 +24938,7 @@ function _ldBuildTrailerPicker(order) {
 window.ldPickTrailerUnit = function(oid, unit) {
     _ldTrailerUnit[oid] = unit;
     var today = window._bkkToday();
-    _ldLoadOrderCards(today);
+    _ldLoadOrderCards(today, false, true);
     setTimeout(function(){ _ldDraftLoad(oid); }, 150);
 };
 
@@ -24994,7 +25000,7 @@ window.ldSpConfirm = async function(oid, itemCount) {
         if(error) throw error;
         showToast('✅ จัดสินค้าเสร็จแล้ว — เลือกรถที่จะโหลด');
         var today=window._bkkToday();
-        _ldLoadOrderCards(today);
+        _ldLoadOrderCards(today, false, true);
     } catch(e){ showToast('Error: '+(e?.message||String(e)),true); }
 };
 
@@ -26043,7 +26049,8 @@ window.ldToggleTrailerUnit = function(orderId, unit) {
         });
     }
     var today = window._bkkToday();
-    _ldLoadOrderCards(today);
+    // force — ผู้ใช้กดเปิด/ปิดหน่วยรถเอง ต้องวาดทันที
+    _ldLoadOrderCards(today, false, true);
     // After re-render, restore form values for all still-open units
     var _activeSnap = Object.assign({}, _ldTrailerActive[orderId] || {});
     setTimeout(function(){
@@ -26063,7 +26070,10 @@ window.ldToggleCard = function(orderId) {
     var isOpen = _ldActiveOrderId === orderId;
     _ldActiveOrderId = isOpen ? null : orderId;
     var today = window._bkkToday();
-    _ldLoadOrderCards(today);
+    // force — การกดการ์ดคือคำสั่งของผู้ใช้ ต้องวาดทันที
+    // ไม่งั้นตัวกันการวาดทับจะเห็นว่า "มีฟอร์มเปิดอยู่" แล้วเลื่อนออกไปเรื่อยๆ
+    // ผลคือกดขยายการ์ดไม่ได้เลย
+    _ldLoadOrderCards(today, false, true);
     if (!isOpen) {
         // ไม่เดินสถานะเป็น "กำลังโหลด" ถ้ารถยังไม่ผ่านตรวจสภาพ
         _ldGuardStartLoading(orderId);
