@@ -25779,6 +25779,9 @@ window.ldQcToggle = function(oid, i) {
         lbl.style.background = checked ? '#f0fdf4' : '#fffbeb';
         lbl.style.borderColor = checked ? '#86efac' : '#fde68a';
     }
+    // เซฟร่างด้วย — ไม่งั้นเครื่องอื่นที่เปิดใบเดียวกันไม่มีทางรู้ว่าตรวจไปแล้วกี่ข้อ
+    // (เจ้าของสั่ง 8 ต.ค. 69) "เปิดดูการ์ดงานที่กำลังโหลดจากเครื่องอื่น ไม่เห็นร่องรอยเลย"
+    try { ldDraftSave(oid, _ldTrailerUnit[oid] || 'mother') } catch(e) {}
 };
 // คืนภาพติ๊ก QC หลัง re-render (กัน QC เด้งกลับเป็นยังไม่ติ๊ก)
 function _ldRestoreQcVisual(oid) {
@@ -25954,6 +25957,13 @@ async function _ldUpsertDraft(oid, unit) {
                 end_time: null,
                 truck_unit: _curUnit,
                 mo_number: _ldMoValue(oid, iIdx) || null,
+                // สถานะ QC ติดไปกับร่างด้วย — รูปแบบเดียวกับที่บันทึกตอนส่งจริง
+                // ใช้ช่อง note ที่มีอยู่แล้ว ไม่ต้องเพิ่มคอลัมน์ในฐาน
+                note: (function(){
+                    var st = _ldQcState[oid];
+                    if (!st || !st.some(function(v){ return v })) return null;
+                    return '[QC:' + Array.from({length: LD_QC_COUNT}, function(_, i){ return st[i] ? 1 : 0 }).join('') + ']';
+                })(),
                 updated_at: new Date().toISOString()
             };
             var existingId = _ldDraftRowIds[_uk][_dOiIdx];
@@ -26009,7 +26019,7 @@ async function _ldApplyRemoteDrafts(oid, unit) {
         var _u = unit || _ldTrailerUnit[oid] || 'mother';
         var _uk = oid + '|' + _u;
         var q = window._sb.from('loading_sessions')
-            .select('id,sku,lifts,truck_unit,staff_name,item_idx')
+            .select('id,sku,lifts,truck_unit,staff_name,item_idx,mo_number,note')
             .eq('order_id', oid).eq('record_type', 'draft');
         if (od.is_trailer) q = q.eq('truck_unit', _u);
         var { data: drafts } = await q;
@@ -26060,6 +26070,41 @@ async function _ldApplyRemoteDrafts(oid, unit) {
                 }
             });
         });
+        // ── เลข MO ที่เครื่องอื่นกรอกไว้ ───────────────────────────────────
+        // (เจ้าของสั่ง 8 ต.ค. 69) เดิมเห็นเฉพาะเครื่องที่กรอก เครื่องอื่นมองไม่เห็นเลย
+        // จนกว่าจะกดส่ง — คนคุมงานเปิดดูจากอีกเครื่องแล้วนึกว่ายังไม่มีใครกรอก
+        mapItems.forEach(function(mi){
+            if (!mi.sku) return;
+            var row = byIdx[mi.oiIdx];
+            if (!row || !row.mo_number) return;
+            var el = document.getElementById('ldf-mo-'+oid+'-'+mi.formIdx);
+            // ช่องที่กำลังพิมพ์อยู่ ห้ามแตะ · ของตัวเองที่พิมพ์ไว้แล้วก็ไม่ทับ
+            if (el && el !== active && !el.value) {
+                el.value = String(row.mo_number);
+                (_ldMoState[oid] = _ldMoState[oid] || {})[mi.formIdx] = String(row.mo_number);
+                changed = true;
+            }
+        });
+
+        // ── ติ๊ก QC ที่เครื่องอื่นตรวจไว้ ───────────────────────────────────
+        // อ่านจาก marker ใน note ของร่าง (รูปแบบเดียวกับตอนส่งจริง)
+        // รับได้ทั้ง 5 หลัก (ของเก่า) และ 7 หลัก (หลังเพิ่มข้อ มอก. 7 ต.ค. 69)
+        var _qcRow = drafts.filter(function(r){ return /\[QC:[01]{5,}\]/.test(r.note||'') })[0];
+        if (_qcRow) {
+            var _mq = (_qcRow.note||'').match(/\[QC:([01]{5,})\]/);
+            if (_mq) {
+                var remote = _mq[1].split('').map(function(c){ return c === '1' });
+                var mine = _ldQcState[oid] || [];
+                var diff = false;
+                for (var qi = 0; qi < LD_QC_COUNT; qi++) {
+                    // ติ๊กแล้วเท่านั้นที่ซิงค์ข้ามเครื่อง — ไม่ปลดติ๊กให้ใคร
+                    // (ถ้าปลดให้ด้วย เครื่องที่ยังไม่ได้ตรวจจะไปลบของที่อีกคนตรวจแล้ว)
+                    if (remote[qi] && !mine[qi]) { mine[qi] = true; diff = true }
+                }
+                if (diff) { _ldQcState[oid] = mine; _ldRestoreQcVisual(oid); }
+            }
+        }
+
         if (changed) {
             _ldLocalSave(oid, _u);      // เก็บลงเครื่องด้วย จะได้ไม่ถูก localStorage เก่าทับตอนเปิดใหม่
             ldCardStats(oid, _u);
@@ -27208,6 +27253,16 @@ function _ldSubOrders() {
             if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
         })
         .on('postgres_changes',{event:'*',schema:'public',table:'loading_sessions'}, function(){
+            // ── อย่ารีเฟรชเพราะการเซฟของตัวเอง ─────────────────────────────
+            //
+            // (เจ้าของสังเกต 7 ต.ค. 69) "ตอนติ๊กคุณภาพ ระบบจะกระพริบ"
+            // ทุกครั้งที่หน้างานพิมพ์ ระบบเซฟร่าง → realtime แจ้งกลับมาว่าข้อมูลเปลี่ยน
+            // → หน้าดึงข้อมูลใหม่ทั้งชุด กระพริบกวนตาและเสี่ยงค่าในช่องกรอกหาย
+            // เครื่องตัวเองรู้ค่าของตัวเองอยู่แล้ว ไม่ต้องไปถามฐานกลับมา
+            var _justEdited = Object.keys(window._ldLastEdit || {}).some(function(k){
+                return Date.now() - (window._ldLastEdit[k] || 0) < 3000
+            })
+            if (_justEdited) return
             var cur = _ldCurrentDate();
             _ldRefreshGlobalStats(cur);
             if (typeof window.ldMonLoad === 'function') window.ldMonLoad();
