@@ -25779,10 +25779,34 @@ window.ldQcToggle = function(oid, i) {
         lbl.style.background = checked ? '#f0fdf4' : '#fffbeb';
         lbl.style.borderColor = checked ? '#86efac' : '#fde68a';
     }
-    // เซฟร่างด้วย — ไม่งั้นเครื่องอื่นที่เปิดใบเดียวกันไม่มีทางรู้ว่าตรวจไปแล้วกี่ข้อ
-    // (เจ้าของสั่ง 8 ต.ค. 69) "เปิดดูการ์ดงานที่กำลังโหลดจากเครื่องอื่น ไม่เห็นร่องรอยเลย"
-    try { ldDraftSave(oid, _ldTrailerUnit[oid] || 'mother') } catch(e) {}
+    // ส่งสถานะ QC ขึ้นฐานให้เครื่องอื่นเห็น (เจ้าของสั่ง 8 ต.ค. 69)
+    //
+    // ⚠ ห้ามเรียก ldDraftSave() ที่นี่เด็ดขาด — ตัวนั้นอ่านค่าจาก "ทุกช่องกรอก"
+    // แล้วเขียนทับร่างทั้งใบ ถ้าติ๊กจังหวะที่หน้าเพิ่งวาดใหม่และยังเติมค่ากลับไม่เสร็จ
+    // (ใช้เวลา ~120 ms) มันจะอ่านได้ช่องว่างแล้วล้างน้ำหนักทั้งใบเป็นศูนย์
+    // — เกิดขึ้นจริง 8 ต.ค. 69 หน้างานกดส่งแล้วข้อมูลที่กรอกหายหมด
+    _ldSaveQcOnly(oid);
 };
+
+// ── บันทึกเฉพาะสถานะ QC ─────────────────────────────────────────────────────
+// แตะคอลัมน์ note อย่างเดียว ไม่ยุ่งกับน้ำหนัก/จำนวนเลย จึงทำข้อมูลหายไม่ได้
+// อัปเดตเฉพาะแถวร่างที่มีอยู่แล้ว — ยังไม่มีร่าง = ยังไม่มีใครกรอกอะไร เก็บไว้ในเครื่องพอ
+var _ldQcSaveTimers = {};
+function _ldSaveQcOnly(oid) {
+    clearTimeout(_ldQcSaveTimers[oid]);
+    _ldQcSaveTimers[oid] = setTimeout(async function(){
+        try {
+            var st = _ldQcState[oid];
+            if (!st) return;
+            var note = '[QC:' + Array.from({length: LD_QC_COUNT}, function(_, i){ return st[i] ? 1 : 0 }).join('') + ']';
+            var od = _ldDraftOrderCache[oid];
+            var q = window._sb.from('loading_sessions').update({ note: note })
+                .eq('order_id', oid).eq('record_type', 'draft');
+            if (od && od.is_trailer) q = q.eq('truck_unit', _ldTrailerUnit[oid] || 'mother');
+            await q;
+        } catch(e) {}
+    }, 800);
+}
 // คืนภาพติ๊ก QC หลัง re-render (กัน QC เด้งกลับเป็นยังไม่ติ๊ก)
 function _ldRestoreQcVisual(oid) {
     var st = _ldQcState[oid]; if (!st) return;
@@ -25870,6 +25894,13 @@ var _ldUpsertLock = {};   // prevent concurrent upserts per order|unit
 async function _ldUpsertDraft(oid, unit) {
     var _curUnit = unit || _ldTrailerUnit[oid] || 'mother';
     var _uk = oid+'|'+_curUnit;
+    // ⚠ ตาข่ายสุดท้ายกันข้อมูลหาย (8 ต.ค. 69)
+    // ถ้าช่องกรอกของฟอร์มนี้ไม่มีอยู่บนจอ (ฟอร์มปิด/กำลังวาดใหม่) ค่าที่อ่านได้จะเป็น
+    // ศูนย์ทั้งหมด แล้วเราจะเขียนทับร่างที่มีข้อมูลจริงอยู่ — ห้ามเขียนในกรณีนี้
+    if (!document.getElementById('ldf-lw-'+oid+'-'+_curUnit+'-0-0')) {
+        console.warn('[WMS-LD] ข้ามการบันทึกร่าง — ฟอร์มไม่ได้อยู่บนจอ', oid, _curUnit);
+        return;
+    }
     // Skip if already running for this order+unit (debounce race guard)
     if (_ldUpsertLock[_uk]) return;
     _ldUpsertLock[_uk] = true;
