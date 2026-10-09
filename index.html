@@ -29482,6 +29482,11 @@ function _ldRenderMonitorTable(rows, orders) {
                     var _u = order.unit_review||{};
                     return (_u.mother&&_u.mother.reviewed_by) || (_u.trailer&&_u.trailer.reviewed_by) || '';
                 })(),
+                reviewedAt: (function(){
+                    if (order.reviewed_at) return order.reviewed_at;
+                    var _u = order.unit_review||{};
+                    return (_u.mother&&_u.mother.reviewed_at) || (_u.trailer&&_u.trailer.reviewed_at) || '';
+                })(),
                 sale: _ldSaleForCustomer(order.customer_name),
                 unitDiff: (function(){ var u=_ldScaleDiffUnit[orderId]||{}; return {mother:(u.mother!=null?u.mother:null), trailer:(u.trailer!=null?u.trailer:null)}; })(),
                 qc: (function(){
@@ -30036,16 +30041,27 @@ window.ldOpenLoadingDoc = function(orderId) {
       +'</table>'
 
       +(function(){
-            var sign = function(role, name){
+            var thDT = function(iso){
+                if (!iso) return '';
+                try {
+                    var dt = new Date(iso);
+                    var dd = dt.toLocaleDateString('en-GB',{timeZone:'Asia/Bangkok'});
+                    var tt = dt.toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',minute:'2-digit'});
+                    return dd+' '+tt;
+                } catch(e){ return ''; }
+            };
+            var sign = function(role, name, when){
                 return '<td style="width:33.3%;padding:6px">'
                     +'<div style="font-size:10px;color:#444">'+role+'</div>'
-                    +'<div style="height:34px;display:flex;align-items:flex-end;justify-content:center;font-size:11px;font-weight:600;padding-bottom:3px">'+(name?esc(name):'')+'</div>'
+                    +'<div style="height:30px;display:flex;align-items:flex-end;justify-content:center;font-size:11px;font-weight:600;padding-bottom:2px">'+(name?esc(name):'')+'</div>'
+                    +'<div style="height:14px;font-size:10px;color:#444">'+(when||'')+'</div>'
                     +'<div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>';
             };
+            var loadWhen = thDate(d.orderDate) + ((d.tEnd && d.tEnd!=='—') ? (' '+esc(d.tEnd)) : '');
             return '<table class="grid" style="margin-top:16px;text-align:center"><tr>'
-                +sign('ผู้โหลดสินค้า', d.staff)
-                +sign('ผู้ตรวจสอบ (ฝ่ายจัดส่ง)', d.reviewer)
-                +sign('ผู้อนุมัติ (ฝ่ายขาย)', d.sale)
+                +sign('ผู้โหลดสินค้า', d.staff, loadWhen)
+                +sign('ผู้ตรวจสอบ (ฝ่ายจัดส่ง)', d.reviewer, thDT(d.reviewedAt))
+                +sign('ผู้อนุมัติ (ฝ่ายขาย)', d.sale, thDate(d.orderDate))
             +'</tr></table>';
       })()
 
