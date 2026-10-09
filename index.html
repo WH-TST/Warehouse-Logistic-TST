@@ -28046,8 +28046,9 @@ async function _ldLoadProductMap() {
     try {
         var {data} = await window._sb.from('products').select('sku,name,search_name,min_w,max_w,lines_per_bundle,lifts_per_round');
         _ldProductMap = {};
-        // ชื่อแสดง = search_name (ชื่อค้นหา) เป็นหลัก, ไม่มีค่อย fallback เป็น name
-        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {name:(p.search_name||p.name||''), min_w:p.min_w, max_w:p.max_w, lpb:p.lines_per_bundle||0, lpr:p.lifts_per_round||0}; });
+        // ชื่อแสดงบนหน้าจอ = search_name (ชื่อค้นหา) เป็นหลัก, ไม่มีค่อย fallback เป็น name
+        // prodName = ชื่อสินค้าจริง ใช้ในเอกสารที่ยื่นให้ สมอ. (ห้ามใช้ชื่อค้นหา)
+        (data||[]).forEach(function(p){ _ldProductMap[p.sku] = {name:(p.search_name||p.name||''), prodName:(p.name||p.search_name||''), min_w:p.min_w, max_w:p.max_w, lpb:p.lines_per_bundle||0, lpr:p.lifts_per_round||0}; });
     } catch(e) {}
 }
 
@@ -29254,7 +29255,7 @@ function _ldRenderMonitorTable(rows, orders) {
                     }
                     if (aQ > 0 || tQ > 0) {
                         _docRows.push({
-                            sku: it.sku||'', name: pName,
+                            sku: it.sku||'', name: (prod.prodName||pName),
                             lot: (_sr&&_sr.mo_number) ? String(_sr.mo_number) : '',
                             unit: unitKey||'', orderQty: tQ, pcs: aQ,
                             kg: hasFinal ? fKg : aW,
@@ -29482,6 +29483,7 @@ function _ldRenderMonitorTable(rows, orders) {
                     return (_u.mother&&_u.mother.reviewed_by) || (_u.trailer&&_u.trailer.reviewed_by) || '';
                 })(),
                 sale: _ldSaleForCustomer(order.customer_name),
+                unitDiff: (function(){ var u=_ldScaleDiffUnit[orderId]||{}; return {mother:(u.mother!=null?u.mother:null), trailer:(u.trailer!=null?u.trailer:null)}; })(),
                 qc: (function(){
                     // ผล QC ถูกบันทึกตอนกดส่งงาน ในรูปแบบ [QC:1111111] ที่ท้าย note
                     for (var _i=0;_i<sessions.length;_i++){
@@ -29915,13 +29917,34 @@ window.ldOpenLoadingDoc = function(orderId) {
         ? esc(d.truckPlate||'—')+' (แม่) / '+esc(d.trailerPlate||'—')+' (ลูก)'
         : esc(d.truckPlate||'—');
     var timeLine = (d.tStart&&d.tEnd) ? (esc(d.tStart)+' – '+esc(d.tEnd)+(d.durMin?(' ('+d.durMin+' นาที)'):'')) : '—';
-    var scaleRow = (d.scaleKg!=null)
-        ? '<tr><td class="lbl">น้ำหนักจากการโหลด</td><td class="n">'+nf(d.loadedKg,1)+' กก.</td>'
-          +'<td class="lbl">น้ำหนักตราชั่งใหญ่</td><td class="n">'+nf(d.scaleKg,1)+' กก.</td>'
-          +'<td class="lbl">ส่วนต่าง</td><td class="n">'+(d.diffKg>0?'+':'')+Number(d.diffKg||0).toFixed(1)+' กก.</td></tr>'
-        : '<tr><td class="lbl">น้ำหนักจากการโหลด</td><td class="n">'+nf(d.loadedKg,1)+' กก.</td>'
-          +'<td class="lbl">น้ำหนักตราชั่งใหญ่</td><td class="n">—</td>'
-          +'<td class="lbl">ส่วนต่าง</td><td class="n">—</td></tr>';
+    // รถพ่วงชั่งแยกคันละครั้ง ตารางนี้จึงต้องแยกแม่/ลูก ไม่ใช่ยอดรวมก้อนเดียว
+    var scaleTable;
+    if (d.isTrailer) {
+        var sumBy = function(u){ var t=0; d.rows.forEach(function(r){ if((r.unit||'mother')===u) t+=r.kg||0; }); return t; };
+        var line = function(label, plate, loaded, diff){
+            var scale = (diff!=null) ? (loaded+diff) : null;
+            return '<tr><td class="lbl" style="width:92px">'+label+'</td>'
+                +'<td>'+esc(plate||'—')+'</td>'
+                +'<td class="n" style="width:116px">'+nf(loaded,1)+' กก.</td>'
+                +'<td class="n" style="width:116px">'+(scale!=null?(nf(scale,1)+' กก.'):'—')+'</td>'
+                +'<td class="n" style="width:104px">'+(diff!=null?((diff>0?'+':'')+Number(diff).toFixed(1)+' กก.'):'—')+'</td></tr>';
+        };
+        var mLoaded = sumBy('mother'), tLoaded = sumBy('trailer');
+        var mD = d.unitDiff ? d.unitDiff.mother : null, tD = d.unitDiff ? d.unitDiff.trailer : null;
+        var sumDiff = (mD!=null||tD!=null) ? ((mD||0)+(tD||0)) : null;
+        scaleTable = '<tr><th style="width:92px">หน่วยรถ</th><th>ทะเบียน</th>'
+            +'<th style="width:116px">น้ำหนักจากการโหลด</th><th style="width:116px">น้ำหนักตราชั่งใหญ่</th><th style="width:104px">ส่วนต่าง</th></tr>'
+            +line('แม่ · Head', d.truckPlate, mLoaded, mD)
+            +line('ลูก · Trailer', d.trailerPlate, tLoaded, tD)
+            +'<tr style="font-weight:600;background:#f4f4f4"><td class="c" colspan="2">รวมทั้งคัน</td>'
+              +'<td class="n" style="width:116px">'+nf(mLoaded+tLoaded,1)+' กก.</td>'
+              +'<td class="n" style="width:116px">'+((mD!=null||tD!=null)?(nf(mLoaded+tLoaded+(sumDiff||0),1)+' กก.'):'—')+'</td>'
+              +'<td class="n" style="width:104px">'+(sumDiff!=null?((sumDiff>0?'+':'')+Number(sumDiff).toFixed(1)+' กก.'):'—')+'</td></tr>';
+    } else {
+        scaleTable = '<tr><td class="lbl">น้ำหนักจากการโหลด</td><td class="n">'+nf(d.loadedKg,1)+' กก.</td>'
+            +'<td class="lbl">น้ำหนักตราชั่งใหญ่</td><td class="n">'+(d.scaleKg!=null?(nf(d.scaleKg,1)+' กก.'):'—')+'</td>'
+            +'<td class="lbl">ส่วนต่าง</td><td class="n">'+(d.diffKg!=null?((d.diffKg>0?'+':'')+Number(d.diffKg).toFixed(1)+' กก.'):'—')+'</td></tr>';
+    }
 
     // ── เช็คลิสต์ QC: อ่านจากที่หน้างานติ๊กไว้ตอนกดส่งงาน ──
     var qcLabels = ['ตรวจสภาพสินค้า','ตรวจสนิม','SKU และจำนวน','ไม้หมอน/เหล็กรอง','มัด/รัดเรียบร้อย',
@@ -30004,7 +30027,7 @@ window.ldOpenLoadingDoc = function(orderId) {
         +'<td class="n">'+(avgAll!=null?avgAll.toFixed(2):'—')+'</td>'
       +'</tr></tfoot></table>'
 
-      +'<h4>3. การสอบทานน้ำหนักรวม</h4><table class="grid">'+scaleRow+'</table>'
+      +'<h4>3. การสอบทานน้ำหนักรวม</h4><table class="grid">'+scaleTable+'</table>'
 
       +'<h4>4. ผลการตรวจคุณภาพก่อนปิดงาน (QC Checklist)</h4><table class="grid">'
         +qcRowsHtml
