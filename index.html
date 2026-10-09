@@ -29161,8 +29161,9 @@ function _ldRenderMonitorTable(rows, orders) {
                     var tQ=Number(it.qty||0);
                     var bg=idx%2===0?'#fff':'#f8fafc';
                     var oor=avg!=null&&minW!=null&&maxW!=null&&(avg<minW||avg>maxW);
-                    var avgColor=oor?'#dc2626':'#c1121f';
-                    var avgCell=avg!=null?'<span style="color:'+avgColor+';font-weight:900;">'+avg.toFixed(2)+(oor?' ⚠':'')+'</span>':'<span style="color:#cbd5e1;">—</span>';
+                    var _rowOor=oor;
+                    var avgColor=oor?'#b91c1c':'#334155';
+                    var avgCell=avg!=null?'<span style="color:'+avgColor+';font-weight:900;'+(oor?'background:#fee2e2;border-radius:5px;padding:1px 6px;':'')+'">'+avg.toFixed(2)+(oor?' ⚠':'')+'</span>':'<span style="color:#cbd5e1;">—</span>';
                     var qDiff=tQ>0?aQ-tQ:0;
                     var qColor=aQ>0?'#16a34a':'#cbd5e1';
                     var qBadge='';
@@ -29179,9 +29180,9 @@ function _ldRenderMonitorTable(rows, orders) {
                         tTotScale+=sw;
                         var swAvg=sw>0&&aQ>0?(sw/aQ):null;
                         var swAvgOor=swAvg!=null&&minW!=null&&maxW!=null&&(swAvg<minW||swAvg>maxW);
-                        var swAvgColor=swAvgOor?'#dc2626':'#92400e';
+                        var swAvgColor=swAvgOor?'#b91c1c':'#334155';
                         var swAvgCell=swAvg!=null
-                            ?'<span style="color:'+swAvgColor+';font-weight:900;">'+swAvg.toFixed(2)+(swAvgOor?' ⚠':'')+'</span>'
+                            ?'<span style="color:'+swAvgColor+';font-weight:900;'+(swAvgOor?'background:#fee2e2;border-radius:5px;padding:1px 6px;':'')+'">'+swAvg.toFixed(2)+(swAvgOor?' ⚠':'')+'</span>'
                             :'<span style="color:#cbd5e1;">—</span>';
                         var _dBorder=swAvgOor?'#dc2626':sw>0?'#22c55e':'#fde68a';
                         var _dBtnBg=sw>0?'#16a34a':'#f59e0b';
@@ -29202,12 +29203,13 @@ function _ldRenderMonitorTable(rows, orders) {
                         var fKg=fm.finalKg, fAvg=fm.finalAvg;
                         tTotFinal+=fKg;
                         var fOor=fAvg>0&&minW!=null&&maxW!=null&&(fAvg<minW||fAvg>maxW);
-                        var fAvgColor=fOor?'#dc2626':'#c1121f';
+                        if (fOor) _rowOor=true;
+                        var fAvgColor=fOor?'#b91c1c':'#334155';
                         var diff2=fKg-aW;
                         var diffBadge=diff2!==0?'<span style="font-size:9px;font-weight:900;padding:1px 4px;border-radius:4px;margin-left:3px;background:'+(diff2>0?'#f0fdf4':'#fff1f2')+';color:'+(diff2>0?'#15803d':'#dc2626')+';"> '+(diff2>0?'+':'')+diff2.toFixed(1)+'</span>':'';
                         finalCells=
-                            '<td style="padding:7px 8px;font-size:12px;font-weight:900;color:#c1121f;text-align:right;background:#fdf2f3;">'+fKg.toLocaleString(undefined,{maximumFractionDigits:1})+diffBadge+'</td>'
-                            +'<td style="padding:7px 8px;font-size:11px;font-weight:900;color:'+fAvgColor+';text-align:right;background:#fdf2f3;">'+fAvg.toFixed(2)+(fOor?' ⚠':'')+'</td>';
+                            '<td style="padding:7px 8px;font-size:12px;font-weight:900;color:#1e293b;text-align:right;background:#f1f5f9;">'+fKg.toLocaleString(undefined,{maximumFractionDigits:1})+diffBadge+'</td>'
+                            +'<td style="padding:7px 8px;font-size:12px;font-weight:900;color:'+fAvgColor+';text-align:right;background:'+(fOor?'#fee2e2':'#f1f5f9')+';">'+fAvg.toFixed(2)+(fOor?' ⚠':'')+'</td>';
                     }
                     if (aQ > 0) {
                         // งานวนชั่ง → ใช้ Scale (KG); ไม่งั้นใช้ Final ถ้ามี ไม่งั้น Loaded
@@ -29217,7 +29219,7 @@ function _ldRenderMonitorTable(rows, orders) {
                         });
                     }
                     var canCutDone = it.can_cut;
-                    return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9;">'
+                    return '<tr style="background:'+(_rowOor?'#fffbeb':bg)+';border-bottom:1px solid #f1f5f9;'+(_rowOor?'box-shadow:inset 3px 0 0 #d97706;':'')+'">'
                         +'<td style="padding:7px 10px;font-size:11px;color:#94a3b8;text-align:center;">'+(idx+1)+'</td>'
                         +'<td style="padding:7px 10px;font-size:10px;color:#64748b;font-family:monospace;font-weight:700;">'+_ldEsc(it.sku||'')
                             // เลข MO ของสินค้า มอก. (เจ้าของสั่ง 7 ต.ค. 69) — งานที่ปิดแล้วก็ต้องเห็น
@@ -29231,7 +29233,7 @@ function _ldRenderMonitorTable(rows, orders) {
                         +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#1e293b;min-width:120px;">'+_ldEsc(pName)
                             +(canCutDone?'<span style="display:inline-flex;align-items:center;gap:2px;margin-left:5px;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:0 5px;font-size:9px;font-weight:900;color:#b45309;vertical-align:middle;">✂ ตัดได้</span>':'')
                         +'</td>'
-                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:#9a0c18;text-align:right;">'+tQ.toLocaleString()+'</td>'
+                        +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:#334155;text-align:right;">'+tQ.toLocaleString()+'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(minW!=null?minW:'—')+'</td>'
                         +'<td style="padding:7px 10px;font-size:11px;font-weight:700;color:#f59e0b;text-align:center;">'+(maxW!=null?maxW:'—')+'</td>'
                         +'<td style="padding:7px 10px;font-size:12px;font-weight:900;color:'+qColor+';text-align:right;">'+_qCell+qBadge+'</td>'
@@ -29244,19 +29246,19 @@ function _ldRenderMonitorTable(rows, orders) {
                 var lwTh = isLW ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">&#x2696;&#xFE0F; Scale (KG)</th>'
                     +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#92400e;text-align:right;background:#fffbeb;">Scale Avg</th>' : '';
                 var finalTh = hasFinal
-                    ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#c1121f;text-align:right;background:#fde2e4;">Final Weight (KG)</th>'
-                      +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#c1121f;text-align:right;background:#fde2e4;">Final Avg</th>'
+                    ? '<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#475569;text-align:right;background:#e2e8f0;">Final Weight (KG)</th>'
+                      +'<th style="padding:7px 8px;font-size:9px;font-weight:900;color:#475569;text-align:right;background:#e2e8f0;">Final Avg</th>'
                     : '';
                 var thead='<thead><tr style="background:#f1f5f9;border-bottom:2px solid #e2e8f0;">'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#94a3b8;text-align:center;">#</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">SKU</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:left;">Product</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#9a0c18;text-align:right;">Order</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:right;">Order</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MIN</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#f59e0b;text-align:center;">MAX</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">Loaded (PCS)</th>'
                     +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#16a34a;text-align:right;">Loaded (KG)</th>'
-                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#c1121f;text-align:right;">Avg/pcs</th>'
+                    +'<th style="padding:7px 10px;font-size:9px;font-weight:900;color:#475569;text-align:right;">Avg/pcs</th>'
                     +lwTh
                     +finalTh
                     +'</tr></thead>';
