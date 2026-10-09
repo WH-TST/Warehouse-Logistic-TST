@@ -1207,9 +1207,20 @@
     }
     .sidebar-stripe { display: none; }
     .sidebar-gradient > * { position: relative; z-index: 1; }
-    /* ── Sidebar Mini (icon-only) mode ── */
-    #app-sidebar.sidebar-mini { width: 64px !important; }
-    #app-main.sidebar-mini    { margin-left: 64px !important; }
+    /* ── ซ่อน Sidebar (เจ้าของสั่ง 9 ต.ค. 69 "ให้ทำงานเหมือนโปรแกรมผลิต") ──
+       ของเดิมเป็นโหมด mini เหลือแถบไอคอน 64px ฝั่งผลิตย่อแล้วหายทั้งแถบ
+       เนื้อหาได้ความกว้างเต็มจอ แล้วมีปุ่มแฮมเบอร์เกอร์บนหัวไว้เรียกกลับ
+       คลาสยังชื่อ sidebar-mini เหมือนเดิม จะได้ไม่ต้องไล่แก้ทุกจุดที่อ้างถึง */
+    #app-sidebar.sidebar-mini {
+        width: 0 !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        border-right: 0 !important;
+        box-shadow: none !important;
+    }
+    #app-main.sidebar-mini    { margin-left: 0 !important; }
+    /* ปุ่มกลมที่ขอบ sidebar ไปอยู่นอกจอตอนกว้าง 0 — ซ่อนไปเลย ไม่ให้ค้างเป็นจุดลอย */
+    #app-sidebar.sidebar-mini > button { display: none !important; }
 
     /* ซ่อน text ใน nav-btn — font-size:0 ทำให้ text node invisible */
     #app-sidebar.sidebar-mini .nav-btn {
@@ -1253,8 +1264,9 @@
     }
     /* ซ่อน footer text */
     #app-sidebar.sidebar-mini #sidebar-footer-text { display: none; }
-    /* ซ่อน ปุ่ม collapse ใน header เมื่อ mini */
-    #app-sidebar.sidebar-mini ~ #app-main #sidebar-toggle-btn { display: none !important; }
+    /* ปุ่มเรียก sidebar กลับ — ต้องโผล่ตอนซ่อนอยู่เท่านั้น
+       (ของเดิมสั่ง display:none ตอน mini เพราะยังมีแถบไอคอนให้กดอยู่) */
+    #app-sidebar.sidebar-mini ~ #app-main #sidebar-toggle-btn { display: flex !important; }
 
     /* Tooltip เมื่อ mini: แสดงชื่อ tab */
     #app-sidebar.sidebar-mini .nav-btn { position: relative; }
@@ -2109,7 +2121,7 @@ input[id^="ldf-lq-"]::placeholder{color:#bfdbfe;font-size:13px;font-weight:400;}
     <!-- Mobile overlay backdrop -->
     <div id="mobile-sidebar-overlay" onclick="closeMobileSidebar()"></div>
 
-    <aside id="app-sidebar" class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 flex flex-col" style="transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);">
+    <aside id="app-sidebar" class="fixed left-0 top-0 h-full w-72 sidebar-gradient z-50 flex flex-col" style="transition:transform 0.28s cubic-bezier(0.4,0,0.2,1), width 0.25s ease;">
         <!-- ปุ่มปิด sidebar บน mobile -->
         <button onclick="closeMobileSidebar()" id="mobile-close-btn" class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-white lg:hidden" style="background:rgba(255,255,255,0.12);z-index:110;">
             <i class="fas fa-times text-sm"></i>
@@ -37985,6 +37997,7 @@ var WMS_VIEWS=[
   {id:'customers',label:'ข้อมูลลูกค้า'},
   {id:'loading-order',label:'ใบสั่งโหลดสินค้า'},
   {id:'load-monitor',label:'ติดตามทีมโหลดสินค้า'},
+  {id:'si-summary',label:'สรุปยอดส่งจริง (SI)'},
   {id:'loading',label:'หน้างานโหลดสินค้า'},
   {id:'truck-dispatch',label:'จัดรถส่งสินค้า'},
   {id:'driver-monitor',label:'ติดตามคนขับ'},
@@ -37992,6 +38005,7 @@ var WMS_VIEWS=[
   {id:'driver-worklog',label:'สรุปการทำงานคนขับ'},
   {id:'stock-movement',label:'ความเคลื่อนไหวสินค้า'},
   {id:'kpi-wh',label:'KPI คลัง–ขนส่ง'},
+  {id:'wh-eval',label:'ประเมินทีม'},
   {id:'training',label:'อบรมพนักงาน'},
   {id:'production-block',label:'แผนผลิต'},
   {id:'output-audit',label:'ตรวจสอบยอดผลิต'},
@@ -38197,6 +38211,7 @@ var UP_NAV = [
   {id:'customers',    label:'ข้อมูลลูกค้า',        icon:'fa-store'},
   {id:'loading-order',label:'ใบสั่งโหลดสินค้า',   icon:'fa-clipboard-list'},
   {id:'load-monitor', label:'ติดตามทีมโหลดสินค้า', icon:'fa-desktop'},
+  {id:'si-summary',   label:'สรุปยอดส่งจริง (SI)', icon:'fa-file-invoice'},
   {id:'loading',      label:'หน้างานโหลดสินค้า',  icon:'fa-dolly'},
   {id:'truck-dispatch',label:'จัดรถส่งสินค้า',   icon:'fa-truck'},
   {id:'driver-monitor',label:'ติดตามคนขับ',      icon:'fa-satellite-dish'},
@@ -38204,6 +38219,7 @@ var UP_NAV = [
   {id:'driver-worklog',label:'สรุปการทำงานคนขับ',icon:'fa-user-clock'},
   {id:'stock-movement',label:'ความเคลื่อนไหวสินค้า',icon:'fa-right-left'},
   {id:'kpi-wh',       label:'KPI คลัง–ขนส่ง',     icon:'fa-chart-bar'},
+  {id:'wh-eval',      label:'ประเมินทีม',          icon:'fa-clipboard-check'},
   {id:'training',     label:'อบรมพนักงาน',        icon:'fa-chalkboard-teacher'},
   {id:'user-accounts',label:'ผู้ใช้งานระบบ',      icon:'fa-users-cog'},
   {id:'audit-log',    label:'ประวัติการแก้ไขข้อมูล', icon:'fa-history'},
