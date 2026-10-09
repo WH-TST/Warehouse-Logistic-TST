@@ -1674,6 +1674,14 @@
     .tab-active-red i { color: #ffffff !important; }
     .tab-hover-red:hover { background-color: #ffffff !important; color: #c1121f !important; }
     .tab-underline-red { border-bottom-color:#c1121f !important; color:#c1121f !important; background-color:#fdf2f3 !important; }
+    /* รอตรวจสอบ = น้ำเงิน (แดงสงวนไว้ให้ตีกลับ/ลบ) */
+    .rv-pending-badge { background:#dbeafe !important; color:#1d4ed8 !important; border:1px solid #93c5fd !important; }
+    .rv-pending-dot   { background:#2563eb !important; }
+    .rv-pending-border{ border-color:#2563eb !important; }
+    /* รอโหลด / กำลังโหลด = เหลือง */
+    .rv-load-badge { background:#fef3c7 !important; color:#b45309 !important; border:1px solid #fcd34d !important; }
+    .rv-load-dot    { background:#f59e0b !important; }
+    .rv-load-border { border-color:#f59e0b !important; }
     .bg-teal-700,.bg-teal-800 { background-color: #9a0c18 !important; }
     .bg-teal-50 { background-color: #fdf2f3 !important; }
     .bg-teal-100 { background-color: #fde2e4 !important; }
@@ -24367,14 +24375,14 @@ function _ldRenderCards(orders) {
             _carryBadge = '<span style="background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;font-size:10px;font-weight:900;border-radius:8px;padding:2px 8px;white-space:nowrap;">⏳ ยกมา '+_dp[2]+'/'+_dp[1]+'</span>';
         }
         var isActive = _ldActiveOrderId === o.id;
-        var stColor = _rv==='rejected'?'border-rose-500':_rv==='pending_review'?'border-violet-400':o.status==='in_progress'?'border-sky-400':'border-amber-400';
+        var stColor = _rv==='rejected'?'border-rose-500':_rv==='pending_review'?'rv-pending-border':'rv-load-border';
         var stBadge = _rv==='rejected'
             ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-400">❌ Rejected</span>'
             : _rv==='pending_review'
-            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse block"></span>Under Review</span>'
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black rv-pending-badge flex items-center gap-1"><span class="w-1.5 h-1.5 rv-pending-dot rounded-full animate-pulse block"></span>Under Review</span>'
             : o.status==='in_progress'
-            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-100 text-sky-700 border border-sky-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse block"></span>Loading</span>'
-            : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">Pending</span>';
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black rv-load-badge flex items-center gap-1"><span class="w-1.5 h-1.5 rv-load-dot rounded-full animate-pulse block"></span>Loading</span>'
+            : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black rv-load-badge">Pending</span>';
         var itemList = items.map(function(it,idx){
             return '<tr class="border-t border-slate-100">'
                 +'<td class="px-3 py-2 text-xs font-black text-slate-500">'+(idx+1)+'</td>'
@@ -24403,8 +24411,8 @@ function _ldRenderCards(orders) {
             var tFormHtml = tOpen ? _ldBuildFormForUnit(o, 'trailer') : '';
             // unit status banner helper
             var _unitStatusBanner = function(st) {
-                if (st==='pending_review') return '<div style="background:linear-gradient(135deg,#5c070e,#c1121f);padding:10px 16px;display:flex;align-items:center;gap:8px;">'
-                    +'<i class="fas fa-hourglass-half" style="color:#f08d94;font-size:13px;"></i>'
+                if (st==='pending_review') return '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);padding:10px 16px;display:flex;align-items:center;gap:8px;">'
+                    +'<i class="fas fa-hourglass-half" style="color:#bfdbfe;font-size:13px;"></i>'
                     +'<div style="font-size:12px;font-weight:900;color:#fff;">รอตรวจสอบจากจัดส่ง — กรุณารอ</div>'
                     +'</div>';
                 if (st==='approved') return '<div style="background:linear-gradient(135deg,#14532d,#16a34a);padding:10px 16px;display:flex;align-items:center;gap:8px;">'
@@ -24434,14 +24442,14 @@ function _ldRenderCards(orders) {
                 '<div style="border-top:1px solid #e2e8f0;">'
                     +'<div '+(mLocked?'':'onclick="ldToggleTrailerUnit(\''+o.id+'\',\'mother\')" ')+' class="px-4 py-3 flex items-center justify-between '+(mLocked?'':'cursor-pointer select-none active:bg-green-50')+'" style="background:#f0fdf4;">'
                         +'<div class="flex items-center gap-3">'
-                            +'<div style="width:8px;height:8px;background:'+(mRvSt==='pending_review'?'#c1121f':'#16a34a')+';border-radius:50%;flex-shrink:0;'+(mRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
+                            +'<div style="width:8px;height:8px;background:'+(mRvSt==='pending_review'?'#2563eb':'#16a34a')+';border-radius:50%;flex-shrink:0;'+(mRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
                             +'<div>'
                                 +'<div style="font-size:13px;font-weight:700;color:#15803d;">แม่ · Head · '+(o.truck_plate||'—')+'</div>'
                                 +'<div style="font-size:11px;color:#86efac;">'+Math.round(mKg).toLocaleString()+' KG · '+mPcs.toLocaleString()+' เส้น</div>'
                             +'</div>'
                         +'</div>'
                         +(mLocked
-                            ? '<span style="font-size:10px;font-weight:900;color:#c1121f;background:#fde2e4;border:1px solid #f08d94;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#c1121f;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>'
+                            ? '<span style="font-size:10px;font-weight:900;color:#1d4ed8;background:#dbeafe;border:1px solid #93c5fd;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#2563eb;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>'
                             : '<i class="fas fa-chevron-'+(mOpen?'up':'down')+' text-green-400 text-xs"></i>')
                     +'</div>'
                     +_unitStatusBanner(mRvSt)
@@ -24452,14 +24460,14 @@ function _ldRenderCards(orders) {
                 '<div style="border-top:1px solid #e2e8f0;">'
                     +'<div '+(tLocked?'':'onclick="ldToggleTrailerUnit(\''+o.id+'\',\'trailer\')" ')+' class="px-4 py-3 flex items-center justify-between '+(tLocked?'':'cursor-pointer select-none active:bg-blue-50')+'" style="background:#fdf2f3;">'
                         +'<div class="flex items-center gap-3">'
-                            +'<div style="width:8px;height:8px;background:'+(tRvSt==='pending_review'?'#c1121f':'#c1121f')+';border-radius:50%;flex-shrink:0;'+(tRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
+                            +'<div style="width:8px;height:8px;background:'+(tRvSt==='pending_review'?'#2563eb':'#c1121f')+';border-radius:50%;flex-shrink:0;'+(tRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
                             +'<div>'
                                 +'<div style="font-size:13px;font-weight:700;color:#9a0c18;">ลูก · Trailer · '+(o.trailer_plate||'—')+'</div>'
                                 +'<div style="font-size:11px;color:#f08d94;">'+Math.round(tKg).toLocaleString()+' KG · '+tPcs.toLocaleString()+' เส้น</div>'
                             +'</div>'
                         +'</div>'
                         +(tLocked
-                            ? '<span style="font-size:10px;font-weight:900;color:#c1121f;background:#fde2e4;border:1px solid #f08d94;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#c1121f;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>'
+                            ? '<span style="font-size:10px;font-weight:900;color:#1d4ed8;background:#dbeafe;border:1px solid #93c5fd;border-radius:999px;padding:2px 8px;display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;background:#2563eb;border-radius:50%;display:inline-block;"></span>รอตรวจสอบ</span>'
                             : '<i class="fas fa-chevron-'+(tOpen?'up':'down')+' text-blue-400 text-xs"></i>')
                     +'</div>'
                     +_unitStatusBanner(tRvSt)
@@ -24510,16 +24518,16 @@ function _ldRenderCards(orders) {
                 +'</div>';
         }
         var pendingBanner = _rv==='pending_review'
-            ? '<div style="background:linear-gradient(135deg,#5c070e,#c1121f);padding:12px 16px;display:flex;align-items:center;gap:10px;">'
-              +'<i class="fas fa-hourglass-half" style="color:#f08d94;font-size:16px;"></i>'
+            ? '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);padding:12px 16px;display:flex;align-items:center;gap:10px;">'
+              +'<i class="fas fa-hourglass-half" style="color:#bfdbfe;font-size:16px;"></i>'
               +'<div><div style="font-size:13px;font-weight:900;color:#fff;">Waiting for dispatch review</div>'
-              +'<div style="font-size:11px;color:#f08d94;margin-top:2px;">Your submitted data is being reviewed — please wait</div></div>'
+              +'<div style="font-size:11px;color:#bfdbfe;margin-top:2px;">Your submitted data is being reviewed — please wait</div></div>'
               +'</div>'
             : '';
         var canToggle = _rv!=='pending_review';
 
-        var _iconBg = _rv==='rejected'?'linear-gradient(135deg,#7f1d1d,#dc2626)':_rv==='pending_review'?'linear-gradient(135deg,#5c070e,#c1121f)':isActive?'linear-gradient(135deg,#9a0c18,#dc2430)':'linear-gradient(135deg,#1e293b,#334155)';
-        var _accentBar = _rv==='rejected'?'#ef4444':_rv==='pending_review'?'#c1121f':isActive?'#dc2430':'#64748b';
+        var _iconBg = _rv==='rejected'?'linear-gradient(135deg,#7f1d1d,#dc2626)':_rv==='pending_review'?'linear-gradient(135deg,#1e3a8a,#2563eb)':isActive?'linear-gradient(135deg,#b45309,#f59e0b)':'linear-gradient(135deg,#1e293b,#334155)';
+        var _accentBar = _rv==='rejected'?'#ef4444':_rv==='pending_review'?'#2563eb':isActive?'#f59e0b':'#64748b';
         return '<div id="ld-card-'+o.id+'" data-oid="'+o.id+'" data-rv="'+_rv+'" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all" style="border-left:4px solid '+_accentBar+';">'
             +'<div '+(canToggle?'onclick="ldToggleCard(\''+o.id+'\')" ':'')+' style="padding:12px 14px 12px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;'+(canToggle?'cursor:pointer;':'')+'">'
                 // Left: icon + info
@@ -28532,7 +28540,7 @@ function _ldRenderMonitorTable(sessions, orders) {
         // งาน rejected → แสดง "กำลังโหลดใหม่" เสมอ (รอหน้างานแก้ไข)
         var isReEditingAfterReject = _rv==='rejected';
         var statusBadge = _rv==='pending_review'
-            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-violet-100 text-violet-700 border border-violet-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-pulse block"></span>รอตรวจสอบ</span>'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black rv-pending-badge flex items-center gap-1"><span class="w-1.5 h-1.5 rv-pending-dot rounded-full animate-pulse block"></span>รอตรวจสอบ</span>'
             : isReEditingAfterReject
             ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-orange-100 text-orange-700 border border-orange-400 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse block"></span>↩ กำลังโหลดใหม่</span>'
             : _rv==='rejected'
@@ -28542,9 +28550,9 @@ function _ldRenderMonitorTable(sessions, orders) {
             : allDone
             ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 border border-emerald-300">✓ เสร็จแล้ว</span>'
             : anyLoading
-            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-700 border border-rose-300 flex items-center gap-1"><span class="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse block"></span>กำลังโหลด</span>'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black rv-load-badge flex items-center gap-1"><span class="w-1.5 h-1.5 rv-load-dot rounded-full animate-pulse block"></span>กำลังโหลด</span>'
             : o.status==='pending'
-            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-300">รอโหลด</span>'
+            ? '<span class="px-2 py-1 rounded-full text-[10px] font-black rv-load-badge">รอโหลด</span>'
             : '<span class="px-2 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-500 border border-slate-200">'+_ldEsc(o.status||'—')+'</span>';
 
         var _skuUsedIds = {}; // track matched session ids per sku to avoid reuse
@@ -28595,8 +28603,8 @@ function _ldRenderMonitorTable(sessions, orders) {
             +'</tr>';
         }).join('');
 
-        var _cardBorder = _rv==='pending_review'?'#c1121f':_rv==='rejected'?'#f87171':anyLoading?'#fda4af':allDone?'#86efac':'#e2e8f0';
-        var _cardAccent = _rv==='pending_review'?'linear-gradient(135deg,#5c070e,#9a0c18)':_rv==='rejected'?'linear-gradient(135deg,#7f1d1d,#dc2626)':'#1e293b';
+        var _cardBorder = _rv==='pending_review'?'#2563eb':_rv==='rejected'?'#f87171':anyLoading?'#f59e0b':allDone?'#86efac':'#e2e8f0';
+        var _cardAccent = _rv==='pending_review'?'linear-gradient(135deg,#1e3a8a,#2563eb)':_rv==='rejected'?'linear-gradient(135deg,#7f1d1d,#dc2626)':'#1e293b';
         var _orderLabel = _ldEsc((o.order_no||'')+(o.truck_plate?' · '+o.truck_plate:'')+(o.customer_name?' · '+o.customer_name:''));
         var scaleDiff = o.scale_diff!=null?(parseFloat(o.scale_diff)||0):null;
         var diffChip = scaleDiff!=null
