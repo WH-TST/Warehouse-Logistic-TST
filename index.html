@@ -26949,7 +26949,10 @@ window.ldCardSave = async function(oid, unit) {
         } catch(e){}
         var error = null;
         // mark order done if all items have data
-        var allFilled = items.every(function(it){ return it.qty>0||it.weight>0; });
+        // กดปุ่มส่งงาน = หน่วยนี้จบแล้ว ต้องเข้าคิวตรวจเสมอ
+        // เดิมใช้ every() → ถ้ามีรายการไหนโหลดไม่ได้เลย (0 เส้น) ทั้งหน่วยจะไม่เข้าคิวตรวจ
+        // ฝั่งมอนิเตอร์เลยไม่มีปุ่มอนุมัติให้กด (เจอกับรถพ่วงวนชั่ง 90-2957 ฝั่งแม่)
+        var allFilled = items.some(function(it){ return it.qty>0||it.weight>0; });
         if (allFilled) {
             if (orderData && orderData.is_trailer && orderData.trailer_split) {
                 var {data:curOrd2} = await window._sb.from('loading_orders').select('unit_review').eq('id',oid).maybeSingle();
@@ -29308,6 +29311,11 @@ function _ldRenderMonitorTable(rows, orders) {
                         resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
                     } else if(st==='rejected'){
                         approveBtn='<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:900;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;">↩ ตีกลับ — รอแก้ไข</span>';
+                        resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
+                    } else if(unitSess&&unitSess.length){
+                        // ใบเก่าที่ค้างเพราะบั๊กเดิม: มีข้อมูลโหลดแล้วแต่ไม่มีสถานะตรวจ
+                        approveBtn='<button onclick="ldApproveUnit(\''+orderId+'\',\''+unit+'\')" style="padding:5px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;font-size:11px;font-weight:900;cursor:pointer;margin-left:8px;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>อนุมัติ</button>';
+                        rejectBtn='<button onclick="ldRejectUnit(\''+orderId+'\',\''+unit+'\',\''+_ldEsc(label)+'\')" style="padding:5px 10px;border-radius:8px;border:2px solid #fca5a5;background:#fff5f5;color:#dc2626;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-times-circle" style="margin-right:3px;"></i>ตีกลับ</button>';
                         resetBtn=(_cu&&_cu.isAdmin)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
                     } else {
                         resetBtn=(_cu&&_cu.isAdmin)&&(mSess.length||tSess.length)?'<button onclick="ldMonResetUnit(\''+orderId+'\',\''+_ldEsc(plate)+'\',\''+unit+'\')" style="padding:5px 10px;border-radius:8px;border:1.5px solid #94a3b8;background:#f8fafc;color:#475569;font-size:11px;font-weight:900;cursor:pointer;margin-left:4px;"><i class="fas fa-undo-alt"></i> รีเซท</button>':'';
