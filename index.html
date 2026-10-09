@@ -29157,7 +29157,7 @@ function _ldRenderMonitorTable(rows, orders) {
             var finalMap = (_ldScaleDiff[orderId]!=null && _ldScaleDiff[orderId]!==0)
                 ? _ldComputeFinalWeights(sessions, _ldScaleDiff[orderId]) : null;
 
-            function _buildDoneTable(filtSess, targetItems, unitDiffKg) {
+            function _buildDoneTable(filtSess, targetItems, unitDiffKg, unitKey) {
                 // trailer-unit mode: unitDiffKg ส่งมาชัดเจน → คำนวณใหม่ต่อ unit
                 // non-trailer mode: unitDiffKg=undefined → ใช้ finalMap ที่คำนวณไว้แล้วจาก _ldScaleDiff
                 if (unitDiffKg !== undefined) {
@@ -29224,11 +29224,14 @@ function _ldRenderMonitorTable(rows, orders) {
                         var _dBtnBg=sw>0?'#16a34a':'#f59e0b';
                         // index จริงของรายการ ไม่ใช่ลำดับหลังกรองแม่/ลูก
                         var _swIdx=(it._origIdx!=null?it._origIdx:idx);
+                        // รถพ่วง: SKU เดียวกันโผล่ได้ทั้งตารางแม่และลูก id ต้องแยกตามหน่วย
+                        // ไม่งั้น id ซ้ำกันใน DOM แล้วค่าที่กรอกฝั่งลูกไปโผล่ฝั่งแม่ด้วย
+                        var _swDom=orderId+(unitKey?'-'+unitKey:'')+'-'+_swIdx;
                         scaleCell='<td style="padding:7px 8px;text-align:right;background:#fffbeb;">'
                             +'<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;">'
-                            +'<input id="ld-sw-'+orderId+'-'+_swIdx+'" type="number" min="0" step="0.1" value="'+(it.scale_weight||'')+'" placeholder="—"'
+                            +'<input id="ld-sw-'+_swDom+'" type="number" min="0" step="0.1" value="'+(it.scale_weight||'')+'" placeholder="—"'
                             +' style="width:68px;border:2px solid '+_dBorder+';border-radius:6px;padding:2px 5px;font-size:12px;font-weight:700;color:#92400e;text-align:right;outline:none;">'
-                            +'<button onclick="_ldSaveScaleWeight(\''+orderId+'\','+_swIdx+')" style="background:'+_dBtnBg+';color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:900;cursor:pointer;">✔</button>'
+                            +'<button onclick="_ldSaveScaleWeight(\''+orderId+'\','+_swIdx+',\''+(unitKey||'')+'\')" style="background:'+_dBtnBg+';color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:900;cursor:pointer;">✔</button>'
                             +'</div></td>'
                             +'<td style="padding:7px 8px;font-size:11px;text-align:right;background:#fffbeb;">'+swAvgCell+'</td>';
                     }
@@ -29323,8 +29326,8 @@ function _ldRenderMonitorTable(rows, orders) {
             if (order.is_trailer && order.trailer_split) {
                 var sp=order.trailer_split;
                 // พก _origIdx ไปด้วย — .filter ทำให้ลำดับไม่ตรงกับ order.items
-                var mItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0,can_cut:it.can_cut,scale_weight:it.scale_weight,_origIdx:_i};}).filter(function(it){return it.qty>0;});
-                var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0,can_cut:it.can_cut,scale_weight:it.scale_weight,_origIdx:_i};}).filter(function(it){return it.qty>0;});
+                var mItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.mother_pcs||0,target_weight:0,can_cut:it.can_cut,scale_weight:it.scale_weight_mother,_origIdx:_i};}).filter(function(it){return it.qty>0;});
+                var tItems=orderItems.map(function(it,_i){var s=sp[String(_i)]||sp[it.sku]||{};return {sku:it.sku,product_name:it.product_name,qty:s.trailer_pcs||0,target_weight:0,can_cut:it.can_cut,scale_weight:it.scale_weight_trailer,_origIdx:_i};}).filter(function(it){return it.qty>0;});
                 // For sessions without truck_unit (old data), infer from SKU: if SKU only in trailer split → trailer
                 var _tOnlySku=new Set(tItems.filter(function(ti){return !mItems.some(function(mi){return mi.sku===ti.sku;});}).map(function(ti){return ti.sku;}));
                 var mSess=sessions.filter(function(r){return r.truck_unit==='mother'||(r.truck_unit!=='trailer'&&!_tOnlySku.has(r.sku));});
@@ -29417,11 +29420,11 @@ function _ldRenderMonitorTable(rows, orders) {
                 doneTableHtml=
                     (mSubmitted
                         ? _unitBar('mother',mRv,'แม่ · Head · '+_ldEsc(order.truck_plate||''),order.truck_plate||'—','#dcfce7','#15803d','#86efac',mSess)
-                          +_buildDoneTable(mSess,mItems,mDiff)
+                          +_buildDoneTable(mSess,mItems,mDiff,'mother')
                         : _stillLoadingPlaceholder('แม่ · Head · '+_ldEsc(order.truck_plate||'—'),'#dcfce7','#15803d','#86efac'))
                     +(tSubmitted
                         ? _unitBar('trailer',tRv,'ลูก · Trailer · '+_ldEsc(order.trailer_plate||''),order.trailer_plate||'—','#fde2e4','#9a0c18','#f9c8cc',tSess)
-                          +_buildDoneTable(tSess,tItems,tDiff)
+                          +_buildDoneTable(tSess,tItems,tDiff,'trailer')
                         : _stillLoadingPlaceholder('ลูก · Trailer · '+_ldEsc(order.trailer_plate||'—'),'#fde2e4','#9a0c18','#f9c8cc'));
             } else {
                 var itemsToRender = orderItems.length ? orderItems : sessions.map(function(r){
@@ -30241,15 +30244,20 @@ function _loRender(orders) {
     }).join('');
 }
 
-window._ldSaveScaleWeight = async function(orderId, itemIdx) {
-    var inp = document.getElementById('ld-sw-'+orderId+'-'+itemIdx);
+window._ldSaveScaleWeight = async function(orderId, itemIdx, unitKey) {
+    // รถพ่วงเก็บแยกฟิลด์ตามหน่วย (scale_weight_mother / _trailer)
+    // เดิมใช้ scale_weight ช่องเดียวต่อรายการ ค่าของรถลูกเลยไปโผล่ที่รถแม่ด้วย
+    var _fld = unitKey ? ('scale_weight_'+unitKey) : 'scale_weight';
+    var inp = document.getElementById('ld-sw-'+orderId+(unitKey?'-'+unitKey:'')+'-'+itemIdx);
     if (!inp) return;
     var wt = parseFloat(inp.value);
     if (isNaN(wt) || wt < 0) { showToast('กรุณากรอกน้ำหนักที่ถูกต้อง', true); return; }
     var {data, error} = await window._sb.from('loading_orders').select('items').eq('id', orderId).maybeSingle();
     if (error || !data) { showToast('โหลดข้อมูลไม่สำเร็จ', true); return; }
     var items = (data.items || []).map(function(it, i) {
-        return i === itemIdx ? Object.assign({}, it, {scale_weight: wt}) : it;
+        if (i !== itemIdx) return it;
+        var patch = {}; patch[_fld] = wt;
+        return Object.assign({}, it, patch);
     });
     var {error: e2} = await window._sb.from('loading_orders').update({items: items, updated_at: new Date().toISOString()}).eq('id', orderId);
     if (e2) { showToast('บันทึกไม่สำเร็จ: '+(e2.message||''), true); return; }
