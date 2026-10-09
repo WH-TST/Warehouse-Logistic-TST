@@ -29476,6 +29476,12 @@ function _ldRenderMonitorTable(rows, orders) {
                 customer: order.customer_name||'', team: teamName||'', staff: staffNames||'',
                 tStart: tStart||'', tEnd: tEnd||'', durMin: durMin||0,
                 loadedKg: totalWt||0,
+                reviewer: (function(){
+                    if (order.reviewed_by) return order.reviewed_by;
+                    var _u = order.unit_review||{};
+                    return (_u.mother&&_u.mother.reviewed_by) || (_u.trailer&&_u.trailer.reviewed_by) || '';
+                })(),
+                sale: _ldSaleForCustomer(order.customer_name),
                 qc: (function(){
                     // ผล QC ถูกบันทึกตอนกดส่งงาน ในรูปแบบ [QC:1111111] ที่ท้าย note
                     for (var _i=0;_i<sessions.length;_i++){
@@ -29865,6 +29871,18 @@ var _ldCopyRegistry = {};    // {orderId: [{sku,qty,weight},...]} — for copy b
 var LD_DOC_NO = 'WH001-REV.00';
 var LD_DOC_LOGO = 'https://static.wixstatic.com/media/5a1d18_237433e7b53841cca74e8f402795c4ca~mv2.png';
 
+// เซลที่ดูแลลูกค้าเจ้านี้ — ทะเบียนร้าน (logi_shops.sale) ซิงก์มาจากระบบฝ่ายขาย
+function _ldSaleForCustomer(cname) {
+    try {
+        var n = String(cname||'').trim(); if (!n) return '';
+        var list = (typeof LOGI_MASTER_CACHE!=='undefined' && LOGI_MASTER_CACHE.shops) || [];
+        var norm = function(x){ return String(x||'').replace(/บริษัท|ห้างหุ้นส่วนจำกัด|หจก\.?|บจก\.?|จำกัด|\(|\)|\s/g,'').toLowerCase(); };
+        var t = norm(n);
+        for (var i=0;i<list.length;i++){ if (norm(list[i].name)===t) return String(list[i].sale||'').trim(); }
+        return '';
+    } catch(e) { return ''; }
+}
+
 window.ldOpenLoadingDoc = function(orderId) {
     var d = _ldDocRegistry[orderId];
     if (!d || !d.rows.length) { showToast('ไม่มีข้อมูลสำหรับออกเอกสาร', true); return; }
@@ -29994,11 +30012,19 @@ window.ldOpenLoadingDoc = function(orderId) {
         +'<tr><td class="lbl">หมายเหตุ</td><td colspan="5" style="height:30px"></td></tr>'
       +'</table>'
 
-      +'<table class="grid" style="margin-top:16px;text-align:center"><tr>'
-        +'<td style="width:33.3%;padding:6px"><div style="font-size:10px;color:#444">ผู้โหลดสินค้า</div><div style="height:36px"></div><div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>'
-        +'<td style="width:33.3%;padding:6px"><div style="font-size:10px;color:#444">ผู้ตรวจสอบ (ฝ่ายจัดส่ง)</div><div style="height:36px"></div><div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>'
-        +'<td style="padding:6px"><div style="font-size:10px;color:#444">ผู้อนุมัติ</div><div style="height:36px"></div><div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>'
-      +'</tr></table>'
+      +(function(){
+            var sign = function(role, name){
+                return '<td style="width:33.3%;padding:6px">'
+                    +'<div style="font-size:10px;color:#444">'+role+'</div>'
+                    +'<div style="height:34px;display:flex;align-items:flex-end;justify-content:center;font-size:11px;font-weight:600;padding-bottom:3px">'+(name?esc(name):'')+'</div>'
+                    +'<div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>';
+            };
+            return '<table class="grid" style="margin-top:16px;text-align:center"><tr>'
+                +sign('ผู้โหลดสินค้า', d.staff)
+                +sign('ผู้ตรวจสอบ (ฝ่ายจัดส่ง)', d.reviewer)
+                +sign('ผู้อนุมัติ (ฝ่ายขาย)', d.sale)
+            +'</tr></table>';
+      })()
 
       +'<div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-top:8px">'
         +'<span>'+LD_DOC_NO+'</span><span>พิมพ์ '+printedAt+' โดย '+esc(printedBy)+'</span></div>'
