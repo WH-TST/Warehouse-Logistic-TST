@@ -24349,13 +24349,42 @@ async function _ldLoadOrderCards(dateVal, background, force) {
         } else {
             data = r1.data||[];
         }
-        _ldRenderCards(data);
+        // ดึงยอดที่โหลดจริงมาด้วย — ไม่งั้นการ์ดหน้างานโชว์ยอด "แผน"
+        // ส่วนมอนิเตอร์โชว์ยอด "จริง" สองจอเลยไม่ตรงกัน (เคส 90-2957)
+        var actualMap = {};
+        try {
+            var _ids = data.map(function(o){ return o.id; });
+            if (_ids.length) {
+                var _rs = await window._sb.from('loading_sessions')
+                    .select('order_id,truck_unit,qty,weight')
+                    .in('order_id', _ids).neq('record_type','draft');
+                (_rs.data||[]).forEach(function(r){
+                    var k = r.order_id+'|'+(r.truck_unit||'mother');
+                    if(!actualMap[k]) actualMap[k] = {pcs:0, kg:0};
+                    actualMap[k].pcs += parseFloat(r.qty)||0;
+                    actualMap[k].kg  += parseFloat(r.weight)||0;
+                });
+            }
+        } catch(e) { actualMap = {}; }
+        _ldRenderCards(data, actualMap);
     } catch(e) {
         wrap.innerHTML = '<div class="text-center py-8 text-rose-400 font-bold">Failed to load: '+(e?.message||'')+'</div>';
     }
 }
 
-function _ldRenderCards(orders) {
+// ยอดที่โชว์บนแถบหน่วยรถ: ถ้าโหลดแล้วให้ใช้ยอดจริง (ตรงกับมอนิเตอร์) ไม่งั้นใช้ยอดแผน
+function _ldUnitAmount(act, planKg, planPcs) {
+    var pPcs = Math.round(planPcs||0), pKg = Math.round(planKg||0);
+    if (act && (act.pcs>0 || act.kg>0)) {
+        var aPcs = Math.round(act.pcs), aKg = Math.round(act.kg);
+        var planNote = (pPcs && aPcs !== pPcs) ? ' · แผน ' + pPcs.toLocaleString() + ' เส้น' : '';
+        return 'โหลดแล้ว ' + aKg.toLocaleString() + ' KG · ' + aPcs.toLocaleString() + ' เส้น' + planNote;
+    }
+    return 'แผน ' + pKg.toLocaleString() + ' KG · ' + pPcs.toLocaleString() + ' เส้น';
+}
+
+function _ldRenderCards(orders, actualMap) {
+    actualMap = actualMap || {};
     var wrap = _ldGetCardsWrap();
     if (!wrap) return;
     if (!orders.length) {
@@ -24400,6 +24429,10 @@ function _ldRenderCards(orders) {
             var ur = o.unit_review || {};
             var mRvSt = (ur.mother||{}).status||'';
             var tRvSt = (ur.trailer||{}).status||'';
+            // ส่งงานแล้ว (มีแถวบันทึกการโหลดจริง) แต่ไม่มีสถานะตรวจ = ใบเก่าที่ค้างจากบั๊กเดิม
+            // ถือว่ารอตรวจสอบ ไม่งั้นหน้างานยังเห็นเป็นงานค้างกรอก ไม่ตรงกับมอนิเตอร์
+            if (!mRvSt && actualMap[o.id+'|mother']) mRvSt = 'pending_review';
+            if (!tRvSt && actualMap[o.id+'|trailer']) tRvSt = 'pending_review';
             var mLocked = mRvSt==='pending_review'||mRvSt==='approved';
             var tLocked = tRvSt==='pending_review'||tRvSt==='approved';
             var mOpen = !mLocked && !!ta.mother;
@@ -24445,7 +24478,7 @@ function _ldRenderCards(orders) {
                             +'<div style="width:8px;height:8px;background:'+(mRvSt==='pending_review'?'#2563eb':'#16a34a')+';border-radius:50%;flex-shrink:0;'+(mRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
                             +'<div>'
                                 +'<div style="font-size:13px;font-weight:700;color:#15803d;">แม่ · Head · '+(o.truck_plate||'—')+'</div>'
-                                +'<div style="font-size:11px;color:#86efac;">'+Math.round(mKg).toLocaleString()+' KG · '+mPcs.toLocaleString()+' เส้น</div>'
+                                +'<div style="font-size:11px;color:#86efac;">'+_ldUnitAmount(actualMap[o.id+'|mother'], mKg, mPcs)+'</div>'
                             +'</div>'
                         +'</div>'
                         +(mLocked
@@ -24463,7 +24496,7 @@ function _ldRenderCards(orders) {
                             +'<div style="width:8px;height:8px;background:'+(tRvSt==='pending_review'?'#2563eb':'#c1121f')+';border-radius:50%;flex-shrink:0;'+(tRvSt==='pending_review'?'animation:pulse 1.5s infinite;':'')+'"></div>'
                             +'<div>'
                                 +'<div style="font-size:13px;font-weight:700;color:#9a0c18;">ลูก · Trailer · '+(o.trailer_plate||'—')+'</div>'
-                                +'<div style="font-size:11px;color:#f08d94;">'+Math.round(tKg).toLocaleString()+' KG · '+tPcs.toLocaleString()+' เส้น</div>'
+                                +'<div style="font-size:11px;color:#f08d94;">'+_ldUnitAmount(actualMap[o.id+'|trailer'], tKg, tPcs)+'</div>'
                             +'</div>'
                         +'</div>'
                         +(tLocked
@@ -43786,12 +43819,13 @@ window.dmRefreshAll=async function(silent){
     var st=(!activePlan&&plans.length)?'completed':(curLog?curLog.status:(plans.length?'idle':'off'));
     if(st!=='off')activeCount++;
     var stColors={
-      off:{color:'#475569',label:'ไม่มีงานวันนี้',icon:'fa-moon',bg:'#1e293b',border:'#334155'},
-      idle:{color:'#94a3b8',label:'รอเริ่มงาน',icon:'fa-clock',bg:'#1e293b',border:'#334155'},
-      traveling:{color:'#dc2430',label:'กำลังเดินทาง',icon:'fa-truck-moving',bg:'#1e3a5f',border:'#9a0c18'},
-      at_shop:{color:'#f59e0b',label:'อยู่ที่ร้าน',icon:'fa-store',bg:'#3b2a05',border:'#d97706'},
-      returning:{color:'#e8707a',label:'กำลังกลับ',icon:'fa-route',bg:'#2e1f5e',border:'#c1121f'},
-      completed:{color:'#34d399',label:'เสร็จสิ้น',icon:'fa-check-circle',bg:'#052e16',border:'#059669'}
+      // โทนพาสเทลบนพื้นเข้ม — จอมอนิเตอร์เปิดทั้งวัน สีจัดแล้วแสบตา
+      off:{color:'#9aa5b1',label:'ไม่มีงานวันนี้',icon:'fa-moon',bg:'#232a35',border:'#39414e'},
+      idle:{color:'#bcc6d1',label:'รอเริ่มงาน',icon:'fa-clock',bg:'#232a35',border:'#454f5c'},
+      traveling:{color:'#a8c7e8',label:'กำลังเดินทาง',icon:'fa-truck-moving',bg:'#232d3a',border:'#4a6a8a'},
+      at_shop:{color:'#f2ce86',label:'อยู่ที่ร้าน',icon:'fa-store',bg:'#322c20',border:'#8a7245'},
+      returning:{color:'#c8b2e0',label:'กำลังกลับ',icon:'fa-route',bg:'#2b2635',border:'#6d5a8a'},
+      completed:{color:'#a7d7b8',label:'เสร็จสิ้น',icon:'fa-check-circle',bg:'#212f28',border:'#52805f'}
     };
     var sm=stColors[st]||stColors.off;
     var trucks=Array.from(new Set(plans.map(function(p){return p.truck_plate;}).filter(Boolean))).join(', ');
@@ -43805,13 +43839,13 @@ window.dmRefreshAll=async function(silent){
       var _curSh=_shops[_seq]||_shops[0];
       if(st==='at_shop'){
         var _atSh=_shops.find(function(s){var v=_sv[s.seq];return v&&v.lat_arrival&&!v.lat_depart;});
-        if(_atSh) ctxLine='<div style="font-size:11px;color:#fbbf24;margin-top:3px;"><i class="fas fa-map-marker-alt" style="margin-right:4px;"></i>อยู่ที่: '+dmEsc(_atSh.shopName||_atSh.shopId||'–')+'</div>';
+        if(_atSh) ctxLine='<div style="font-size:11px;color:#f2ce86;margin-top:3px;"><i class="fas fa-map-marker-alt" style="margin-right:4px;"></i>อยู่ที่: '+dmEsc(_atSh.shopName||_atSh.shopId||'–')+'</div>';
       } else if(st==='traveling'&&_curSh){
-        ctxLine='<div style="font-size:11px;color:#e8707a;margin-top:3px;"><i class="fas fa-truck-moving" style="margin-right:4px;"></i>กำลังไป: '+dmEsc(_curSh.shopName||_curSh.shopId||'–')+'</div>';
+        ctxLine='<div style="font-size:11px;color:#a8c7e8;margin-top:3px;"><i class="fas fa-truck-moving" style="margin-right:4px;"></i>กำลังไป: '+dmEsc(_curSh.shopName||_curSh.shopId||'–')+'</div>';
       } else if(st==='returning'){
-        ctxLine='<div style="font-size:11px;color:#e8707a;margin-top:3px;"><i class="fas fa-route" style="margin-right:4px;"></i>กำลังกลับบริษัท</div>';
+        ctxLine='<div style="font-size:11px;color:#c8b2e0;margin-top:3px;"><i class="fas fa-route" style="margin-right:4px;"></i>กำลังกลับบริษัท</div>';
       } else if(st==='idle'&&_curSh){
-        ctxLine='<div style="font-size:11px;color:#94a3b8;margin-top:3px;"><i class="fas fa-flag" style="margin-right:4px;"></i>จุดแรก: '+dmEsc(_curSh.shopName||_curSh.shopId||'–')+'</div>';
+        ctxLine='<div style="font-size:11px;color:#bcc6d1;margin-top:3px;"><i class="fas fa-flag" style="margin-right:4px;"></i>จุดแรก: '+dmEsc(_curSh.shopName||_curSh.shopId||'–')+'</div>';
       }
     }
     // ── trip list minibar ──
@@ -43821,7 +43855,7 @@ window.dmRefreshAll=async function(silent){
       plans.forEach(function(p,pi){
         var _l=tripLogsMap[p.plan_id];
         var _pst=(p.status==='success')?'completed':(_l?_l.status:'idle');
-        var _col={idle:'#475569',traveling:'#dc2430',at_shop:'#f59e0b',returning:'#e8707a',completed:'#34d399'}[_pst]||'#475569';
+        var _col={idle:'#9aa5b1',traveling:'#a8c7e8',at_shop:'#f2ce86',returning:'#c8b2e0',completed:'#a7d7b8'}[_pst]||'#9aa5b1';
         var _icon={idle:'fa-clock',traveling:'fa-truck-moving',at_shop:'fa-store',returning:'fa-route',completed:'fa-check'}[_pst]||'fa-clock';
         var _shops=(p.shops||[]).filter(function(s){return s.type!=='service_center';});
         var _label='เที่ยว '+(p.trip_no||pi+1)+' · '+_shops.length+' จุด';
@@ -43830,7 +43864,7 @@ window.dmRefreshAll=async function(silent){
       });
       tripBar+='</div>';
     }
-    var maintBanner=maintPlan?'<div style="display:flex;align-items:center;gap:6px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:4px 8px;margin-top:6px;"><i class="fas fa-wrench" style="color:#fbbf24;font-size:10px;flex-shrink:0;"></i><span style="font-size:10px;color:#fde68a;font-weight:700;">มีคิวเข้าศูนย์ซ่อม</span></div>':'';
+    var maintBanner=maintPlan?'<div style="display:flex;align-items:center;gap:6px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:4px 8px;margin-top:6px;"><i class="fas fa-wrench" style="color:#f2ce86;font-size:10px;flex-shrink:0;"></i><span style="font-size:10px;color:#f2e3bd;font-weight:700;">มีคิวเข้าศูนย์ซ่อม</span></div>':'';
     html+='<div onclick="dmOpenAllDriverTrip(\''+driver.username+'\')" style="background:'+sm.bg+';border:1px solid '+sm.border+';border-radius:16px;padding:14px;cursor:pointer;transition:opacity .2s;" onmouseover="this.style.opacity=\'.85\'" onmouseout="this.style.opacity=\'1\'">'
       +'<div style="display:flex;align-items:flex-start;gap:10px;">'
       +'<div style="width:42px;height:42px;border-radius:12px;background:'+sm.border+';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;font-weight:900;color:'+sm.color+';">'+initials+'</div>'
@@ -43841,7 +43875,7 @@ window.dmRefreshAll=async function(silent){
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0;padding-left:4px;">'
       +'<div style="font-size:20px;font-weight:900;color:#fff;line-height:1;">'+done+'/'+plans.length+'</div>'
-      +'<div style="font-size:10px;color:#64748b;font-weight:700;">เที่ยว</div>'
+      +'<div style="font-size:10px;color:#8b95a3;font-weight:700;">เที่ยว</div>'
       +(trucks?'<div style="font-size:10px;color:#94a3b8;margin-top:4px;">🚛 '+dmEsc(trucks)+'</div>':'')
       +'</div></div></div>';
   });
@@ -44270,7 +44304,7 @@ function dmRenderPlanList(area){
     +'<div style="flex:1;"><div style="font-weight:900;color:#fff;font-size:17px;">'+dmEsc(driver.driver_name)+'</div>'
     +'<div style="font-size:12px;color:#34d399;font-weight:700;margin-top:2px;">'+(trucks?'🚛 '+trucks:'ไม่มีรถวันนี้')+'</div></div>'
     +'<div style="text-align:right;"><div style="font-size:26px;font-weight:900;color:#fff;line-height:1;">'+plans.length+'</div>'
-    +'<div style="font-size:10px;color:#64748b;font-weight:700;">เที่ยว</div>'
+    +'<div style="font-size:10px;color:#8b95a3;font-weight:700;">เที่ยว</div>'
     +'<div style="font-size:13px;font-weight:900;color:#34d399;margin-top:2px;">'+done+' <span style="font-size:10px;color:#64748b;">สำเร็จ</span></div>'
     +'</div></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'
