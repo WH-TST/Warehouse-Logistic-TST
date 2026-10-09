@@ -29152,6 +29152,8 @@ function _ldRenderMonitorTable(rows, orders) {
             var durMin = parsedWorkMin !== null ? parsedWorkMin
                 : ((minStart&&maxEnd) ? Math.round((new Date(maxEnd)-new Date(minStart))/60000) : 0);
 
+            // ── ข้อมูลสำหรับเอกสารโหลดสินค้า (WH001-REV.00) ──
+            var _docRows = [];
             // ── helper: build done table for a subset of sessions + items
             // finalMap: {sku: {finalKg, finalAvg}} — from scale diff calculation
             var finalMap = (_ldScaleDiff[orderId]!=null && _ldScaleDiff[orderId]!==0)
@@ -29249,6 +29251,15 @@ function _ldRenderMonitorTable(rows, orders) {
                         finalCells=
                             '<td style="padding:7px 8px;font-size:12px;font-weight:900;color:#1e293b;text-align:right;background:#f1f5f9;">'+fKg.toLocaleString(undefined,{maximumFractionDigits:1})+diffBadge+'</td>'
                             +'<td style="padding:7px 8px;font-size:12px;font-weight:900;color:'+fAvgColor+';text-align:right;background:'+(fOor?'#fee2e2':'#f1f5f9')+';">'+fAvg.toFixed(2)+(fOor?' ⚠':'')+'</td>';
+                    }
+                    if (aQ > 0 || tQ > 0) {
+                        _docRows.push({
+                            sku: it.sku||'', name: pName,
+                            lot: (_sr&&_sr.mo_number) ? String(_sr.mo_number) : '',
+                            unit: unitKey||'', orderQty: tQ, pcs: aQ,
+                            kg: hasFinal ? fKg : aW,
+                            min: minW, max: maxW
+                        });
                     }
                     if (aQ > 0) {
                         // งานวนชั่ง → ใช้ Scale (KG); ไม่งั้นใช้ Final ถ้ามี ไม่งั้น Loaded
@@ -29457,6 +29468,27 @@ function _ldRenderMonitorTable(rows, orders) {
                   +'<div style="font-size:13px;font-weight:700;color:#f08d94;font-family:monospace;">'+_ldEsc(order.trailer_plate||'—')+'<span style="font-size:10px;color:#f08d94;margin-left:4px;">ลูก · Trailer</span></div>'
                 : '<div style="font-size:20px;font-weight:900;color:#fff;font-family:monospace;letter-spacing:1px;">'+_ldEsc(order.truck_plate||orderId.slice(0,8))+'</div>';
 
+            // เก็บข้อมูลไว้ให้ปุ่ม "เอกสารโหลดสินค้า" (WH001-REV.00)
+            _ldDocRegistry[orderId] = {
+                orderNo: order.order_no||'', orderDate: order.order_date||'',
+                truckPlate: order.truck_plate||'', trailerPlate: order.trailer_plate||'',
+                isTrailer: !!(order.is_trailer && order.trailer_split),
+                customer: order.customer_name||'', team: teamName||'', staff: staffNames||'',
+                tStart: tStart||'', tEnd: tEnd||'', durMin: durMin||0,
+                loadedKg: totalWt||0,
+                qc: (function(){
+                    // ผล QC ถูกบันทึกตอนกดส่งงาน ในรูปแบบ [QC:1111111] ที่ท้าย note
+                    for (var _i=0;_i<sessions.length;_i++){
+                        var _m=(sessions[_i].note||'').match(/\[QC:([01]{5,})\]/);
+                        if(_m) return _m[1];
+                    }
+                    return null;
+                })(),
+                scaleKg: (_ldScaleDiff[orderId]!=null) ? (totalWt + _ldScaleDiff[orderId]) : null,
+                diffKg: (_ldScaleDiff[orderId]!=null) ? _ldScaleDiff[orderId] : null,
+                rows: _docRows.slice()
+            };
+
             var _rvOrd2 = order.review_status||'';
             var _cardBorderColor = (_rvOrd2==='rejected' && _hasDrafts) ? '#fb923c' : _rvOrd2==='rejected' ? '#fca5a5' : '#86efac';
             var _cardHtml = '<div style="background:#fff;border-radius:18px;border:2px solid '+_cardBorderColor+';overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px #0001;">'
@@ -29486,6 +29518,9 @@ function _ldRenderMonitorTable(rows, orders) {
                             +(allPhotos.length
                                 ? (function(){ var k='ph_'+orderId; _ldPhotoRegistry[k]=allPhotos; return '<button onclick="ldShowPhotos(\''+k+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#c1121f;color:#fff;border:none;cursor:pointer;"><i class="fas fa-images"></i> รูปภาพ ('+allPhotos.length+')</button>'; })()
                                 : '<span style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;background:#1e293b;color:#475569;border:1px solid #334155;"><i class="fas fa-image" style="margin-right:4px;"></i>ไม่มีรูป</span>')
+                            +((order.review_status||'')!=='rejected'
+                                ? '<button onclick="ldOpenLoadingDoc(\''+orderId+'\')" style="display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:11px;font-weight:900;background:#1e293b;color:#e2e8f0;border:1px solid #475569;cursor:pointer;"><i class="fas fa-file-alt"></i> เอกสารโหลดสินค้า</button>'
+                                : '')
                         +'</div>'
                     +'</div>'
                     // hide summary chips for trailer_split — shown per-unit inside each section
@@ -29820,7 +29855,159 @@ function _monQcBadge() {
 
 // ── Photo lightbox ──────────────────────────────────────────────────
 var _ldPhotoRegistry = {};   // {key: [url,...]} — avoids passing JSON in onclick
+var _ldDocRegistry = {};     // {orderId: {...}} — ข้อมูลเอกสารโหลดสินค้า WH001-REV.00
 var _ldCopyRegistry = {};    // {orderId: [{sku,qty,weight},...]} — for copy button
+
+// ══════════════════════════════════════════════════════════════════
+//  เอกสารโหลดสินค้า WH001-REV.00 — ใช้ยื่นตอน สมอ. เข้าตรวจโรงงาน
+//  เปิดพรีวิวหน้าต่างใหม่ มีปุ่มพิมพ์ในหน้า
+// ══════════════════════════════════════════════════════════════════
+var LD_DOC_NO = 'WH001-REV.00';
+var LD_DOC_LOGO = 'https://static.wixstatic.com/media/5a1d18_237433e7b53841cca74e8f402795c4ca~mv2.png';
+
+window.ldOpenLoadingDoc = function(orderId) {
+    var d = _ldDocRegistry[orderId];
+    if (!d || !d.rows.length) { showToast('ไม่มีข้อมูลสำหรับออกเอกสาร', true); return; }
+    var esc = _ldEsc;
+    var nf = function(n, dg){ return Number(n||0).toLocaleString(undefined,{maximumFractionDigits:dg==null?0:dg}); };
+    var thDate = function(iso){ if(!iso) return '—'; var p=String(iso).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso; };
+
+    var totPcs = 0, totKg = 0;
+    d.rows.forEach(function(r){ totPcs += r.pcs||0; totKg += r.kg||0; });
+    var avgAll = totPcs>0 ? (totKg/totPcs) : null;
+
+    var unitTh = d.isTrailer ? '<th style="width:48px">หน่วยรถ</th>' : '';
+    var body = d.rows.map(function(r, i){
+        var avg = r.pcs>0 ? (r.kg/r.pcs) : null;
+        var rng = (r.min!=null&&r.max!=null) ? (r.min+'–'+r.max) : '—';
+        return '<tr>'
+            +'<td class="c">'+(i+1)+'</td>'
+            +'<td class="mono">'+esc(r.sku)+'</td>'
+            +'<td>'+esc(r.name)+'</td>'
+            +(d.isTrailer ? '<td class="c">'+(r.unit==='trailer'?'ลูก':'แม่')+'</td>' : '')
+            +'<td class="c mono">'+(r.lot?esc(r.lot):'—')+'</td>'
+            +'<td class="n">'+nf(r.pcs)+'</td>'
+            +'<td class="n">'+nf(r.kg)+'</td>'
+            +'<td class="c" style="font-size:10px">'+rng+'</td>'
+            +'<td class="n" style="font-weight:600">'+(avg!=null?avg.toFixed(2):'—')+'</td>'
+        +'</tr>';
+    }).join('');
+
+    var plateLine = d.isTrailer
+        ? esc(d.truckPlate||'—')+' (แม่) / '+esc(d.trailerPlate||'—')+' (ลูก)'
+        : esc(d.truckPlate||'—');
+    var timeLine = (d.tStart&&d.tEnd) ? (esc(d.tStart)+' – '+esc(d.tEnd)+(d.durMin?(' ('+d.durMin+' นาที)'):'')) : '—';
+    var scaleRow = (d.scaleKg!=null)
+        ? '<tr><td class="lbl">น้ำหนักจากการโหลด</td><td class="n">'+nf(d.loadedKg,1)+' กก.</td>'
+          +'<td class="lbl">น้ำหนักตราชั่งใหญ่</td><td class="n">'+nf(d.scaleKg,1)+' กก.</td>'
+          +'<td class="lbl">ส่วนต่าง</td><td class="n">'+(d.diffKg>0?'+':'')+Number(d.diffKg||0).toFixed(1)+' กก.</td></tr>'
+        : '<tr><td class="lbl">น้ำหนักจากการโหลด</td><td class="n">'+nf(d.loadedKg,1)+' กก.</td>'
+          +'<td class="lbl">น้ำหนักตราชั่งใหญ่</td><td class="n">—</td>'
+          +'<td class="lbl">ส่วนต่าง</td><td class="n">—</td></tr>';
+
+    // ── เช็คลิสต์ QC: อ่านจากที่หน้างานติ๊กไว้ตอนกดส่งงาน ──
+    var qcLabels = ['ตรวจสภาพสินค้า','ตรวจสนิม','SKU และจำนวน','ไม้หมอน/เหล็กรอง','มัด/รัดเรียบร้อย',
+                    'พ่นเครื่องหมาย มอก. ที่ตัวสินค้า','ติดสติ๊กเกอร์ มอก. ทุกมัด'];
+    var qcRowsHtml = '';
+    var qcBox = function(ok){ return '<span style="display:inline-block;width:11px;height:11px;border:1.2px solid #333;text-align:center;line-height:10px;font-size:10px;font-weight:600;margin-right:6px;vertical-align:-1px">'+(ok?'✓':'')+'</span>'; };
+    qcRowsHtml = '<tr><th style="width:24px">#</th><th style="text-align:left">รายการตรวจก่อนปิดงาน</th>'
+        +'<th style="width:52px">ผลตรวจ</th><th style="width:24px">#</th><th style="text-align:left">รายการตรวจก่อนปิดงาน</th>'
+        +'<th style="width:52px">ผลตรวจ</th></tr>';
+    for (var _q=0; _q<qcLabels.length; _q+=2) {
+        qcRowsHtml += '<tr>';
+        for (var _k=_q; _k<_q+2; _k++) {
+            if (_k>=qcLabels.length) { qcRowsHtml += '<td></td><td></td><td></td>'; break; }
+            var ok = d.qc ? d.qc.charAt(_k)==='1' : false;
+            qcRowsHtml += '<td class="c">'+(_k+1)+'</td>'
+                +'<td>'+qcBox(ok)+qcLabels[_k]+'</td>'
+                +'<td class="c" style="font-weight:600">'+(d.qc ? (ok?'ผ่าน':'ไม่ผ่าน') : '—')+'</td>';
+        }
+        qcRowsHtml += '</tr>';
+    }
+    if (!d.qc) {
+        qcRowsHtml += '<tr><td colspan="6" style="font-size:10px;color:#555">* งานนี้บันทึกก่อนเริ่มใช้เช็คลิสต์ในระบบ จึงไม่มีผลตรวจที่บันทึกไว้</td></tr>';
+    }
+
+    var now = new Date();
+    var printedBy = (window._cu && (window._cu.name||window._cu.username)) || '—';
+    var printedAt = thDate(window._bkkToday())+' '+now.toTimeString().slice(0,5);
+
+    var html = '<!doctype html><html lang="th"><head><meta charset="utf-8">'
+      +'<title>'+LD_DOC_NO+' · '+esc(d.orderNo||d.truckPlate||'')+'</title>'
+      +'<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">'
+      +'<style>'
+      +'body{background:#e9ecef;margin:0;padding:24px;font-family:"IBM Plex Sans Thai",sans-serif}'
+      +'.pg{background:#fff;color:#111;width:760px;margin:0 auto;padding:26px 30px;font-size:11px;line-height:1.5;box-shadow:0 2px 12px rgba(0,0,0,.15)}'
+      +'table{width:100%;border-collapse:collapse}'
+      +'.grid td{border:1px solid #333;padding:4px 6px;vertical-align:top}'
+      +'.grid th{border:1px solid #333;padding:5px 6px;background:#eee;font-weight:600;font-size:10px}'
+      +'.lbl{background:#f4f4f4;font-size:10px;color:#444;width:104px}'
+      +'.n{text-align:right;font-variant-numeric:tabular-nums}.c{text-align:center}'
+      +'.mono{font-family:"IBM Plex Mono",monospace;font-size:10px;white-space:nowrap}'
+      +'h4{font-weight:600;font-size:11px;margin:13px 0 4px}'
+      +'#bar{position:fixed;top:0;left:0;right:0;background:#1e293b;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;font-size:13px}'
+      +'#bar button{background:#c1121f;color:#fff;border:none;border-radius:8px;padding:7px 18px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px}'
+      +'body{padding-top:70px}'
+      +'@media print{#bar{display:none}body{background:#fff;padding:0}.pg{box-shadow:none;width:auto;padding:0}}'
+      +'</style></head><body>'
+      +'<div id="bar"><button onclick="window.print()">พิมพ์เอกสาร</button><span>'+LD_DOC_NO+' — ตรวจความถูกต้องก่อนสั่งพิมพ์</span></div>'
+      +'<div class="pg">'
+      +'<table style="margin-bottom:10px"><tr>'
+        +'<td style="width:118px"><img src="'+LD_DOC_LOGO+'" alt="TST" style="width:108px;height:auto;display:block"></td>'
+        +'<td style="padding-left:6px"><div style="font-weight:600;font-size:14px">บริษัท ที.แสตนดาร์ด สตีล จำกัด</div>'
+          +'<div style="font-size:9px;color:#555;letter-spacing:.06em">T.STANDARD STEEL COMPANY LIMITED</div>'
+          +'<div style="font-weight:600;font-size:15px;margin-top:7px">บันทึกการโหลดสินค้า · Loading Record</div></td>'
+        +'<td style="width:198px;font-size:10px"><table class="grid">'
+          +'<tr><td class="lbl" style="width:62px">เลขที่เอกสาร</td><td style="font-weight:600;white-space:nowrap">'+LD_DOC_NO+'</td></tr>'
+          +'<tr><td class="lbl">หน้า</td><td>1 / 1</td></tr>'
+        +'</table></td>'
+      +'</tr></table>'
+
+      +'<h4>1. ข้อมูลการจัดส่ง</h4><table class="grid">'
+        +'<tr><td class="lbl">เลขที่ใบโหลด</td><td style="font-weight:600">'+esc(d.orderNo||'—')+'</td>'
+          +'<td class="lbl" style="width:68px">วันที่โหลด</td><td style="width:84px">'+thDate(d.orderDate)+'</td>'
+          +'<td class="lbl" style="width:66px">ทะเบียนรถ</td><td style="font-weight:600">'+plateLine+'</td></tr>'
+        +'<tr><td class="lbl">ลูกค้า</td><td colspan="3">'+esc(d.customer||'—')+'</td>'
+          +'<td class="lbl">เวลาโหลด</td><td>'+timeLine+'</td></tr>'
+        +'<tr><td class="lbl">ทีมโหลด</td><td>'+esc(d.team||'—')+'</td>'
+          +'<td class="lbl">ผู้โหลด</td><td colspan="3">'+esc(d.staff||'—')+'</td></tr>'
+      +'</table>'
+
+      +'<h4>2. รายการสินค้าและการตรวจสอบน้ำหนักต่อหน่วย</h4><table class="grid">'
+      +'<thead><tr><th style="width:20px">#</th><th style="width:96px">รหัสสินค้า</th><th>ชื่อสินค้า</th>'
+      +unitTh
+      +'<th style="width:64px">ล็อตผลิต</th><th style="width:46px">จำนวน<br>(เส้น)</th>'
+      +'<th style="width:56px">น้ำหนักรวม<br>(กก.)</th><th style="width:68px">เกณฑ์/เส้น<br>(กก.)</th>'
+      +'<th style="width:48px">เฉลี่ยจริง<br>(กก.)</th></tr></thead>'
+      +'<tbody>'+body+'</tbody>'
+      +'<tfoot><tr style="font-weight:600;background:#f4f4f4">'
+        +'<td class="c" colspan="'+(d.isTrailer?5:4)+'">รวม '+d.rows.length+' รายการ</td>'
+        +'<td class="n">'+nf(totPcs)+'</td><td class="n">'+nf(totKg)+'</td><td></td>'
+        +'<td class="n">'+(avgAll!=null?avgAll.toFixed(2):'—')+'</td>'
+      +'</tr></tfoot></table>'
+
+      +'<h4>3. การสอบทานน้ำหนักรวม</h4><table class="grid">'+scaleRow+'</table>'
+
+      +'<h4>4. ผลการตรวจคุณภาพก่อนปิดงาน (QC Checklist)</h4><table class="grid">'
+        +qcRowsHtml
+        +'<tr><td class="lbl">ผู้ตรวจ</td><td colspan="5">'+esc(d.staff||'—')+'</td></tr>'
+        +'<tr><td class="lbl">หมายเหตุ</td><td colspan="5" style="height:30px"></td></tr>'
+      +'</table>'
+
+      +'<table class="grid" style="margin-top:16px;text-align:center"><tr>'
+        +'<td style="width:33.3%;padding:6px"><div style="font-size:10px;color:#444">ผู้โหลดสินค้า</div><div style="height:36px"></div><div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>'
+        +'<td style="width:33.3%;padding:6px"><div style="font-size:10px;color:#444">ผู้ตรวจสอบ (ฝ่ายจัดส่ง)</div><div style="height:36px"></div><div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>'
+        +'<td style="padding:6px"><div style="font-size:10px;color:#444">ผู้อนุมัติ</div><div style="height:36px"></div><div style="border-top:1px solid #333;padding-top:3px;font-size:9px">ลงชื่อ / วันที่</div></td>'
+      +'</tr></table>'
+
+      +'<div style="display:flex;justify-content:space-between;font-size:9px;color:#666;margin-top:8px">'
+        +'<span>'+LD_DOC_NO+'</span><span>พิมพ์ '+printedAt+' โดย '+esc(printedBy)+'</span></div>'
+      +'</div></body></html>';
+
+    var w = window.open('', '_blank');
+    if (!w) { showToast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต pop-up ก่อน', true); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+};
 
 window.ldCopyLoadData = function(orderId, btn) {
     var rows = _ldCopyRegistry[orderId] || [];
