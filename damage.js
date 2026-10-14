@@ -1482,6 +1482,7 @@
 
   /* ═══════════════════════════ ปุ่มลอยสำหรับ WH Staff (ทีมโหลดสินค้า) ═══════════════════════════ */
   DMG.ensureWhFab = function () {
+    injectCss(); // ไม่งั้นปุ่มไม่มี position:fixed/สี เลย กลายเป็นปุ่มเปล่าปนอยู่ในเนื้อหา มองไม่เห็น
     if ($('dmg-wh-fab')) return;
     var b = document.createElement('button');
     b.id = 'dmg-wh-fab'; b.className = 'dmg-fab'; b.title = 'แจ้งสินค้าเสียหาย';
