@@ -2343,6 +2343,16 @@ input[id^="ldf-lq-"]::placeholder{color:var(--ac-200);font-size:13px;font-weight
                 <span class="nav-icon"><i class="fas fa-file-import"></i></span> นำเข้าข้อมูล
             </button>
 
+            <!-- ─── QUALITY ─── -->
+            <div class="nav-group-label" style="padding-top:16px;">
+                <span class="line"></span>
+                <i class="fas fa-shield-halved" style="color:var(--sb-label);font-size:8px;"></i>&nbsp;คุณภาพ
+                <span class="line"></span>
+            </div>
+            <button onclick="switchView('damage-cases')" id="nav-damage-cases" class="nav-btn" data-tip="แจ้งสินค้าเสียหาย">
+                <span class="nav-icon"><i class="fas fa-triangle-exclamation"></i></span> แจ้งสินค้าเสียหาย
+            </button>
+
             <!-- ─── PRODUCTION ─── -->
             <div class="nav-group-label" style="padding-top:16px;">
                 <span class="line"></span>
@@ -8265,6 +8275,10 @@ input[id^="ldf-lq-"]::placeholder{color:var(--ac-200);font-size:13px;font-weight
 <!-- DRIVER ANALYTICS                                              -->
 <!-- ============================================================ -->
 <!-- ══════ สรุปการทำงานคนขับ (รถบริษัท) ══════ -->
+<!-- ══════ แจ้งสินค้าเสียหายและติดตามความรับผิดชอบ (Product Damage Management) ══════ -->
+<!-- เนื้อหาทั้งหมดวาดโดย damage.js (DMG.initCases) — ดู supabase_damage_cases.sql สำหรับตาราง -->
+<div id="view-damage-cases-content" class="hidden space-y-4"></div>
+
 <!-- ══════ รายการเคลื่อนไหวสินค้า ══════ -->
 <div id="view-stock-movement-content" class="hidden space-y-4">
   <style>
@@ -13887,7 +13901,7 @@ window.switchView = function switchView(view) {
     if (view === 'load-monitor') { view = 'loading-order'; _navId = 'load-monitor'; _wantLoTab = 'monitor'; }
     else if (view === 'loading-order') { _wantLoTab = 'orders'; }
 
-    const views = ['theme', 'wm-manage', 'load-monitor', 'printtag', 'analytics', 'whactivity', 'stock-movement', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'driver-worklog', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['theme', 'damage-cases', 'wm-manage', 'load-monitor', 'printtag', 'analytics', 'whactivity', 'stock-movement', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'driver-worklog', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13947,6 +13961,7 @@ window.switchView = function switchView(view) {
     if (view === 'driver-worklog' && window.dwlInit) window.dwlInit();
     if (view === 'stock-movement' && window.smvInit) window.smvInit();
     if (view === 'theme' && window.themeRender) window.themeRender();
+    if (view === 'damage-cases' && window.DMG) window.DMG.initCases();
 
     const titleEl = document.getElementById('view-title');
     if (titleEl) {
@@ -13975,7 +13990,8 @@ window.switchView = function switchView(view) {
             'user-accounts': 'ผู้ใช้งานระบบ — Driver & WH Staff',
             'stock-count': 'ตรวจนับ–เทียบสต๊อก',
             'wh-eval': 'ประเมินทักษะทีมคลังสินค้า — Skill Evaluation',
-            'theme': 'ธีมสี — เลือกโทนสีของโปรแกรม'
+            'theme': 'ธีมสี — เลือกโทนสีของโปรแกรม',
+            'damage-cases': 'แจ้งสินค้าเสียหาย — Product Damage Management'
         }[view] || 'WL Management';
         if (_navId === 'load-monitor') titleEl.innerText = 'ติดตามทีมโหลดสินค้า — WMS Monitor';
     }
@@ -38589,6 +38605,7 @@ var WMS_VIEWS=[
   {id:'products',label:'ทะเบียนสินค้า'},
   {id:'stock-count',label:'ตรวจนับ–เทียบสต๊อก'},
   {id:'kpi-stock',label:'นำเข้าข้อมูล'},
+  {id:'damage-cases',label:'แจ้งสินค้าเสียหาย'},
   {id:'logistic-plan',label:'วางแผนจัดส่ง'},
   {id:'truck-calendar',label:'ตารางส่งแบบบล็อก'},
   {id:'customers',label:'ข้อมูลลูกค้า'},
@@ -38728,6 +38745,7 @@ window.doLogin = async function(){
 window.doLogout=function(){
   if(!confirm('ต้องการออกจากระบบใช่ไหมครับ?'))return;
   _cu=null;_clearSess();
+  var _dmgFab=document.getElementById('dmg-wh-fab'); if(_dmgFab)_dmgFab.remove();
   document.getElementById('login-username').value='';
   document.getElementById('login-password').value='';
   document.getElementById('login-error').classList.add('hidden');
@@ -38803,6 +38821,7 @@ var UP_NAV = [
   {id:'products',     label:'ทะเบียนสินค้า',      icon:'fa-boxes'},
   {id:'stock-count',  label:'ตรวจนับ–เทียบสต๊อก', icon:'fa-clipboard-check'},
   {id:'kpi-stock',    label:'นำเข้าข้อมูล',       icon:'fa-file-import'},
+  {id:'damage-cases', label:'แจ้งสินค้าเสียหาย',    icon:'fa-triangle-exclamation'},
   {id:'logistic-plan',label:'วางแผนจัดส่ง',       icon:'fa-route'},
   {id:'truck-calendar',label:'ตารางส่งแบบบล็อก',  icon:'fa-calendar-alt'},
   {id:'customers',    label:'ข้อมูลลูกค้า',        icon:'fa-store'},
@@ -45860,6 +45879,8 @@ window.whInit = async function(user, team) {
   }
   if (typeof window._ldRequestNotifPermission === 'function') window._ldRequestNotifPermission(user.username);
   setTimeout(_whUpdateNotifBtn, 500);
+  // ทีมโหลดสินค้าเห็นปุ่มแจ้งสินค้าเสียหายเสมอ (บทบาท Reporter ตาม Product Damage Management)
+  if (window.DMG && typeof window.DMG.ensureWhFab === 'function') window.DMG.ensureWhFab();
   // Training realtime for WH Staff
   setTimeout(function(){ if (typeof trCheckDriverPending === 'function') trCheckDriverPending(user.username); }, 1500);
   if (typeof _trStartRt === 'function') _trStartRt(user.username);
@@ -45905,6 +45926,7 @@ window.whLogout = function() {
   localStorage.removeItem('wms_sess');
   var scr = document.getElementById('wh-screen');
   if (scr) scr.classList.remove('active');
+  var fab = document.getElementById('dmg-wh-fab'); if (fab) fab.remove();
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('login-username').value = '';
   document.getElementById('login-password').value = '';
@@ -49981,3 +50003,4 @@ window.whEvalPrint = function() {
 })();
 </script>
 
+<script src="damage.js"></script>
