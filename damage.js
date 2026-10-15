@@ -53,6 +53,25 @@
   ];
 
   // ข้อสงสัยของผู้แจ้ง — ต้องติดป้ายว่าเป็นข้อสงสัย ไม่ใช่ข้อสรุป
+  // อาการเสีย — หน้างานแตะเลือก ไม่ต้องพิมพ์
+  //
+  // code เก็บลง dmg_cases.defect_code เพื่อเอาไปนับเป็นกราฟบนมอนิเตอร์ผลิต
+  // th เก็บลง symptom ด้วย เพื่อให้หัวหน้า/ฝ่ายผลิตอ่านออกโดยไม่ต้องแปลรหัส
+  // ⚠ ห้ามแก้ code ของตัวที่มีอยู่แล้ว ไม่งั้นข้อมูลเก่ากับใหม่จะนับรวมกันไม่ได้
+  var DEFECTS = [
+    { code: 'seam_crack',  th: 'ตะเข็บแตก',      my: 'အပြားဆက်ကြောင်း ကွဲ' },
+    { code: 'zinc_peel',   th: 'สังกะสีลอก',      my: 'သွပ်ပြား ကွာ' },
+    { code: 'rust',        th: 'เป็นสนิม',        my: 'သံချေး တက်' },
+    { code: 'dent',        th: 'บุบ',             my: 'ချိုင့်' },
+    { code: 'bent',        th: 'คด โก่ง',         my: 'ကွေး ကောက်' },
+    { code: 'length_off',  th: 'ยาวไม่ได้',       my: 'အလျား မမှန်' },
+    { code: 'thick_off',   th: 'หนาไม่ได้',       my: 'အထူ မမှန်' },
+    { code: 'shape_off',   th: 'หน้าตัดเบี้ยว',   my: 'မျက်နှာပြင် မညီ' },
+    { code: 'no_mok',      th: 'ไม่มีตรา มอก.',   my: 'မောကော် တံဆိပ် မပါ' },
+    { code: 'loose_bundle',th: 'มัดไม่แน่น',      my: 'အစည်း မတင်း' },
+    { code: 'other',       th: 'อื่นๆ',           my: 'အခြား' }
+  ];
+
   // จุดที่พบเหตุ — รายชื่อโซนจริงในโรงงาน (หน้างานกำหนด 15 ต.ค. 69)
   var INCIDENT_LOCATIONS = ['C4','C5','P1','P2','P3','P4','RE1','RE4','RE3'];
 
@@ -259,7 +278,7 @@
 
   // ส่งออกให้ส่วนอื่นของไฟล์ใช้
   DMG._ = { STATUS: STATUS, STATUS_ORDER: STATUS_ORDER, PRIORITY: PRIORITY, INCIDENT_TYPES: INCIDENT_TYPES,
-    INCIDENT_LOCATIONS: INCIDENT_LOCATIONS,
+    INCIDENT_LOCATIONS: INCIDENT_LOCATIONS, DEFECTS: DEFECTS,
     SUSPECTED_STAGES: SUSPECTED_STAGES, CONCLUSIONS: CONCLUSIONS, PROCESS_STEPS: PROCESS_STEPS,
     ROOT_CAUSE_CATS: ROOT_CAUSE_CATS, ATTACH_TYPES: ATTACH_TYPES, CAPA_STATUS: CAPA_STATUS, CAPA_CLS: CAPA_CLS,
     ACTION_LABELS: ACTION_LABELS, EMAIL_TYPES: EMAIL_TYPES, CFG: CFG,
@@ -352,6 +371,20 @@
       '.dmg-fab{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;background:#1d4ed8;color:#fff;border:none;font-size:22px;box-shadow:0 6px 20px rgba(29,78,216,.4);cursor:pointer;z-index:10001}', // #wh-screen (หน้าจอทีมโหลด) ใช้ z-index:10000 ต้องสูงกว่านั้น ไม่งั้นโดนบังมิด
       '#dmg-report-screen{position:fixed;inset:0;background:#f1f5f9;z-index:10050;display:none;flex-direction:column;overflow-y:auto}',
       '#dmg-report-screen.dmg-my{font-family:"Noto Sans Myanmar",system-ui,sans-serif;line-height:1.8}',
+      '.dmg-step{margin-bottom:18px}',
+      '.dmg-step .dmg-label{font-size:15px;font-weight:800;color:#0f172a;margin-bottom:7px}',
+      '.dmg-defects{display:flex;flex-wrap:wrap;gap:7px}',
+      '.dmg-defects .dmg-chip{font-size:14px;padding:9px 14px;border-radius:999px}',
+      '.dmg-defects .dmg-chip.on{background:#c2410c;border-color:#c2410c;color:#fff;font-weight:800}',
+      '.dmg-stepper{display:flex;align-items:center;gap:9px}',
+      '.dmg-stepper button{width:52px;height:52px;flex:0 0 auto;border-radius:12px;border:1.5px solid #cbd5e1;background:#fff;font-size:24px;color:#334155;line-height:1}',
+      '.dmg-stepper input{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;border:1.5px solid #cbd5e1;border-radius:12px;padding:9px;background:#fff;color:#0f172a;-moz-appearance:textfield}',
+      '.dmg-stepper input::-webkit-outer-spin-button,.dmg-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}',
+      '.dmg-lotbox{border:1.5px solid #f0b100;border-radius:10px;background:#fffbeb;padding:10px}',
+      '.dmg-lotin{width:100%;box-sizing:border-box;border:1.5px solid #f0b100;border-radius:8px;padding:11px;font-size:18px;font-weight:800;text-align:center;letter-spacing:1px;background:#fff;color:#92400e;outline:none}',
+      '.dmg-lothint{font-size:11.5px;color:#92400e;margin-top:6px;line-height:1.5}',
+      '.dmg-attest{font-size:12px;color:#64748b;text-align:center;margin:4px 0 10px}',
+      '.dmg-send{font-size:17px;font-weight:800;padding:14px}',
       '#dmg-report-screen.dmg-my .dmg-label{line-height:1.7}',
       '#dmg-report-screen.active{display:flex}',
       '.dmg-rpt-hd{background:#0f172a;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}',
@@ -414,10 +447,12 @@
     list.splice(idx, 1);
     renderReportPhotos();
   };
+  // ช่องรูปช่องเดียว รับได้หลายรูปจนถึงเพดานที่ตั้งไว้ (ค่าตั้งต้น 10 รูป)
+  // เดิมแยกเป็น "ภาพรวม" กับ "ระยะใกล้" ซึ่งบังคับให้หน้างานตัดสินใจว่ารูปนี้นับเป็นแบบไหน
+  // ทั้งที่ตอนดูจริงไม่มีใครสนใจว่ามาจากช่องไหน
   function renderReportPhotos() {
-    var a = $('dmg-rpt-photos-overview'), b = $('dmg-rpt-photos-closeup');
-    if (a) a.innerHTML = photoGridHtml(_rptPhotos, 'overview', Math.max(1, Math.floor(DMG._.CFG.maxPhotos / 2)));
-    if (b) b.innerHTML = photoGridHtml(_rptCloseupPhotos, 'closeup', Math.max(1, Math.ceil(DMG._.CFG.maxPhotos / 2)));
+    var a = $('dmg-rpt-photos-overview');
+    if (a) a.innerHTML = photoGridHtml(_rptPhotos, 'overview', DMG._.CFG.maxPhotos);
   }
 
   function reportFieldErr(id, msg) {
@@ -437,29 +472,28 @@
   }
 
   function reportFormHtml() {
-    var u = DMG._.me();
-    // (หน้างานสั่ง 15 ต.ค. 69) เหลือประเภทเดียว — ของที่มาถึงคลังแล้วเสียอยู่แล้ว
-    // เก็บลงฐานข้อมูลเป็น 'production' ซึ่งเป็นค่าที่ check constraint ยอมรับอยู่แล้ว
-    var typeOpts = '<option value="production" selected>' + DMG._.esc(t('typeProd')) + '</option>';
-    var locOpts = DMG._.INCIDENT_LOCATIONS.map(function (l) { return '<option value="' + DMG._.esc(l) + '">' + DMG._.esc(l) + '</option>'; }).join('');
-    var stageOpts = '<option value="">' + DMG._.esc(t('notSure')) + '</option>' + DMG._.SUSPECTED_STAGES.map(function (s) {
-      return '<option value="' + DMG._.esc(s) + '">' + DMG._.esc(s) + '</option>';
+    var locOpts = DMG._.INCIDENT_LOCATIONS.map(function (l) {
+      return '<option value="' + DMG._.esc(l) + '">' + DMG._.esc(l) + '</option>';
     }).join('');
+    var defChips = DMG._.DEFECTS.map(function (d) {
+      return '<div class="dmg-chip" data-code="' + d.code + '" onclick="DMG.pickDefect(\'' + d.code + '\')">'
+        + DMG._.esc(_lang === 'my' ? d.my : d.th) + '</div>';
+    }).join('');
+
+    // ค่าที่ระบบเติมให้เอง ไม่ต้องให้หน้างานกรอก — เก็บเป็น hidden เพื่อให้ draft/collect อ่านได้เหมือนเดิม
     return ''
       + '<form id="dmg-report-form" onsubmit="return false">'
+      + '<input type="hidden" id="dmg-rpt-datetime" value="' + DMG._.nowBkkLocal() + '">'
+      + '<input type="hidden" id="dmg-rpt-type" value="production">'
+      + '<input type="hidden" id="dmg-rpt-priority" value="normal">'
+      + '<input type="hidden" id="dmg-rpt-unit" value="เส้น">'
+      + '<input type="hidden" id="dmg-rpt-defect">'
 
-      + '<div class="dmg-section-title"><i class="fas fa-user"></i> ' + DMG._.esc(t('secReporter')) + '</div>'
-      + '<div class="dmg-row2">'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('reporter')) + '</label><input class="dmg-input" value="' + DMG._.esc(u.name) + '" disabled></div>'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('dept')) + '</label><input class="dmg-input" id="dmg-rpt-dept-display" value="' + DMG._.esc(u.isWhStaff ? t('whDept') + ' (' + t('team') + ' ' + (u.team || '-') + ')' : '-') + '" disabled></div>'
-      + '</div>'
-      + '<div class="dmg-row2">'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('datetime')) + ' <span class="req">*</span></label><input type="datetime-local" class="dmg-input" id="dmg-rpt-datetime" value="' + DMG._.nowBkkLocal() + '"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('location')) + ' <span class="req">*</span></label><select class="dmg-select" id="dmg-rpt-location"><option value="">' + DMG._.esc(t('pickLoc')) + '</option>' + locOpts + '</select></div>'
-      + '</div>'
+      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepPhoto')) + ' <span class="req">*</span></label>'
+        + '<div id="dmg-rpt-photos-overview"></div>'
+        + '<div class="dmg-muted" style="margin-top:6px">' + DMG._.esc(t('shotHint')) + '</div></div>'
 
-      + '<div class="dmg-section-title"><i class="fas fa-box"></i> ' + DMG._.esc(t('secProduct')) + '</div>'
-      + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('product')) + ' <span class="req">*</span></label>'
+      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepProd')) + ' <span class="req">*</span></label>'
         + '<div class="dmg-combo">'
           + '<input class="dmg-input" id="dmg-rpt-product-search" autocomplete="off" disabled'
             + ' placeholder="' + DMG._.esc(t('prodLoading')) + '"'
@@ -470,45 +504,30 @@
         + '</div>'
         + '<input type="hidden" id="dmg-rpt-product">'
         + '<div id="dmg-rpt-product-msg" class="dmg-muted" style="margin-top:4px;font-size:12px"></div></div>'
-      + '<div class="dmg-row2">'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('lot')) + '</label><input class="dmg-input" id="dmg-rpt-lot"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('qty')) + ' <span class="req">*</span></label><input type="number" min="0" step="0.01" class="dmg-input" id="dmg-rpt-qty"></div>'
-      + '</div>'
-      + '<div class="dmg-row2">'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('unit')) + '</label><input class="dmg-input" id="dmg-rpt-unit" value="' + DMG._.esc(t('unitVal')) + '"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('dmgType')) + ' <span class="req">*</span></label><select class="dmg-select" id="dmg-rpt-type">' + typeOpts + '</select></div>'
-      + '</div>'
-      + '<div class="dmg-row2">'
-        + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('priority')) + '</label><select class="dmg-select" id="dmg-rpt-priority">'
-          + '<option value="normal" selected>' + DMG._.esc(t('prNormal')) + '</option><option value="low">' + DMG._.esc(t('prLow')) + '</option><option value="high">' + DMG._.esc(t('prHigh')) + '</option><option value="urgent">' + DMG._.esc(t('prUrgent')) + '</option></select></div>'
-      + '</div>'
 
-      + '<div class="dmg-section-title"><i class="fas fa-circle-exclamation"></i> ' + DMG._.esc(t('secEvent')) + '</div>'
-      + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('condition')) + '</label><textarea class="dmg-textarea" id="dmg-rpt-condition"></textarea></div>'
-      + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('stage')) + ' <span class="dmg-muted" style="display:inline">' + DMG._.esc(t('stageNote')) + '</span></label><select class="dmg-select" id="dmg-rpt-stage">' + stageOpts + '</select></div>'
-      + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('impact')) + '</label>'
-        + '<div class="dmg-chip-group" id="dmg-rpt-impact-group">'
-          + '<div class="dmg-chip on" data-val="false" onclick="DMG.toggleChip(this,\'dmg-rpt-impact-group\')">' + DMG._.esc(t('noImpact')) + '</div>'
-          + '<div class="dmg-chip" data-val="true" onclick="DMG.toggleChip(this,\'dmg-rpt-impact-group\')">' + DMG._.esc(t('hasImpact')) + '</div>'
+      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepDefect')) + ' <span class="req">*</span></label>'
+        + '<div class="dmg-chip-group dmg-defects" id="dmg-rpt-defect-group">' + defChips + '</div></div>'
+
+      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepQty')) + ' <span class="req">*</span></label>'
+        + '<div class="dmg-stepper">'
+          + '<button type="button" onclick="DMG.qtyStep(-1)" aria-label="ลด">&minus;</button>'
+          + '<input type="number" min="0" step="1" inputmode="numeric" id="dmg-rpt-qty">'
+          + '<button type="button" onclick="DMG.qtyStep(1)" aria-label="เพิ่ม">+</button>'
         + '</div></div>'
-      + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('acted')) + '</label>'
-        + '<div class="dmg-chip-group" id="dmg-rpt-action-group">'
-          + '<div class="dmg-chip on" data-val="false" onclick="DMG.toggleChip(this,\'dmg-rpt-action-group\');DMG.toggleActionDetail()">' + DMG._.esc(t('notYet')) + '</div>'
-          + '<div class="dmg-chip" data-val="true" onclick="DMG.toggleChip(this,\'dmg-rpt-action-group\');DMG.toggleActionDetail()">' + DMG._.esc(t('done')) + '</div>'
+
+      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepWhere')) + ' <span class="req">*</span></label>'
+        + '<select class="dmg-select" id="dmg-rpt-location"><option value="">' + DMG._.esc(t('pickLoc')) + '</option>' + locOpts + '</select></div>'
+
+      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepLot')) + '</label>'
+        + '<div class="dmg-lotbox">'
+          + '<input class="dmg-lotin" id="dmg-rpt-lot" autocomplete="off" autocapitalize="characters" placeholder="P214/09">'
+          + '<div class="dmg-lothint">' + DMG._.esc(t('lotHint')) + '</div>'
         + '</div></div>'
-      + '<div class="dmg-field" id="dmg-rpt-action-detail-wrap" style="display:none"><label class="dmg-label">' + DMG._.esc(t('actDetail')) + '</label><textarea class="dmg-textarea" id="dmg-rpt-action-detail"></textarea></div>'
 
-      + '<div class="dmg-section-title"><i class="fas fa-camera"></i> ' + DMG._.esc(t('secPhoto')) + ' <span class="req">*</span></div>'
-      + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('photoWide')) + '</label><div id="dmg-rpt-photos-overview"></div></div>'
-      + '<div class="dmg-field"><label class="dmg-label">' + DMG._.esc(t('photoClose')) + '</label><div id="dmg-rpt-photos-closeup"></div></div>'
-      + '<div class="dmg-muted">' + DMG._.esc(t('photoHint1')) + DMG._.CFG.minPhotos + DMG._.esc(t('photoHint2')) + '</div>'
-
-      + '<div class="dmg-section-title"><i class="fas fa-check"></i> ' + DMG._.esc(t('secConfirm')) + '</div>'
-      + '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:#475569;margin-bottom:16px;cursor:pointer">'
-        + '<input type="checkbox" id="dmg-rpt-confirm" style="margin-top:3px"> ' + DMG._.esc(t('confirmTxt')) + '</label>'
+      + '<div class="dmg-attest">' + DMG._.esc(t('attest')) + '</div>'
       + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
-        + '<button type="button" class="dmg-btn" style="flex:1;min-width:140px" onclick="DMG.saveDraft()"><i class="fas fa-save"></i> ' + DMG._.esc(t('saveDraft')) + '</button>'
-        + '<button type="button" class="dmg-btn dmg-btn-primary" style="flex:2;min-width:140px" onclick="DMG.submitReport()" id="dmg-rpt-submit-btn"><i class="fas fa-paper-plane"></i> ' + DMG._.esc(t('submit')) + '</button>'
+        + '<button type="button" class="dmg-btn" style="flex:1;min-width:120px" onclick="DMG.saveDraft()"><i class="fas fa-save"></i> ' + DMG._.esc(t('saveDraft')) + '</button>'
+        + '<button type="button" class="dmg-btn dmg-btn-primary dmg-send" style="flex:2;min-width:160px" onclick="DMG.submitReport()" id="dmg-rpt-submit-btn"><i class="fas fa-paper-plane"></i> ' + DMG._.esc(t('sendToProd')) + '</button>'
       + '</div>'
       + '</form>';
   }
@@ -519,8 +538,9 @@
     el.classList.add('on');
   };
   DMG.toggleActionDetail = function () {
-    var on = $('dmg-rpt-action-group').querySelector('.on[data-val="true"]');
-    $('dmg-rpt-action-detail-wrap').style.display = on ? '' : 'none';
+    var grp = $('dmg-rpt-action-group'), wrap = $('dmg-rpt-action-detail-wrap');
+    if (!grp || !wrap) return;                 // ฟอร์มใหม่ไม่มีปุ่มชุดนี้แล้ว
+    wrap.style.display = grp.querySelector('.on[data-val="true"]') ? '' : 'none';
   };
   /* ───────────────── ดรอปดาวน์สินค้า — ใช้ Search name ตามที่หน้างานสั่ง ───────────────── */
   //
@@ -568,6 +588,22 @@
       });
   }
   DMG.reloadProducts = function () { _rptProducts = null; fillProductSelect(); };
+
+  DMG.pickDefect = function (code) {
+    $('dmg-rpt-defect').value = code;
+    var g = $('dmg-rpt-defect-group');
+    g.querySelectorAll('.dmg-chip').forEach(function (c) {
+      c.classList.toggle('on', c.getAttribute('data-code') === code);
+    });
+    var e = $('dmg-rpt-defect-group-err'); if (e) e.remove();
+    g.classList.remove('dmg-err-border');
+  };
+
+  DMG.qtyStep = function (d) {
+    var el = $('dmg-rpt-qty');
+    var v = (parseFloat(el.value) || 0) + d;
+    el.value = v > 0 ? v : '';
+  };
 
   DMG.productSearch = function () {
     var inp = $('dmg-rpt-product-search'), box = $('dmg-rpt-product-list');
@@ -691,6 +727,19 @@
     needPhoto1: ['กรุณาแนบรูปอย่างน้อย ', 'ဓာတ်ပုံ အနည်းဆုံး '],
     needPhoto2: [' รูป', ' ပုံ ပူးတွဲပါ'],
     needConfirm:['กรุณาติ๊กยืนยันข้อมูลก่อนส่ง', 'မပို့မီ အတည်ပြုချက် အမှန်ခြစ်ပါ'],
+    stepPhoto:  ['1. ถ่ายรูป', '၁. ဓာတ်ပုံ ရိုက်ပါ'],
+    stepProd:   ['2. สินค้า', '၂. ပစ္စည်း'],
+    stepDefect: ['3. เสียยังไง', '၃. ဘယ်လို ပျက်နေလဲ'],
+    stepQty:    ['4. กี่เส้น', '၄. ဘယ်နှစ်ချောင်း'],
+    stepWhere:  ['5. เจอที่ไหน', '၅. ဘယ်နေရာမှာ တွေ့လဲ'],
+    stepLot:    ['6. เลขล็อตข้างเส้น', '၆. ချောင်းဘေးက Lot နံပါတ်'],
+    shotTap:    ['แตะเพื่อถ่ายรูป', 'ဓာတ်ပုံရိုက်ရန် နှိပ်ပါ'],
+    shotHint:   ['ถ่ายให้เห็นตำหนิชัดๆ ถ่ายได้หลายรูป', 'ပျက်နေသည့်နေရာ ကွက်ကွက်ကွင်းကွင်း မြင်အောင် ရိုက်ပါ ပုံများစွာ ရိုက်နိုင်သည်'],
+    lotHint:    ['อ่านจากตัวหนังสือที่พ่นข้างเส้น · ไม่มีก็ส่งได้ แต่ฝ่ายผลิตจะตามกลับไม่ได้ว่าล็อตไหน',
+                 'ချောင်းဘေးတွင် ဆေးဖြန်းထားသော စာသားမှ ဖတ်ပါ · မပါလည်း ပို့နိုင်သည် သို့သော် မည်သည့် Lot မှန်း ပြန်လိုက်၍ မရပါ'],
+    attest:     ['กดส่ง = ยืนยันว่าตรงกับที่พบจริง', 'ပို့ရန် နှိပ်ခြင်း = တွေ့ရှိရသည့်အတိုင်း မှန်ကန်ကြောင်း အတည်ပြုခြင်း ဖြစ်သည်'],
+    sendToProd: ['ส่งให้ฝ่ายผลิต', 'ထုတ်လုပ်ရေးသို့ ပို့ရန်'],
+    needDefect: ['กรุณาเลือกว่าเสียยังไง', 'ဘယ်လို ပျက်နေသည်ကို ရွေးပါ'],
     langBtn:    ['မြန်မာ', 'ไทย']
   };
   function t(k) { var v = L[k]; return v ? v[_lang === 'my' ? 1 : 0] : k; }
@@ -716,7 +765,7 @@
     var body = $('dmg-rpt-body');
     if (!body || !$('dmg-report-form')) return;
     var keep = collectReportForm(true).fields;
-    var chips = { impact: chipVal('dmg-rpt-impact-group'), action: chipVal('dmg-rpt-action-group') };
+    var defect = $('dmg-rpt-defect').value;
     var prodSku = $('dmg-rpt-product').value, prodLabel = $('dmg-rpt-product').getAttribute('data-label') || '';
     applyLangChrome();
     body.innerHTML = reportFormHtml();
@@ -724,14 +773,7 @@
       if (id === 'dmg-rpt-product' || id === 'dmg-rpt-product-search') return;
       var el = $(id); if (el) el.value = keep[id];
     });
-    ['impact', 'action'].forEach(function (g) {
-      if (chips[g] == null) return;
-      var grp = $('dmg-rpt-' + g + '-group');
-      grp.querySelectorAll('.dmg-chip').forEach(function (c) {
-        c.classList.toggle('on', (c.getAttribute('data-val') === 'true') === chips[g]);
-      });
-    });
-    DMG.toggleActionDetail();
+    if (defect) DMG.pickDefect(defect);
     renderReportPhotos();
     fillProductSelect();
     if (prodSku) DMG.productPick(prodSku, prodLabel);
@@ -776,8 +818,7 @@
 
   function collectReportForm(forDraft) {
     var ids = ['dmg-rpt-datetime', 'dmg-rpt-location', 'dmg-rpt-product', 'dmg-rpt-lot',
-      'dmg-rpt-qty', 'dmg-rpt-unit', 'dmg-rpt-type', 'dmg-rpt-priority',
-      'dmg-rpt-condition', 'dmg-rpt-stage', 'dmg-rpt-action-detail'];
+      'dmg-rpt-qty', 'dmg-rpt-unit', 'dmg-rpt-type', 'dmg-rpt-priority', 'dmg-rpt-defect'];
     var fields = {};
     ids.forEach(function (id) { var el = $(id); if (el) fields[id] = el.value; });
     if (forDraft) return { fields: fields };
@@ -789,18 +830,24 @@
       incident_type: fields['dmg-rpt-type'] || null,
       incident_location: fields['dmg-rpt-location'] || null,
       incident_datetime: DMG._.bkkLocalToISO(fields['dmg-rpt-datetime']),
-      condition_on_found: fields['dmg-rpt-condition'] || null,
-      suspected_stage: fields['dmg-rpt-stage'] || null,
-      delivery_impact: chipVal('dmg-rpt-impact-group'),
-      initial_action_taken: chipVal('dmg-rpt-action-group'),
-      initial_action_detail: fields['dmg-rpt-action-detail'] || null,
+      defect_code: fields['dmg-rpt-defect'] || null,
+      // symptom เก็บคำไทยเสมอ ไม่ว่าหน้างานจะกรอกด้วยภาษาไหน
+      // หัวหน้ากับฝ่ายผลิตจะได้อ่านออกเหมือนกันทุกเคส
+      symptom: defectTh(fields['dmg-rpt-defect']),
+      suspected_stage: 'ผลิต',
       product_code: fields['dmg-rpt-product'] || null, product_name: selectedProductName(),
       lot_number: fields['dmg-rpt-lot'] || null,
       damaged_quantity: fields['dmg-rpt-qty'] ? Number(fields['dmg-rpt-qty']) : null,
       unit: fields['dmg-rpt-unit'] || null,
       priority: fields['dmg-rpt-priority'] || 'normal',
-      title: (selectedProductName() || 'สินค้าเสียหาย') + ' — ' + (DMG._.incidentLabel(fields['dmg-rpt-type']) || '')
+      title: (selectedProductName() || 'สินค้าเสียหาย') + ' — ' + (defectTh(fields['dmg-rpt-defect']) || '')
     };
+  }
+
+  /** คำไทยของอาการ — ใช้ตอนบันทึก ไม่ขึ้นกับภาษาที่หน้าจอเลือกอยู่ */
+  function defectTh(code) {
+    var d = DMG._.DEFECTS.filter(function (x) { return x.code === code; })[0];
+    return d ? d.th : null;
   }
 
   function validateReport(data) {
@@ -808,12 +855,11 @@
     var errs = [];
     function need(id, cond, msg) { if (!cond) { reportFieldErr(id, msg); errs.push(msg); } }
     need('dmg-rpt-location', !!data.incident_location, t('needLoc'));
+    need('dmg-rpt-defect-group', !!data.defect_code, t('needDefect'));
     need('dmg-rpt-product-search', !!data.product_code, t('needProd'));
     need('dmg-rpt-qty', data.damaged_quantity != null && data.damaged_quantity > 0, t('needQty'));
-    need('dmg-rpt-type', !!data.incident_type, t('needType'));
     var totalPhotos = _rptPhotos.length + _rptCloseupPhotos.length;
     if (totalPhotos < DMG._.CFG.minPhotos) { var pm = t('needPhoto1') + DMG._.CFG.minPhotos + t('needPhoto2'); errs.push(pm); DMG._.toast(pm, true); }
-    if (!$('dmg-rpt-confirm').checked) { errs.push('กรุณายืนยันว่าข้อมูลตรงกับสิ่งที่พบ'); DMG._.toast(t('needConfirm'), true); }
     return errs;
   }
 
