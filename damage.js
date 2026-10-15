@@ -345,7 +345,7 @@
       '.dmg-chip{border:1.5px solid #e2e8f0;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;color:#475569}',
       '.dmg-chip.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff}',
       '.dmg-demo-tag{background:#fef3c7;color:#92400e;font-size:10px;font-weight:900;padding:1px 7px;border-radius:999px;margin-left:6px}',
-      '.dmg-fab{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;background:#1d4ed8;color:#fff;border:none;font-size:22px;box-shadow:0 6px 20px rgba(29,78,216,.4);cursor:pointer;z-index:40}',
+      '.dmg-fab{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;background:#1d4ed8;color:#fff;border:none;font-size:22px;box-shadow:0 6px 20px rgba(29,78,216,.4);cursor:pointer;z-index:10001}', // #wh-screen (หน้าจอทีมโหลด) ใช้ z-index:10000 ต้องสูงกว่านั้น ไม่งั้นโดนบังมิด
       '#dmg-report-screen{position:fixed;inset:0;background:#f1f5f9;z-index:10050;display:none;flex-direction:column;overflow-y:auto}',
       '#dmg-report-screen.active{display:flex}',
       '.dmg-rpt-hd{background:#0f172a;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}',
