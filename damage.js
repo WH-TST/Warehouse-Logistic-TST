@@ -1344,7 +1344,10 @@
 
   function workflowBarHtml() {
     var c = _curCase.c;
-    var nexts = (_transitions && _transitions[c.status]) || [];
+    // "ยกเลิก" ไม่ใช่ขั้นตอนของงาน เป็นคำสั่งของผู้ดูแลระบบ จึงไม่อยู่ในดรอปดาวน์นี้
+    // (ถ้าอยู่ จะไม่มีช่องให้กรอกเหตุผล และใครก็เลือกได้ ผิดเจตนาทั้งสองข้อ)
+    var nexts = ((_transitions && _transitions[c.status]) || [])
+      .filter(function (s) { return s !== 'Cancelled'; });
     if (!nexts.length) return '';
     var opts = '<option value="">— เปลี่ยนสถานะเป็น —</option>' + nexts.map(function (s) {
       return '<option value="' + s + '">' + DMG._.esc(DMG._.STATUS[s].th) + '</option>';
@@ -1362,6 +1365,7 @@
   DMG.applyStatusChange = function () {
     var s = $('dmg-next-status').value;
     if (!s) return;
+    if (s === 'Cancelled') { DMG._.toast('ยกเลิกเคสต้องใช้ปุ่มยกเลิกบนหัวหน้าต่าง', true); return; }
     var reasonEl = $('dmg-status-reason');
     var reason = reasonEl ? reasonEl.value.trim() : '';
     if ((s === 'Awaiting Information' || s === 'Reopened') && !reason) {
