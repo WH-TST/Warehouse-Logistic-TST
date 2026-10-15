@@ -520,6 +520,7 @@
       + '<input type="hidden" id="dmg-rpt-unit" value="เส้น">'
       + '<input type="hidden" id="dmg-rpt-defect">'
       + '<input type="hidden" id="dmg-rpt-location">'
+      + '<input type="hidden" id="dmg-rpt-product">'
 
       + '<div class="dmg-step" id="dmg-step-1">'
         + '<div class="dmg-sthead"><span class="dmg-stnum">1</span>'
