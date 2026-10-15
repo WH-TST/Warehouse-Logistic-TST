@@ -359,7 +359,7 @@
       '.dmg-rpt-success .num{font-size:22px;font-weight:900;color:#1d4ed8;font-family:monospace;margin:10px 0}',
       '.dmg-combo{position:relative}',
       '.dmg-combo-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:#e2e8f0;color:#475569;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:12px}',
-      '.dmg-combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1.5px solid #cbd5e1;border-radius:10px;max-height:260px;overflow-y:auto;z-index:20;box-shadow:0 10px 24px rgba(15,23,42,.18)}',
+      '.dmg-combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1.5px solid #cbd5e1;border-radius:10px;max-height:min(55vh,420px);overflow-y:auto;-webkit-overflow-scrolling:touch;z-index:20;box-shadow:0 10px 24px rgba(15,23,42,.18)}',
       '.dmg-combo-item{padding:11px 12px;font-size:14px;border-bottom:1px solid #f1f5f9;cursor:pointer}',
       '.dmg-combo-item:last-child{border-bottom:none}',
       '.dmg-combo-item:hover,.dmg-combo-item:active{background:#eff6ff}',
@@ -526,8 +526,6 @@
   // (เดิมเป็นช่องพิมพ์เอง 2 ช่อง หน้างานพิมพ์รหัสผิดได้ง่าย)
   var _rptProducts = null;          // แคชไว้ทั้งรอบ ไม่ต้องดึงซ้ำทุกครั้งที่เปิดฟอร์ม
 
-  var MAX_COMBO_ROWS = 60;          // แสดงทีละไม่เกินเท่านี้ ไม่งั้นมือถือหน่วง
-
   function selectedProductName() {
     var h = $('dmg-rpt-product');
     return (h && h.value) ? (h.getAttribute('data-label') || null) : null;
@@ -581,14 +579,13 @@
     if (!hits.length) {
       box.innerHTML = '<div class="dmg-combo-empty">ไม่พบสินค้าที่ตรงกับ "' + DMG._.esc(inp.value) + '"</div>';
     } else {
-      box.innerHTML = hits.slice(0, MAX_COMBO_ROWS).map(function (p) {
+      // แสดงทุกรายการที่ค้นเจอ ไม่ตัดจำนวน (หน้างานสั่ง 15 ต.ค. 69)
+      // 239 รายการยังเลื่อนไหวลื่นบนมือถือ ถ้าวันไหนสินค้าเพิ่มจนหน่วงค่อยว่ากัน
+      box.innerHTML = hits.map(function (p) {
         return '<div class="dmg-combo-item" onclick="DMG.productPick(\'' + DMG._.esc(p.sku) + '\',this.getAttribute(\'data-label\'))"'
           + ' data-label="' + DMG._.esc(p.label) + '">' + DMG._.esc(p.label)
           + '<span class="sku">' + DMG._.esc(p.sku) + '</span></div>';
-      }).join('')
-      + (hits.length > MAX_COMBO_ROWS
-          ? '<div class="dmg-combo-empty">แสดง ' + MAX_COMBO_ROWS + ' จาก ' + hits.length + ' รายการ — พิมพ์เพิ่มเพื่อลดผลลัพธ์</div>'
-          : '');
+      }).join('');
     }
     box.style.display = '';
   };
