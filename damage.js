@@ -525,7 +525,7 @@
 
       + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepLot')) + ' <span class="req">*</span></label>'
         + '<div class="dmg-lotbox">'
-          + '<input class="dmg-lotin" id="dmg-rpt-lot" autocomplete="off" autocapitalize="characters" placeholder="P214/09" oninput="DMG.lotClean(this)">'
+          + '<input class="dmg-lotin" id="dmg-rpt-lot" autocomplete="off" autocapitalize="characters" placeholder="' + DMG._.esc(t('lotEg')) + '" oninput="DMG.lotClean(this)">'
           + '<div class="dmg-lothint">' + DMG._.esc(t('lotHint')) + '</div>'
         + '</div></div>'
 
@@ -762,6 +762,7 @@
     lotHint:    ['อ่านจากตัวหนังสือที่พ่นข้างเส้น ท้ายบรรทัด · ต้องมีเลขล็อต ฝ่ายผลิตถึงจะตามกลับได้ว่าเป็นของรอบไหน',
                  'ချောင်းဘေးတွင် ဆေးဖြန်းထားသော စာသား၏ အဆုံးမှ ဖတ်ပါ · Lot နံပါတ် ပါမှသာ ထုတ်လုပ်ရေးက မည်သည့်အကြိမ်မှန်း ပြန်လိုက်နိုင်မည်'],
     needLot:    ['กรุณากรอกเลขล็อตที่พ่นข้างเส้น', 'ချောင်းဘေးက Lot နံပါတ် ဖြည့်ပါ'],
+    lotEg:      ['เช่น 2610035 หรือ P262/01', 'ဥပမာ 2610035 သို့မဟုတ် P262/01'],
     attest:     ['กดส่ง = ยืนยันว่าตรงกับที่พบจริง', 'ပို့ရန် နှိပ်ခြင်း = တွေ့ရှိရသည့်အတိုင်း မှန်ကန်ကြောင်း အတည်ပြုခြင်း ဖြစ်သည်'],
     sendToProd: ['ส่งให้ฝ่ายผลิต', 'ထုတ်လုပ်ရေးသို့ ပို့ရန်'],
     needDefect: ['กรุณาเลือกว่าเสียยังไง', 'ဘယ်လို ပျက်နေသည်ကို ရွေးပါ'],
