@@ -374,6 +374,9 @@
       '.dmg-step{margin-bottom:18px}',
       '.dmg-step .dmg-label{font-size:15px;font-weight:800;color:#0f172a;margin-bottom:7px}',
       '.dmg-defects{display:flex;flex-wrap:wrap;gap:7px}',
+      '.dmg-locs{display:flex;flex-wrap:wrap;gap:7px}',
+      '.dmg-locs .dmg-chip{font-family:ui-monospace,monospace;font-size:14px;font-weight:700;padding:8px 0;border-radius:10px;width:60px;text-align:center}',
+      '.dmg-locs .dmg-chip.on{background:#0f766e;border-color:#0f766e;color:#fff}',
       '.dmg-defects .dmg-chip{font-size:14px;padding:9px 14px;border-radius:999px}',
       '.dmg-defects .dmg-chip.on{background:#c2410c;border-color:#c2410c;color:#fff;font-weight:800}',
       '.dmg-stepper{display:flex;align-items:center;gap:9px}',
@@ -472,8 +475,9 @@
   }
 
   function reportFormHtml() {
-    var locOpts = DMG._.INCIDENT_LOCATIONS.map(function (l) {
-      return '<option value="' + DMG._.esc(l) + '">' + DMG._.esc(l) + '</option>';
+    var locChips = DMG._.INCIDENT_LOCATIONS.map(function (l) {
+      return '<div class="dmg-chip" data-code="' + DMG._.esc(l) + '" onclick="DMG.pickLoc(\'' + DMG._.esc(l) + '\')">'
+        + DMG._.esc(l) + '</div>';
     }).join('');
     var defChips = DMG._.DEFECTS.map(function (d) {
       return '<div class="dmg-chip" data-code="' + d.code + '" onclick="DMG.pickDefect(\'' + d.code + '\')">'
@@ -488,6 +492,7 @@
       + '<input type="hidden" id="dmg-rpt-priority" value="normal">'
       + '<input type="hidden" id="dmg-rpt-unit" value="เส้น">'
       + '<input type="hidden" id="dmg-rpt-defect">'
+      + '<input type="hidden" id="dmg-rpt-location">'
 
       + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepPhoto')) + ' <span class="req">*</span></label>'
         + '<div id="dmg-rpt-photos-overview"></div>'
@@ -516,7 +521,7 @@
         + '</div></div>'
 
       + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepWhere')) + ' <span class="req">*</span></label>'
-        + '<select class="dmg-select" id="dmg-rpt-location"><option value="">' + DMG._.esc(t('pickLoc')) + '</option>' + locOpts + '</select></div>'
+        + '<div class="dmg-chip-group dmg-locs" id="dmg-rpt-location-group">' + locChips + '</div></div>'
 
       + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepLot')) + '</label>'
         + '<div class="dmg-lotbox">'
@@ -589,15 +594,27 @@
   }
   DMG.reloadProducts = function () { _rptProducts = null; fillProductSelect(); };
 
-  DMG.pickDefect = function (code) {
-    $('dmg-rpt-defect').value = code;
-    var g = $('dmg-rpt-defect-group');
+  /** เลือกชิป 1 ตัวในกลุ่ม แล้วเก็บค่าลงช่องซ่อนที่คู่กัน */
+  function pickChip(field, code) {
+    var hid = $('dmg-rpt-' + field), g = $('dmg-rpt-' + field + '-group');
+    if (!hid || !g) return;
+    hid.value = code;
     g.querySelectorAll('.dmg-chip').forEach(function (c) {
       c.classList.toggle('on', c.getAttribute('data-code') === code);
     });
-    var e = $('dmg-rpt-defect-group-err'); if (e) e.remove();
+    var e = $('dmg-rpt-' + field + '-group-err'); if (e) e.remove();
     g.classList.remove('dmg-err-border');
-  };
+  }
+  DMG.pickDefect = function (code) { pickChip('defect', code); };
+  DMG.pickLoc    = function (code) { pickChip('location', code); };
+
+  /** ไฮไลต์ชิปให้ตรงกับค่าที่อยู่ในช่องซ่อน — ใช้หลังวาดฟอร์มใหม่หรือดึงร่างกลับมา */
+  function restoreChips() {
+    ['defect', 'location'].forEach(function (f) {
+      var hid = $('dmg-rpt-' + f);
+      if (hid && hid.value) pickChip(f, hid.value);
+    });
+  }
 
   DMG.qtyStep = function (d) {
     var el = $('dmg-rpt-qty');
@@ -765,7 +782,7 @@
     var body = $('dmg-rpt-body');
     if (!body || !$('dmg-report-form')) return;
     var keep = collectReportForm(true).fields;
-    var defect = $('dmg-rpt-defect').value;
+    var defect = $('dmg-rpt-defect').value;   // ชิปตัวอื่นคืนค่าเองใน restoreChips()
     var prodSku = $('dmg-rpt-product').value, prodLabel = $('dmg-rpt-product').getAttribute('data-label') || '';
     applyLangChrome();
     body.innerHTML = reportFormHtml();
@@ -774,6 +791,7 @@
       var el = $(id); if (el) el.value = keep[id];
     });
     if (defect) DMG.pickDefect(defect);
+    restoreChips();
     renderReportPhotos();
     fillProductSelect();
     if (prodSku) DMG.productPick(prodSku, prodLabel);
@@ -854,7 +872,7 @@
     clearReportErrs();
     var errs = [];
     function need(id, cond, msg) { if (!cond) { reportFieldErr(id, msg); errs.push(msg); } }
-    need('dmg-rpt-location', !!data.incident_location, t('needLoc'));
+    need('dmg-rpt-location-group', !!data.incident_location, t('needLoc'));
     need('dmg-rpt-defect-group', !!data.defect_code, t('needDefect'));
     need('dmg-rpt-product-search', !!data.product_code, t('needProd'));
     need('dmg-rpt-qty', data.damaged_quantity != null && data.damaged_quantity > 0, t('needQty'));
@@ -949,6 +967,7 @@
       $('dmg-rpt-body').innerHTML = reportFormHtml();
       renderReportPhotos();
       loadDraftIntoForm();
+      restoreChips();
       fillProductSelect();      // ต้องอยู่หลัง loadDraftIntoForm เพราะต้องรู้ว่าร่างเลือกสินค้าอะไรไว้
       scr.classList.add('active');
     });
