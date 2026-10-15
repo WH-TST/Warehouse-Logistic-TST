@@ -59,17 +59,17 @@
   // th เก็บลง symptom ด้วย เพื่อให้หัวหน้า/ฝ่ายผลิตอ่านออกโดยไม่ต้องแปลรหัส
   // ⚠ ห้ามแก้ code ของตัวที่มีอยู่แล้ว ไม่งั้นข้อมูลเก่ากับใหม่จะนับรวมกันไม่ได้
   var DEFECTS = [
-    { code: 'seam_crack',  th: 'ตะเข็บแตก',      my: 'အပြားဆက်ကြောင်း ကွဲ' },
-    { code: 'zinc_peel',   th: 'สังกะสีลอก',      my: 'သွပ်ပြား ကွာ' },
-    { code: 'rust',        th: 'เป็นสนิม',        my: 'သံချေး တက်' },
-    { code: 'dent',        th: 'บุบ',             my: 'ချိုင့်' },
-    { code: 'bent',        th: 'คด โก่ง',         my: 'ကွေး ကောက်' },
-    { code: 'length_off',  th: 'ยาวไม่ได้',       my: 'အလျား မမှန်' },
-    { code: 'thick_off',   th: 'หนาไม่ได้',       my: 'အထူ မမှန်' },
-    { code: 'shape_off',   th: 'หน้าตัดเบี้ยว',   my: 'မျက်နှာပြင် မညီ' },
-    { code: 'no_mok',      th: 'ไม่มีตรา มอก.',   my: 'မောကော် တံဆိပ် မပါ' },
-    { code: 'loose_bundle',th: 'มัดไม่แน่น',      my: 'အစည်း မတင်း' },
-    { code: 'other',       th: 'อื่นๆ',           my: 'အခြား' }
+    { ic: 'fa-bolt', code: 'seam_crack',  th: 'ตะเข็บแตก',      my: 'အပြားဆက်ကြောင်း ကွဲ' },
+    { ic: 'fa-layer-group', code: 'zinc_peel',   th: 'สังกะสีลอก',      my: 'သွပ်ပြား ကွာ' },
+    { ic: 'fa-droplet', code: 'rust',        th: 'เป็นสนิม',        my: 'သံချေး တက်' },
+    { ic: 'fa-circle-dot', code: 'dent',        th: 'บุบ',             my: 'ချိုင့်' },
+    { ic: 'fa-wave-square', code: 'bent',        th: 'คด โก่ง',         my: 'ကွေး ကောက်' },
+    { ic: 'fa-ruler-horizontal', code: 'length_off',  th: 'ยาวไม่ได้',       my: 'အလျား မမှန်' },
+    { ic: 'fa-ruler-vertical', code: 'thick_off',   th: 'หนาไม่ได้',       my: 'အထူ မမှန်' },
+    { ic: 'fa-vector-square', code: 'shape_off',   th: 'หน้าตัดเบี้ยว',   my: 'မျက်နှာပြင် မညီ' },
+    { ic: 'fa-certificate', code: 'no_mok',      th: 'ไม่มีตรา มอก.',   my: 'မောကော် တံဆိပ် မပါ' },
+    { ic: 'fa-link-slash', code: 'loose_bundle',th: 'มัดไม่แน่น',      my: 'အစည်း မတင်း' },
+    { ic: 'fa-ellipsis', code: 'other',       th: 'อื่นๆ',           my: 'အခြား' }
   ];
 
   // จุดที่พบเหตุ — รายชื่อโซนจริงในโรงงาน (หน้างานกำหนด 15 ต.ค. 69)
@@ -371,23 +371,49 @@
       '.dmg-fab{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;background:#1d4ed8;color:#fff;border:none;font-size:22px;box-shadow:0 6px 20px rgba(29,78,216,.4);cursor:pointer;z-index:10001}', // #wh-screen (หน้าจอทีมโหลด) ใช้ z-index:10000 ต้องสูงกว่านั้น ไม่งั้นโดนบังมิด
       '#dmg-report-screen{position:fixed;inset:0;background:#f1f5f9;z-index:10050;display:none;flex-direction:column;overflow-y:auto}',
       '#dmg-report-screen.dmg-my{font-family:"Noto Sans Myanmar",system-ui,sans-serif;line-height:1.8}',
-      '.dmg-step{margin-bottom:18px}',
-      '.dmg-step .dmg-label{font-size:15px;font-weight:800;color:#0f172a;margin-bottom:7px}',
+      /* ── หน้าตาฟอร์มแจ้งเหตุ ──────────────────────────────────────────
+         แต่ละขั้นเป็นการ์ดมีเลขวงกลม พอกรอกแล้วเลขเปลี่ยนเป็นเครื่องหมายถูกสีเขียว
+         หน้างานจะได้รู้ว่าเหลืออะไร โดยไม่ต้องกดส่งก่อนแล้วค่อยโดนเตือน */
+      '#dmg-report-screen{background:#eef2f6}',
+      '.dmg-rpt-body{padding-bottom:96px!important}',
+      '.dmg-step{background:#fff;border:1px solid #e2e8f0;border-left:4px solid #cbd5e1;border-radius:0 14px 14px 0;padding:14px 15px;margin-bottom:12px;transition:border-color .15s}',
+      '.dmg-step.done{border-left-color:#0f766e}',
+      '.dmg-sthead{display:flex;align-items:center;gap:9px;margin-bottom:11px}',
+      '.dmg-stnum{flex:0 0 auto;width:27px;height:27px;border-radius:50%;background:#e2e8f0;color:#475569;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;line-height:1}',
+      '.dmg-step.done .dmg-stnum{background:#0f766e;color:#fff}',
+      '.dmg-sthead .dmg-label{margin:0;font-size:15.5px;font-weight:800;color:#0f172a;flex:1}',
+      '.dmg-stok{color:#0f766e;font-size:17px;opacity:0;transition:opacity .15s}',
+      '.dmg-step.done .dmg-stok{opacity:1}',
+      '.dmg-step .req{color:#dc2626}',
+
       '.dmg-defects{display:flex;flex-wrap:wrap;gap:7px}',
-      '.dmg-locs{display:flex;flex-wrap:wrap;gap:7px}',
-      '.dmg-locs .dmg-chip{font-family:ui-monospace,monospace;font-size:14px;font-weight:700;padding:8px 0;border-radius:10px;width:60px;text-align:center}',
-      '.dmg-locs .dmg-chip.on{background:#0f766e;border-color:#0f766e;color:#fff}',
-      '.dmg-defects .dmg-chip{font-size:14px;padding:9px 14px;border-radius:999px}',
-      '.dmg-defects .dmg-chip.on{background:#c2410c;border-color:#c2410c;color:#fff;font-weight:800}',
-      '.dmg-stepper{display:flex;align-items:center;gap:9px}',
-      '.dmg-stepper button{width:52px;height:52px;flex:0 0 auto;border-radius:12px;border:1.5px solid #cbd5e1;background:#fff;font-size:24px;color:#334155;line-height:1}',
-      '.dmg-stepper input{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;border:1.5px solid #cbd5e1;border-radius:12px;padding:9px;background:#fff;color:#0f172a;-moz-appearance:textfield}',
+      '.dmg-defects .dmg-chip{font-size:14px;font-weight:600;padding:9px 13px;border-radius:999px;background:#f8fafc;border:1.5px solid #e2e8f0;color:#334155;display:inline-flex;align-items:center;gap:6px}',
+      '.dmg-defects .dmg-chip i{font-size:13px;color:#94a3b8}',
+      '.dmg-defects .dmg-chip.on{background:#c2410c;border-color:#c2410c;color:#fff;font-weight:800;box-shadow:0 3px 10px rgba(194,65,12,.3)}',
+      '.dmg-defects .dmg-chip.on i{color:#fed7aa}',
+
+      '.dmg-locs{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:7px}',
+      '.dmg-locs .dmg-chip{font-family:ui-monospace,monospace;font-size:15px;font-weight:800;padding:11px 0;border-radius:11px;text-align:center;background:#f8fafc;border:1.5px solid #e2e8f0;color:#334155}',
+      '.dmg-locs .dmg-chip.on{background:#0f766e;border-color:#0f766e;color:#fff;box-shadow:0 3px 10px rgba(15,118,110,.3)}',
+
+      '.dmg-stepper{display:flex;align-items:center;gap:10px}',
+      '.dmg-stepper button{width:56px;height:56px;flex:0 0 auto;border-radius:14px;border:none;background:#0f172a;color:#fff;font-size:26px;line-height:1}',
+      '.dmg-stepper button:active{background:#334155}',
+      '.dmg-stepper input{flex:1;min-width:0;text-align:center;font-size:30px;font-weight:800;border:2px solid #e2e8f0;border-radius:14px;padding:10px;background:#f8fafc;color:#0f172a;-moz-appearance:textfield}',
+      '.dmg-step.done .dmg-stepper input{background:#f0fdfa;border-color:#5eead4}',
       '.dmg-stepper input::-webkit-outer-spin-button,.dmg-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}',
-      '.dmg-lotbox{border:1.5px solid #f0b100;border-radius:10px;background:#fffbeb;padding:10px}',
-      '.dmg-lotin{width:100%;box-sizing:border-box;border:1.5px solid #f0b100;border-radius:8px;padding:11px;font-size:18px;font-weight:800;text-align:center;letter-spacing:1px;background:#fff;color:#92400e;outline:none}',
-      '.dmg-lothint{font-size:11.5px;color:#92400e;margin-top:6px;line-height:1.5}',
-      '.dmg-attest{font-size:12px;color:#64748b;text-align:center;margin:4px 0 10px}',
-      '.dmg-send{font-size:17px;font-weight:800;padding:14px}',
+
+      '.dmg-lotbox{border:2px solid #fbbf24;border-radius:12px;background:#fffbeb;padding:11px}',
+      '.dmg-lotin{width:100%;box-sizing:border-box;border:2px solid #fbbf24;border-radius:10px;padding:13px;font-size:19px;font-weight:800;text-align:center;letter-spacing:1px;background:#fff;color:#92400e;outline:none}',
+      '.dmg-lotin::placeholder{font-size:14px;font-weight:600;letter-spacing:0;color:#d6b26b}',
+      '.dmg-lothint{font-size:12px;color:#92400e;margin-top:7px;line-height:1.55}',
+
+      '.dmg-attest{font-size:12px;color:#64748b;text-align:center;margin:14px 0 4px}',
+      '.dmg-sendbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #e2e8f0;padding:11px 14px;display:flex;gap:10px;box-shadow:0 -4px 18px rgba(15,23,42,.1)}',
+      '.dmg-draftbtn{flex:0 0 auto;width:54px;padding:0;font-size:17px}',
+      '.dmg-send{flex:1;display:flex;align-items:center;justify-content:center;gap:10px;border:none;border-radius:13px;background:#94a3b8;color:#fff;font-size:17px;font-weight:800;padding:15px;font-family:inherit}',
+      '.dmg-send.ready{background:#c2410c;box-shadow:0 5px 16px rgba(194,65,12,.4)}',
+      '.dmg-prog{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;background:rgba(255,255,255,.22);border-radius:7px;padding:3px 9px}',
       '#dmg-report-screen.dmg-my .dmg-label{line-height:1.7}',
       '#dmg-report-screen.active{display:flex}',
       '.dmg-rpt-hd{background:#0f172a;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}',
@@ -456,6 +482,7 @@
   function renderReportPhotos() {
     var a = $('dmg-rpt-photos-overview');
     if (a) a.innerHTML = photoGridHtml(_rptPhotos, 'overview', DMG._.CFG.maxPhotos);
+    DMG.syncSteps();
   }
 
   function reportFieldErr(id, msg) {
@@ -481,7 +508,7 @@
     }).join('');
     var defChips = DMG._.DEFECTS.map(function (d) {
       return '<div class="dmg-chip" data-code="' + d.code + '" onclick="DMG.pickDefect(\'' + d.code + '\')">'
-        + DMG._.esc(_lang === 'my' ? d.my : d.th) + '</div>';
+        + '<i class="fas ' + d.ic + '"></i> ' + DMG._.esc(_lang === 'my' ? d.my : d.th) + '</div>';
     }).join('');
 
     // ค่าที่ระบบเติมให้เอง ไม่ต้องให้หน้างานกรอก — เก็บเป็น hidden เพื่อให้ draft/collect อ่านได้เหมือนเดิม
@@ -494,11 +521,17 @@
       + '<input type="hidden" id="dmg-rpt-defect">'
       + '<input type="hidden" id="dmg-rpt-location">'
 
-      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepPhoto')) + ' <span class="req">*</span></label>'
+      + '<div class="dmg-step" id="dmg-step-1">'
+        + '<div class="dmg-sthead"><span class="dmg-stnum">1</span>'
+          + '<span class="dmg-label">' + DMG._.esc(t('stepPhoto')) + ' <span class="req">*</span></span>'
+          + '<i class="dmg-stok fas fa-circle-check"></i></div>'
         + '<div id="dmg-rpt-photos-overview"></div>'
-        + '<div class="dmg-muted" style="margin-top:6px">' + DMG._.esc(t('shotHint')) + '</div></div>'
-
-      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepProd')) + ' <span class="req">*</span></label>'
+        + '<div class="dmg-muted" style="margin-top:6px">' + DMG._.esc(t('shotHint')) + '</div>'
+      + '</div>'
+      + '<div class="dmg-step" id="dmg-step-2">'
+        + '<div class="dmg-sthead"><span class="dmg-stnum">2</span>'
+          + '<span class="dmg-label">' + DMG._.esc(t('stepProd')) + ' <span class="req">*</span></span>'
+          + '<i class="dmg-stok fas fa-circle-check"></i></div>'
         + '<div class="dmg-combo">'
           + '<input class="dmg-input" id="dmg-rpt-product-search" autocomplete="off" disabled'
             + ' placeholder="' + DMG._.esc(t('prodLoading')) + '"'
@@ -507,32 +540,45 @@
             + ' onclick="DMG.productClear()" aria-label="' + DMG._.esc(t('prodClear')) + '"><i class="fas fa-times"></i></button>'
           + '<div class="dmg-combo-list" id="dmg-rpt-product-list" style="display:none"></div>'
         + '</div>'
-        + '<input type="hidden" id="dmg-rpt-product">'
-        + '<div id="dmg-rpt-product-msg" class="dmg-muted" style="margin-top:4px;font-size:12px"></div></div>'
-
-      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepDefect')) + ' <span class="req">*</span></label>'
-        + '<div class="dmg-chip-group dmg-defects" id="dmg-rpt-defect-group">' + defChips + '</div></div>'
-
-      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepQty')) + ' <span class="req">*</span></label>'
+        + '<div id="dmg-rpt-product-msg" class="dmg-muted" style="margin-top:4px;font-size:12px"></div>'
+      + '</div>'
+      + '<div class="dmg-step" id="dmg-step-3">'
+        + '<div class="dmg-sthead"><span class="dmg-stnum">3</span>'
+          + '<span class="dmg-label">' + DMG._.esc(t('stepDefect')) + ' <span class="req">*</span></span>'
+          + '<i class="dmg-stok fas fa-circle-check"></i></div>'
+        + '<div class="dmg-chip-group dmg-defects" id="dmg-rpt-defect-group">' + defChips + '</div>'
+      + '</div>'
+      + '<div class="dmg-step" id="dmg-step-4">'
+        + '<div class="dmg-sthead"><span class="dmg-stnum">4</span>'
+          + '<span class="dmg-label">' + DMG._.esc(t('stepQty')) + ' <span class="req">*</span></span>'
+          + '<i class="dmg-stok fas fa-circle-check"></i></div>'
         + '<div class="dmg-stepper">'
           + '<button type="button" onclick="DMG.qtyStep(-1)" aria-label="ลด">&minus;</button>'
-          + '<input type="number" min="0" step="1" inputmode="numeric" id="dmg-rpt-qty">'
+          + '<input type="number" min="0" step="1" inputmode="numeric" id="dmg-rpt-qty" oninput="DMG.syncSteps()">'
           + '<button type="button" onclick="DMG.qtyStep(1)" aria-label="เพิ่ม">+</button>'
-        + '</div></div>'
-
-      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepWhere')) + ' <span class="req">*</span></label>'
-        + '<div class="dmg-chip-group dmg-locs" id="dmg-rpt-location-group">' + locChips + '</div></div>'
-
-      + '<div class="dmg-step"><label class="dmg-label">' + DMG._.esc(t('stepLot')) + ' <span class="req">*</span></label>'
+        + '</div>'
+      + '</div>'
+      + '<div class="dmg-step" id="dmg-step-5">'
+        + '<div class="dmg-sthead"><span class="dmg-stnum">5</span>'
+          + '<span class="dmg-label">' + DMG._.esc(t('stepWhere')) + ' <span class="req">*</span></span>'
+          + '<i class="dmg-stok fas fa-circle-check"></i></div>'
+        + '<div class="dmg-chip-group dmg-locs" id="dmg-rpt-location-group">' + locChips + '</div>'
+      + '</div>'
+      + '<div class="dmg-step" id="dmg-step-6">'
+        + '<div class="dmg-sthead"><span class="dmg-stnum">6</span>'
+          + '<span class="dmg-label">' + DMG._.esc(t('stepLot')) + ' <span class="req">*</span></span>'
+          + '<i class="dmg-stok fas fa-circle-check"></i></div>'
         + '<div class="dmg-lotbox">'
-          + '<input class="dmg-lotin" id="dmg-rpt-lot" autocomplete="off" autocapitalize="characters" placeholder="' + DMG._.esc(t('lotEg')) + '" oninput="DMG.lotClean(this)">'
+          + '<input class="dmg-lotin" id="dmg-rpt-lot" autocomplete="off" autocapitalize="characters" placeholder="' + DMG._.esc(t('lotEg')) + '" oninput="DMG.lotClean(this);DMG.syncSteps()">'
           + '<div class="dmg-lothint">' + DMG._.esc(t('lotHint')) + '</div>'
-        + '</div></div>'
-
+        + '</div>'
+      + '</div>'
       + '<div class="dmg-attest">' + DMG._.esc(t('attest')) + '</div>'
-      + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
-        + '<button type="button" class="dmg-btn" style="flex:1;min-width:120px" onclick="DMG.saveDraft()"><i class="fas fa-save"></i> ' + DMG._.esc(t('saveDraft')) + '</button>'
-        + '<button type="button" class="dmg-btn dmg-btn-primary dmg-send" style="flex:2;min-width:160px" onclick="DMG.submitReport()" id="dmg-rpt-submit-btn"><i class="fas fa-paper-plane"></i> ' + DMG._.esc(t('sendToProd')) + '</button>'
+      + '<div class="dmg-sendbar">'
+        + '<button type="button" class="dmg-btn dmg-draftbtn" onclick="DMG.saveDraft()" title="' + DMG._.esc(t('saveDraft')) + '"><i class="fas fa-save"></i></button>'
+        + '<button type="button" class="dmg-send" onclick="DMG.submitReport()" id="dmg-rpt-submit-btn">'
+          + '<span class="dmg-sendtxt"><i class="fas fa-paper-plane"></i> ' + DMG._.esc(t('sendToProd')) + '</span>'
+          + '<span class="dmg-prog" id="dmg-rpt-prog">0/6</span></button>'
       + '</div>'
       + '</form>';
   }
@@ -604,6 +650,7 @@
     });
     var e = $('dmg-rpt-' + field + '-group-err'); if (e) e.remove();
     g.classList.remove('dmg-err-border');
+    DMG.syncSteps();
   }
   DMG.pickDefect = function (code) { pickChip('defect', code); };
   DMG.pickLoc    = function (code) { pickChip('location', code); };
@@ -618,6 +665,28 @@
 
   // ตัวพิมพ์ใหญ่ ตัดช่องว่างและอักขระไทยทิ้ง — กติกาเดียวกับช่อง MO ในฟอร์มโหลดสินค้า
   // ถ้าปล่อยให้พิมพ์อิสระ เลขล็อตเดียวกันจะกลายเป็นคนละตัวตอนเอาไปจับคู่
+  /** ติดเครื่องหมายถูกให้ขั้นที่กรอกแล้ว + อัปเดตตัวนับบนปุ่มส่ง
+   *  มีไว้ให้หน้างานรู้ว่าเหลืออะไร โดยไม่ต้องกดส่งแล้วค่อยโดนเตือน */
+  DMG.syncSteps = function () {
+    if (!$('dmg-report-form')) return;
+    var qty = parseFloat(($('dmg-rpt-qty') || {}).value) || 0;
+    var ok = [
+      _rptPhotos.length > 0,
+      !!($('dmg-rpt-product') || {}).value,
+      !!($('dmg-rpt-defect') || {}).value,
+      qty > 0,
+      !!($('dmg-rpt-location') || {}).value,
+      !!String((($('dmg-rpt-lot') || {}).value) || '').trim()
+    ];
+    ok.forEach(function (done, n) {
+      var el = $('dmg-step-' + (n + 1));
+      if (el) el.classList.toggle('done', done);
+    });
+    var n = ok.filter(Boolean).length;
+    var pg = $('dmg-rpt-prog'); if (pg) pg.textContent = n + '/6';
+    var btn = $('dmg-rpt-submit-btn'); if (btn) btn.classList.toggle('ready', n === 6);
+  };
+
   DMG.lotClean = function (el) {
     var v = String(el.value || '').toUpperCase().replace(/[^0-9A-Z/-]/g, '');
     if (el.value !== v) el.value = v;
@@ -627,6 +696,7 @@
     var el = $('dmg-rpt-qty');
     var v = (parseFloat(el.value) || 0) + d;
     el.value = v > 0 ? v : '';
+    DMG.syncSteps();
   };
 
   DMG.productSearch = function () {
@@ -658,6 +728,7 @@
     inp.value = label || sku;
     $('dmg-rpt-product-list').style.display = 'none';
     $('dmg-rpt-product-clear').style.display = '';
+    DMG.syncSteps();
   };
 
   DMG.productClear = function () {
@@ -666,6 +737,7 @@
     inp.value = ''; inp.focus();
     $('dmg-rpt-product-clear').style.display = 'none';
     DMG.productSearch();
+    DMG.syncSteps();
   };
 
   // คลิกนอกกล่อง = ปิดรายการ (ถ้ายังไม่ได้เลือก ให้ล้างข้อความที่พิมพ์ค้างไว้
@@ -751,12 +823,12 @@
     needPhoto1: ['กรุณาแนบรูปอย่างน้อย ', 'ဓာတ်ပုံ အနည်းဆုံး '],
     needPhoto2: [' รูป', ' ပုံ ပူးတွဲပါ'],
     needConfirm:['กรุณาติ๊กยืนยันข้อมูลก่อนส่ง', 'မပို့မီ အတည်ပြုချက် အမှန်ခြစ်ပါ'],
-    stepPhoto:  ['1. ถ่ายรูป', '၁. ဓာတ်ပုံ ရိုက်ပါ'],
-    stepProd:   ['2. สินค้า', '၂. ပစ္စည်း'],
-    stepDefect: ['3. เสียยังไง', '၃. ဘယ်လို ပျက်နေလဲ'],
-    stepQty:    ['4. กี่เส้น', '၄. ဘယ်နှစ်ချောင်း'],
-    stepWhere:  ['5. เจอที่ไหน', '၅. ဘယ်နေရာမှာ တွေ့လဲ'],
-    stepLot:    ['6. เลขล็อตข้างเส้น', '၆. ချောင်းဘေးက Lot နံပါတ်'],
+    stepPhoto: ['ถ่ายรูป', 'ဓာတ်ပုံ ရိုက်ပါ'],
+    stepProd: ['สินค้า', 'ပစ္စည်း'],
+    stepDefect: ['เสียยังไง', 'ဘယ်လို ပျက်နေလဲ'],
+    stepQty: ['กี่เส้น', 'ဘယ်နှစ်ချောင်း'],
+    stepWhere: ['เจอที่ไหน', 'ဘယ်နေရာမှာ တွေ့လဲ'],
+    stepLot: ['เลขล็อตข้างเส้น', 'ချောင်းဘေးက Lot နံပါတ်'],
     shotTap:    ['แตะเพื่อถ่ายรูป', 'ဓာတ်ပုံရိုက်ရန် နှိပ်ပါ'],
     shotHint:   ['ถ่ายให้เห็นตำหนิชัดๆ ถ่ายได้หลายรูป', 'ပျက်နေသည့်နေရာ ကွက်ကွက်ကွင်းကွင်း မြင်အောင် ရိုက်ပါ ပုံများစွာ ရိုက်နိုင်သည်'],
     lotHint:    ['อ่านจากตัวหนังสือที่พ่นข้างเส้น ท้ายบรรทัด · ต้องมีเลขล็อต ฝ่ายผลิตถึงจะตามกลับได้ว่าเป็นของรอบไหน',
@@ -978,7 +1050,8 @@
       renderReportPhotos();
       loadDraftIntoForm();
       restoreChips();
-      fillProductSelect();      // ต้องอยู่หลัง loadDraftIntoForm เพราะต้องรู้ว่าร่างเลือกสินค้าอะไรไว้
+      fillProductSelect();
+      DMG.syncSteps();      // ต้องอยู่หลัง loadDraftIntoForm เพราะต้องรู้ว่าร่างเลือกสินค้าอะไรไว้
       scr.classList.add('active');
     });
   };
