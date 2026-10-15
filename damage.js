@@ -53,6 +53,9 @@
   ];
 
   // ข้อสงสัยของผู้แจ้ง — ต้องติดป้ายว่าเป็นข้อสงสัย ไม่ใช่ข้อสรุป
+  // จุดที่พบเหตุ — รายชื่อโซนจริงในโรงงาน (หน้างานกำหนด 15 ต.ค. 69)
+  var INCIDENT_LOCATIONS = ['C4','C5','P1','P2','P3','P4','RE1','RE4','RE3'];
+
   var SUSPECTED_STAGES = ['ผลิต','QC','รับเข้า / จัดเก็บ','หยิบ / แพ็ก','โหลดสินค้า','ขนส่ง','ลูกค้า / หลังส่งมอบ','ไม่ทราบ'];
 
   var CONCLUSIONS = [
@@ -256,6 +259,7 @@
 
   // ส่งออกให้ส่วนอื่นของไฟล์ใช้
   DMG._ = { STATUS: STATUS, STATUS_ORDER: STATUS_ORDER, PRIORITY: PRIORITY, INCIDENT_TYPES: INCIDENT_TYPES,
+    INCIDENT_LOCATIONS: INCIDENT_LOCATIONS,
     SUSPECTED_STAGES: SUSPECTED_STAGES, CONCLUSIONS: CONCLUSIONS, PROCESS_STEPS: PROCESS_STEPS,
     ROOT_CAUSE_CATS: ROOT_CAUSE_CATS, ATTACH_TYPES: ATTACH_TYPES, CAPA_STATUS: CAPA_STATUS, CAPA_CLS: CAPA_CLS,
     ACTION_LABELS: ACTION_LABELS, EMAIL_TYPES: EMAIL_TYPES, CFG: CFG,
@@ -424,7 +428,10 @@
 
   function reportFormHtml() {
     var u = DMG._.me();
-    var typeOpts = DMG._.INCIDENT_TYPES.map(function (t) { return '<option value="' + t.v + '">' + DMG._.esc(t.th) + '</option>'; }).join('');
+    // (หน้างานสั่ง 15 ต.ค. 69) เหลือประเภทเดียว — ของที่มาถึงคลังแล้วเสียอยู่แล้ว
+    // เก็บลงฐานข้อมูลเป็น 'production' ซึ่งเป็นค่าที่ check constraint ยอมรับอยู่แล้ว
+    var typeOpts = '<option value="production" selected>เสียหายจากฝ่ายผลิต / หลุด QC</option>';
+    var locOpts = DMG._.INCIDENT_LOCATIONS.map(function (l) { return '<option value="' + DMG._.esc(l) + '">' + DMG._.esc(l) + '</option>'; }).join('');
     var stageOpts = '<option value="">— ไม่ระบุ —</option>' + DMG._.SUSPECTED_STAGES.map(function (s) {
       return '<option value="' + DMG._.esc(s) + '">' + DMG._.esc(s) + '</option>';
     }).join('');
@@ -438,32 +445,27 @@
       + '</div>'
       + '<div class="dmg-row2">'
         + '<div class="dmg-field"><label class="dmg-label">วันเวลาที่พบเหตุ <span class="req">*</span></label><input type="datetime-local" class="dmg-input" id="dmg-rpt-datetime" value="' + DMG._.nowBkkLocal() + '"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">จุดที่พบเหตุ <span class="req">*</span></label><input class="dmg-input" id="dmg-rpt-location" placeholder="เช่น คลัง P1 จุดรับเข้า"></div>'
+        + '<div class="dmg-field"><label class="dmg-label">จุดที่พบเหตุ <span class="req">*</span></label><select class="dmg-select" id="dmg-rpt-location"><option value="">— เลือกจุด —</option>' + locOpts + '</select></div>'
       + '</div>'
 
       + '<div class="dmg-section-title"><i class="fas fa-box"></i> รายละเอียดสินค้า</div>'
-      + '<div class="dmg-row2">'
-        + '<div class="dmg-field"><label class="dmg-label">รหัสสินค้า (SKU) <span class="req">*</span></label><input class="dmg-input" id="dmg-rpt-sku" placeholder="เช่น 0SQG200140"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">ชื่อสินค้า <span class="req">*</span></label><input class="dmg-input" id="dmg-rpt-name" placeholder="ชื่อสินค้า"></div>'
-      + '</div>'
+      + '<div class="dmg-field"><label class="dmg-label">สินค้า <span class="req">*</span></label>'
+        + '<select class="dmg-select" id="dmg-rpt-product" disabled><option value="">กำลังโหลดรายการสินค้า…</option></select>'
+        + '<div id="dmg-rpt-product-msg" class="dmg-muted" style="margin-top:4px;font-size:12px"></div></div>'
       + '<div class="dmg-row2">'
         + '<div class="dmg-field"><label class="dmg-label">เลข Lot / Batch</label><input class="dmg-input" id="dmg-rpt-lot"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">เลขที่ใบสั่งผลิต</label><input class="dmg-input" id="dmg-rpt-po"></div>'
-      + '</div>'
-      + '<div class="dmg-field"><label class="dmg-label">เลขที่คำสั่งซื้อ / ใบส่งสินค้า</label><input class="dmg-input" id="dmg-rpt-do"></div>'
-      + '<div class="dmg-row3">'
         + '<div class="dmg-field"><label class="dmg-label">จำนวนที่เสียหาย <span class="req">*</span></label><input type="number" min="0" step="0.01" class="dmg-input" id="dmg-rpt-qty"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">หน่วยนับ</label><input class="dmg-input" id="dmg-rpt-unit" value="เส้น"></div>'
-        + '<div class="dmg-field"><label class="dmg-label">มูลค่าความเสียหายโดยประมาณ (บาท)</label><input type="number" min="0" class="dmg-input" id="dmg-rpt-value"></div>'
       + '</div>'
       + '<div class="dmg-row2">'
-        + '<div class="dmg-field"><label class="dmg-label">ประเภทความเสียหาย <span class="req">*</span></label><select class="dmg-select" id="dmg-rpt-type"><option value="">— เลือกประเภท —</option>' + typeOpts + '</select></div>'
+        + '<div class="dmg-field"><label class="dmg-label">หน่วยนับ</label><input class="dmg-input" id="dmg-rpt-unit" value="เส้น"></div>'
+        + '<div class="dmg-field"><label class="dmg-label">ประเภทความเสียหาย <span class="req">*</span></label><select class="dmg-select" id="dmg-rpt-type">' + typeOpts + '</select></div>'
+      + '</div>'
+      + '<div class="dmg-row2">'
         + '<div class="dmg-field"><label class="dmg-label">ระดับความเร่งด่วน</label><select class="dmg-select" id="dmg-rpt-priority">'
           + '<option value="normal" selected>ปกติ</option><option value="low">ต่ำ</option><option value="high">สูง</option><option value="urgent">เร่งด่วน</option></select></div>'
       + '</div>'
 
       + '<div class="dmg-section-title"><i class="fas fa-circle-exclamation"></i> รายละเอียดเหตุการณ์</div>'
-      + '<div class="dmg-field"><label class="dmg-label">พบความเสียหายอย่างไร <span class="req">*</span></label><textarea class="dmg-textarea" id="dmg-rpt-symptom" placeholder="อธิบายสิ่งที่พบ"></textarea></div>'
       + '<div class="dmg-field"><label class="dmg-label">สภาพสินค้าตอนพบ</label><textarea class="dmg-textarea" id="dmg-rpt-condition"></textarea></div>'
       + '<div class="dmg-field"><label class="dmg-label">สงสัยว่าเกิดในขั้นตอนไหน <span class="dmg-muted" style="display:inline">(ข้อสงสัยเท่านั้น ไม่ใช่ข้อสรุป)</span></label><select class="dmg-select" id="dmg-rpt-stage">' + stageOpts + '</select></div>'
       + '<div class="dmg-field"><label class="dmg-label">มีผลกระทบต่อการส่งมอบหรือไม่</label>'
@@ -502,6 +504,50 @@
     var on = $('dmg-rpt-action-group').querySelector('.on[data-val="true"]');
     $('dmg-rpt-action-detail-wrap').style.display = on ? '' : 'none';
   };
+  /* ───────────────── ดรอปดาวน์สินค้า — ใช้ Search name ตามที่หน้างานสั่ง ───────────────── */
+  //
+  // เก็บ sku ไว้ใน value และโชว์ search_name ให้คนอ่าน ตอนบันทึกจึงได้ทั้งสองค่า
+  // (เดิมเป็นช่องพิมพ์เอง 2 ช่อง หน้างานพิมพ์รหัสผิดได้ง่าย)
+  var _rptProducts = null;          // แคชไว้ทั้งรอบ ไม่ต้องดึงซ้ำทุกครั้งที่เปิดฟอร์ม
+
+  function selectedProductName() {
+    var el = $('dmg-rpt-product');
+    if (!el || !el.value) return null;
+    var o = el.options[el.selectedIndex];
+    return o ? o.textContent : null;
+  }
+
+  function fillProductSelect() {
+    var sel = $('dmg-rpt-product'), msg = $('dmg-rpt-product-msg');
+    if (!sel) return;
+    var want = sel.getAttribute('data-want') || '';   // ค่าที่ร่างเก็บไว้ ต้องเลือกคืนหลังรายการมาถึง
+    function render(list) {
+      sel.innerHTML = '<option value="">— เลือกสินค้า —</option>' + list.map(function (p) {
+        return '<option value="' + DMG._.esc(p.sku) + '">' + DMG._.esc(p.label) + '</option>';
+      }).join('');
+      sel.disabled = false;
+      if (want) sel.value = want;
+      msg.textContent = 'เลือกได้ ' + list.length + ' รายการ';
+      msg.style.color = '';
+    }
+    if (_rptProducts) { render(_rptProducts); return; }
+    fetchAll(function () { return sb().from('products').select('sku,name,search_name'); })
+      .then(function (rows) {
+        _rptProducts = rows.map(function (r) { return { sku: r.sku, label: r.search_name || r.name || r.sku }; })
+          .sort(function (a, b) { return a.label.localeCompare(b.label, 'th'); });
+        render(_rptProducts);
+      })['catch'](function (e) {
+        // ห้ามเงียบ — ถ้าดึงไม่ได้ ต้องบอกให้เห็น ไม่งั้นคนแจ้งเหตุไม่ได้แล้วไม่รู้ว่าทำไม
+        sel.innerHTML = '<option value="">โหลดรายการสินค้าไม่สำเร็จ</option>';
+        sel.disabled = true;
+        msg.innerHTML = 'โหลดรายการสินค้าไม่สำเร็จ — ' + DMG._.esc(String((e && e.message) || e))
+          + ' <a href="#" onclick="DMG.reloadProducts();return false;">ลองใหม่</a>';
+        msg.style.color = '#dc2626';
+        console.error('[DMG] โหลด products ไม่สำเร็จ', e);
+      });
+  }
+  DMG.reloadProducts = function () { _rptProducts = null; fillProductSelect(); };
+
   function chipVal(groupId) {
     var on = $(groupId).querySelector('.on');
     return on ? on.getAttribute('data-val') === 'true' : null;
@@ -521,14 +567,19 @@
       var raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
       var d = JSON.parse(raw);
-      Object.keys(d.fields || {}).forEach(function (id) { var el = $(id); if (el) el.value = d.fields[id]; });
+      Object.keys(d.fields || {}).forEach(function (id) {
+        var el = $(id); if (!el) return;
+        // ดรอปดาวน์สินค้ายังโหลดรายการไม่เสร็จ ใส่ค่าตรงๆ จะหาย — จำไว้ให้ fillProductSelect เลือกคืน
+        if (id === 'dmg-rpt-product') { el.setAttribute('data-want', d.fields[id] || ''); return; }
+        el.value = d.fields[id];
+      });
     } catch (e) {}
   }
 
   function collectReportForm(forDraft) {
-    var ids = ['dmg-rpt-datetime', 'dmg-rpt-location', 'dmg-rpt-sku', 'dmg-rpt-name', 'dmg-rpt-lot', 'dmg-rpt-po',
-      'dmg-rpt-do', 'dmg-rpt-qty', 'dmg-rpt-unit', 'dmg-rpt-value', 'dmg-rpt-type', 'dmg-rpt-priority',
-      'dmg-rpt-symptom', 'dmg-rpt-condition', 'dmg-rpt-stage', 'dmg-rpt-action-detail'];
+    var ids = ['dmg-rpt-datetime', 'dmg-rpt-location', 'dmg-rpt-product', 'dmg-rpt-lot',
+      'dmg-rpt-qty', 'dmg-rpt-unit', 'dmg-rpt-type', 'dmg-rpt-priority',
+      'dmg-rpt-condition', 'dmg-rpt-stage', 'dmg-rpt-action-detail'];
     var fields = {};
     ids.forEach(function (id) { var el = $(id); if (el) fields[id] = el.value; });
     if (forDraft) return { fields: fields };
@@ -540,20 +591,17 @@
       incident_type: fields['dmg-rpt-type'] || null,
       incident_location: fields['dmg-rpt-location'] || null,
       incident_datetime: DMG._.bkkLocalToISO(fields['dmg-rpt-datetime']),
-      symptom: fields['dmg-rpt-symptom'] || null,
       condition_on_found: fields['dmg-rpt-condition'] || null,
       suspected_stage: fields['dmg-rpt-stage'] || null,
       delivery_impact: chipVal('dmg-rpt-impact-group'),
       initial_action_taken: chipVal('dmg-rpt-action-group'),
       initial_action_detail: fields['dmg-rpt-action-detail'] || null,
-      product_code: fields['dmg-rpt-sku'] || null, product_name: fields['dmg-rpt-name'] || null,
-      lot_number: fields['dmg-rpt-lot'] || null, production_order: fields['dmg-rpt-po'] || null,
-      delivery_reference: fields['dmg-rpt-do'] || null,
+      product_code: fields['dmg-rpt-product'] || null, product_name: selectedProductName(),
+      lot_number: fields['dmg-rpt-lot'] || null,
       damaged_quantity: fields['dmg-rpt-qty'] ? Number(fields['dmg-rpt-qty']) : null,
       unit: fields['dmg-rpt-unit'] || null,
-      estimated_damage_value: fields['dmg-rpt-value'] ? Number(fields['dmg-rpt-value']) : null,
       priority: fields['dmg-rpt-priority'] || 'normal',
-      title: (fields['dmg-rpt-name'] || 'สินค้าเสียหาย') + ' — ' + (DMG._.incidentLabel(fields['dmg-rpt-type']) || '')
+      title: (selectedProductName() || 'สินค้าเสียหาย') + ' — ' + (DMG._.incidentLabel(fields['dmg-rpt-type']) || '')
     };
   }
 
@@ -561,12 +609,10 @@
     clearReportErrs();
     var errs = [];
     function need(id, cond, msg) { if (!cond) { reportFieldErr(id, msg); errs.push(msg); } }
-    need('dmg-rpt-location', !!data.incident_location, 'กรุณากรอกจุดที่พบเหตุ');
-    need('dmg-rpt-sku', !!data.product_code, 'กรุณากรอกรหัสสินค้า');
-    need('dmg-rpt-name', !!data.product_name, 'กรุณากรอกชื่อสินค้า');
+    need('dmg-rpt-location', !!data.incident_location, 'กรุณาเลือกจุดที่พบเหตุ');
+    need('dmg-rpt-product', !!data.product_code, 'กรุณาเลือกสินค้า');
     need('dmg-rpt-qty', data.damaged_quantity != null && data.damaged_quantity > 0, 'กรุณากรอกจำนวนที่เสียหาย');
     need('dmg-rpt-type', !!data.incident_type, 'กรุณาเลือกประเภทความเสียหาย');
-    need('dmg-rpt-symptom', !!data.symptom, 'กรุณาอธิบายว่าพบความเสียหายอย่างไร');
     var totalPhotos = _rptPhotos.length + _rptCloseupPhotos.length;
     if (totalPhotos < DMG._.CFG.minPhotos) { errs.push('กรุณาแนบรูปอย่างน้อย ' + DMG._.CFG.minPhotos + ' รูป'); DMG._.toast('กรุณาแนบรูปอย่างน้อย ' + DMG._.CFG.minPhotos + ' รูป', true); }
     if (!$('dmg-rpt-confirm').checked) { errs.push('กรุณายืนยันว่าข้อมูลตรงกับสิ่งที่พบ'); DMG._.toast('กรุณาติ๊กยืนยันข้อมูลก่อนส่ง', true); }
@@ -655,6 +701,7 @@
       $('dmg-rpt-body').innerHTML = reportFormHtml();
       renderReportPhotos();
       loadDraftIntoForm();
+      fillProductSelect();      // ต้องอยู่หลัง loadDraftIntoForm เพราะต้องรู้ว่าร่างเลือกสินค้าอะไรไว้
       scr.classList.add('active');
     });
   };
