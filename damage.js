@@ -356,7 +356,15 @@
       '.dmg-rpt-body{padding:16px;max-width:640px;margin:0 auto;width:100%;box-sizing:border-box;padding-bottom:40px}',
       '.dmg-rpt-success{text-align:center;padding:50px 20px}',
       '.dmg-rpt-success .ic{font-size:56px;margin-bottom:14px}',
-      '.dmg-rpt-success .num{font-size:22px;font-weight:900;color:#1d4ed8;font-family:monospace;margin:10px 0}'
+      '.dmg-rpt-success .num{font-size:22px;font-weight:900;color:#1d4ed8;font-family:monospace;margin:10px 0}',
+      '.dmg-combo{position:relative}',
+      '.dmg-combo-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:#e2e8f0;color:#475569;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:12px}',
+      '.dmg-combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1.5px solid #cbd5e1;border-radius:10px;max-height:260px;overflow-y:auto;z-index:20;box-shadow:0 10px 24px rgba(15,23,42,.18)}',
+      '.dmg-combo-item{padding:11px 12px;font-size:14px;border-bottom:1px solid #f1f5f9;cursor:pointer}',
+      '.dmg-combo-item:last-child{border-bottom:none}',
+      '.dmg-combo-item:hover,.dmg-combo-item:active{background:#eff6ff}',
+      '.dmg-combo-item .sku{display:block;font-size:11px;color:#64748b;font-family:monospace;margin-top:2px}',
+      '.dmg-combo-empty{padding:12px;font-size:13px;color:#64748b;text-align:center}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -450,7 +458,15 @@
 
       + '<div class="dmg-section-title"><i class="fas fa-box"></i> รายละเอียดสินค้า</div>'
       + '<div class="dmg-field"><label class="dmg-label">สินค้า <span class="req">*</span></label>'
-        + '<select class="dmg-select" id="dmg-rpt-product" disabled><option value="">กำลังโหลดรายการสินค้า…</option></select>'
+        + '<div class="dmg-combo">'
+          + '<input class="dmg-input" id="dmg-rpt-product-search" autocomplete="off" disabled'
+            + ' placeholder="กำลังโหลดรายการสินค้า…"'
+            + ' oninput="DMG.productSearch()" onfocus="DMG.productSearch()">'
+          + '<button type="button" class="dmg-combo-clear" id="dmg-rpt-product-clear" style="display:none"'
+            + ' onclick="DMG.productClear()" aria-label="ล้างสินค้าที่เลือก"><i class="fas fa-times"></i></button>'
+          + '<div class="dmg-combo-list" id="dmg-rpt-product-list" style="display:none"></div>'
+        + '</div>'
+        + '<input type="hidden" id="dmg-rpt-product">'
         + '<div id="dmg-rpt-product-msg" class="dmg-muted" style="margin-top:4px;font-size:12px"></div></div>'
       + '<div class="dmg-row2">'
         + '<div class="dmg-field"><label class="dmg-label">เลข Lot / Batch</label><input class="dmg-input" id="dmg-rpt-lot"></div>'
@@ -510,36 +526,41 @@
   // (เดิมเป็นช่องพิมพ์เอง 2 ช่อง หน้างานพิมพ์รหัสผิดได้ง่าย)
   var _rptProducts = null;          // แคชไว้ทั้งรอบ ไม่ต้องดึงซ้ำทุกครั้งที่เปิดฟอร์ม
 
+  var MAX_COMBO_ROWS = 60;          // แสดงทีละไม่เกินเท่านี้ ไม่งั้นมือถือหน่วง
+
   function selectedProductName() {
-    var el = $('dmg-rpt-product');
-    if (!el || !el.value) return null;
-    var o = el.options[el.selectedIndex];
-    return o ? o.textContent : null;
+    var h = $('dmg-rpt-product');
+    return (h && h.value) ? (h.getAttribute('data-label') || null) : null;
   }
 
+  /** สินค้าที่เลิกใช้แล้วจะมีคำว่า Disable ติดอยู่ในชื่อ — หน้างานไม่ต้องเห็น */
+  function isRetiredProduct(label) { return /disable/i.test(label || ''); }
+
   function fillProductSelect() {
-    var sel = $('dmg-rpt-product'), msg = $('dmg-rpt-product-msg');
-    if (!sel) return;
-    var want = sel.getAttribute('data-want') || '';   // ค่าที่ร่างเก็บไว้ ต้องเลือกคืนหลังรายการมาถึง
-    function render(list) {
-      sel.innerHTML = '<option value="">— เลือกสินค้า —</option>' + list.map(function (p) {
-        return '<option value="' + DMG._.esc(p.sku) + '">' + DMG._.esc(p.label) + '</option>';
-      }).join('');
-      sel.disabled = false;
-      if (want) sel.value = want;
-      msg.textContent = 'เลือกได้ ' + list.length + ' รายการ';
+    var inp = $('dmg-rpt-product-search'), msg = $('dmg-rpt-product-msg'), hid = $('dmg-rpt-product');
+    if (!inp) return;
+    var want = hid.getAttribute('data-want') || '';   // ค่าที่ร่างเก็บไว้ ต้องเลือกคืนหลังรายการมาถึง
+    function ready(list) {
+      inp.disabled = false;
+      inp.placeholder = 'พิมพ์ชื่อหรือรหัสเพื่อค้นหา';
+      msg.textContent = 'ค้นหาได้ ' + list.length + ' รายการ (พิมพ์ได้ทั้งชื่อไทย อังกฤษ และรหัส)';
       msg.style.color = '';
+      if (want) {
+        var hit = list.filter(function (p) { return p.sku === want; })[0];
+        if (hit) DMG.productPick(hit.sku, hit.label);
+      }
     }
-    if (_rptProducts) { render(_rptProducts); return; }
+    if (_rptProducts) { ready(_rptProducts); return; }
     fetchAll(function () { return sb().from('products').select('sku,name,search_name'); })
       .then(function (rows) {
         _rptProducts = rows.map(function (r) { return { sku: r.sku, label: r.search_name || r.name || r.sku }; })
+          .filter(function (p) { return !isRetiredProduct(p.label); })
           .sort(function (a, b) { return a.label.localeCompare(b.label, 'th'); });
-        render(_rptProducts);
+        ready(_rptProducts);
       })['catch'](function (e) {
         // ห้ามเงียบ — ถ้าดึงไม่ได้ ต้องบอกให้เห็น ไม่งั้นคนแจ้งเหตุไม่ได้แล้วไม่รู้ว่าทำไม
-        sel.innerHTML = '<option value="">โหลดรายการสินค้าไม่สำเร็จ</option>';
-        sel.disabled = true;
+        inp.disabled = true;
+        inp.placeholder = 'โหลดรายการสินค้าไม่สำเร็จ';
         msg.innerHTML = 'โหลดรายการสินค้าไม่สำเร็จ — ' + DMG._.esc(String((e && e.message) || e))
           + ' <a href="#" onclick="DMG.reloadProducts();return false;">ลองใหม่</a>';
         msg.style.color = '#dc2626';
@@ -547,6 +568,57 @@
       });
   }
   DMG.reloadProducts = function () { _rptProducts = null; fillProductSelect(); };
+
+  DMG.productSearch = function () {
+    var inp = $('dmg-rpt-product-search'), box = $('dmg-rpt-product-list');
+    if (!inp || !box || !_rptProducts) return;
+    var q = inp.value.trim().toLowerCase();
+    var hits = q
+      ? _rptProducts.filter(function (p) {
+          return p.label.toLowerCase().indexOf(q) >= 0 || p.sku.toLowerCase().indexOf(q) >= 0;
+        })
+      : _rptProducts;
+    if (!hits.length) {
+      box.innerHTML = '<div class="dmg-combo-empty">ไม่พบสินค้าที่ตรงกับ "' + DMG._.esc(inp.value) + '"</div>';
+    } else {
+      box.innerHTML = hits.slice(0, MAX_COMBO_ROWS).map(function (p) {
+        return '<div class="dmg-combo-item" onclick="DMG.productPick(\'' + DMG._.esc(p.sku) + '\',this.getAttribute(\'data-label\'))"'
+          + ' data-label="' + DMG._.esc(p.label) + '">' + DMG._.esc(p.label)
+          + '<span class="sku">' + DMG._.esc(p.sku) + '</span></div>';
+      }).join('')
+      + (hits.length > MAX_COMBO_ROWS
+          ? '<div class="dmg-combo-empty">แสดง ' + MAX_COMBO_ROWS + ' จาก ' + hits.length + ' รายการ — พิมพ์เพิ่มเพื่อลดผลลัพธ์</div>'
+          : '');
+    }
+    box.style.display = '';
+  };
+
+  DMG.productPick = function (sku, label) {
+    var hid = $('dmg-rpt-product'), inp = $('dmg-rpt-product-search');
+    hid.value = sku; hid.setAttribute('data-label', label || '');
+    inp.value = label || sku;
+    $('dmg-rpt-product-list').style.display = 'none';
+    $('dmg-rpt-product-clear').style.display = '';
+  };
+
+  DMG.productClear = function () {
+    var hid = $('dmg-rpt-product'), inp = $('dmg-rpt-product-search');
+    hid.value = ''; hid.removeAttribute('data-label');
+    inp.value = ''; inp.focus();
+    $('dmg-rpt-product-clear').style.display = 'none';
+    DMG.productSearch();
+  };
+
+  // คลิกนอกกล่อง = ปิดรายการ (ถ้ายังไม่ได้เลือก ให้ล้างข้อความที่พิมพ์ค้างไว้
+  // ไม่งั้นคนจะเห็นตัวหนังสือในช่องแล้วนึกว่าเลือกแล้ว ทั้งที่ยังไม่ได้เลือก)
+  document.addEventListener('click', function (ev) {
+    var box = $('dmg-rpt-product-list');
+    if (!box || box.style.display === 'none') return;
+    if (ev.target.closest && ev.target.closest('.dmg-combo')) return;
+    box.style.display = 'none';
+    var hid = $('dmg-rpt-product'), inp = $('dmg-rpt-product-search');
+    if (hid && inp) inp.value = hid.value ? (hid.getAttribute('data-label') || '') : '';
+  });
 
   function chipVal(groupId) {
     var on = $(groupId).querySelector('.on');
@@ -571,6 +643,7 @@
         var el = $(id); if (!el) return;
         // ดรอปดาวน์สินค้ายังโหลดรายการไม่เสร็จ ใส่ค่าตรงๆ จะหาย — จำไว้ให้ fillProductSelect เลือกคืน
         if (id === 'dmg-rpt-product') { el.setAttribute('data-want', d.fields[id] || ''); return; }
+        if (id === 'dmg-rpt-product-search') return;   // ตั้งให้เองตอนเลือกคืนจากร่าง
         el.value = d.fields[id];
       });
     } catch (e) {}
@@ -610,7 +683,7 @@
     var errs = [];
     function need(id, cond, msg) { if (!cond) { reportFieldErr(id, msg); errs.push(msg); } }
     need('dmg-rpt-location', !!data.incident_location, 'กรุณาเลือกจุดที่พบเหตุ');
-    need('dmg-rpt-product', !!data.product_code, 'กรุณาเลือกสินค้า');
+    need('dmg-rpt-product-search', !!data.product_code, 'กรุณาเลือกสินค้าจากรายการ');
     need('dmg-rpt-qty', data.damaged_quantity != null && data.damaged_quantity > 0, 'กรุณากรอกจำนวนที่เสียหาย');
     need('dmg-rpt-type', !!data.incident_type, 'กรุณาเลือกประเภทความเสียหาย');
     var totalPhotos = _rptPhotos.length + _rptCloseupPhotos.length;
