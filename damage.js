@@ -28,10 +28,11 @@
     'Corrective Action':    { th: 'ดำเนินการแก้ไข',         cls: 'amber' },
     'Verification':         { th: 'รอตรวจผลการแก้ไข',       cls: 'blue'  },
     'Closed':               { th: 'ปิดเคส',                 cls: 'green' },
-    'Reopened':             { th: 'เปิดเคสอีกครั้ง',        cls: 'amber' }
+    'Reopened':             { th: 'เปิดเคสอีกครั้ง',        cls: 'amber' },
+    'Cancelled':            { th: 'ยกเลิก',                 cls: 'gray'  }
   };
   var STATUS_ORDER = ['Draft','Submitted','New','Under Review','Awaiting Information','Assigned',
-    'Investigating','Pending Approval','Corrective Action','Verification','Closed','Reopened'];
+    'Investigating','Pending Approval','Corrective Action','Verification','Closed','Reopened','Cancelled'];
 
   var PRIORITY = {
     low:    { th: 'ต่ำ',     cls: 'gray'  },
@@ -434,6 +435,8 @@
       '.dmg-rpt-body{padding:16px;max-width:640px;margin:0 auto;width:100%;box-sizing:border-box;padding-bottom:40px}',
       '.dmg-rpt-success{text-align:center;padding:50px 20px}',
       '.dmg-rpt-success .ic{font-size:56px;margin-bottom:14px}',
+      '.dmg-cancelled-note{background:#f1f5f9;border:1px solid #cbd5e1;border-left:4px solid #64748b;border-radius:0 10px 10px 0;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#475569;line-height:1.7}',
+      '.dmg-cancelled-note b{display:block;color:#334155;font-size:14px;margin-bottom:4px}',
       '.dmg-rpt-success .num{font-size:22px;font-weight:900;color:#1d4ed8;font-family:monospace;margin:10px 0}',
       '.dmg-combo{position:relative}',
       '.dmg-combo-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:#e2e8f0;color:#475569;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:12px}',
@@ -1095,7 +1098,7 @@
 
   /* ═══════════════════════════ หน้าจอที่ 2: ศูนย์รับเรื่อง (ออฟฟิศ) ═══════════════════════════ */
   var _caseList = [];       // รายการเคสทั้งหมด (หน้านี้โหลดมาทีเดียว กรอง/เรียง/แบ่งหน้าในเครื่อง)
-  var _caseFilters = { q: '', status: '', incident_type: '', department: '', priority: '', overdue: false, noCause: false, from: '', to: '', showDemo: true };
+  var _caseFilters = { q: '', status: '', incident_type: '', department: '', priority: '', overdue: false, noCause: false, from: '', to: '', showDemo: true, showCancelled: false };
   var _casePage = 1;
   var CASE_PAGE_SIZE = 25;
   var _caseRefreshTimer = null;
@@ -1137,13 +1140,19 @@
       + '<label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#475569"><input type="checkbox" ' + (_caseFilters.overdue ? 'checked' : '') + ' onchange="DMG.setFilter(\'overdue\',this.checked)"> เกินกำหนด</label>'
       + '<label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#475569"><input type="checkbox" ' + (_caseFilters.noCause ? 'checked' : '') + ' onchange="DMG.setFilter(\'noCause\',this.checked)"> ยังไม่ระบุสาเหตุ</label>'
       + '<label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#475569"><input type="checkbox" ' + (_caseFilters.showDemo ? 'checked' : '') + ' onchange="DMG.setFilter(\'showDemo\',this.checked)"> แสดงข้อมูลตัวอย่าง</label>'
+      + '<label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#475569"><input type="checkbox" ' + (_caseFilters.showCancelled ? 'checked' : '') + ' onchange="DMG.setFilter(\'showCancelled\',this.checked)"> แสดงเคสที่ยกเลิก</label>'
       + '<button class="dmg-btn dmg-btn-sm" onclick="DMG.resetFilters()"><i class="fas fa-rotate-left"></i> ล้างตัวกรอง</button>'
       + '<button class="dmg-btn dmg-btn-primary dmg-btn-sm" style="margin-left:auto" onclick="DMG.openReportForm()"><i class="fas fa-plus"></i> แจ้งเหตุใหม่</button>'
       + '</div>';
   }
-  DMG.setFilter = function (key, val) { _caseFilters[key] = val; _casePage = 1; renderCaseList(); };
+  DMG.setFilter = function (key, val) {
+    _caseFilters[key] = val; _casePage = 1;
+    // เคสที่ยกเลิกถูกคัดออกตั้งแต่ชั้นคิวรี (deleted_at) จึงต้องโหลดใหม่ ไม่ใช่แค่วาดใหม่
+    if (key === 'showCancelled') { loadCaseList().then(renderCasesPanel); return; }
+    renderCaseList();
+  };
   DMG.resetFilters = function () {
-    _caseFilters = { q: '', status: '', incident_type: '', department: '', priority: '', overdue: false, noCause: false, from: '', to: '', showDemo: true };
+    _caseFilters = { q: '', status: '', incident_type: '', department: '', priority: '', overdue: false, noCause: false, from: '', to: '', showDemo: true, showCancelled: false };
     _casePage = 1; renderCasesPanel();
   };
 
@@ -1214,7 +1223,9 @@
     var listEl = $('dmg-case-table-wrap');
     if (listEl) listEl.innerHTML = '<div class="dmg-empty"><i class="fas fa-spinner fa-spin"></i></div>';
     return DMG._.fetchAll(function () {
-      return DMG._.sb().from('dmg_cases').select('*').is('deleted_at', null).order('created_at', { ascending: false });
+      var q = DMG._.sb().from('dmg_cases').select('*');
+      if (!_caseFilters.showCancelled) q = q.is('deleted_at', null);
+      return q.order('created_at', { ascending: false });
     }).then(function (rows) {
       _caseList = rows;
       // ดึงรูป thumbnail แรกของแต่ละเคส (เบากว่าการดึงรูปทั้งหมดของทุกเคส)
@@ -1369,6 +1380,28 @@
     });
   };
 
+  /** ยกเลิกเคส — ไม่ใช่การลบ เคสยังอยู่ครบ แค่ติดป้ายและหลุดจากรายการปกติ
+   *  ฐานข้อมูลเป็นคนบังคับว่าต้องมีเหตุผล และประทับเวลา/ชื่อคนยกเลิกเอง
+   *  (ปุ่มนี้ซ่อนจากคนทั่วไปได้ แต่กันที่ชั้นข้อมูลไม่ได้ เพราะทุกคนใช้กุญแจเดียวกัน) */
+  DMG.cancelCase = function () {
+    if (!DMG._.me().isAdmin) { DMG._.toast('เฉพาะผู้ดูแลระบบเท่านั้นที่ยกเลิกเคสได้', true); return; }
+    var c = _curCase.c;
+    var reason = window.prompt('ยกเลิกเคส ' + (c.case_number || '') + '\n\nระบุเหตุผล (บันทึกถาวร ลบไม่ได้):', '');
+    if (reason === null) return;
+    reason = String(reason).trim();
+    if (!reason) { DMG._.toast('ต้องระบุเหตุผลที่ยกเลิก', true); return; }
+    var u = DMG._.me();
+    DMG._.sb().from('dmg_cases')
+      .update({ status: 'Cancelled', status_reason: reason, last_actor: u.username })
+      .eq('id', c.id).select('id,status,cancelled_by,deleted_at').then(function (r) {
+        if (r.error) { DMG._.toast('ยกเลิกไม่สำเร็จ: ' + r.error.message, true); return; }
+        if (!r.data || !r.data.length) { DMG._.toast('ยกเลิกไม่สำเร็จ — ฐานข้อมูลไม่อนุญาต', true); return; }
+        DMG._.toast('ยกเลิกเคสแล้ว');
+        DMG.closeCaseDetail();
+        loadCaseList().then(renderCasesPanel);
+      });
+  };
+
   function renderCaseModal() {
     var inner = $('dmg-modal-inner');
     var c = _curCase.c;
@@ -1380,8 +1413,16 @@
       + '<div><b style="font-size:16px;font-family:monospace">' + DMG._.esc(c.case_number || 'ร่าง') + '</b>' + (c.is_demo ? '<span class="dmg-demo-tag">ตัวอย่าง</span>' : '')
         + '<div style="font-size:12px;color:#94a3b8;margin-top:2px">' + DMG._.esc(c.title || '') + '</div></div>'
       + '<div style="display:flex;align-items:center;gap:10px">' + DMG._.statusBadge(c.status) + DMG._.priorityBadge(c.priority)
+      + ((DMG._.me().isAdmin && c.status !== 'Cancelled')
+          ? '<button class="dmg-x" title="ยกเลิกเคส" onclick="DMG.cancelCase()"><i class="fas fa-ban"></i></button>' : '')
       + '<button class="dmg-x" onclick="DMG.closeCaseDetail()"><i class="fas fa-times"></i></button></div></div>'
       + '<div class="dmg-modal-body">'
+      + (c.status === 'Cancelled'
+          ? '<div class="dmg-cancelled-note"><b><i class="fas fa-ban"></i> เคสนี้ถูกยกเลิก</b>'
+            + '<div>เหตุผล: ' + DMG._.esc(c.status_reason || '—') + '</div>'
+            + '<div>โดย ' + DMG._.esc(c.cancelled_by || '—') + ' · ' + DMG._.esc(DMG._.fmtDT(c.deleted_at)) + '</div>'
+            + '<div style="margin-top:4px;opacity:.85">ข้อมูลยังอยู่ครบ ไม่ได้ถูกลบ และไม่ถูกนับในตัวเลขสรุป</div></div>'
+          : '')
       + workflowBarHtml()
       + '<div class="dmg-tabs">' + tabs.map(function (t) { return '<div class="dmg-tab ' + (t[0] === _curTab ? 'on' : '') + '" onclick="DMG.switchCaseTab(\'' + t[0] + '\')">' + t[1] + '</div>'; }).join('') + '</div>'
       + '<div id="dmg-tab-body">' + renderTabBody() + '</div>'
