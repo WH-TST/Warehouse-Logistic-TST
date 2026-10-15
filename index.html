@@ -45972,6 +45972,25 @@ window.whInit = async function(user, team) {
   document.getElementById('app-sidebar').classList.add('wms-app-hidden');
   var scr = document.getElementById('wh-screen');
   if (scr) scr.classList.add('active');
+
+  // ── ปุ่มแจ้งสินค้าเสียหาย (บทบาท Reporter ของทีมโหลดสินค้า) ────────────────
+  //
+  // (หน้างานแจ้ง 15 ต.ค. 69) "ปุ่มที่เอาไว้ให้หน้างานกรอกหายไปไหน"
+  //
+  // เดิมเรียกไว้ท้าย whInit แบบ if (window.DMG) ... ซึ่งพังเงียบได้ 2 ทาง
+  //   1. ตอนเปิดโปรแกรมแล้วคืน session เดิม damage.js อาจยังโหลดไม่เสร็จ
+  //      → window.DMG ยังไม่มี เงื่อนไขเป็นเท็จ ข้ามไปเฉยๆ ไม่มี error ให้เห็น
+  //   2. บรรทัดก่อนหน้า (ldInit / ขอสิทธิ์แจ้งเตือน) โยน error → ไม่เคยวิ่งมาถึง
+  //
+  // ย้ายมาไว้ต้น whInit และลองซ้ำจนกว่า damage.js จะพร้อม ถ้าครบ 10 วิ
+  // ยังไม่มา ให้ขึ้น error ใน console แทนที่จะเงียบหาย
+  (function _whDmgFab(tries){
+    try {
+      if (window.DMG && typeof window.DMG.ensureWhFab === 'function') { window.DMG.ensureWhFab(); return; }
+    } catch(e) { console.error('[DMG] สร้างปุ่มแจ้งสินค้าเสียหายไม่สำเร็จ', e); return; }
+    if (tries < 40) setTimeout(function(){ _whDmgFab(tries+1); }, 250);
+    else console.error('[DMG] damage.js ไม่โหลด ปุ่มแจ้งสินค้าเสียหายจึงไม่ขึ้น');
+  })(0);
   var nm = document.getElementById('wh-hd-name');
   var tm = document.getElementById('wh-hd-team');
   if (nm) nm.textContent = user.name || user.username;
@@ -45989,8 +46008,6 @@ window.whInit = async function(user, team) {
   }
   if (typeof window._ldRequestNotifPermission === 'function') window._ldRequestNotifPermission(user.username);
   setTimeout(_whUpdateNotifBtn, 500);
-  // ทีมโหลดสินค้าเห็นปุ่มแจ้งสินค้าเสียหายเสมอ (บทบาท Reporter ตาม Product Damage Management)
-  if (window.DMG && typeof window.DMG.ensureWhFab === 'function') window.DMG.ensureWhFab();
   // Training realtime for WH Staff
   setTimeout(function(){ if (typeof trCheckDriverPending === 'function') trCheckDriverPending(user.username); }, 1500);
   if (typeof _trStartRt === 'function') _trStartRt(user.username);
