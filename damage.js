@@ -72,6 +72,15 @@
     { ic: 'fa-ellipsis', code: 'other',       th: 'อื่นๆ',           my: 'အခြား' }
   ];
 
+  // เจอของเสียระหว่างทำอะไรอยู่ — คนละเรื่องกับ "เจอที่ไหน" (โซน)
+  // เจอตอนโหลด = ของจ่อขึ้นรถแล้ว รุนแรงกว่าเจอตอนนับสต๊อก จึงต้องแยกเก็บ
+  var FOUND_DURING = [
+    { code: 'loading',     ic: 'fa-truck-ramp-box',  th: 'ตอนโหลดสินค้า',      my: 'ပစ္စည်းတင်နေစဉ်' },
+    { code: 'stock_count', ic: 'fa-list-check',      th: 'ตอนนับสต๊อก',        my: 'စာရင်းရေတွက်နေစဉ်' },
+    { code: 'zone_arrange',ic: 'fa-arrows-to-dot',   th: 'ตอนจัดพื้นที่',       my: 'နေရာစီစဉ်နေစဉ်' },
+    { code: 'zone_check',  ic: 'fa-magnifying-glass',th: 'ตอนตรวจสอบพื้นที่วาง', my: 'နေရာစစ်ဆေးနေစဉ်' }
+  ];
+
   // จุดที่พบเหตุ — รายชื่อโซนจริงในโรงงาน (หน้างานกำหนด 15 ต.ค. 69)
   var INCIDENT_LOCATIONS = ['C4','C5','P1','P2','P3','P4','RE1','RE4','RE3'];
 
@@ -278,7 +287,7 @@
 
   // ส่งออกให้ส่วนอื่นของไฟล์ใช้
   DMG._ = { STATUS: STATUS, STATUS_ORDER: STATUS_ORDER, PRIORITY: PRIORITY, INCIDENT_TYPES: INCIDENT_TYPES,
-    INCIDENT_LOCATIONS: INCIDENT_LOCATIONS, DEFECTS: DEFECTS,
+    INCIDENT_LOCATIONS: INCIDENT_LOCATIONS, DEFECTS: DEFECTS, FOUND_DURING: FOUND_DURING,
     SUSPECTED_STAGES: SUSPECTED_STAGES, CONCLUSIONS: CONCLUSIONS, PROCESS_STEPS: PROCESS_STEPS,
     ROOT_CAUSE_CATS: ROOT_CAUSE_CATS, ATTACH_TYPES: ATTACH_TYPES, CAPA_STATUS: CAPA_STATUS, CAPA_CLS: CAPA_CLS,
     ACTION_LABELS: ACTION_LABELS, EMAIL_TYPES: EMAIL_TYPES, CFG: CFG,
@@ -392,6 +401,11 @@
       '.dmg-defects .dmg-chip.on{background:#c2410c;border-color:#c2410c;color:#fff;font-weight:800;box-shadow:0 3px 10px rgba(194,65,12,.3)}',
       '.dmg-defects .dmg-chip.on i{color:#fed7aa}',
 
+      '.dmg-durings{display:flex;flex-wrap:wrap;gap:7px}',
+      '.dmg-durings .dmg-chip{font-size:14px;font-weight:600;padding:9px 13px;border-radius:999px;background:#f8fafc;border:1.5px solid #e2e8f0;color:#334155;display:inline-flex;align-items:center;gap:6px}',
+      '.dmg-durings .dmg-chip i{font-size:13px;color:#94a3b8}',
+      '.dmg-durings .dmg-chip.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff;font-weight:800;box-shadow:0 3px 10px rgba(29,78,216,.3)}',
+      '.dmg-durings .dmg-chip.on i{color:#bfdbfe}',
       '.dmg-locs{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:7px}',
       '.dmg-locs .dmg-chip{font-family:ui-monospace,monospace;font-size:15px;font-weight:800;padding:11px 0;border-radius:11px;text-align:center;background:#f8fafc;border:1.5px solid #e2e8f0;color:#334155}',
       '.dmg-locs .dmg-chip.on{background:#0f766e;border-color:#0f766e;color:#fff;box-shadow:0 3px 10px rgba(15,118,110,.3)}',
@@ -502,6 +516,10 @@
   }
 
   function reportFormHtml() {
+    var durChips = DMG._.FOUND_DURING.map(function (d) {
+      return '<div class="dmg-chip" data-code="' + d.code + '" onclick="DMG.pickDuring(\'' + d.code + '\')">'
+        + '<i class="fas ' + d.ic + '"></i> ' + DMG._.esc(_lang === 'my' ? d.my : d.th) + '</div>';
+    }).join('');
     var locChips = DMG._.INCIDENT_LOCATIONS.map(function (l) {
       return '<div class="dmg-chip" data-code="' + DMG._.esc(l) + '" onclick="DMG.pickLoc(\'' + DMG._.esc(l) + '\')">'
         + DMG._.esc(l) + '</div>';
@@ -521,6 +539,7 @@
       + '<input type="hidden" id="dmg-rpt-defect">'
       + '<input type="hidden" id="dmg-rpt-location">'
       + '<input type="hidden" id="dmg-rpt-product">'
+      + '<input type="hidden" id="dmg-rpt-during">'
 
       + '<div class="dmg-step" id="dmg-step-1">'
         + '<div class="dmg-sthead"><span class="dmg-stnum">1</span>'
@@ -567,6 +586,12 @@
       + '</div>'
       + '<div class="dmg-step" id="dmg-step-6">'
         + '<div class="dmg-sthead"><span class="dmg-stnum">6</span>'
+          + '<span class="dmg-label">' + DMG._.esc(t('stepDuring')) + ' <span class="req">*</span></span>'
+          + '<i class="dmg-stok fas fa-circle-check"></i></div>'
+        + '<div class="dmg-chip-group dmg-durings" id="dmg-rpt-during-group">' + durChips + '</div>'
+      + '</div>'
+      + '<div class="dmg-step" id="dmg-step-7">'
+        + '<div class="dmg-sthead"><span class="dmg-stnum">7</span>'
           + '<span class="dmg-label">' + DMG._.esc(t('stepLot')) + ' <span class="req">*</span></span>'
           + '<i class="dmg-stok fas fa-circle-check"></i></div>'
         + '<div class="dmg-lotbox">'
@@ -579,7 +604,7 @@
         + '<button type="button" class="dmg-btn dmg-draftbtn" onclick="DMG.saveDraft()" title="' + DMG._.esc(t('saveDraft')) + '"><i class="fas fa-save"></i></button>'
         + '<button type="button" class="dmg-send" onclick="DMG.submitReport()" id="dmg-rpt-submit-btn">'
           + '<span class="dmg-sendtxt"><i class="fas fa-paper-plane"></i> ' + DMG._.esc(t('sendToProd')) + '</span>'
-          + '<span class="dmg-prog" id="dmg-rpt-prog">0/6</span></button>'
+          + '<span class="dmg-prog" id="dmg-rpt-prog">0/7</span></button>'
       + '</div>'
       + '</form>';
   }
@@ -655,10 +680,11 @@
   }
   DMG.pickDefect = function (code) { pickChip('defect', code); };
   DMG.pickLoc    = function (code) { pickChip('location', code); };
+  DMG.pickDuring = function (code) { pickChip('during', code); };
 
   /** ไฮไลต์ชิปให้ตรงกับค่าที่อยู่ในช่องซ่อน — ใช้หลังวาดฟอร์มใหม่หรือดึงร่างกลับมา */
   function restoreChips() {
-    ['defect', 'location'].forEach(function (f) {
+    ['defect', 'location', 'during'].forEach(function (f) {
       var hid = $('dmg-rpt-' + f);
       if (hid && hid.value) pickChip(f, hid.value);
     });
@@ -677,6 +703,7 @@
       !!($('dmg-rpt-defect') || {}).value,
       qty > 0,
       !!($('dmg-rpt-location') || {}).value,
+      !!($('dmg-rpt-during') || {}).value,
       !!String((($('dmg-rpt-lot') || {}).value) || '').trim()
     ];
     ok.forEach(function (done, n) {
@@ -684,8 +711,8 @@
       if (el) el.classList.toggle('done', done);
     });
     var n = ok.filter(Boolean).length;
-    var pg = $('dmg-rpt-prog'); if (pg) pg.textContent = n + '/6';
-    var btn = $('dmg-rpt-submit-btn'); if (btn) btn.classList.toggle('ready', n === 6);
+    var pg = $('dmg-rpt-prog'); if (pg) pg.textContent = n + '/' + ok.length;
+    var btn = $('dmg-rpt-submit-btn'); if (btn) btn.classList.toggle('ready', n === ok.length);
   };
 
   DMG.lotClean = function (el) {
@@ -829,7 +856,9 @@
     stepDefect: ['เสียยังไง', 'ဘယ်လို ပျက်နေလဲ'],
     stepQty: ['กี่เส้น', 'ဘယ်နှစ်ချောင်း'],
     stepWhere: ['เจอที่ไหน', 'ဘယ်နေရာမှာ တွေ့လဲ'],
-    stepLot: ['เลขล็อตข้างเส้น', 'ချောင်းဘေးက Lot နံပါတ်'],
+    stepDuring: ['เจอตอนไหน', 'ဘယ်အချိန်မှာ တွေ့လဲ'],
+    stepLot:    ['เลขล็อตข้างเส้น', 'ချောင်းဘေးက Lot နံပါတ်'],
+    needDuring: ['กรุณาเลือกว่าเจอตอนไหน', 'ဘယ်အချိန်မှာ တွေ့သည်ကို ရွေးပါ'],
     shotTap:    ['แตะเพื่อถ่ายรูป', 'ဓာတ်ပုံရိုက်ရန် နှိပ်ပါ'],
     shotHint:   ['ถ่ายให้เห็นตำหนิชัดๆ ถ่ายได้หลายรูป', 'ပျက်နေသည့်နေရာ ကွက်ကွက်ကွင်းကွင်း မြင်အောင် ရိုက်ပါ ပုံများစွာ ရိုက်နိုင်သည်'],
     lotHint:    ['อ่านจากตัวหนังสือที่พ่นข้างเส้น ท้ายบรรทัด · ต้องมีเลขล็อต ฝ่ายผลิตถึงจะตามกลับได้ว่าเป็นของรอบไหน',
@@ -918,7 +947,7 @@
 
   function collectReportForm(forDraft) {
     var ids = ['dmg-rpt-datetime', 'dmg-rpt-location', 'dmg-rpt-product', 'dmg-rpt-lot',
-      'dmg-rpt-qty', 'dmg-rpt-unit', 'dmg-rpt-type', 'dmg-rpt-priority', 'dmg-rpt-defect'];
+      'dmg-rpt-qty', 'dmg-rpt-unit', 'dmg-rpt-type', 'dmg-rpt-priority', 'dmg-rpt-defect', 'dmg-rpt-during'];
     var fields = {};
     ids.forEach(function (id) { var el = $(id); if (el) fields[id] = el.value; });
     if (forDraft) return { fields: fields };
@@ -931,6 +960,7 @@
       incident_location: fields['dmg-rpt-location'] || null,
       incident_datetime: DMG._.bkkLocalToISO(fields['dmg-rpt-datetime']),
       defect_code: fields['dmg-rpt-defect'] || null,
+      found_during: fields['dmg-rpt-during'] || null,
       // symptom เก็บคำไทยเสมอ ไม่ว่าหน้างานจะกรอกด้วยภาษาไหน
       // หัวหน้ากับฝ่ายผลิตจะได้อ่านออกเหมือนกันทุกเคส
       symptom: defectTh(fields['dmg-rpt-defect']),
@@ -955,6 +985,7 @@
     var errs = [];
     function need(id, cond, msg) { if (!cond) { reportFieldErr(id, msg); errs.push(msg); } }
     need('dmg-rpt-location-group', !!data.incident_location, t('needLoc'));
+    need('dmg-rpt-during-group', !!data.found_during, t('needDuring'));
     need('dmg-rpt-defect-group', !!data.defect_code, t('needDefect'));
     need('dmg-rpt-product-search', !!data.product_code, t('needProd'));
     need('dmg-rpt-qty', data.damaged_quantity != null && data.damaged_quantity > 0, t('needQty'));
