@@ -2433,6 +2433,9 @@ input[id^="ldf-lq-"]::placeholder{color:var(--ac-200);font-size:13px;font-weight
                 <i class="fas fa-user-tie" style="color:var(--sb-label);font-size:8px;"></i>&nbsp;ผู้ดูแลระบบ
                 <span class="line"></span>
             </div>
+            <button onclick="switchView('dev-queue')" id="nav-dev-queue" class="nav-btn" data-tip="คิวงานพัฒนาระบบ">
+                <span class="nav-icon"><i class="fas fa-list-check"></i></span> คิวงานพัฒนาระบบ
+            </button>
             <button onclick="switchView('wh-eval');whEvalInit();" id="nav-wh-eval" class="nav-btn" data-tip="ประเมินทีมคลัง">
                 <span class="nav-icon"><i class="fas fa-clipboard-check"></i></span> ประเมินทีม
             </button>
@@ -8278,6 +8281,8 @@ input[id^="ldf-lq-"]::placeholder{color:var(--ac-200);font-size:13px;font-weight
 <!-- ══════ แจ้งสินค้าเสียหายและติดตามความรับผิดชอบ (Product Damage Management) ══════ -->
 <!-- เนื้อหาทั้งหมดวาดโดย damage.js (DMG.initCases) — ดู supabase_damage_cases.sql สำหรับตาราง -->
 <div id="view-damage-cases-content" class="hidden space-y-4"></div>
+<!-- คิวงานพัฒนาระบบ — เนื้อหาวาดโดย devqueue.js (DQ.initQueue) -->
+<div id="view-dev-queue-content" class="hidden space-y-4"></div>
 
 <!-- ══════ รายการเคลื่อนไหวสินค้า ══════ -->
 <div id="view-stock-movement-content" class="hidden space-y-4">
@@ -13901,7 +13906,7 @@ window.switchView = function switchView(view) {
     if (view === 'load-monitor') { view = 'loading-order'; _navId = 'load-monitor'; _wantLoTab = 'monitor'; }
     else if (view === 'loading-order') { _wantLoTab = 'orders'; }
 
-    const views = ['theme', 'damage-cases', 'wm-manage', 'load-monitor', 'printtag', 'analytics', 'whactivity', 'stock-movement', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'driver-worklog', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
+    const views = ['theme', 'dev-queue', 'damage-cases', 'wm-manage', 'load-monitor', 'printtag', 'analytics', 'whactivity', 'stock-movement', 'production-block', 'output-audit', 'logistic-plan', 'truck-calendar', 'customers', 'loading-order', 'si-summary', 'loading', 'driver-monitor', 'driver-analytics', 'driver-worklog', 'kpi-wh', 'kpi-stock', 'products', 'user-accounts', 'stock-count', 'training', 'device-control', 'user-preview', 'wh-eval'];
 
     views.forEach(v => {
         const content = document.getElementById(`view-${v}-content`);
@@ -13962,6 +13967,7 @@ window.switchView = function switchView(view) {
     if (view === 'stock-movement' && window.smvInit) window.smvInit();
     if (view === 'theme' && window.themeRender) window.themeRender();
     if (view === 'damage-cases' && window.DMG) window.DMG.initCases();
+    if (view === 'dev-queue' && window.DQ) window.DQ.initQueue();
 
     const titleEl = document.getElementById('view-title');
     if (titleEl) {
@@ -13991,7 +13997,8 @@ window.switchView = function switchView(view) {
             'stock-count': 'ตรวจนับ–เทียบสต๊อก',
             'wh-eval': 'ประเมินทักษะทีมคลังสินค้า — Skill Evaluation',
             'theme': 'ธีมสี — เลือกโทนสีของโปรแกรม',
-            'damage-cases': 'แจ้งสินค้าเสียหาย — Product Damage Management'
+            'damage-cases': 'แจ้งสินค้าเสียหาย — Product Damage Management',
+            'dev-queue': 'คิวงานพัฒนาระบบ — Dev Queue'
         }[view] || 'WL Management';
         if (_navId === 'load-monitor') titleEl.innerText = 'ติดตามทีมโหลดสินค้า — WMS Monitor';
     }
@@ -38716,6 +38723,7 @@ var WMS_VIEWS=[
   {id:'stock-count',label:'ตรวจนับ–เทียบสต๊อก'},
   {id:'kpi-stock',label:'นำเข้าข้อมูล'},
   {id:'damage-cases',label:'แจ้งสินค้าเสียหาย'},
+  {id:'dev-queue',label:'คิวงานพัฒนาระบบ'},
   {id:'logistic-plan',label:'วางแผนจัดส่ง'},
   {id:'truck-calendar',label:'ตารางส่งแบบบล็อก'},
   {id:'customers',label:'ข้อมูลลูกค้า'},
@@ -38932,6 +38940,7 @@ var UP_NAV = [
   {id:'stock-count',  label:'ตรวจนับ–เทียบสต๊อก', icon:'fa-clipboard-check'},
   {id:'kpi-stock',    label:'นำเข้าข้อมูล',       icon:'fa-file-import'},
   {id:'damage-cases', label:'แจ้งสินค้าเสียหาย',    icon:'fa-triangle-exclamation'},
+  {id:'dev-queue',    label:'คิวงานพัฒนาระบบ',      icon:'fa-list-check'},
   {id:'logistic-plan',label:'วางแผนจัดส่ง',       icon:'fa-route'},
   {id:'truck-calendar',label:'ตารางส่งแบบบล็อก',  icon:'fa-calendar-alt'},
   {id:'customers',    label:'ข้อมูลลูกค้า',        icon:'fa-store'},
@@ -50131,3 +50140,4 @@ window.whEvalPrint = function() {
 </script>
 
 <script src="damage.js"></script>
+<script src="devqueue.js"></script>
